@@ -1,0 +1,236 @@
+import '../../core/formato.dart';
+
+/// Nombre legible de un rol o tipo de usuario.
+String nombreTipoUsuario(String codigo) => switch (codigo) {
+  'PASAJERO' => 'Pasajero',
+  'CONDUCTOR' => 'Conductor',
+  'ADMIN' => 'Administrador',
+  _ => Formato.enumTexto(codigo),
+};
+
+/// Nombre legible de un tipo de documento de conductor.
+String nombreTipoDocumento(String codigo) => switch (codigo) {
+  'CI' => 'Carnet de identidad',
+  'LICENCIA' => 'Licencia de conducir',
+  'SOAT' => 'SOAT',
+  'RUAT' => 'RUAT',
+  'INSPECCION_TECNICA' => 'Inspección técnica',
+  'ANTECEDENTES' => 'Certificado de antecedentes',
+  _ => Formato.enumTexto(codigo),
+};
+
+/// PersonaAdminResponse del backend.
+class Persona {
+  final int idPersona;
+  final String? ci;
+  final String? complementoCi;
+  final String nombres;
+  final String apellidos;
+  final DateTime? fechaNacimiento;
+  final String? correo;
+  final String? telefono;
+  final DateTime? creadoEn;
+
+  /// Roles de sus cuentas activas (PASAJERO, CONDUCTOR, ADMIN).
+  final List<String> tiposUsuario;
+
+  /// Nombre de usuario que comparten sus cuentas de pasajero/conductor (null si no tiene).
+  final String? nombreUsuario;
+
+  Persona({
+    required this.idPersona,
+    this.ci,
+    this.complementoCi,
+    required this.nombres,
+    required this.apellidos,
+    this.fechaNacimiento,
+    this.correo,
+    this.telefono,
+    this.creadoEn,
+    this.tiposUsuario = const [],
+    this.nombreUsuario,
+  });
+
+  String get nombreCompleto => '$nombres $apellidos';
+
+  /// "1234567-1B" o "1234567".
+  String get ciCompleto {
+    if (ci == null || ci!.isEmpty) return '';
+    return complementoCi == null || complementoCi!.isEmpty ? ci! : '$ci-$complementoCi';
+  }
+
+  bool tieneTipo(String codigo) => tiposUsuario.contains(codigo);
+
+  /// Texto de la columna Usuarios ("Pasajero, Conductor").
+  String get tiposUsuarioTexto => tiposUsuario.map(nombreTipoUsuario).join(', ');
+
+  factory Persona.desdeJson(Map<String, dynamic> json) => Persona(
+    idPersona: Formato.leerEntero(json['idPersona'])!,
+    ci: json['ci'] as String?,
+    complementoCi: json['complementoCi'] as String?,
+    nombres: json['nombres'] as String? ?? '',
+    apellidos: json['apellidos'] as String? ?? '',
+    fechaNacimiento: Formato.leerFecha(json['fechaNacimiento']),
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
+    creadoEn: Formato.leerFecha(json['creadoEn']),
+    tiposUsuario: (json['tiposUsuario'] as List<dynamic>? ?? const []).cast<String>(),
+    nombreUsuario: json['nombreUsuario'] as String?,
+  );
+}
+
+/// UsuarioAdminResponse del backend.
+class UsuarioAdmin {
+  final int idUsuario;
+  final int idPersona;
+  final String nombres;
+  final String apellidos;
+  final String? ci;
+  final String nombreUsuario;
+  final String? correo;
+  final String? telefono;
+  final String rol;
+  final DateTime? fechaRegistro;
+
+  UsuarioAdmin({
+    required this.idUsuario,
+    required this.idPersona,
+    required this.nombres,
+    required this.apellidos,
+    this.ci,
+    required this.nombreUsuario,
+    this.correo,
+    this.telefono,
+    required this.rol,
+    this.fechaRegistro,
+  });
+
+  factory UsuarioAdmin.desdeJson(Map<String, dynamic> json) => UsuarioAdmin(
+    idUsuario: Formato.leerEntero(json['idUsuario'])!,
+    idPersona: Formato.leerEntero(json['idPersona'])!,
+    nombres: json['nombres'] as String? ?? '',
+    apellidos: json['apellidos'] as String? ?? '',
+    ci: json['ci'] as String?,
+    nombreUsuario: json['nombreUsuario'] as String? ?? '',
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
+    rol: json['rol'] as String? ?? '',
+    fechaRegistro: Formato.leerFecha(json['fechaRegistro']),
+  );
+}
+
+/// PasajeroAdminResponse del backend.
+class PasajeroAdmin {
+  final int idPasajero;
+  final String nombreUsuario;
+  final String nombres;
+  final String apellidos;
+  final String? correo;
+  final String? telefono;
+  final double? calificacionPromedio;
+  final int? totalCalificaciones;
+  final DateTime? fechaRegistro;
+
+  PasajeroAdmin({
+    required this.idPasajero,
+    required this.nombreUsuario,
+    required this.nombres,
+    required this.apellidos,
+    this.correo,
+    this.telefono,
+    this.calificacionPromedio,
+    this.totalCalificaciones,
+    this.fechaRegistro,
+  });
+
+  factory PasajeroAdmin.desdeJson(Map<String, dynamic> json) => PasajeroAdmin(
+    idPasajero: Formato.leerEntero(json['idPasajero'])!,
+    nombreUsuario: json['nombreUsuario'] as String? ?? '',
+    nombres: json['nombres'] as String? ?? '',
+    apellidos: json['apellidos'] as String? ?? '',
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
+    calificacionPromedio: Formato.leerDecimal(json['calificacionPromedio']),
+    totalCalificaciones: Formato.leerEntero(json['totalCalificaciones']),
+    fechaRegistro: Formato.leerFecha(json['fechaRegistro']),
+  );
+}
+
+/// ConductorAdminResponse del backend.
+class ConductorAdmin {
+  final int idConductor;
+  final int idPersona;
+  final String nombreUsuario;
+  final String nombres;
+  final String apellidos;
+  final String? ci;
+  final String? correo;
+  final String? telefono;
+  final String? numeroLicencia;
+  final String? categoriaLicencia;
+  final String? placa;
+  final String situacionAprobacion;
+  final double? calificacionPromedio;
+  final DateTime? fechaAprobacion;
+  final int cantidadDocumentos;
+
+  ConductorAdmin({
+    required this.idConductor,
+    required this.idPersona,
+    required this.nombreUsuario,
+    required this.nombres,
+    required this.apellidos,
+    this.ci,
+    this.correo,
+    this.telefono,
+    this.numeroLicencia,
+    this.categoriaLicencia,
+    this.placa,
+    required this.situacionAprobacion,
+    this.calificacionPromedio,
+    this.fechaAprobacion,
+    required this.cantidadDocumentos,
+  });
+
+  String get nombreCompleto => '$nombres $apellidos';
+
+  factory ConductorAdmin.desdeJson(Map<String, dynamic> json) => ConductorAdmin(
+    idConductor: Formato.leerEntero(json['idConductor'])!,
+    idPersona: Formato.leerEntero(json['idPersona'])!,
+    nombreUsuario: json['nombreUsuario'] as String? ?? '',
+    nombres: json['nombres'] as String? ?? '',
+    apellidos: json['apellidos'] as String? ?? '',
+    ci: json['ci'] as String?,
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
+    numeroLicencia: json['numeroLicencia'] as String?,
+    categoriaLicencia: json['categoriaLicencia'] as String?,
+    placa: json['placa'] as String?,
+    situacionAprobacion: json['situacionAprobacion'] as String? ?? '',
+    calificacionPromedio: Formato.leerDecimal(json['calificacionPromedio']),
+    fechaAprobacion: Formato.leerFecha(json['fechaAprobacion']),
+    cantidadDocumentos: Formato.leerEntero(json['cantidadDocumentos']) ?? 0,
+  );
+}
+
+/// DocumentoConductorAdminResponse del backend.
+class DocumentoConductor {
+  final int id;
+  final String tipoDocumento;
+  final DateTime? fechaVencimiento;
+  final String situacionRevision;
+
+  DocumentoConductor({
+    required this.id,
+    required this.tipoDocumento,
+    this.fechaVencimiento,
+    required this.situacionRevision,
+  });
+
+  factory DocumentoConductor.desdeJson(Map<String, dynamic> json) => DocumentoConductor(
+    id: Formato.leerEntero(json['id'])!,
+    tipoDocumento: json['tipoDocumento'] as String? ?? '',
+    fechaVencimiento: Formato.leerFecha(json['fechaVencimiento']),
+    situacionRevision: json['situacionRevision'] as String? ?? '',
+  );
+}

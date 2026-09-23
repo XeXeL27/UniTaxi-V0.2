@@ -1,0 +1,32 @@
+# Secretos locales: perfiles de Spring y variables de Docker (solo se suben las plantillas .example)
+backend/src/main/resources/application-*.properties
+!backend/src/main/resources/application-*.properties.example
+.env
+*.env
+!.env.example
+
+# Backend (Gradle)
+backend/build/
+backend/.gradle/
+backend/bin/
+backend/out/
+
+# IDEs y herramientas locales
+.idea/
+*.iml
+.vscode/
+.github/modernize/
+.claude/settings.local.json
+
+# Flutter
+**/.dart_tool/
+**/build/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+
+# Node
+**/node_modules/
+
+# Sistema
+.DS_Store
+*.log

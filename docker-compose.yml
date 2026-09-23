@@ -1,0 +1,33 @@
+# TaxiUAP - Base de datos de desarrollo: PostgreSQL 16 + PostGIS 3
+# El PostgreSQL 16 local no tiene PostGIS; esta imagen ya lo trae y crea la extension
+# automaticamente en la BD taxiuap al inicializar el volumen.
+# Puerto 5436 en el host (5432-5435 los usan los clusters locales).
+#
+#   docker compose up -d        levantar
+#   docker compose down         detener (los datos quedan en el volumen)
+#   docker compose down -v      detener y borrar los datos
+
+services:
+  taxiuap-db:
+    image: postgis/postgis:16-3.5
+    container_name: taxiuap-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: taxiuap
+      POSTGRES_USER: postgres
+      # La contrasena se lee del archivo .env (no se sube al repositorio; ver .env.example)
+      POSTGRES_PASSWORD: ${TAXIUAP_DB_PASSWORD:?Defina TAXIUAP_DB_PASSWORD en el archivo .env}
+      TZ: America/La_Paz
+      PGTZ: America/La_Paz
+    ports:
+      - "127.0.0.1:5436:5432"
+    volumes:
+      - taxiuap-db-datos:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d taxiuap"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  taxiuap-db-datos:
