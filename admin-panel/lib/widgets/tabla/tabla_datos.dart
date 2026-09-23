@@ -14,9 +14,12 @@ import 'iconos_tabla.dart';
 /// de dato, orden por columna, paginacion y exportacion a Excel, CSV y PDF. Todo se hace sobre
 /// la lista ya cargada, sin volver a consultar al backend.
 ///
-/// Es responsive, al estilo de DataTables Responsive: las columnas se reparten el ancho disponible
-/// y, si no entran todas, se ocultan las de la derecha y cada fila muestra un boton "+" que despliega
-/// debajo los datos ocultos. La columna de acciones siempre queda visible.
+/// Las filas van numeradas (N° 1..N sobre la lista filtrada y ordenada) y se ordenan con el menu
+/// "Ordenar" (A-Z / Z-A, mas reciente / mas antiguo, menor / mayor) o con clic en el encabezado.
+///
+/// Es responsive: las columnas se reparten el ancho disponible y, si no entran todas, se ocultan las
+/// de la derecha. El ojo de la columna Acciones abre un modal con todos los datos del registro. La
+/// columna de acciones siempre queda visible.
 class TablaDatos<T> extends StatefulWidget {
   final String titulo;
   final FaIconData icono;
@@ -67,9 +70,6 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
 
   /// Cambia al limpiar los filtros para reconstruir los campos con sus valores iniciales.
   int _generacionFiltros = 0;
-
-  /// Filas cuyo detalle (columnas ocultas) esta desplegado.
-  final Set<T> _desplegadas = {};
 
   int? _columnaOrden;
   bool _ascendente = true;
@@ -174,15 +174,21 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     }
   }
 
-  /// Ancho de la columna de acciones segun cuantos botones tiene la primera fila.
+  /// Ancho de la columna de acciones: el ojo mas los botones de la primera fila.
   double _anchoAcciones(List<T> filas) {
     final accionesFila = widget.accionesFila;
-    if (accionesFila == null) return 0;
-    final cantidad = filas.isEmpty ? 1 : accionesFila(filas.first).length;
+    final cantidad = 1 + (accionesFila == null || filas.isEmpty ? 0 : accionesFila(filas.first).length);
     // Nunca mas angosta que el titulo "Acciones".
     final ancho = cantidad * _anchoPorAccion + 24;
     return ancho < 100 ? 100 : ancho;
   }
+
+  /// Texto de cada sentido de orden segun el tipo de dato de la columna.
+  static (String, String) _textosOrden(TipoColumna tipo) => switch (tipo) {
+    TipoColumna.fecha || TipoColumna.fechaHora => ('Más antiguo primero', 'Más reciente primero'),
+    TipoColumna.numero => ('Menor a mayor', 'Mayor a menor'),
+    TipoColumna.texto || TipoColumna.estado => ('De la A a la Z', 'De la Z a la A'),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -223,7 +229,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
               else if (filasPagina.isEmpty)
                 _sinRegistros()
               else
-                _tabla(filasPagina, diseno),
+                _tabla(filasPagina, inicio, diseno),
               const SizedBox(height: 12),
               _paginacion(visibles.length, inicio, filasPagina.length, pagina, totalPaginas, movil),
             ],
@@ -293,6 +299,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
           icon: IconosTabla.filtro,
           label: Text(filtrosActivos == 0 ? 'Filtros' : 'Filtros ($filtrosActivos)'),
         ),
+        _menuOrden(),
         if (widget.alRecargar != null)
           IconButton(
             tooltip: 'Recargar',
@@ -301,6 +308,60 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
           ),
         _grupoExportar(visibles),
       ],
+    );
+  }
+
+  /// Menu de orden: para cada columna, sus dos sentidos con texto segun el tipo de dato.
+  Widget _menuOrden() {
+    final actual = _columnaOrden;
+    String etiqueta() {
+      if (actual == null) return 'Ordenar';
+      final (asc, desc) = _textosOrden(widget.columnas[actual].tipo);
+      return '${widget.columnas[actual].titulo}: ${_ascendente ? asc : desc}';
+    }
+
+    return PopupMenuButton<(int, bool)?>(
+      tooltip: 'Ordenar los registros',
+      onSelected: (opcion) => setState(() {
+        if (opcion == null) {
+          _columnaOrden = null;
+          _ascendente = true;
+        } else {
+          _columnaOrden = opcion.$1;
+          _ascendente = opcion.$2;
+        }
+        _pagina = 0;
+      }),
+      itemBuilder: (_) => [
+        const PopupMenuItem<(int, bool)?>(value: null, child: Text('Orden original')),
+        for (var i = 0; i < widget.columnas.length; i++) ...[
+          const PopupMenuDivider(),
+          PopupMenuItem<(int, bool)?>(
+            enabled: false,
+            height: 30,
+            child: Text(
+              widget.columnas[i].titulo,
+              style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+            ),
+          ),
+          for (final ascendente in [true, false])
+            PopupMenuItem<(int, bool)?>(
+              value: (i, ascendente),
+              height: 36,
+              child: Row(
+                children: [
+                  SizedBox(width: 22, child: actual == i && _ascendente == ascendente ? IconosTabla.marcado : null),
+                  Text(
+                    ascendente ? _textosOrden(widget.columnas[i].tipo).$1 : _textosOrden(widget.columnas[i].tipo).$2,
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ],
+      child: IgnorePointer(
+        child: OutlinedButton.icon(onPressed: () {}, icon: IconosTabla.ordenar, label: Text(etiqueta())),
+      ),
     );
   }
 
@@ -510,8 +571,18 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     );
   }
 
-  /// Tabla con bordes entre celdas. Las columnas que no entran se muestran al desplegar la fila.
-  Widget _tabla(List<T> filasPagina, _DisenoTabla diseno) {
+  /// Tabla con bordes entre celdas: N°, columnas visibles y acciones (con el ojo para ver el detalle).
+  ///
+  /// Rendimiento: las filas no se miden con IntrinsicHeight; las lineas verticales del cuerpo se
+  /// dibujan una sola vez encima de todas las filas.
+  Widget _tabla(List<T> filasPagina, int inicio, _DisenoTabla diseno) {
+    final separadores = <double>[];
+    var x = _DisenoTabla.anchoNumero;
+    separadores.add(x);
+    for (final ancho in diseno.anchos) {
+      x += ancho;
+      separadores.add(x);
+    }
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
@@ -522,7 +593,25 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _filaEncabezado(diseno),
-          for (var f = 0; f < filasPagina.length; f++) ..._filaDatos(filasPagina[f], f, diseno),
+          Stack(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var f = 0; f < filasPagina.length; f++) _filaDatos(filasPagina[f], inicio + f + 1, f, diseno),
+                ],
+              ),
+              for (final posicion in separadores)
+                Positioned(
+                  left: posicion - 1,
+                  top: 0,
+                  bottom: 0,
+                  child: const IgnorePointer(
+                    child: SizedBox(width: 1, child: ColoredBox(color: ColoresApp.borde)),
+                  ),
+                ),
+            ],
+          ),
         ],
       ),
     );
@@ -530,28 +619,33 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
 
   Widget _filaEncabezado(_DisenoTabla diseno) {
     final columnas = widget.columnas;
+    const borde = Color(0x33FFFFFF);
+    const estilo = TextStyle(color: Colors.white, fontWeight: FontWeight.w700);
     return Container(
       color: ColoresApp.azul,
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            _contenedorCelda(
+              ancho: _DisenoTabla.anchoNumero,
+              bordeDerecho: true,
+              colorBorde: borde,
+              alineacion: Alignment.center,
+              child: const Text('N°', style: estilo),
+            ),
             for (var v = 0; v < diseno.visibles.length; v++)
               _contenedorCelda(
                 ancho: diseno.anchos[v],
-                bordeDerecho: v < diseno.visibles.length - 1 || diseno.anchoAcciones > 0,
-                colorBorde: const Color(0x33FFFFFF),
+                bordeDerecho: true,
+                colorBorde: borde,
                 child: _encabezado(diseno.visibles[v], columnas[diseno.visibles[v]]),
               ),
-            if (diseno.anchoAcciones > 0)
-              _contenedorCelda(
-                ancho: diseno.anchoAcciones,
-                bordeDerecho: false,
-                child: const Text(
-                  'Acciones',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-                ),
-              ),
+            _contenedorCelda(
+              ancho: diseno.anchoAcciones,
+              bordeDerecho: false,
+              child: const Text('Acciones', style: estilo),
+            ),
           ],
         ),
       ),
@@ -563,115 +657,158 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     final icono = !activa
         ? IconosTabla.ordenInactivo
         : (_ascendente ? IconosTabla.ordenAscendente : IconosTabla.ordenDescendente);
-    return InkWell(
-      onTap: () => _ordenarPor(indice),
+    final (asc, desc) = _textosOrden(columna.tipo);
+    return Tooltip(
+      message: 'Ordenar: ${activa && _ascendente ? desc : asc}',
+      child: InkWell(
+        onTap: () => _ordenarPor(indice),
+        child: Row(
+          children: [
+            Flexible(
+              child: Text(
+                columna.titulo,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+            ),
+            const SizedBox(width: 6),
+            icono,
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _filaDatos(T fila, int numero, int posicion, _DisenoTabla diseno) {
+    final accionesFila = widget.accionesFila;
+    return Container(
+      decoration: BoxDecoration(
+        color: posicion.isOdd ? ColoresApp.filaAlterna : Colors.white,
+        border: const Border(top: BorderSide(color: ColoresApp.borde)),
+      ),
       child: Row(
         children: [
-          Flexible(
+          _contenedorCelda(
+            ancho: _DisenoTabla.anchoNumero,
+            bordeDerecho: false,
+            alineacion: Alignment.center,
             child: Text(
-              columna.titulo,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              '$numero',
+              style: const TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.azul),
             ),
           ),
-          const SizedBox(width: 6),
-          icono,
+          for (var v = 0; v < diseno.visibles.length; v++)
+            _contenedorCelda(
+              ancho: diseno.anchos[v],
+              bordeDerecho: false,
+              child: _celda(widget.columnas[diseno.visibles[v]], fila),
+            ),
+          _contenedorCelda(
+            ancho: diseno.anchoAcciones,
+            bordeDerecho: false,
+            relleno: const EdgeInsets.symmetric(horizontal: 4),
+            child: Wrap(
+              children: [
+                IconButton(
+                  tooltip: 'Ver todos los datos',
+                  onPressed: () => _mostrarDetalle(fila, numero),
+                  icon: IconosTabla.ojo,
+                ),
+                if (accionesFila != null) ...accionesFila(fila),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  /// Fila de datos y, si esta desplegada, su detalle con las columnas ocultas.
-  List<Widget> _filaDatos(T fila, int posicion, _DisenoTabla diseno) {
-    final accionesFila = widget.accionesFila;
-    final desplegada = _desplegadas.contains(fila);
-    final fondo = posicion.isOdd ? ColoresApp.filaAlterna : Colors.white;
-
-    return [
-      Container(
-        decoration: BoxDecoration(
-          color: fondo,
-          border: const Border(top: BorderSide(color: ColoresApp.borde)),
-        ),
-        child: IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (var v = 0; v < diseno.visibles.length; v++)
-                _contenedorCelda(
-                  ancho: diseno.anchos[v],
-                  bordeDerecho: v < diseno.visibles.length - 1 || diseno.anchoAcciones > 0,
-                  child: v == 0 && diseno.hayOcultas
-                      ? Row(
-                          children: [
-                            _botonDesplegar(fila, desplegada),
-                            const SizedBox(width: 8),
-                            Expanded(child: _celda(widget.columnas[diseno.visibles[v]], fila)),
-                          ],
-                        )
-                      : _celda(widget.columnas[diseno.visibles[v]], fila),
-                ),
-              if (accionesFila != null)
-                _contenedorCelda(
-                  ancho: diseno.anchoAcciones,
-                  bordeDerecho: false,
-                  relleno: const EdgeInsets.symmetric(horizontal: 4),
-                  child: Wrap(children: accionesFila(fila)),
-                ),
-            ],
-          ),
-        ),
-      ),
-      if (desplegada && diseno.hayOcultas)
-        Container(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
-          decoration: const BoxDecoration(
-            color: Color(0xFFEEF2F8),
-            border: Border(
-              top: BorderSide(color: ColoresApp.borde),
-              left: BorderSide(color: ColoresApp.rojo, width: 3),
+  /// Modal con todos los datos del registro (el ojo de la columna Acciones).
+  Future<void> _mostrarDetalle(T fila, int numero) {
+    return showDialog<void>(
+      context: context,
+      builder: (context) {
+        final movil = Pantalla.esMovil(context);
+        final contenido = Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
+              ),
+              child: Row(
+                children: [
+                  FaIcon(widget.icono, color: ColoresApp.azul, size: 18),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      '${widget.titulo} - registro N° $numero',
+                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ColoresApp.azul),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Cerrar',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: IconosTabla.limpiar,
+                  ),
+                ],
+              ),
             ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final indice in diseno.ocultas)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 5),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.center,
-                    children: [
-                      SizedBox(
-                        width: 130,
-                        child: Text(
-                          widget.columnas[indice].titulo,
-                          style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var i = 0; i < widget.columnas.length; i++)
+                      Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        decoration: BoxDecoration(
+                          border: i == 0 ? null : const Border(top: BorderSide(color: ColoresApp.borde)),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: movil ? 110 : 150,
+                              child: Text(
+                                widget.columnas[i].titulo,
+                                style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+                              ),
+                            ),
+                            Expanded(child: _celda(widget.columnas[i], fila, vacio: '-')),
+                          ],
                         ),
                       ),
-                      Expanded(child: _celda(widget.columnas[indice], fila, vacio: '-')),
-                    ],
-                  ),
+                  ],
                 ),
-            ],
-          ),
-        ),
-    ];
-  }
-
-  /// Boton circular rojo con "+" (o azul con "-" cuando esta desplegada), como DataTables.
-  Widget _botonDesplegar(T fila, bool desplegada) {
-    return Tooltip(
-      message: desplegada ? 'Ocultar detalle' : 'Ver más datos',
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: () => setState(() => desplegada ? _desplegadas.remove(fila) : _desplegadas.add(fila)),
-        child: Container(
-          width: 20,
-          height: 20,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(color: desplegada ? ColoresApp.azul : ColoresApp.rojo, shape: BoxShape.circle),
-          child: desplegada ? IconosTabla.contraer : IconosTabla.expandir,
-        ),
-      ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: ColoresApp.borde)),
+              ),
+              alignment: Alignment.centerRight,
+              child: FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                style: FilledButton.styleFrom(backgroundColor: ColoresApp.azul),
+                child: const Text('Cerrar'),
+              ),
+            ),
+          ],
+        );
+        if (movil) {
+          return Dialog.fullscreen(
+            backgroundColor: Colors.white,
+            child: SafeArea(child: contenido),
+          );
+        }
+        return Dialog(
+          clipBehavior: Clip.antiAlias,
+          child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: contenido),
+        );
+      },
     );
   }
 
@@ -681,11 +818,12 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     required Widget child,
     Color colorBorde = ColoresApp.borde,
     EdgeInsets relleno = const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    Alignment alineacion = Alignment.centerLeft,
   }) {
     return Container(
       width: ancho,
       padding: relleno,
-      alignment: Alignment.centerLeft,
+      alignment: alineacion,
       decoration: BoxDecoration(
         border: bordeDerecho ? Border(right: BorderSide(color: colorBorde)) : null,
       ),
@@ -783,9 +921,9 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
 }
 
 /// Que columnas entran en pantalla y con que ancho. Si no entran todas se ocultan las de la
-/// derecha (la primera siempre queda) y la primera columna reserva lugar para el boton "+".
+/// derecha (la primera siempre queda). La columna N° y la de acciones tienen ancho fijo.
 class _DisenoTabla {
-  static const _anchoBoton = 28.0;
+  static const anchoNumero = 56.0;
 
   final List<int> visibles;
   final List<int> ocultas;
@@ -794,24 +932,18 @@ class _DisenoTabla {
 
   const _DisenoTabla(this.visibles, this.ocultas, this.anchos, this.anchoAcciones);
 
-  bool get hayOcultas => ocultas.isNotEmpty;
-
   static _DisenoTabla calcular<T>({
     required List<ColumnaTabla<T>> columnas,
     required double anchoDisponible,
     required double anchoAcciones,
   }) {
-    final total = columnas.fold<double>(0, (suma, c) => suma + c.anchoMinimo) + anchoAcciones;
+    final fijo = anchoNumero + anchoAcciones;
     final visibles = <int>[];
-    if (total <= anchoDisponible) {
-      visibles.addAll(List.generate(columnas.length, (i) => i));
-    } else {
-      var usado = anchoAcciones + _anchoBoton;
-      for (var i = 0; i < columnas.length; i++) {
-        if (visibles.isNotEmpty && usado + columnas[i].anchoMinimo > anchoDisponible) break;
-        visibles.add(i);
-        usado += columnas[i].anchoMinimo;
-      }
+    var usado = fijo;
+    for (var i = 0; i < columnas.length; i++) {
+      if (visibles.isNotEmpty && usado + columnas[i].anchoMinimo > anchoDisponible) break;
+      visibles.add(i);
+      usado += columnas[i].anchoMinimo;
     }
     final ocultas = [
       for (var i = 0; i < columnas.length; i++)
@@ -819,17 +951,15 @@ class _DisenoTabla {
     ];
 
     // El espacio sobrante se reparte segun la proporcion de cada columna.
-    final extraBoton = ocultas.isEmpty ? 0.0 : _anchoBoton;
     final minimos = [for (final i in visibles) columnas[i].anchoMinimo];
     final sumaMinimos = minimos.fold<double>(0, (a, b) => a + b);
     final sumaProporciones = visibles.fold<double>(0, (a, i) => a + columnas[i].flex);
-    final sobrante = (anchoDisponible - sumaMinimos - anchoAcciones - extraBoton).clamp(0.0, double.infinity);
+    final sobrante = (anchoDisponible - sumaMinimos - fijo).clamp(0.0, double.infinity);
     final anchos = [
-      for (var v = 0; v < visibles.length; v++)
-        minimos[v] + sobrante * columnas[visibles[v]].flex / sumaProporciones + (v == 0 ? extraBoton : 0),
+      for (var v = 0; v < visibles.length; v++) minimos[v] + sobrante * columnas[visibles[v]].flex / sumaProporciones,
     ];
     // Si ni la primera columna entra completa, se ajusta al espacio real para no desbordar.
-    final sumaAnchos = anchos.fold<double>(0, (a, b) => a + b) + anchoAcciones;
+    final sumaAnchos = anchos.fold<double>(0, (a, b) => a + b) + fijo;
     if (sumaAnchos > anchoDisponible && anchos.isNotEmpty) {
       anchos[0] = (anchos[0] - (sumaAnchos - anchoDisponible)).clamp(60.0, double.infinity);
     }

@@ -85,19 +85,13 @@ class _LayoutAdminState extends State<LayoutAdmin> {
       body: escritorio
           ? Row(
               children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 220),
-                  curve: Curves.easeInOut,
-                  width: _menuVisible ? _anchoMenu : 0,
-                  child: ClipRect(
-                    child: OverflowBox(
-                      alignment: Alignment.centerRight,
-                      minWidth: _anchoMenu,
-                      maxWidth: _anchoMenu,
-                      child: MenuLateral(rutaActual: widget.rutaActual),
-                    ),
+                // Sin animacion de ancho: animarlo obligaba a volver a medir la tabla en cada cuadro y
+                // el cambio se sentia lento.
+                if (_menuVisible)
+                  SizedBox(
+                    width: _anchoMenu,
+                    child: MenuLateral(rutaActual: widget.rutaActual),
                   ),
-                ),
                 Expanded(child: contenido),
               ],
             )

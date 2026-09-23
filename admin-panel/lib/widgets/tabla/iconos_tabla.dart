@@ -26,7 +26,10 @@ class IconosTabla {
   static const ordenAscendente = FaIcon(FontAwesomeIcons.sortUp, size: 12, color: Color(0xFFFFFFFF));
   static const ordenDescendente = FaIcon(FontAwesomeIcons.sortDown, size: 12, color: Color(0xFFFFFFFF));
 
-  // Boton de fila para mostrar/ocultar las columnas que no entran en pantalla.
-  static const expandir = FaIcon(FontAwesomeIcons.plus, size: 10, color: Color(0xFFFFFFFF));
-  static const contraer = FaIcon(FontAwesomeIcons.minus, size: 10, color: Color(0xFFFFFFFF));
+  // Ojo de la columna Acciones: abre el modal con todos los datos del registro.
+  static const ojo = FaIcon(FontAwesomeIcons.eye, size: 16, color: Color(0xFF0B2341));
+
+  // Menu Ordenar.
+  static const ordenar = FaIcon(FontAwesomeIcons.arrowDownWideShort, size: 14);
+  static const marcado = FaIcon(FontAwesomeIcons.check, size: 12, color: Color(0xFFB71234));
 }

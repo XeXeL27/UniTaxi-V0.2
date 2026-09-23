@@ -199,7 +199,13 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
         abrirPdf(bytes);
       }
     } on ApiExcepcion catch (e) {
-      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+      if (mounted) {
+        await mostrarErrorDialogo(
+          context,
+          titulo: descargar ? 'No se pudo descargar' : 'No se pudo abrir el documento',
+          mensaje: e.mensaje,
+        );
+      }
     } finally {
       if (mounted) setState(() => _abriendo = null);
     }

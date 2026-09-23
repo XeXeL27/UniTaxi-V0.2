@@ -208,21 +208,30 @@ Basada en Config/ y security/ de uniFex, adaptada:
 - Menu lateral con grupos desplegables por tipo, definido en un solo lugar: lib/core/menu.dart
 - Iconos: Font Awesome (font_awesome_flutter, widget FaIcon). Nunca emojis
 - Colores del diseno de referencia: azul #0B2341, rojo #B71234 (lib/core/tema.dart)
-- Menu retractil: el boton de tres lineas de la barra superior esconde/muestra el menu en escritorio (se
-  recuerda la preferencia) y abre el drawer en pantallas angostas
+- Menu retractil: el boton de tres lineas de la barra superior esconde/muestra el menu al instante en
+  escritorio (se recuerda la preferencia) y abre el drawer en pantallas angostas
 - Toda lista usa el mismo widget: ListadoRemoto -> TablaDatos (lib/widgets/). Las columnas se definen con
   ColumnaTabla y su TipoColumna (texto, numero, fecha, fechaHora, estado), que decide el filtro, el orden y
   la exportacion. La busqueda, los filtros y la exportacion trabajan sobre la lista ya cargada
 - Estilo de tabla unico (tipo DataTables Responsive): encabezado azul marino con texto blanco, bordes entre
   celdas, filas blancas / gris claro con texto oscuro, exportar Excel | CSV | PDF en botones agrupados.
   Nunca se corta: las columnas se reparten el ancho (ColumnaTabla.ancho = minimo, proporcion = flex; el
-  minimo nunca es menor que el titulo). Si no entran todas, se ocultan las de la derecha y la fila muestra
-  un "+" rojo que despliega debajo los datos ocultos. La primera columna debe ser la que identifica el
-  registro (nombre, usuario) porque lleva el "+"; la columna de acciones siempre queda visible
+  minimo nunca es menor que el titulo). Primera columna "N°" (1..N sobre la lista filtrada y ordenada).
+  Si no entran todas las columnas, se ocultan las de la derecha; el ojo (primer boton de Acciones) abre un
+  modal con todos los datos del registro. La columna de acciones siempre se ve.
+- Rendimiento de la tabla: las filas no usan IntrinsicHeight (las lineas verticales se dibujan una vez
+  sobre el cuerpo) y el menu lateral se muestra/esconde sin animar el ancho (animarlo re-media la tabla
+  en cada cuadro). En modo debug (flutter run) todo es mas lento que en el build release
+  Orden: menu "Ordenar" con textos segun el tipo (De la A a la Z / Z a A, Mas reciente / Mas antiguo
+  primero, Menor / Mayor) o clic en el encabezado. Toda lista con fechas debe incluir su columna de fecha
+  (por ejemplo Registrado) para poder ordenar por antiguedad
+- En textos de la interfaz no usar flechas ni simbolos especiales (→): el panel no carga fuentes de
+  internet y esos glifos salen como cuadros vacios
 - La columna de estado (A/X) no se muestra: los listados solo traen registros en A
 - Altas y ediciones en modal: ModalFormulario + abrirModal (lib/widgets/modal_formulario.dart)
 - Flujos estandar (lib/widgets/flujos_crud.dart) con los modales de lib/widgets/dialogos.dart:
-  crear -> formulario -> modal verde; editar -> confirmacion naranja -> formulario -> modal verde;
+  modales animados (circulo dibujado en 0,4 s y luego check / signo de pregunta / X), estilo de la
+  referencia del usuario. crear -> formulario -> modal verde; editar -> confirmacion naranja -> formulario -> modal verde;
   eliminar -> confirmacion naranja -> borrado logico -> modal rojo. Toda pantalla nueva usa estos flujos
 - Cada modulo en lib/modulos/<grupo>/: modelos.dart, <grupo>_api.dart y una pantalla por opcion del menu
 
@@ -815,6 +824,11 @@ cd passenger-app && flutter build appbundle --release
 - [x] Flujo de viaje (solicitud -> oferta -> viaje -> pago) - implementado; falta prueba end-to-end por la API
 - [x] DataSeeder con datos de prueba - ejecutado y verificado (corre despues de AdminInitializer via @Order)
 - [x] Backend arrancando contra la BD en Docker; login, 401/403 y endpoints con geography verificados
+- [x] Panel admin: tabla con N°, ojo que abre modal de detalle, menu Ordenar; modales animados (verde / naranja / rojo)
+- [x] Repositorio GitHub: https://github.com/XeXeL27/UniTaxi-V0.2 (publico). Sin properties ni .env
+- [ ] SIGUIENTE (fase 2 del panel, pendiente de aprobacion): grupos Instituciones, Vehiculos, Tarifas y
+      descuentos, Calificaciones con la misma TablaDatos + flujos_crud; luego revision de documentos y
+      verificaciones estudiantiles
 - [ ] App Flutter pasajero
 - [ ] App Flutter conductor
 - [x] Estado A/X en todas las tablas; contacto en persona; nombre_usuario; login con rol (BD recreada 2026-09-23)

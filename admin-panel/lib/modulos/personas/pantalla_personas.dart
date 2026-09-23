@@ -34,6 +34,7 @@ class PantallaPersonas extends StatelessWidget {
         ColumnaTabla(titulo: 'Teléfono', valor: (p) => p.telefono, ancho: 100, proporcion: 1.4),
         ColumnaTabla(titulo: 'CI', valor: (p) => p.ciCompleto, ancho: 90, proporcion: 1.2),
         ColumnaTabla(titulo: 'Nacimiento', tipo: TipoColumna.fecha, valor: (p) => p.fechaNacimiento),
+        ColumnaTabla(titulo: 'Registrado', tipo: TipoColumna.fechaHora, valor: (p) => p.creadoEn),
         ColumnaTabla(
           titulo: 'Usuarios',
           valor: (p) => p.tiposUsuarioTexto,

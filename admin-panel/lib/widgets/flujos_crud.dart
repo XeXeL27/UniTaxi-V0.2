@@ -34,11 +34,7 @@ Future<void> flujoEditar(
   required String mensajeExito,
   required VoidCallback alTerminar,
 }) async {
-  final confirmado = await confirmarAccion(
-    context,
-    mensaje: '¿Está seguro de editar $descripcion?',
-    textoConfirmar: 'Sí, editar',
-  );
+  final confirmado = await confirmarAccion(context, mensaje: 'Va a editar $descripcion.', textoConfirmar: 'Sí, editar');
   if (!confirmado || !context.mounted) return;
   final resultado = await abrirModal(context, formulario);
   if (resultado == null || !context.mounted) return;
@@ -55,14 +51,14 @@ Future<void> flujoEliminar(
 }) async {
   final confirmado = await confirmarAccion(
     context,
-    mensaje: '¿Está seguro de eliminar $descripcion? El registro dejará de aparecer en las listas.',
+    mensaje: 'Va a eliminar $descripcion. El registro dejará de aparecer en las listas.',
     textoConfirmar: 'Sí, eliminar',
   );
   if (!confirmado || !context.mounted) return;
   try {
     await eliminar();
   } on ApiExcepcion catch (e) {
-    if (context.mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    if (context.mounted) await mostrarErrorDialogo(context, titulo: 'No se pudo eliminar', mensaje: e.mensaje);
     return;
   }
   if (!context.mounted) return;
