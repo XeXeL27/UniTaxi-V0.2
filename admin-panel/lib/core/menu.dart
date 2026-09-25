@@ -27,9 +27,12 @@ class Menu {
   static const usuarios = ItemMenu('Usuarios', FontAwesomeIcons.userShield, '/usuarios');
   static const pasajeros = ItemMenu('Pasajeros', FontAwesomeIcons.userCheck, '/pasajeros');
   static const conductores = ItemMenu('Conductores', FontAwesomeIcons.carSide, '/conductores');
+  static const zonas = ItemMenu('Zonas de servicio', FontAwesomeIcons.drawPolygon, '/zonas');
+  static const mapa = ItemMenu('Mapa', FontAwesomeIcons.mapLocationDot, '/mapa');
 
   static const grupos = [
     GrupoMenu('Personas', FontAwesomeIcons.users, [personas, usuarios, pasajeros, conductores]),
+    GrupoMenu('Mapa', FontAwesomeIcons.map, [zonas, mapa]),
   ];
 
   static List<ItemMenu> get todos => [inicio, for (final g in grupos) ...g.items];

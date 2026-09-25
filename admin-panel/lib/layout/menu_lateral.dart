@@ -21,44 +21,48 @@ class MenuLateral extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: enDrawer ? null : 260,
+    // Material y no Container con color: los ListTile de los grupos pintan sus efectos de tinta
+    // sobre el Material mas cercano y un ColoredBox intermedio los tapaba.
+    return Material(
       color: ColoresApp.azul,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            height: 70,
-            alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
+      child: SizedBox(
+        width: enDrawer ? null : 260,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 70,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FaIcon(FontAwesomeIcons.taxi, color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'TAXIUAP ADMIN',
+                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17, letterSpacing: 1),
+                  ),
+                ],
+              ),
             ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                FaIcon(FontAwesomeIcons.taxi, color: Colors.white, size: 20),
-                SizedBox(width: 10),
-                Text(
-                  'TAXIUAP ADMIN',
-                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 17, letterSpacing: 1),
-                ),
-              ],
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _OpcionMenu(
+                    item: Menu.inicio,
+                    activa: rutaActual == Menu.inicio.ruta,
+                    alPresionar: () => _ir(context, Menu.inicio.ruta),
+                  ),
+                  for (final grupo in Menu.grupos) _grupo(context, grupo),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                _OpcionMenu(
-                  item: Menu.inicio,
-                  activa: rutaActual == Menu.inicio.ruta,
-                  alPresionar: () => _ir(context, Menu.inicio.ruta),
-                ),
-                for (final grupo in Menu.grupos) _grupo(context, grupo),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

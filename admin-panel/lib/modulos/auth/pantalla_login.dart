@@ -6,6 +6,10 @@ import '../../core/api_excepcion.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
 
+/// Ajuste de los iconos dentro de los campos del login: izquierda, arriba, abajo, derecha.
+/// Un valor positivo acerca el icono hacia ese lado. El tamano se cambia en el size del icono.
+const EdgeInsets _ajusteIconoLogin = EdgeInsets.only(left: 10, top: 10);
+
 /// Inicio de sesion del administrador (correo o telefono y contrasena).
 class PantallaLogin extends StatefulWidget {
   const PantallaLogin({super.key});
@@ -47,86 +51,106 @@ class _PantallaLoginState extends State<PantallaLogin> {
 
   @override
   Widget build(BuildContext context) {
-    final movil = Pantalla.esMovil(context);
+    final dividido = MediaQuery.sizeOf(context).width >= Pantalla.loginDividido;
     return Scaffold(
-      body: Container(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [ColoresApp.azul, ColoresApp.azul, ColoresApp.rojo, ColoresApp.rojo],
-            stops: [0, 0.5, 0.5, 1],
-          ),
-        ),
-        alignment: Alignment.center,
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 400),
-            padding: EdgeInsets.symmetric(horizontal: movil ? 20 : 32, vertical: movil ? 32 : 48),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(10),
-              boxShadow: const [BoxShadow(color: Color(0x4D000000), blurRadius: 25, offset: Offset(0, 10))],
+      backgroundColor: ColoresApp.azul,
+      body: dividido
+          ? Row(
+              children: [
+                const Expanded(flex: 5, child: _PanelMarca()),
+                Expanded(flex: 6, child: _formulario()),
+              ],
+            )
+          : Column(
+              children: [
+                const _PanelMarca(compacta: true),
+                Expanded(child: _formulario()),
+              ],
             ),
+    );
+  }
+
+  Widget _formulario() {
+    return Container(
+      color: ColoresApp.superficie,
+      alignment: Alignment.center,
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
             child: Form(
               key: _claveFormulario,
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Center(child: FaIcon(FontAwesomeIcons.taxi, color: ColoresApp.rojo, size: 34)),
-                  const SizedBox(height: 12),
                   const Text(
-                    'Acceso al Sistema',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ColoresApp.azul),
+                    'Iniciar sesión',
+                    style: TextStyle(
+                      fontSize: 30,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: -0.5,
+                      color: ColoresApp.azul,
+                    ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 6),
                   const Text(
-                    'TaxiUAP - Panel de administración',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: Colors.black54),
+                    'Entra con tu cuenta de administrador',
+                    style: TextStyle(fontSize: 15, color: ColoresApp.textoSuave),
                   ),
                   const SizedBox(height: 28),
                   if (_error != null) ...[
                     Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: const Color(0xFFF8D7DA), borderRadius: BorderRadius.circular(6)),
-                      child: Text(_error!, style: const TextStyle(color: Color(0xFF842029))),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFDECF0),
+                        borderRadius: BorderRadius.circular(RadiosApp.control),
+                        border: Border.all(color: ColoresApp.rojo.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Padding(
+                            padding: EdgeInsets.only(top: 2),
+                            child: FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              _error!,
+                              style: const TextStyle(color: ColoresApp.rojoOscuro, height: 1.4),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 20),
                   ],
-                  const Text(
-                    'Usuario',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: ColoresApp.azul),
-                  ),
-                  const SizedBox(height: 6),
                   TextFormField(
                     controller: _usuario,
                     autofocus: true,
                     textInputAction: TextInputAction.next,
                     autofillHints: const [AutofillHints.username, AutofillHints.email],
                     decoration: const InputDecoration(
-                      hintText: 'Usuario, correo o teléfono',
-                      prefixIcon: Padding(padding: EdgeInsets.all(12), child: FaIcon(FontAwesomeIcons.user, size: 16)),
+                      labelText: 'Usuario, correo o teléfono',
+                      prefixIcon: Padding(
+                        padding: _ajusteIconoLogin,
+                        child: FaIcon(FontAwesomeIcons.user, size: 16),
+                      ),
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingrese su usuario' : null,
                   ),
-                  const SizedBox(height: 18),
-                  const Text(
-                    'Contraseña',
-                    style: TextStyle(fontWeight: FontWeight.bold, color: ColoresApp.azul),
-                  ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 16),
                   TextFormField(
                     controller: _password,
                     obscureText: _ocultarPassword,
                     autofillHints: const [AutofillHints.password],
                     onFieldSubmitted: (_) => _ingresar(),
                     decoration: InputDecoration(
+                      labelText: 'Contraseña',
                       prefixIcon: const Padding(
-                        padding: EdgeInsets.all(12),
+                        padding: _ajusteIconoLogin,
                         child: FaIcon(FontAwesomeIcons.lock, size: 16),
                       ),
                       suffixIcon: IconButton(
@@ -137,7 +161,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                     ),
                     validator: (v) => (v == null || v.isEmpty) ? 'Ingrese su contraseña' : null,
                   ),
-                  const SizedBox(height: 28),
+                  const SizedBox(height: 26),
                   FilledButton.icon(
                     onPressed: _cargando ? null : _ingresar,
                     icon: _cargando
@@ -147,13 +171,136 @@ class _PantallaLoginState extends State<PantallaLogin> {
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
                         : const FaIcon(FontAwesomeIcons.rightToBracket, size: 16),
-                    label: const Text('Iniciar Sesión', style: TextStyle(fontWeight: FontWeight.bold)),
+                    label: const Text('Iniciar sesión'),
+                  ),
+                  const SizedBox(height: 24),
+                  const Row(
+                    children: [
+                      Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 12),
+                        child: FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 12),
+                      ),
+                      Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Acceso exclusivo para administradores del sistema',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: ColoresApp.textoSuave),
                   ),
                 ],
               ),
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Lado izquierdo del login: marca, nombre del producto y un halo rojo difuso.
+class _PanelMarca extends StatelessWidget {
+  const _PanelMarca({this.compacta = false});
+
+  final bool compacta;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [ColoresApp.azulClaro, ColoresApp.azul],
+        ),
+      ),
+      child: Stack(
+        children: [
+          if (!compacta)
+            Positioned(
+              left: -140,
+              bottom: -180,
+              child: Container(
+                width: 440,
+                height: 440,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [ColoresApp.rojo.withValues(alpha: 0.45), Colors.transparent],
+                  ),
+                ),
+              ),
+            ),
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: compacta ? 24 : 56, vertical: compacta ? 32 : 40),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: compacta ? CrossAxisAlignment.center : CrossAxisAlignment.start,
+              children: [
+                Align(
+                  alignment: compacta ? Alignment.center : Alignment.centerLeft,
+                  child: Container(
+                    width: compacta ? 54 : 66,
+                    height: compacta ? 54 : 66,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [ColoresApp.rojo, ColoresApp.rojoOscuro],
+                      ),
+                      borderRadius: BorderRadius.circular(18),
+                      boxShadow: [
+                        BoxShadow(
+                          color: ColoresApp.rojoOscuro.withValues(alpha: 0.45),
+                          blurRadius: 22,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: const Center(child: FaIcon(FontAwesomeIcons.taxi, color: Colors.white, size: 28)),
+                  ),
+                ),
+                SizedBox(height: compacta ? 14 : 26),
+                Text(
+                  'TaxiUAP',
+                  style: TextStyle(
+                    fontSize: compacta ? 28 : 38,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: -0.5,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Panel de administración',
+                  style: TextStyle(
+                    fontSize: compacta ? 14 : 16,
+                    color: Colors.white.withValues(alpha: 0.75),
+                  ),
+                ),
+                if (!compacta) ...[
+                  const SizedBox(height: 26),
+                  Container(
+                    width: 56,
+                    height: 4,
+                    decoration: BoxDecoration(color: ColoresApp.rojo, borderRadius: BorderRadius.circular(2)),
+                  ),
+                  const SizedBox(height: 26),
+                  Text(
+                    'Gestiona pasajeros, conductores, viajes y verificaciones desde un solo lugar.',
+                    style: TextStyle(
+                      fontSize: 15,
+                      height: 1.5,
+                      color: Colors.white.withValues(alpha: 0.72),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
