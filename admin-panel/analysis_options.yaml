@@ -13,6 +13,9 @@ analyzer:
   exclude:
     - build/**
     - web/**
+    # Los simuladores de tool/ son de linea de comandos: su unica salida es por pantalla, asi que
+    # alli print no es un olvido sino el canal correcto. En lib/ la regla sigue activa.
+    - tool/**
 
 linter:
   # The lint rules applied to this project can be customized in the

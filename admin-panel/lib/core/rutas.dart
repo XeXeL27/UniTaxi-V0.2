@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../layout/layout_admin.dart';
 import '../modulos/auth/pantalla_login.dart';
+import '../modulos/flota/pantalla_flota.dart';
 import '../modulos/inicio/pantalla_inicio.dart';
 import '../modulos/mapa/pantalla_mapa.dart';
 import '../modulos/mapa/pantalla_zonas.dart';
@@ -39,6 +40,7 @@ GoRouter crearRutas(Sesion sesion) {
           GoRoute(path: Menu.conductores.ruta, pageBuilder: (_, _) => pagina(const PantallaConductores())),
           GoRoute(path: Menu.zonas.ruta, pageBuilder: (_, _) => pagina(const PantallaZonas())),
           GoRoute(path: Menu.mapa.ruta, pageBuilder: (_, _) => pagina(const PantallaMapa())),
+          GoRoute(path: Menu.flota.ruta, pageBuilder: (_, _) => pagina(const PantallaFlota())),
         ],
       ),
     ],
