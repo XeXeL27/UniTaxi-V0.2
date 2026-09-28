@@ -7,8 +7,7 @@ estudiantes verificados con su comprobante de matrícula. Primera versión solo 
 |---|---|---|
 | `backend/` | API REST, JWT, WebSocket STOMP, reglas de negocio | Spring Boot 4.1, Java 21, Gradle |
 | `admin-panel/` | Panel web de administración | Flutter Web |
-| `passenger-app/` | App del pasajero (pendiente) | Flutter |
-| `driver-app/` | App del conductor (pendiente) | Flutter |
+| `app-movil/` | Una sola app para pasajeros y conductores (Android; también se sirve como web) | Flutter |
 | `docker-compose.yml` | Base de datos de desarrollo | PostgreSQL 16 + PostGIS 3.5 |
 
 Las convenciones del proyecto, el modelo de datos y las reglas de negocio están en [CLAUDE.md](CLAUDE.md).
@@ -32,24 +31,35 @@ cp backend/src/main/resources/application-xexel.properties.example \
 Completar en ambos los valores `<cambiar>`. La contraseña de `.env` (`TAXIUAP_DB_PASSWORD`) debe ser la
 misma que `spring.datasource.password` del perfil xexel.
 
-## Iniciar todo
-
-En tres terminales, en este orden:
+## Iniciar todo (un solo comando)
 
 ```bash
-# 1. Base de datos (puerto 5436)
-docker compose up -d
-docker compose ps            # debe decir "healthy"
-
-# 2. Backend (puerto 8080). Al arrancar crea las tablas y carga datos de prueba (perfil xexel)
-cd backend && ./gradlew bootRun
-
-# 3. Panel admin (puerto 5173, abre Chrome)
-cd admin-panel && flutter run -d chrome --web-port 5173
+./iniciar.sh
 ```
+
+Levanta la base de datos, compila el panel y la app si su código cambió y arranca el backend, que sirve
+todo desde el mismo servidor. Luego se entra solo cambiando el link:
+
+| Link | Qué abre |
+|---|---|
+| `http://localhost:8080/admin` | Panel de administración (cuentas ADMIN) |
+| `http://localhost:8080/app` | App: según la cuenta muestra lo del pasajero o lo del conductor; si la persona tiene las dos, pregunta cómo quiere ingresar |
+| `http://IP-de-la-PC:8080/app` | La app desde un celular de la misma red (en el navegador el GPS solo funciona en `localhost` o con HTTPS) |
+
+- `./iniciar.sh --compilar` recompila los dos frontends aunque no hayan cambiado.
+- `SERVER_PORT=8081 ./iniciar.sh` usa otro puerto.
 
 El panel se abre con el administrador inicial: usuario `admin` y la contraseña de
 `admin.inicial.password` del perfil xexel.
+
+### Para programar con recarga en caliente
+
+```bash
+docker compose up -d
+cd backend && ./gradlew bootRun
+cd admin-panel && flutter run -d chrome --web-port 5173
+cd app-movil && flutter run -d chrome --web-port 5174      # o en el celular/emulador: flutter run
+```
 
 Usuarios de prueba del seed (contraseña `Taxi123*`): `pasajero1` a `pasajero8`, `conductor1` a
 `conductor6`, `admin.pruebas`.
@@ -57,8 +67,8 @@ Usuarios de prueba del seed (contraseña `Taxi123*`): `pasajero1` a `pasajero8`,
 ## Detener todo
 
 ```bash
-# Panel: tecla q en la terminal de flutter run
-# Backend: Ctrl+C en su terminal
+# Backend (con ./iniciar.sh): Ctrl+C en su terminal
+# flutter run: tecla q en su terminal
 docker compose down          # detiene la base de datos; los datos quedan guardados
 ```
 
@@ -68,6 +78,9 @@ docker compose down          # detiene la base de datos; los datos quedan guarda
 
 ```bash
 cd backend && ./gradlew build
+
+# App Android (hace falta el Android SDK):
+cd app-movil && flutter build appbundle --release
 
 # Panel admin para producción:
 cd admin-panel && flutter build web --release --no-tree-shake-icons --no-web-resources-cdn \

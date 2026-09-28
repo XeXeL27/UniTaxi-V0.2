@@ -10,6 +10,7 @@ import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,9 +38,13 @@ public class PerfilPasajeroService {
         persona.setComplementoCi(request.complementoCi());
         persona.setFechaNacimiento(request.fechaNacimiento());
 
-        usuario.setFotoUrl(request.fotoUrl());
-
         return aRespuesta(pasajero);
+    }
+
+    /** Perfil de un pasajero por su id (panel admin). */
+    public PerfilPasajeroResponse obtenerPorPasajero(Long idPasajero) {
+        return aRespuesta(pasajeroRepository.findById(idPasajero)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Pasajero", idPasajero)));
     }
 
     private Pasajero buscarPasajero(Long idUsuario) {
@@ -61,6 +66,7 @@ public class PerfilPasajeroService {
                 persona.getTelefono(),
                 usuario.getFotoUrl(),
                 pasajero.getCalificacionPromedio(),
-                pasajero.getTotalCalificaciones());
+                pasajero.getTotalCalificaciones(),
+                usuario.getId());
     }
 }

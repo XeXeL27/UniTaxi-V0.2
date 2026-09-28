@@ -13,5 +13,7 @@ public interface CalificacionRepository extends JpaRepository<Calificacion, Long
 
     List<Calificacion> findByUsuarioReceptorId(Long idUsuarioReceptor);
 
+    List<Calificacion> findByUsuarioEmisorId(Long idUsuarioEmisor);
+
     boolean existsByViajeIdAndUsuarioEmisorId(Long idViaje, Long idUsuarioEmisor);
 }

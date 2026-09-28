@@ -97,6 +97,43 @@ public class AutenticacionService {
         return generarTokens(candidatos.get(0));
     }
 
+    /**
+     * Roles de las cuentas que coinciden con estas credenciales, sin iniciar sesion. La app movil lo
+     * usa para saber si la persona entra como pasajero, como conductor o si hay que preguntarle.
+     */
+    public List<String> cuentas(String identificador, String password) {
+        List<String> roles = buscarCandidatos(identificador.trim()).stream()
+                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+                .filter(u -> u.getPersona().getEstadoPersona() == EstadoRegistro.A)
+                .filter(u -> passwordEncoder.matches(password, u.getPasswordHash()))
+                .map(u -> u.getRol().getCodigo())
+                .distinct()
+                .toList();
+        if (roles.isEmpty()) {
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS);
+        }
+        return roles;
+    }
+
+    /**
+     * Pasa la sesion a la otra cuenta de la misma persona (pasajero o conductor) sin volver a pedir
+     * la contrasena: las dos cuentas comparten credenciales y la persona ya se autentico.
+     */
+    public TokenResponse cambiarRol(Long idUsuarioActual, String rol) {
+        Usuario actual = usuarioRepository.findById(idUsuarioActual)
+                .orElseThrow(() -> new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS));
+        String destino = rol == null ? "" : rol.trim().toUpperCase();
+        if (!RolSistema.PASAJERO.getCodigo().equals(destino) && !RolSistema.CONDUCTOR.getCodigo().equals(destino)) {
+            throw new NegocioException("Solo se puede cambiar entre pasajero y conductor");
+        }
+        return usuarioRepository.findByPersonaId(actual.getPersona().getId()).stream()
+                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+                .filter(u -> u.getRol().getCodigo().equals(destino))
+                .findFirst()
+                .map(this::generarTokens)
+                .orElseThrow(() -> new NegocioException("No tiene una cuenta de " + destino.toLowerCase()));
+    }
+
     public TokenResponse refrescar(RefreshRequest datos) {
         try {
             var jwtUser = jwtService.validar(datos.tokenRefresco(), TipoToken.REFRESCO);
@@ -153,6 +190,13 @@ public class AutenticacionService {
                 persona.getTelefono(),
                 rolCodigo);
 
-        return new TokenResponse(tokenAcceso, tokenRefresco, jwtService.getExpiracionMs(), usuarioResponse);
+        List<String> rolesDisponibles = usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+                .map(u -> u.getRol().getCodigo())
+                .distinct()
+                .toList();
+
+        return new TokenResponse(tokenAcceso, tokenRefresco, jwtService.getExpiracionMs(), usuarioResponse,
+                rolesDisponibles);
     }
 }

@@ -45,6 +45,18 @@ class ClienteApi {
     });
   }
 
+  /// PUT multipart con un solo archivo en la parte [campo] (por ejemplo reemplazar un PDF).
+  Future<dynamic> putArchivo(String ruta, String campo, ArchivoSubida archivo, {String tipo = 'pdf'}) {
+    return _ejecutar(() {
+      final peticion = http.MultipartRequest('PUT', Uri.parse('${Config.apiUrl}$ruta'));
+      peticion.files.add(
+        http.MultipartFile.fromBytes(campo, archivo.bytes, filename: archivo.nombre,
+            contentType: MediaType('application', tipo)),
+      );
+      return peticion;
+    });
+  }
+
   /// Descarga un archivo binario (por ejemplo un PDF) con la sesion actual.
   Future<Uint8List> bytes(String ruta) async {
     final respuesta = await _conReintento(() => http.Request('GET', Uri.parse('${Config.apiUrl}$ruta')));

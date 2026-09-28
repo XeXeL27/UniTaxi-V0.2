@@ -35,6 +35,10 @@ class TablaDatos<T> extends StatefulWidget {
   /// Botones por fila (editar, eliminar, etc.). Si es null no hay columna de acciones.
   final List<Widget> Function(T fila)? accionesFila;
 
+  /// Si se indica, el ojo de la columna Acciones abre esta vista (por ejemplo el expediente de un
+  /// conductor) en lugar del modal generico con los datos de la fila.
+  final void Function(T fila)? alVer;
+
   /// Nombre base de los archivos exportados (sin extension).
   final String nombreArchivo;
 
@@ -50,6 +54,7 @@ class TablaDatos<T> extends StatefulWidget {
     this.alRecargar,
     this.acciones = const [],
     this.accionesFila,
+    this.alVer,
   });
 
   @override
@@ -709,8 +714,8 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
             child: Wrap(
               children: [
                 IconButton(
-                  tooltip: 'Ver todos los datos',
-                  onPressed: () => _mostrarDetalle(fila, numero),
+                  tooltip: widget.alVer == null ? 'Ver todos los datos' : 'Ver más',
+                  onPressed: () => widget.alVer == null ? _mostrarDetalle(fila, numero) : widget.alVer!(fila),
                   icon: IconosTabla.ojo,
                 ),
                 if (accionesFila != null) ...accionesFila(fila),

@@ -28,6 +28,11 @@ import com.taxiuap.backend.vehicle.enums.SituacionRevision;
 import com.taxiuap.backend.vehicle.service.DocumentoConductorService;
 
 import jakarta.validation.Valid;
+import com.taxiuap.backend.vehicle.dto.ActualizarDocumentoRequest;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+
 import lombok.RequiredArgsConstructor;
 
 /** Revision administrativa de documentos de conductor. */
@@ -57,6 +62,27 @@ public class DocumentoConductorAdminController {
                 .contentType(MediaType.APPLICATION_PDF)
                 .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.inline().filename(nombre).build().toString())
                 .body(recurso);
+    }
+
+    /** Corrige el tipo o el vencimiento del documento. */
+    @PutMapping("/{id}")
+    public ResponseEntity<ApiResponse<DocumentoConductorAdminResponse>> actualizar(
+            @PathVariable Long id, @Valid @RequestBody ActualizarDocumentoRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Documento actualizado", documentoConductorService.actualizarDatos(id, request)));
+    }
+
+    /** Reemplaza el PDF del documento. */
+    @PutMapping(value = "/{id}/archivo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<DocumentoConductorAdminResponse>> reemplazar(
+            @PathVariable Long id, @RequestPart("archivo") MultipartFile archivo) {
+        return ResponseEntity.ok(ApiResponse.exito("PDF reemplazado", documentoConductorService.reemplazarArchivoAdmin(id, archivo)));
+    }
+
+    /** Borrado logico del documento (el PDF se conserva en la carpeta de la persona). */
+    @DeleteMapping("/{id}")
+    public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
+        documentoConductorService.eliminar(id);
+        return ResponseEntity.ok(ApiResponse.exito("Documento eliminado", null));
     }
 
     @PutMapping("/{id}/revision")

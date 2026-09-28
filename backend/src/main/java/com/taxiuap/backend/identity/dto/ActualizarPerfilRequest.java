@@ -13,6 +13,5 @@ public record ActualizarPerfilRequest(
         @NotBlank String apellidos,
         String ci,
         String complementoCi,
-        LocalDate fechaNacimiento,
-        String fotoUrl) {
+        LocalDate fechaNacimiento) {
 }

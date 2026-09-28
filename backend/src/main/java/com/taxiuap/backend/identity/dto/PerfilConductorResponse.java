@@ -23,5 +23,6 @@ public record PerfilConductorResponse(
         BigDecimal calificacionPromedio,
         Integer totalCalificaciones,
         LocalDateTime fechaAprobacion,
-        BigDecimal saldoBilletera) {
+        BigDecimal saldoBilletera,
+        Long idUsuario) {
 }

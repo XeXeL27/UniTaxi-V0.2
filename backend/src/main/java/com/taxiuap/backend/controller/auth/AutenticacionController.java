@@ -1,5 +1,7 @@
 package com.taxiuap.backend.controller.auth;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -44,6 +46,12 @@ public class AutenticacionController {
     public ResponseEntity<ApiResponse<TokenResponse>> login(@Valid @RequestBody LoginRequest datos) {
         TokenResponse token = autenticacionService.login(datos);
         return ResponseEntity.ok(ApiResponse.exito("Sesion iniciada", token));
+    }
+
+    /** Tipos de cuenta (PASAJERO, CONDUCTOR, ADMIN) que tiene la persona con estas credenciales. */
+    @PostMapping("/cuentas")
+    public ResponseEntity<ApiResponse<List<String>>> cuentas(@Valid @RequestBody LoginRequest datos) {
+        return ResponseEntity.ok(ApiResponse.exito(autenticacionService.cuentas(datos.usuario(), datos.password())));
     }
 
     @PostMapping("/refresh")

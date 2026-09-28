@@ -14,7 +14,6 @@ public record ActualizarPerfilConductorRequest(
         String ci,
         String complementoCi,
         LocalDate fechaNacimiento,
-        String fotoUrl,
         @NotBlank String numeroLicencia,
         String categoriaLicencia) {
 }

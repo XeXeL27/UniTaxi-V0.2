@@ -109,7 +109,8 @@ public class RegistroMotoConductorService {
             documento.setConductor(conductor);
             documento.setVehiculo(DOCUMENTOS_DEL_VEHICULO.contains(tipo) ? vehiculo : null);
             documento.setTipoDocumento(tipo);
-            documento.setArchivoUrl(almacenamientoArchivos.guardarPdf(entrada.getValue(), "conductores/" + conductor.getId()));
+            documento.setArchivoUrl(almacenamientoArchivos.guardarPdf(entrada.getValue(),
+                    almacenamientoArchivos.carpetaDocumentosConductor(conductor.getUsuario().getPersona()), tipo.name()));
             documento.setFechaVencimiento(vencimientos.get(tipo));
             documento.setSituacionRevision(SituacionRevision.PENDIENTE);
             documentoConductorRepository.save(documento);

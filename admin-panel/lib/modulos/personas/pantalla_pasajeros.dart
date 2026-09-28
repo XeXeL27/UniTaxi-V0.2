@@ -5,6 +5,9 @@ import 'package:provider/provider.dart';
 import '../../core/cliente_api.dart';
 import '../../widgets/listado_remoto.dart';
 import '../../widgets/tabla/columna_tabla.dart';
+import '../expediente/expediente_api.dart';
+import '../expediente/expediente_pasajero.dart';
+import '../expediente/vista_expediente.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
 
@@ -15,11 +18,14 @@ class PantallaPasajeros extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final api = PersonasApi(context.read<ClienteApi>());
+    final expedienteApi = ExpedienteApi(context.read<ClienteApi>());
     return ListadoRemoto<PasajeroAdmin>(
       titulo: 'Pasajeros',
       icono: FontAwesomeIcons.userCheck,
       nombreArchivo: 'pasajeros',
       cargar: api.listarPasajeros,
+      alVer: (pasajero, recargar) =>
+          abrirExpediente(context, ExpedientePasajero(api: expedienteApi, pasajero: pasajero, alCambiar: recargar)),
       columnas: [
         ColumnaTabla(titulo: 'Usuario', valor: (p) => p.nombreUsuario),
         ColumnaTabla(titulo: 'Nombre', valor: (p) => '${p.nombres} ${p.apellidos}', ancho: 150, proporcion: 2.5),

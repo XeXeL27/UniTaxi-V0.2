@@ -15,5 +15,6 @@ public record PerfilPasajeroResponse(
         String telefono,
         String fotoUrl,
         BigDecimal calificacionPromedio,
-        Integer totalCalificaciones) {
+        Integer totalCalificaciones,
+        Long idUsuario) {
 }

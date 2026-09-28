@@ -11,5 +11,6 @@ public record CalificacionResponse(
         String comentario,
         LocalDateTime fecha,
         String nombreEmisor,
+        String nombreReceptor,
         List<String> etiquetas) {
 }

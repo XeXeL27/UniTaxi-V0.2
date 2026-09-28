@@ -19,6 +19,9 @@ class ListadoRemoto<T> extends StatefulWidget {
   /// Botones por fila; reciben la fila y la funcion para recargar la tabla.
   final List<Widget> Function(T fila, VoidCallback recargar)? accionesFila;
 
+  /// Vista propia del ojo de cada fila; recibe la fila y la funcion para recargar la tabla.
+  final void Function(T fila, VoidCallback recargar)? alVer;
+
   const ListadoRemoto({
     super.key,
     required this.titulo,
@@ -28,6 +31,7 @@ class ListadoRemoto<T> extends StatefulWidget {
     required this.columnas,
     this.acciones,
     this.accionesFila,
+    this.alVer,
   });
 
   @override
@@ -76,6 +80,7 @@ class _ListadoRemotoState<T> extends State<ListadoRemoto<T>> {
       alRecargar: _recargar,
       acciones: widget.acciones?.call(_recargar) ?? const [],
       accionesFila: accionesFila == null ? null : (fila) => accionesFila(fila, _recargar),
+      alVer: widget.alVer == null ? null : (fila) => widget.alVer!(fila, _recargar),
     );
   }
 }

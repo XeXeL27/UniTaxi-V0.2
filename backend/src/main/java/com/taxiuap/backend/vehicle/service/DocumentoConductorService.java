@@ -5,24 +5,26 @@ import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.entity.Administrador;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
+import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
+import com.taxiuap.backend.identity.service.PermisoEdicionService;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
+import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.vehicle.dto.DocumentoConductorAdminResponse;
-import com.taxiuap.backend.vehicle.dto.DocumentoConductorRequest;
+import com.taxiuap.backend.vehicle.dto.ActualizarDocumentoRequest;
 import com.taxiuap.backend.vehicle.dto.DocumentoConductorResponse;
 import com.taxiuap.backend.vehicle.dto.RevisionDocumentoRequest;
 import com.taxiuap.backend.vehicle.entity.DocumentoConductor;
-import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.enums.SituacionRevision;
 import com.taxiuap.backend.vehicle.repository.DocumentoConductorRepository;
-import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -37,45 +39,70 @@ public class DocumentoConductorService {
 
     private final DocumentoConductorRepository documentoConductorRepository;
     private final ConductorRepository conductorRepository;
-    private final VehiculoRepository vehiculoRepository;
+    private final AlmacenamientoArchivos almacenamientoArchivos;
+    private final PermisoEdicionService permisoEdicionService;
 
     public List<DocumentoConductorResponse> listar(Long idUsuario) {
         Conductor conductor = buscarConductor(idUsuario);
-        return documentoConductorRepository.findByConductorId(conductor.getId()).stream()
+        return documentoConductorRepository
+                .findByConductorIdAndEstadoDocumentoConductorOrderByIdAsc(conductor.getId(), EstadoRegistro.A).stream()
                 .map(this::aRespuesta)
                 .toList();
     }
 
-    @Transactional
-    public DocumentoConductorResponse crear(Long idUsuario, DocumentoConductorRequest request) {
-        Conductor conductor = buscarConductor(idUsuario);
-
-        DocumentoConductor documento = new DocumentoConductor();
-        documento.setConductor(conductor);
-        documento.setVehiculo(buscarVehiculoOpcional(request.idVehiculo()));
-        documento.setTipoDocumento(request.tipoDocumento());
-        documento.setArchivoUrl(request.archivoUrl());
-        documento.setFechaVencimiento(request.fechaVencimiento());
-        // Se crea siempre PENDIENTE: solo un administrador cambia la situacion de revision.
-        documento.setSituacionRevision(SituacionRevision.PENDIENTE);
-        documento.setEstadoDocumentoConductor(EstadoRegistro.A);
-
-        return aRespuesta(documentoConductorRepository.save(documento));
-    }
-
-    @Transactional
-    public DocumentoConductorResponse actualizar(Long idUsuario, Long id, DocumentoConductorRequest request) {
+    /** Documento activo del conductor autenticado, para ver su PDF. */
+    public DocumentoConductor obtenerDelConductor(Long idUsuario, Long id) {
         Conductor conductor = buscarConductor(idUsuario);
         DocumentoConductor documento = buscarDelConductor(id, conductor.getId());
+        if (documento.getEstadoDocumentoConductor() != EstadoRegistro.A) {
+            throw RecursoNoEncontradoException.de("DocumentoConductor", id);
+        }
+        return documento;
+    }
 
-        documento.setVehiculo(buscarVehiculoOpcional(request.idVehiculo()));
-        documento.setTipoDocumento(request.tipoDocumento());
-        documento.setArchivoUrl(request.archivoUrl());
-        documento.setFechaVencimiento(request.fechaVencimiento());
-        // Al reemplazar el archivo vuelve a quedar pendiente de revision.
+    /**
+     * El conductor reemplaza el PDF de un documento. Necesita un permiso vigente del administrador
+     * para ese documento; el permiso se cierra al usarlo y el documento vuelve a PENDIENTE.
+     */
+    @Transactional
+    public DocumentoConductorResponse reemplazarArchivo(Long idUsuario, Long id, MultipartFile archivo) {
+        DocumentoConductor documento = obtenerDelConductor(idUsuario, id);
+        almacenamientoArchivos.validarPdf(archivo, documento.getTipoDocumento().name());
+        permisoEdicionService.consumir(documento.getConductor().getId(), TipoPermisoEdicion.DOCUMENTO, id);
+        guardarNuevoArchivo(documento, archivo);
         documento.setSituacionRevision(SituacionRevision.PENDIENTE);
+        documento.setAdminRevisor(null);
+        return aRespuesta(documento);
+    }
 
-        return aRespuesta(documentoConductorRepository.save(documento));
+    /** El administrador corrige el tipo o la fecha de vencimiento de un documento. */
+    @Transactional
+    public DocumentoConductorAdminResponse actualizarDatos(Long id, ActualizarDocumentoRequest request) {
+        DocumentoConductor documento = obtenerActivo(id);
+        documento.setTipoDocumento(request.tipoDocumento());
+        documento.setFechaVencimiento(request.fechaVencimiento());
+        return aRespuestaAdmin(documento);
+    }
+
+    /** El administrador reemplaza el PDF; la situacion de revision no cambia. */
+    @Transactional
+    public DocumentoConductorAdminResponse reemplazarArchivoAdmin(Long id, MultipartFile archivo) {
+        DocumentoConductor documento = obtenerActivo(id);
+        almacenamientoArchivos.validarPdf(archivo, documento.getTipoDocumento().name());
+        guardarNuevoArchivo(documento, archivo);
+        return aRespuestaAdmin(documento);
+    }
+
+    /** Borrado logico del documento. El PDF se conserva en la carpeta de la persona. */
+    @Transactional
+    public void eliminar(Long id) {
+        obtenerActivo(id).setEstadoDocumentoConductor(EstadoRegistro.X);
+    }
+
+    private void guardarNuevoArchivo(DocumentoConductor documento, MultipartFile archivo) {
+        Persona persona = documento.getConductor().getUsuario().getPersona();
+        documento.setArchivoUrl(almacenamientoArchivos.guardarPdf(archivo,
+                almacenamientoArchivos.carpetaDocumentosConductor(persona), documento.getTipoDocumento().name()));
     }
 
     public List<DocumentoConductorAdminResponse> listarParaAdmin(SituacionRevision situacion) {
@@ -124,7 +151,8 @@ public class DocumentoConductorService {
             return false;
         }
 
-        List<DocumentoConductor> documentos = documentoConductorRepository.findByConductorId(idConductor);
+        List<DocumentoConductor> documentos = documentoConductorRepository
+                .findByConductorIdAndEstadoDocumentoConductorOrderByIdAsc(idConductor, EstadoRegistro.A);
         LocalDate hoy = LocalDate.now();
 
         return documentos.stream().allMatch(documento ->
@@ -144,14 +172,6 @@ public class DocumentoConductorService {
             throw RecursoNoEncontradoException.de("DocumentoConductor", id);
         }
         return documento;
-    }
-
-    private Vehiculo buscarVehiculoOpcional(Long idVehiculo) {
-        if (idVehiculo == null) {
-            return null;
-        }
-        return vehiculoRepository.findById(idVehiculo)
-                .orElseThrow(() -> RecursoNoEncontradoException.de("Vehiculo", idVehiculo));
     }
 
     private DocumentoConductorResponse aRespuesta(DocumentoConductor documento) {

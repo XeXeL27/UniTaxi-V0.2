@@ -14,6 +14,11 @@ import com.taxiuap.backend.identity.dto.UsuarioAdminResponse;
 import com.taxiuap.backend.identity.service.GestionUsuarioService;
 import com.taxiuap.backend.shared.response.ApiResponse;
 
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import com.taxiuap.backend.identity.service.FotoPerfilService;
+
 import lombok.RequiredArgsConstructor;
 
 /** Cuentas de usuario desde el panel admin. El alta se hace por /api/admin/personas/{id}/usuarios. */
@@ -23,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 public class UsuarioAdminController {
 
     private final GestionUsuarioService gestionUsuarioService;
+    private final FotoPerfilService fotoPerfilService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UsuarioAdminResponse>>> listar() {
@@ -33,5 +39,14 @@ public class UsuarioAdminController {
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
         gestionUsuarioService.eliminar(id, UsuarioActual.idUsuario());
         return ResponseEntity.ok(ApiResponse.exito("Usuario eliminado", null));
+    }
+
+    /** Foto de perfil de una cuenta (404 si no tiene). */
+    @GetMapping("/{id}/foto")
+    public ResponseEntity<Resource> foto(@PathVariable Long id) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.noCache())
+                .body(fotoPerfilService.leer(id));
     }
 }

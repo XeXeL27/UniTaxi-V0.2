@@ -14,6 +14,8 @@ import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.pricing.entity.BilleteraConductor;
 import com.taxiuap.backend.pricing.repository.BilleteraConductorRepository;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
 
 import lombok.RequiredArgsConstructor;
 
@@ -25,14 +27,23 @@ public class PerfilConductorService {
 
     private final ConductorRepository conductorRepository;
     private final BilleteraConductorRepository billeteraConductorRepository;
+    private final PermisoEdicionService permisoEdicionService;
 
     public PerfilConductorResponse obtener(Long idUsuario) {
         return aRespuesta(buscarConductor(idUsuario));
     }
 
+    /** Perfil de un conductor por su id (panel admin). */
+    public PerfilConductorResponse obtenerPorConductor(Long idConductor) {
+        return aRespuesta(conductorRepository.findById(idConductor)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Conductor", idConductor)));
+    }
+
+    /** El conductor solo puede cambiar sus datos con un permiso vigente del administrador. */
     @Transactional
     public PerfilConductorResponse actualizar(Long idUsuario, ActualizarPerfilConductorRequest request) {
         Conductor conductor = buscarConductor(idUsuario);
+        permisoEdicionService.consumir(conductor.getId(), TipoPermisoEdicion.DATOS, null);
         Usuario usuario = conductor.getUsuario();
         Persona persona = usuario.getPersona();
 
@@ -41,8 +52,6 @@ public class PerfilConductorService {
         persona.setCi(request.ci());
         persona.setComplementoCi(request.complementoCi());
         persona.setFechaNacimiento(request.fechaNacimiento());
-
-        usuario.setFotoUrl(request.fotoUrl());
 
         // situacionAprobacion no se toca aqui: solo la cambia un administrador
         // (ver GestionConductorService).
@@ -80,6 +89,7 @@ public class PerfilConductorService {
                 conductor.getCalificacionPromedio(),
                 conductor.getTotalCalificaciones(),
                 conductor.getFechaAprobacion(),
-                saldoBilletera);
+                saldoBilletera,
+                usuario.getId());
     }
 }

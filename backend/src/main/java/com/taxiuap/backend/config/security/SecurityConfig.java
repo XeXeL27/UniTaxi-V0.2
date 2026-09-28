@@ -70,6 +70,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/api/auth/**", "/api/publico/**", "/ws/**", "/error").permitAll()
+                        // Paginas del panel y de la app (ver SitiosWebConfig); los datos siguen protegidos en /api.
+                        .requestMatchers("/", "/admin", "/admin/**", "/app", "/app/**").permitAll()
                         .requestMatchers("/api/pasajero/**").hasRole(RolSistema.PASAJERO.getCodigo())
                         .requestMatchers("/api/conductor/**").hasRole(RolSistema.CONDUCTOR.getCodigo())
                         .requestMatchers("/api/admin/**").hasRole(RolSistema.ADMIN.getCodigo())

@@ -13,6 +13,10 @@ import '../../widgets/insignia_estado.dart';
 import '../../widgets/listado_remoto.dart';
 import '../../widgets/modal_formulario.dart';
 import '../../widgets/tabla/columna_tabla.dart';
+import '../../widgets/visor_pdf.dart';
+import '../expediente/expediente_api.dart';
+import '../expediente/expediente_conductor.dart';
+import '../expediente/vista_expediente.dart';
 import 'formulario_habilitar_usuario.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
@@ -26,6 +30,7 @@ class PantallaConductores extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final api = PersonasApi(context.read<ClienteApi>());
+    final expedienteApi = ExpedienteApi(context.read<ClienteApi>());
 
     void verDocumentos(ConductorAdmin conductor) {
       showDialog<void>(
@@ -73,6 +78,10 @@ class PantallaConductores extends StatelessWidget {
           ),
         ),
       ],
+      alVer: (conductor, recargar) => abrirExpediente(
+        context,
+        ExpedienteConductor(api: expedienteApi, personasApi: api, conductor: conductor, alCambiar: recargar),
+      ),
       acciones: (recargar) => [
         FilledButton.icon(
           onPressed: () => flujoCrear(
@@ -191,12 +200,16 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
   Future<void> _abrir(DocumentoConductor documento, {required bool descargar}) async {
     setState(() => _abriendo = documento.id);
     try {
-      final bytes = await widget.api.archivoDocumento(documento.id);
+      final nombre = '${documento.tipoDocumento.toLowerCase()}_${widget.conductor.nombreUsuario}.pdf';
       if (descargar) {
-        final nombre = '${documento.tipoDocumento.toLowerCase()}_${widget.conductor.nombreUsuario}.pdf';
-        descargarArchivo(bytes, nombre, 'application/pdf');
+        descargarArchivo(await widget.api.archivoDocumento(documento.id), nombre, 'application/pdf');
       } else {
-        abrirPdf(bytes);
+        await mostrarPdf(
+          context,
+          titulo: '${Formato.enumTexto(documento.tipoDocumento)} de ${widget.conductor.nombreCompleto}',
+          cargar: () => widget.api.archivoDocumento(documento.id),
+          nombreDescarga: nombre,
+        );
       }
     } on ApiExcepcion catch (e) {
       if (mounted) {

@@ -202,6 +202,20 @@ public class ViajeService {
                 .toList();
     }
 
+    /** Viajes de un conductor, del mas reciente al mas antiguo (panel admin). */
+    public List<ViajeResponse> listarPorConductor(Long idConductor) {
+        return viajeRepository.findByConductorIdOrderByFechaInicioDesc(idConductor).stream()
+                .map(this::aRespuesta)
+                .toList();
+    }
+
+    /** Viajes de un pasajero, del mas reciente al mas antiguo (panel admin). */
+    public List<ViajeResponse> listarPorPasajero(Long idPasajero) {
+        return viajeRepository.findByPasajeroIdOrderByFechaInicioDesc(idPasajero).stream()
+                .map(this::aRespuesta)
+                .toList();
+    }
+
     public ViajeResponse obtener(Long idViaje) {
         Long idUsuario = UsuarioActual.idUsuario();
         Viaje viaje = obtenerViaje(idViaje);

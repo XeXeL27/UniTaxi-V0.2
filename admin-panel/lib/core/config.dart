@@ -1,7 +1,18 @@
 /// Configuracion de la app. La URL del backend se puede cambiar al compilar con
 /// --dart-define=API_URL=https://servidor
 class Config {
-  static const String apiUrl = String.fromEnvironment('API_URL', defaultValue: 'http://localhost:8080');
+  static const String _apiDefinida = String.fromEnvironment('API_URL');
+
+  /// Compilacion release. Se lee de una constante de Dart y no de Flutter porque este archivo
+  /// tambien lo usa el simulador de conductores, que corre con dart run.
+  static const bool _release = bool.fromEnvironment('dart.vm.product');
+
+  /// Sin API_URL: compilado en release y servido por el backend (/admin) usa el mismo servidor que
+  /// lo entrega; con flutter run, el backend local en el 8080.
+  static String get apiUrl {
+    if (_apiDefinida.isNotEmpty) return _apiDefinida;
+    return _release ? Uri.base.origin : 'http://localhost:8080';
+  }
 
   /// Rol que puede entrar al panel.
   static const String rolAdmin = 'ADMIN';

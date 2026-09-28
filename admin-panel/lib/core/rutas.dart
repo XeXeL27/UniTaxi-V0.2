@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../layout/layout_admin.dart';
+import '../modulos/sistema/pantalla_carpeta.dart';
 import '../modulos/auth/pantalla_login.dart';
 import '../modulos/flota/pantalla_flota.dart';
 import '../modulos/inicio/pantalla_inicio.dart';
@@ -41,6 +42,7 @@ GoRouter crearRutas(Sesion sesion) {
           GoRoute(path: Menu.zonas.ruta, pageBuilder: (_, _) => pagina(const PantallaZonas())),
           GoRoute(path: Menu.mapa.ruta, pageBuilder: (_, _) => pagina(const PantallaMapa())),
           GoRoute(path: Menu.flota.ruta, pageBuilder: (_, _) => pagina(const PantallaFlota())),
+          GoRoute(path: Menu.carpetaArchivos.ruta, pageBuilder: (_, _) => pagina(const PantallaCarpeta())),
         ],
       ),
     ],

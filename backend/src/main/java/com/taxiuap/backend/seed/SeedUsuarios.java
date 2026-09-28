@@ -295,7 +295,8 @@ class SeedUsuarios {
             Persona persona = conductor.getUsuario().getPersona();
             byte[] pdf = PdfEjemploSeed.generar(tipoDocumento.name(),
                     persona.getNombres() + " " + persona.getApellidos() + " - licencia " + conductor.getNumeroLicencia());
-            documento.setArchivoUrl(almacenamientoArchivos.guardarPdf(pdf, "conductores/" + conductor.getId()));
+            documento.setArchivoUrl(almacenamientoArchivos.guardarPdf(pdf,
+                    almacenamientoArchivos.carpetaDocumentosConductor(persona), tipoDocumento.name()));
             documento.setFechaVencimiento(LocalDate.now().plusYears(1));
             documento.setSituacionRevision(SituacionRevision.APROBADO);
             documentoConductorRepository.save(documento);

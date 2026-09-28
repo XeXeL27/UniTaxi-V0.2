@@ -99,8 +99,54 @@ public class CalificacionService {
 
     /** Calificaciones que recibio el conductor autenticado, de la mas reciente a la mas antigua. */
     public CalificacionesRecibidasResponse recibidasPorConductor() {
-        Conductor conductor = conductorRepository.findByUsuarioId(UsuarioActual.idUsuario())
-                .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de conductor"));
+        return recibidas(conductorRepository.findByUsuarioId(UsuarioActual.idUsuario())
+                .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de conductor")));
+    }
+
+    /** Calificaciones que recibio un conductor (panel admin). */
+    public CalificacionesRecibidasResponse recibidasPorConductor(Long idConductor) {
+        return recibidas(conductorRepository.findById(idConductor)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Conductor", idConductor)));
+    }
+
+    /** Calificaciones que dio un pasajero a sus conductores (panel admin). */
+    public List<CalificacionResponse> dadasPorPasajero(Long idPasajero) {
+        Pasajero pasajero = pasajeroRepository.findById(idPasajero)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Pasajero", idPasajero));
+        return calificacionRepository.findByUsuarioEmisorId(pasajero.getUsuario().getId()).stream()
+                .filter(calificacion -> calificacion.getEstadoCalif() == EstadoRegistro.A)
+                .sorted(Comparator.comparing(Calificacion::getFecha, Comparator.nullsLast(Comparator.reverseOrder())))
+                .map(calificacion -> aRespuesta(calificacion, nombresEtiquetas(calificacion)))
+                .toList();
+    }
+
+    /** Borrado logico de una calificacion (y sus etiquetas); el promedio del conductor se recalcula. */
+    @Transactional
+    public void eliminar(Long idCalificacion) {
+        Calificacion calificacion = buscarActiva(idCalificacion);
+        calificacion.setEstadoCalif(EstadoRegistro.X);
+        calificacionEtiquetaRepository.findByCalificacionId(idCalificacion)
+                .forEach(relacion -> relacion.setEstadoCalifEtiq(EstadoRegistro.X));
+        calificacionRepository.saveAndFlush(calificacion);
+        if (calificacion.getTipo() == TipoCalificacion.PASAJERO_A_CONDUCTOR) {
+            conductorRepository.findByUsuarioId(calificacion.getUsuarioReceptor().getId())
+                    .ifPresent(this::recalcularPromedio);
+        }
+    }
+
+    /** Quita solo el comentario: las estrellas siguen contando en el promedio. */
+    @Transactional
+    public void quitarComentario(Long idCalificacion) {
+        buscarActiva(idCalificacion).setComentario(null);
+    }
+
+    private Calificacion buscarActiva(Long idCalificacion) {
+        return calificacionRepository.findById(idCalificacion)
+                .filter(calificacion -> calificacion.getEstadoCalif() == EstadoRegistro.A)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Calificacion", idCalificacion));
+    }
+
+    private CalificacionesRecibidasResponse recibidas(Conductor conductor) {
         List<Calificacion> recibidas = recibidasDe(conductor);
         List<CalificacionResponse> calificaciones = recibidas.stream()
                 .sorted(Comparator.comparing(Calificacion::getFecha,
@@ -120,6 +166,12 @@ public class CalificacionService {
                         .filter(etiqueta -> etiqueta.getAplicaA() == AplicaA.CONDUCTOR)
                         .orElseThrow(() -> new NegocioException("La etiqueta " + id + " no es valida para un conductor")))
                 .toList();
+    }
+
+    /** Recalcula el promedio y el total de todos los conductores (lo usa el arranque del backend). */
+    @Transactional
+    public void recalcularTodos() {
+        conductorRepository.findAll().forEach(this::recalcularPromedio);
     }
 
     /**
@@ -165,6 +217,9 @@ public class CalificacionService {
                 calificacion.getFecha(),
                 nombreCorto(calificacion.getUsuarioEmisor() != null
                         ? calificacion.getUsuarioEmisor().getPersona()
+                        : null),
+                nombreCorto(calificacion.getUsuarioReceptor() != null
+                        ? calificacion.getUsuarioReceptor().getPersona()
                         : null),
                 etiquetas);
     }
