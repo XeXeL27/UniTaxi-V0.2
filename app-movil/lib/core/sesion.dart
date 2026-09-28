@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_excepcion.dart';
 import 'config.dart';
+import 'navegador.dart';
 
 /// Datos del usuario autenticado (UsuarioResponse del backend).
 class UsuarioSesion {
@@ -13,6 +14,8 @@ class UsuarioSesion {
   final String nombreUsuario;
   final String nombres;
   final String apellidos;
+  final String? correo;
+  final String? telefono;
   final String rol;
 
   UsuarioSesion({
@@ -20,6 +23,8 @@ class UsuarioSesion {
     required this.nombreUsuario,
     required this.nombres,
     required this.apellidos,
+    this.correo,
+    this.telefono,
     required this.rol,
   });
 
@@ -44,6 +49,8 @@ class UsuarioSesion {
     nombreUsuario: json['nombreUsuario'] as String? ?? '',
     nombres: json['nombres'] as String? ?? '',
     apellidos: json['apellidos'] as String? ?? '',
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
     rol: json['rol'] as String? ?? '',
   );
 
@@ -52,6 +59,8 @@ class UsuarioSesion {
     'nombreUsuario': nombreUsuario,
     'nombres': nombres,
     'apellidos': apellidos,
+    'correo': correo,
+    'telefono': telefono,
     'rol': rol,
   };
 }
@@ -59,10 +68,15 @@ class UsuarioSesion {
 /// Estado de la sesion: tokens JWT, usuario y los modos (pasajero, conductor) que tiene la persona.
 /// Se guarda en el telefono para no pedir login cada vez que se abre la app.
 class Sesion extends ChangeNotifier {
-  static const _claveAcceso = 'taxiuap_token_acceso';
-  static const _claveRefresco = 'taxiuap_token_refresco';
-  static const _claveUsuario = 'taxiuap_usuario';
-  static const _claveRoles = 'taxiuap_roles';
+  // Claves propias de la app: el panel admin se sirve en el mismo origen (/admin) y usa las
+  // taxiuap_token_*; si compartieran claves, abrir una cerraria la sesion de la otra.
+  static const _claveAcceso = 'taxiuap_app_token_acceso';
+  static const _claveRefresco = 'taxiuap_app_token_refresco';
+  static const _claveUsuario = 'taxiuap_app_usuario';
+  static const _claveRoles = 'taxiuap_app_roles';
+
+  /// Claves con que el panel admin guarda su sesion (lib/core/sesion.dart del admin-panel).
+  static const _clavesPanel = (acceso: 'taxiuap_token_acceso', refresco: 'taxiuap_token_refresco', usuario: 'taxiuap_usuario');
 
   /// Modos que existen en esta app; ADMIN entra por el panel web.
   static const rolesApp = [Config.rolPasajero, Config.rolConductor];
@@ -100,16 +114,14 @@ class Sesion extends ChangeNotifier {
   }
 
   /// Inicia sesion con nombre de usuario, correo o telefono. Sin [rol] se consulta que cuentas
-  /// tiene la persona: con una sola entra directo; si es pasajero y conductor devuelve los dos
-  /// modos para que la pantalla le pregunte como quiere ingresar (y se vuelve a llamar con el rol).
+  /// tiene la persona: con una sola entra directo; con varias (pasajero, conductor, admin) devuelve
+  /// los modos para que la pantalla le pregunte como quiere ingresar (y se vuelve a llamar con el rol).
+  /// Con la cuenta de administrador pasa al panel web (/admin) con la sesion ya iniciada.
   Future<List<String>?> iniciar(String usuario, String password, {String? rol}) async {
     var elegido = rol;
     if (elegido == null) {
-      final cuentas = await _postAuth('/api/auth/cuentas', {'usuario': usuario.trim(), 'password': password});
-      final modos = [for (final r in (cuentas as List<dynamic>)) '$r'].where(rolesApp.contains).toList();
-      if (modos.isEmpty) {
-        throw ApiExcepcion('Esta cuenta es de administrador: ingresa al panel web en /admin');
-      }
+      final modos = await cuentas(usuario, password);
+      if (modos.isEmpty) throw ApiExcepcion('Esta cuenta no tiene acceso a TaxiUAP');
       if (modos.length > 1) return modos;
       elegido = modos.first;
     }
@@ -118,8 +130,40 @@ class Sesion extends ChangeNotifier {
       'password': password,
       'rol': elegido,
     }) as Map<String, dynamic>;
+    if (elegido == Config.rolAdmin) {
+      await _entregarAlPanel(datos);
+      return null;
+    }
     await _guardar(datos);
     return null;
+  }
+
+  /// Roles de las cuentas con estas credenciales que se pueden usar desde este login, sin iniciar
+  /// sesion (valida la contrasena). El de admin solo cuenta si se puede abrir el panel.
+  Future<List<String>> cuentas(String usuario, String password) async {
+    final datos = await _postAuth('/api/auth/cuentas', {'usuario': usuario.trim(), 'password': password});
+    final roles = [for (final r in (datos as List<dynamic>)) '$r'];
+    final modos = roles.where(rolesApp.contains).toList();
+    if (roles.contains(Config.rolAdmin)) {
+      if (!Navegador.puedeAbrirPanel) {
+        if (modos.isEmpty) {
+          throw ApiExcepcion('El panel de administración se abre en el navegador: ${Config.apiUrl}/admin');
+        }
+      } else {
+        modos.add(Config.rolAdmin);
+      }
+    }
+    return modos;
+  }
+
+  /// Deja la sesion del administrador donde la busca el panel (mismo origen) y lo abre en esta
+  /// misma pestana. La app no guarda nada: la cuenta de admin no se usa aqui.
+  Future<void> _entregarAlPanel(Map<String, dynamic> datos) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_clavesPanel.acceso, datos['tokenAcceso'] as String);
+    await prefs.setString(_clavesPanel.refresco, datos['tokenRefresco'] as String);
+    await prefs.setString(_clavesPanel.usuario, jsonEncode(datos['usuario']));
+    Navegador.abrirPanelAdmin();
   }
 
   /// Pasa a la otra cuenta de la persona (pasajero o conductor) sin pedir la contrasena.

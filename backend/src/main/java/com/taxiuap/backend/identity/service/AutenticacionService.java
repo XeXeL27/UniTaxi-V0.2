@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.taxiuap.backend.config.security.JwtService;
 import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.config.security.TipoToken;
+import com.taxiuap.backend.identity.dto.CambiarContrasenaRequest;
 import com.taxiuap.backend.identity.dto.LoginRequest;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.RefreshRequest;
@@ -132,6 +133,41 @@ public class AutenticacionService {
                 .findFirst()
                 .map(this::generarTokens)
                 .orElseThrow(() -> new NegocioException("No tiene una cuenta de " + destino.toLowerCase()));
+    }
+
+    /**
+     * Cambia la contrasena de quien tiene la sesion iniciada. Las cuentas de pasajero y conductor de
+     * una persona comparten credenciales (regla 12), asi que se cambian juntas; la de administrador
+     * se cambia sola.
+     */
+    @Transactional
+    public void cambiarContrasena(Long idUsuarioActual, CambiarContrasenaRequest datos) {
+        Usuario actual = usuarioRepository.findById(idUsuarioActual)
+                .orElseThrow(() -> new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS));
+        if (!passwordEncoder.matches(datos.actual(), actual.getPasswordHash())) {
+            throw new NegocioException("La contrasena actual no es correcta");
+        }
+        if (!datos.nueva().equals(datos.confirmacion())) {
+            throw new NegocioException("La confirmacion no coincide con la nueva contrasena");
+        }
+        if (datos.nueva().equals(datos.actual())) {
+            throw new NegocioException("La nueva contrasena debe ser distinta de la actual");
+        }
+
+        String hash = cuentaUsuarioService.codificar(datos.nueva());
+        List<Usuario> cuentas = esCuentaDeApp(actual)
+                ? usuarioRepository.findByPersonaId(actual.getPersona().getId()).stream()
+                        .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+                        .filter(this::esCuentaDeApp)
+                        .toList()
+                : List.of(actual);
+        cuentas.forEach(u -> u.setPasswordHash(hash));
+        usuarioRepository.saveAll(cuentas);
+    }
+
+    private boolean esCuentaDeApp(Usuario usuario) {
+        String codigo = usuario.getRol().getCodigo();
+        return RolSistema.PASAJERO.getCodigo().equals(codigo) || RolSistema.CONDUCTOR.getCodigo().equals(codigo);
     }
 
     public TokenResponse refrescar(RefreshRequest datos) {

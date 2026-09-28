@@ -3,106 +3,39 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/tema.dart';
 
-/// Cabecera azul marino con el saludo, el boton del menu lateral (o la flecha para volver) y el
-/// boton de cerrar sesion a la derecha.
-class Cabecera extends StatelessWidget {
-  final String titulo;
-  final String subtitulo;
-  final VoidCallback onMenu;
-
-  /// Si no es null, en lugar del menu se muestra una flecha para volver atras.
-  final VoidCallback? onAtras;
-  final VoidCallback? onCerrarSesion;
-
-  const Cabecera({
-    super.key,
-    required this.titulo,
-    required this.subtitulo,
-    required this.onMenu,
-    this.onAtras,
-    this.onCerrarSesion,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final arriba = MediaQuery.paddingOf(context).top;
-    return Container(
-      padding: EdgeInsets.fromLTRB(8, arriba + 14, 8, 20),
-      decoration: const BoxDecoration(
-        color: ColoresApp.azul,
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
-        boxShadow: [BoxShadow(color: Color(0x33000000), blurRadius: 12, offset: Offset(0, 4))],
-      ),
-      child: Row(
-        children: [
-          onAtras != null
-              ? IconButton(
-                  onPressed: onAtras,
-                  tooltip: 'Volver',
-                  icon: const FaIcon(FontAwesomeIcons.arrowLeft, color: ColoresApp.blanco, size: 20),
-                )
-              : IconButton(
-                  onPressed: onMenu,
-                  tooltip: 'Menú',
-                  icon: const FaIcon(FontAwesomeIcons.bars, color: ColoresApp.blanco, size: 20),
-                ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  titulo,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(color: ColoresApp.blanco, fontSize: 22, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  subtitulo,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: ColoresApp.blanco.withValues(alpha: 0.8), fontSize: 14),
-                ),
-              ],
-            ),
-          ),
-          if (onCerrarSesion != null)
-            IconButton(
-              onPressed: onCerrarSesion,
-              tooltip: 'Cerrar sesión',
-              icon: const FaIcon(FontAwesomeIcons.rightFromBracket, color: ColoresApp.blanco, size: 19),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
 /// Panel blanco inferior con esquinas redondeadas y sombra, sobre el mapa.
+///
+/// [flotante]: tarjeta separada de los bordes, encima de la barra inferior (pantalla de inicio);
+/// en pantallas anchas no pasa de [anchoMaximo].
 class PanelInferior extends StatelessWidget {
   final Widget child;
 
   /// Alto maximo como fraccion de la pantalla; el contenido se desplaza si no entra.
   final double altoMaximo;
+  final bool flotante;
+  static const double anchoMaximo = 560;
 
-  const PanelInferior({super.key, required this.child, this.altoMaximo = 0.62});
+  const PanelInferior({super.key, required this.child, this.altoMaximo = 0.62, this.flotante = false});
 
   @override
   Widget build(BuildContext context) {
     final medidas = MediaQuery.of(context);
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: medidas.size.height * altoMaximo),
+    final panel = ConstrainedBox(
+      constraints: BoxConstraints(
+        maxHeight: medidas.size.height * altoMaximo,
+        maxWidth: flotante ? anchoMaximo : double.infinity,
+      ),
       child: Container(
         width: double.infinity,
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           color: ColoresApp.blanco,
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          border: Border(top: BorderSide(color: ColoresApp.borde)),
-          boxShadow: [BoxShadow(color: Color(0x22000000), blurRadius: 16, offset: Offset(0, -4))],
+          borderRadius: flotante ? BorderRadius.circular(22) : const BorderRadius.vertical(top: Radius.circular(20)),
+          border: flotante ? Border.all(color: ColoresApp.borde) : const Border(top: BorderSide(color: ColoresApp.borde)),
+          boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 16, offset: Offset(0, -4))],
         ),
+        clipBehavior: flotante ? Clip.antiAlias : Clip.none,
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(20, 18, 20, 18 + medidas.padding.bottom),
+          padding: EdgeInsets.fromLTRB(20, 18, 20, flotante ? 18 : 18 + medidas.padding.bottom),
           child: AnimatedSize(
             duration: const Duration(milliseconds: 200),
             alignment: Alignment.topCenter,
@@ -110,6 +43,11 @@ class PanelInferior extends StatelessWidget {
           ),
         ),
       ),
+    );
+    if (!flotante) return panel;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Center(heightFactor: 1, child: panel),
     );
   }
 }

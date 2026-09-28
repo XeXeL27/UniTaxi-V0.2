@@ -5,19 +5,19 @@ import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
 import '../../../core/tema.dart';
+import '../../../widgets/pagina_seccion.dart';
 import '../../../widgets/paneles.dart';
-import '../historial/pantalla_historial.dart';
 import '../viaje/conductor_api.dart';
 
-/// Calificaciones y comentarios que el conductor recibio de sus pasajeros.
+/// Seccion Comentarios de la barra inferior: calificaciones que el conductor recibio de sus pasajeros.
 class PantallaComentarios extends StatefulWidget {
   const PantallaComentarios({super.key});
 
   @override
-  State<PantallaComentarios> createState() => _PantallaComentariosState();
+  State<PantallaComentarios> createState() => PantallaComentariosState();
 }
 
-class _PantallaComentariosState extends State<PantallaComentarios> {
+class PantallaComentariosState extends State<PantallaComentarios> {
   late final ConductorApi _api = ConductorApi(context.read<ClienteApi>());
   CalificacionesRecibidas? _datos;
   String? _error;
@@ -27,6 +27,9 @@ class _PantallaComentariosState extends State<PantallaComentarios> {
     super.initState();
     _cargar();
   }
+
+  /// Vuelve a consultar al entrar a la seccion (pudo llegar una calificacion nueva).
+  Future<void> recargar() => _cargar();
 
   Future<void> _cargar() async {
     setState(() => _error = null);
@@ -41,16 +44,17 @@ class _PantallaComentariosState extends State<PantallaComentarios> {
   @override
   Widget build(BuildContext context) {
     final datos = _datos;
-    return Scaffold(
-      appBar: barraSecundaria('Comentarios'),
-      body: _error != null
+    return PaginaSeccion(
+      titulo: 'Comentarios',
+      subtitulo: 'Lo que opinan tus pasajeros',
+      constructor: (context, relleno) => _error != null
           ? Center(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojo)))
           : datos == null
           ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
           : RefreshIndicator(
               onRefresh: _cargar,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: relleno,
                 children: [
                   Container(
                     padding: const EdgeInsets.all(20),

@@ -113,6 +113,45 @@ class ServiciosMapa {
     }
   }
 
+  /// Lugares que coinciden con [texto], primero los cercanos a [cerca] (o a Cobija). Lista vacia si
+  /// el servicio no responde. Nominatim pide no buscar en cada tecla: la pantalla espera a que el
+  /// usuario deje de escribir.
+  static Future<List<LugarEncontrado>> buscar(String texto, {LatLng? cerca}) async {
+    final consulta = texto.trim();
+    if (consulta.length < 3) return const [];
+    final centro = cerca ?? Config.centroCobija;
+    // Caja de unos 25 km alrededor del centro: prioriza la ciudad sin excluir lo demas.
+    const radio = 0.22;
+    final caja = [
+      centro.longitude - radio,
+      centro.latitude + radio,
+      centro.longitude + radio,
+      centro.latitude - radio,
+    ].map((v) => v.toStringAsFixed(4)).join(',');
+    final url = Uri.parse(
+      '$_servidorDirecciones/search?format=jsonv2&limit=8&accept-language=es&countrycodes=bo'
+      '&viewbox=$caja&q=${Uri.encodeQueryComponent(consulta)}',
+    );
+    try {
+      final respuesta = await http.get(url, headers: _cabeceras()).timeout(const Duration(seconds: 8));
+      if (respuesta.statusCode != 200) return const [];
+      final lista = jsonDecode(utf8.decode(respuesta.bodyBytes)) as List<dynamic>;
+      return [
+        for (final item in lista.cast<Map<String, dynamic>>())
+          if (double.tryParse('${item['lat']}') != null && double.tryParse('${item['lon']}') != null)
+            LugarEncontrado(
+              nombre: (item['name'] as String?)?.trim().isNotEmpty == true
+                  ? item['name'] as String
+                  : '${item['display_name']}'.split(',').first.trim(),
+              detalle: '${item['display_name']}'.split(',').skip(1).take(3).map((p) => p.trim()).join(', '),
+              posicion: LatLng(double.parse('${item['lat']}'), double.parse('${item['lon']}')),
+            ),
+      ];
+    } catch (_) {
+      return const [];
+    }
+  }
+
   /// Posiciones del GPS a medida que el telefono se mueve (cada 5 m como minimo). Pedir antes el
   /// permiso con [ubicacionActual].
   static Stream<LatLng> seguirUbicacion() {
@@ -146,6 +185,15 @@ class ServiciosMapa {
 
   /// El navegador no deja cambiar el User-Agent; en el telefono se identifica la app.
   static Map<String, String> _cabeceras() => kIsWeb ? const {} : const {'User-Agent': Config.agenteMapas};
+}
+
+/// Resultado de la busqueda de lugares.
+class LugarEncontrado {
+  final String nombre;
+  final String detalle;
+  final LatLng posicion;
+
+  const LugarEncontrado({required this.nombre, required this.detalle, required this.posicion});
 }
 
 /// Texto de respaldo cuando no se conoce la direccion de un punto.

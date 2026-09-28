@@ -2,8 +2,13 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../../../comun/historial_viajes.dart';
+import '../../../comun/modelos_viaje.dart';
+import '../../../comun/pantalla_mas.dart';
+import '../../../comun/perfil_api.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
@@ -12,23 +17,25 @@ import '../../../core/formato.dart';
 import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
+import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
-import '../../../widgets/cabecera_menu.dart';
+import '../../../widgets/barra_inferior.dart';
 import '../../../widgets/dialogos.dart';
+import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import '../comentarios/pantalla_comentarios.dart';
-import '../historial/pantalla_historial.dart';
 import '../perfil/pantalla_documentos.dart';
 import '../perfil/pantalla_perfil.dart';
-import '../../../comun/perfil_api.dart';
 import '../viaje/conductor_api.dart';
 import '../viaje/flujo_conductor.dart';
-import '../../../comun/modelos_viaje.dart';
 import '../viaje/paneles_conductor.dart';
 
-/// Vista principal del conductor: mapa con su ubicacion en vivo y la lista de solicitudes; al
-/// elegir una ve la ruta antes de aceptarla y luego lleva el viaje hasta finalizarlo.
+/// Vista principal del conductor, con la barra inferior Inicio / Historial / Comentarios / Mas y
+/// el boton del centro para conectarse o desconectarse.
+///
+/// Inicio: mapa con su ubicacion en vivo y la lista de solicitudes; al elegir una ve la ruta
+/// antes de aceptarla y luego lleva el viaje hasta finalizarlo.
 class PantallaInicioConductor extends StatefulWidget {
   const PantallaInicioConductor({super.key});
 
@@ -37,8 +44,18 @@ class PantallaInicioConductor extends StatefulWidget {
 }
 
 class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
-  final _claveScaffold = GlobalKey<ScaffoldState>();
+  static const _seccionInicio = 0;
+  static const _seccionHistorial = 1;
+  static const _seccionComentarios = 2;
+
   final _mapa = ControladorMapa();
+  final _historial = GlobalKey<PantallaHistorialState>();
+  final _comentarios = GlobalKey<PantallaComentariosState>();
+  int _seccion = _seccionInicio;
+
+  /// Direccion de la ubicacion actual para la cabecera, y donde se calculo.
+  String? _direccion;
+  LatLng? _puntoDireccion;
   late final FlujoConductor _flujo = FlujoConductor(
     api: ConductorApi(context.read<ClienteApi>()),
     mapa: _mapa,
@@ -61,9 +78,53 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   void initState() {
     super.initState();
     _flujo.addListener(_alCambiarFlujo);
+    _mapa.addListener(_revisarDireccion);
     _flujo.iniciar();
     _emisor.iniciar();
     _cargarFoto();
+  }
+
+  /// Calcula la direccion de la cabecera con el primer GPS y otra vez si se movio mas de 300 m.
+  Future<void> _revisarDireccion() async {
+    final gps = _mapa.miUbicacion;
+    if (gps == null) return;
+    final anterior = _puntoDireccion;
+    if (anterior != null && ServiciosMapa.metros(anterior, gps) < 300) return;
+    _puntoDireccion = gps;
+    final texto = await ServiciosMapa.direccionDe(gps);
+    if (mounted && texto != null) setState(() => _direccion = texto);
+  }
+
+  void _irA(int seccion) {
+    if (seccion == _seccion) return;
+    setState(() => _seccion = seccion);
+    if (seccion == _seccionHistorial) _historial.currentState?.recargar();
+    if (seccion == _seccionComentarios) _comentarios.currentState?.recargar();
+  }
+
+  /// Boton del centro: conectarse (aparece en linea y recibe solicitudes) o desconectarse.
+  Future<void> _alternarEnLinea() async {
+    if (_flujo.etapa == EtapaConductor.enViaje) {
+      mostrarMensaje(context, 'Termina el viaje en curso antes de desconectarte.', error: true);
+      return;
+    }
+    if (_flujo.enLinea) {
+      final confirmado = await confirmarAccion(
+        context,
+        titulo: '¿Desconectarte?',
+        mensaje: 'Dejarás de aparecer en el mapa de los pasajeros y de recibir solicitudes.',
+        textoConfirmar: 'Sí, desconectarme',
+      );
+      if (!confirmado || !mounted) return;
+      _flujo.cambiarEnLinea(false);
+      await _emisor.desconectar();
+      if (mounted) mostrarMensaje(context, 'Estás desconectado.');
+    } else {
+      _flujo.cambiarEnLinea(true);
+      _emisor.iniciar();
+      _irA(_seccionInicio);
+      mostrarMensaje(context, 'Estás en línea: recibirás las solicitudes de viaje.');
+    }
   }
 
   Future<void> _cargarFoto() async {
@@ -75,9 +136,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     }
   }
 
-  /// Abre una pantalla del menu; al volver se recarga la foto (pudo cambiarla en su perfil).
+  /// Abre una pantalla de Mas; al volver se recarga la foto (pudo cambiarla en su perfil).
   Future<void> _abrirYRecargar(Widget pantalla) async {
-    Navigator.of(context).pop();
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => pantalla));
     _cargarFoto();
   }
@@ -85,6 +145,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   @override
   void dispose() {
     _emisor.dispose();
+    _mapa.removeListener(_revisarDireccion);
     _flujo.removeListener(_alCambiarFlujo);
     _flujo.dispose();
     _mapa.dispose();
@@ -160,20 +221,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     }
   }
 
-  void _abrir(Widget pantalla) {
-    Navigator.of(context).pop();
-    Navigator.of(context)
-        .push(MaterialPageRoute<void>(builder: (_) => pantalla));
-  }
-
-  Future<void> _cerrarSesion() async {
-    Navigator.of(context).pop();
-    await _confirmarCerrarSesion();
-  }
-
   /// Pasa al modo pasajero (misma persona, otra cuenta) sin cerrar sesion.
   Future<void> _cambiarModo() async {
-    Navigator.of(context).pop();
     if (_flujo.etapa == EtapaConductor.enViaje) {
       mostrarMensaje(context, 'Termina el viaje en curso antes de cambiar de modo.', error: true);
       return;
@@ -211,251 +260,209 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     await sesion.cerrar();
   }
 
-  String _subtitulo() => switch (_flujo.etapa) {
+  String _ubicacionCabecera() => switch (_flujo.etapa) {
     EtapaConductor.detalle => 'Revisa la ruta antes de aceptar',
-    EtapaConductor.enViaje => SituacionViaje.nombre(
-      _flujo.viaje?.situacion ?? '',
-    ),
-    _ => 'Solicitudes de viaje cerca de ti',
+    EtapaConductor.enViaje => SituacionViaje.nombre(_flujo.viaje?.situacion ?? ''),
+    _ when _direccion != null => _direccion!,
+    _ when _mapa.gpsDisponible == false => 'Ubicación no disponible',
+    _ => 'Buscando tu ubicación...',
   };
 
   @override
   Widget build(BuildContext context) {
-    final usuario = context.watch<Sesion>().usuario;
-    final margen = MediaQuery.paddingOf(context);
-    final alto = MediaQuery.sizeOf(context).height;
-    _mapa.margenesVista = EdgeInsets.fromLTRB(
-      48,
-      margen.top + 130,
-      48,
-      alto * 0.5,
-    );
+    final sesion = context.watch<Sesion>();
     return Scaffold(
-      key: _claveScaffold,
-      drawerScrimColor: const Color(0x66000000),
-      drawer: _MenuConductor(
-        usuario: usuario,
-        onSolicitudes: () => Navigator.of(context).pop(),
-        onHistorial: () => _abrir(const PantallaHistorial()),
-        onComentarios: () => _abrir(const PantallaComentarios()),
-        onPerfil: () => _abrirYRecargar(const PantallaPerfilConductor()),
-        onDocumentos: () => _abrirYRecargar(const PantallaDocumentos()),
-        onCambiarModo: context.watch<Sesion>().otroModo == null ? null : _cambiarModo,
-        foto: _foto,
-        onCerrarSesion: _cerrarSesion,
-      ),
-      body: ListenableBuilder(
-        listenable: Listenable.merge([_flujo, _mapa]),
-        builder: (context, _) {
-          final etapa = _flujo.etapa;
-          // El boton atras de Android vuelve de la ruta de una solicitud a la lista.
-          return PopScope(
-            canPop: etapa != EtapaConductor.detalle,
-            onPopInvokedWithResult: (didPop, _) {
-              if (!didPop && _flujo.etapa == EtapaConductor.detalle) {
-                _flujo.volverALista();
-              }
-            },
-            child: Stack(
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: IndexedStack(
+              index: _seccion,
               children: [
-                Positioned.fill(child: MapaBase(controlador: _mapa)),
-                Positioned(
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  child: Cabecera(
-                    titulo: etapa == EtapaConductor.detalle
-                        ? 'Ruta de la solicitud'
-                        : 'Hola, ${usuario?.primerNombre ?? 'Conductor'}',
-                    subtitulo: _subtitulo(),
-                    onMenu: () => _claveScaffold.currentState?.openDrawer(),
-                    onAtras: etapa == EtapaConductor.detalle
-                        ? _flujo.volverALista
-                        : null,
-                    onCerrarSesion: _confirmarCerrarSesion,
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(0, 0, 16, 12),
-                        child: BotonUbicacion(controlador: _mapa),
-                      ),
-                      PanelInferior(
-                        altoMaximo: etapa == EtapaConductor.lista ? 0.5 : 0.62,
-                        child: switch (etapa) {
-                          EtapaConductor.cargando => const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Center(child: CircularProgressIndicator()),
-                          ),
-                          EtapaConductor.lista => PanelSolicitudes(
-                            flujo: _flujo,
-                          ),
-                          EtapaConductor.detalle => PanelDetalleSolicitud(
-                            flujo: _flujo,
-                            onAceptar: _aceptar,
-                          ),
-                          EtapaConductor.enViaje => PanelViajeConductor(
-                            flujo: _flujo,
-                            onAvanzar: _avanzar,
-                            onCancelar: _cancelarViaje,
-                          ),
-                        },
-                      ),
-                    ],
-                  ),
+                _vistaInicio(sesion.usuario),
+                PantallaHistorial(key: _historial, cargar: _flujo.api.misViajes, esConductor: true),
+                PantallaComentarios(key: _comentarios),
+                PantallaMas(
+                  foto: _foto,
+                  onDatosPersonales: () => _abrirYRecargar(const PantallaPerfilConductor()),
+                  onDocumentos: () => _abrirYRecargar(const PantallaDocumentos()),
+                  onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
+                  onCerrarSesion: _confirmarCerrarSesion,
                 ),
               ],
             ),
-          );
-        },
-      ),
-    );
-  }
-}
-
-/// Menu lateral izquierdo del conductor.
-class _MenuConductor extends StatelessWidget {
-  final UsuarioSesion? usuario;
-  final VoidCallback onSolicitudes;
-  final VoidCallback onHistorial;
-  final VoidCallback onComentarios;
-  final VoidCallback onPerfil;
-  final VoidCallback onDocumentos;
-
-  /// Solo si la persona tambien tiene cuenta de pasajero.
-  final VoidCallback? onCambiarModo;
-  final VoidCallback onCerrarSesion;
-  final Uint8List? foto;
-
-  const _MenuConductor({
-    required this.usuario,
-    required this.onSolicitudes,
-    required this.onHistorial,
-    required this.onComentarios,
-    required this.onPerfil,
-    required this.onDocumentos,
-    this.onCambiarModo,
-    required this.onCerrarSesion,
-    this.foto,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Drawer(
-      width: 310,
-      backgroundColor: ColoresApp.fondo,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.horizontal(right: Radius.circular(20)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          CabeceraMenu(usuario: usuario, rol: 'Conductor', foto: foto),
-          const SizedBox(height: 12),
-          _Opcion(
-            icono: FontAwesomeIcons.solidCircleUser,
-            titulo: 'Mi perfil',
-            detalle: 'Tu foto y tus datos',
-            onTap: onPerfil,
           ),
-          _Opcion(
-            icono: FontAwesomeIcons.folderOpen,
-            titulo: 'Mis documentos',
-            detalle: 'Tus PDF y su revisión',
-            onTap: onDocumentos,
-          ),
-          if (onCambiarModo != null)
-            _Opcion(
-              icono: FontAwesomeIcons.personWalking,
-              titulo: 'Cambiar a modo pasajero',
-              detalle: 'Pide un taxi',
-              onTap: onCambiarModo!,
-            ),
-          _Opcion(
-            icono: FontAwesomeIcons.listUl,
-            titulo: 'Solicitudes',
-            detalle: 'Pedidos de taxi disponibles',
-            onTap: onSolicitudes,
-          ),
-          _Opcion(
-            icono: FontAwesomeIcons.clockRotateLeft,
-            titulo: 'Historial de viajes',
-            detalle: 'Rutas que aceptaste',
-            onTap: onHistorial,
-          ),
-          _Opcion(
-            icono: FontAwesomeIcons.solidComments,
-            titulo: 'Comentarios',
-            detalle: 'Lo que opinan tus pasajeros',
-            onTap: onComentarios,
-          ),
-          const Spacer(),
-          const Divider(height: 1, color: ColoresApp.borde),
-          SafeArea(
-            top: false,
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              leading: const FaIcon(
-                FontAwesomeIcons.rightFromBracket,
-                color: ColoresApp.rojo,
-                size: 18,
-              ),
-              title: const Text(
-                'Cerrar sesión',
-                style: TextStyle(
-                  color: ColoresApp.rojo,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              onTap: onCerrarSesion,
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ListenableBuilder(
+              listenable: _flujo,
+              builder: (context, _) {
+                final enLinea = _flujo.enLinea;
+                final pendientes = enLinea && _seccion != _seccionInicio ? _flujo.solicitudes.length : 0;
+                return BarraInferior(
+                  indice: _seccion,
+                  onCambiar: _irA,
+                  items: [
+                    ItemBarra(FontAwesomeIcons.house, 'Inicio', insignia: pendientes),
+                    const ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial'),
+                    const ItemBarra(FontAwesomeIcons.solidComments, 'Opiniones'),
+                    const ItemBarra(FontAwesomeIcons.ellipsis, 'Más'),
+                  ],
+                  botonCentral: BotonCentral(
+                    icono: FontAwesomeIcons.powerOff,
+                    tooltip: enLinea ? 'Desconectarme' : 'Conectarme',
+                    activo: enLinea,
+                    color: ColoresApp.exito,
+                    onTap: _alternarEnLinea,
+                  ),
+                );
+              },
             ),
           ),
         ],
       ),
     );
   }
+
+  Widget _vistaInicio(UsuarioSesion? usuario) {
+    final margen = MediaQuery.paddingOf(context);
+    final alto = MediaQuery.sizeOf(context).height;
+    final abajo = BarraInferior.espacio(context);
+    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 150, 110, abajo + alto * 0.4);
+    return ListenableBuilder(
+      listenable: Listenable.merge([_flujo, _mapa]),
+      builder: (context, _) {
+        final etapa = _flujo.etapa;
+        final enLinea = _flujo.enLinea;
+        // El boton atras de Android vuelve de la ruta de una solicitud a la lista.
+        return PopScope(
+          canPop: etapa != EtapaConductor.detalle,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && _flujo.etapa == EtapaConductor.detalle) _flujo.volverALista();
+          },
+          child: Stack(
+            children: [
+              Positioned.fill(child: MapaBase(controlador: _mapa)),
+              Positioned(
+                top: 0,
+                left: 0,
+                right: 0,
+                child: CabeceraInicio(
+                  saludo: etapa == EtapaConductor.detalle ? 'Solicitud de viaje' : 'Bienvenido',
+                  nombre: etapa == EtapaConductor.detalle
+                      ? 'Ruta del viaje'
+                      : 'Hola, ${usuario?.nombres.split(' ').take(2).join(' ').toUpperCase() ?? 'CONDUCTOR'}',
+                  ubicacion: _ubicacionCabecera(),
+                  onAtras: etapa == EtapaConductor.detalle ? _flujo.volverALista : null,
+                  onBoton: () => mostrarAyuda(context, esConductor: true),
+                ),
+              ),
+              Positioned(
+                left: 16,
+                top: margen.top + 128,
+                child: _EstadoEnLinea(enLinea: enLinea, enViaje: etapa == EtapaConductor.enViaje),
+              ),
+              // En pantallas bajas el selector chocaria con el panel de solicitudes.
+              if (etapa == EtapaConductor.lista && alto >= 760)
+                Positioned(
+                  right: 14,
+                  top: margen.top + 140,
+                  child: SelectorVehiculo(
+                    contador: enLinea && _flujo.listaCargada ? _flujo.solicitudes.length : null,
+                    tooltipContador: _flujo.solicitudes.length == 1
+                        ? '1 solicitud de viaje'
+                        : '${_flujo.solicitudes.length} solicitudes de viaje',
+                    opciones: [
+                      OpcionVehiculo(
+                        nombre: 'Moto',
+                        activa: true,
+                        icono: Image.asset('assets/mototaxi.png', height: 42, fit: BoxFit.contain),
+                        onTap: () => mostrarMensaje(context, 'Recibes solicitudes de viaje en moto.'),
+                      ),
+                      OpcionVehiculo(
+                        nombre: 'Auto',
+                        proximamente: true,
+                        icono: const FaIcon(FontAwesomeIcons.carSide, color: ColoresApp.rojo, size: 30),
+                        onTap: () => mostrarMensaje(context, 'Muy pronto podrás registrar un auto.'),
+                      ),
+                    ],
+                  ),
+                ),
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: abajo + 10,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                      child: Row(
+                        children: [
+                          BotonCapas(controlador: _mapa),
+                          const Spacer(),
+                          BotonUbicacion(controlador: _mapa),
+                        ],
+                      ),
+                    ),
+                    PanelInferior(
+                      flotante: true,
+                      altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.44,
+                      child: switch (etapa) {
+                        EtapaConductor.cargando => const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        EtapaConductor.lista => PanelSolicitudes(flujo: _flujo),
+                        EtapaConductor.detalle => PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
+                        EtapaConductor.enViaje => PanelViajeConductor(
+                          flujo: _flujo,
+                          onAvanzar: _avanzar,
+                          onCancelar: _cancelarViaje,
+                        ),
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
 }
 
-class _Opcion extends StatelessWidget {
-  final FaIconData icono;
-  final String titulo;
-  final String detalle;
-  final VoidCallback onTap;
+/// Pastilla "En linea" (verde) o "Desconectado" (gris) sobre el mapa.
+class _EstadoEnLinea extends StatelessWidget {
+  final bool enLinea;
+  final bool enViaje;
 
-  const _Opcion({
-    required this.icono,
-    required this.titulo,
-    required this.detalle,
-    required this.onTap,
-  });
+  const _EstadoEnLinea({required this.enLinea, required this.enViaje});
 
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 2),
-      leading: SizedBox(
-        width: 24,
-        child: Center(child: FaIcon(icono, color: ColoresApp.azul, size: 18)),
+    final (color, texto) = enViaje
+        ? (ColoresApp.rojo, 'En viaje')
+        : enLinea
+        ? (ColoresApp.exito, 'En línea')
+        : (ColoresApp.textoSuave, 'Desconectado');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: BoxDecoration(
+        color: ColoresApp.blanco,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: const [BoxShadow(color: Color(0x330A2342), blurRadius: 10, offset: Offset(0, 3))],
       ),
-      title: Text(
-        titulo,
-        style: const TextStyle(
-          color: ColoresApp.azul,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Text(texto, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+        ],
       ),
-      subtitle: Text(
-        detalle,
-        style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
-      ),
-      onTap: onTap,
     );
   }
 }

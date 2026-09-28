@@ -52,7 +52,13 @@ class PanelSolicitudes extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 6),
-        if (!flujo.listaCargada)
+        if (!flujo.enLinea)
+          const _Mensaje(
+            icono: FontAwesomeIcons.powerOff,
+            texto: 'Estás desconectado. Toca el botón del centro para conectarte y recibir solicitudes.',
+            color: ColoresApp.textoSuave,
+          )
+        else if (!flujo.listaCargada)
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 18),
             child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),

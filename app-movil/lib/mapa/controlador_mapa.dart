@@ -16,11 +16,23 @@ class PuntoRuta {
   const PuntoRuta(this.posicion, this.texto);
 }
 
+/// Estilo de los tiles del mapa (boton de capas).
+enum CapaMapa {
+  calles('Calles', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
+  satelite('Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
+  claro('Claro', 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png');
+
+  final String nombre;
+  final String url;
+
+  const CapaMapa(this.nombre, this.url);
+}
+
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
 /// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo gris desde su
 /// posicion hasta el punto A (acercamiento).
 class ControladorMapa extends ChangeNotifier {
-  static const double zoomCalle = 16;
+  static const double zoomCalle = 17;
 
   /// Distancia que debe moverse el GPS para volver a calcular el acercamiento.
   static const double _metrosParaRecalcular = 60;
@@ -43,6 +55,14 @@ class ControladorMapa extends ChangeNotifier {
 
   /// Si es true, el punto A se mueve con el GPS (pasajero eligiendo su viaje).
   bool aSigueGps = false;
+
+  CapaMapa capa = CapaMapa.calles;
+
+  void cambiarCapa(CapaMapa nueva) {
+    if (capa == nueva) return;
+    capa = nueva;
+    _avisar();
+  }
 
   /// Margenes que tapan el mapa (cabecera arriba, panel abajo): se respetan al encuadrar.
   EdgeInsets margenesVista = const EdgeInsets.fromLTRB(40, 150, 40, 320);

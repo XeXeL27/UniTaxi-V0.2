@@ -20,7 +20,16 @@ class MapaBase extends StatelessWidget {
   /// Marcadores de la pantalla (por ejemplo los mototaxistas en linea), debajo de A, B y el GPS.
   final List<Marker> marcadoresExtra;
 
-  const MapaBase({super.key, required this.controlador, this.onTap, this.marcadoresExtra = const []});
+  /// Capa de marcadores que se repinta sola (los mototaxistas que se deslizan), debajo de A y B.
+  final Widget? capaAnimada;
+
+  const MapaBase({
+    super.key,
+    required this.controlador,
+    this.onTap,
+    this.marcadoresExtra = const [],
+    this.capaAnimada,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -47,8 +56,10 @@ class MapaBase extends StatelessWidget {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+              key: ValueKey(c.capa),
+              urlTemplate: c.capa.url,
               userAgentPackageName: Config.agenteMapas,
+              maxNativeZoom: c.capa == CapaMapa.satelite ? 18 : 19,
             ),
             PolylineLayer(
               polylines: [
@@ -76,6 +87,7 @@ class MapaBase extends StatelessWidget {
                 ],
               ],
             ),
+            ?capaAnimada,
             MarkerLayer(
               markers: [
                 ...marcadoresExtra,
@@ -144,6 +156,112 @@ class BotonUbicacion extends StatelessWidget {
           width: 50,
           height: 50,
           child: Center(child: FaIcon(FontAwesomeIcons.locationCrosshairs, color: ColoresApp.azul, size: 20)),
+        ),
+      ),
+    );
+  }
+}
+
+/// Boton redondo que abre la eleccion de capa del mapa (calles, satelite, claro).
+class BotonCapas extends StatelessWidget {
+  final ControladorMapa controlador;
+
+  const BotonCapas({super.key, required this.controlador});
+
+  Future<void> _elegir(BuildContext context) async {
+    final elegida = await showModalBottomSheet<CapaMapa>(
+      context: context,
+      backgroundColor: ColoresApp.blanco,
+      constraints: const BoxConstraints(maxWidth: 520),
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text('Tipo de mapa', style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  for (final capa in CapaMapa.values)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        child: _OpcionCapa(
+                          capa: capa,
+                          activa: capa == controlador.capa,
+                          onTap: () => Navigator.of(context).pop(capa),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (elegida != null) controlador.cambiarCapa(elegida);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: ColoresApp.blanco,
+      shape: const CircleBorder(),
+      elevation: 4,
+      shadowColor: const Color(0x55000000),
+      child: InkWell(
+        customBorder: const CircleBorder(),
+        onTap: () => _elegir(context),
+        child: const SizedBox(
+          width: 50,
+          height: 50,
+          child: Center(child: FaIcon(FontAwesomeIcons.layerGroup, color: ColoresApp.azul, size: 19)),
+        ),
+      ),
+    );
+  }
+}
+
+class _OpcionCapa extends StatelessWidget {
+  final CapaMapa capa;
+  final bool activa;
+  final VoidCallback onTap;
+
+  const _OpcionCapa({required this.capa, required this.activa, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final icono = switch (capa) {
+      CapaMapa.calles => FontAwesomeIcons.road,
+      CapaMapa.satelite => FontAwesomeIcons.earthAmericas,
+      CapaMapa.claro => FontAwesomeIcons.map,
+    };
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        decoration: BoxDecoration(
+          color: activa ? ColoresApp.azulSuave : ColoresApp.fondo,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: activa ? ColoresApp.azul : ColoresApp.borde, width: activa ? 2 : 1),
+        ),
+        child: Column(
+          children: [
+            FaIcon(icono, color: activa ? ColoresApp.azul : ColoresApp.textoSuave, size: 22),
+            const SizedBox(height: 8),
+            Text(
+              capa.nombre,
+              style: TextStyle(
+                color: activa ? ColoresApp.azul : ColoresApp.texto,
+                fontWeight: activa ? FontWeight.w700 : FontWeight.w500,
+              ),
+            ),
+          ],
         ),
       ),
     );

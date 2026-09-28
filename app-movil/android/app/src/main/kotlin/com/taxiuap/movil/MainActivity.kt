@@ -1,5 +1,6 @@
 package com.taxiuap.movil
 
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 
-class MainActivity : FlutterActivity()
+// FlutterFragmentActivity: la necesita local_auth para el ingreso con huella.
+class MainActivity : FlutterFragmentActivity()

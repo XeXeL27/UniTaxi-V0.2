@@ -1,33 +1,23 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
-import '../../../widgets/cabecera_menu.dart';
+import '../../../widgets/pagina_seccion.dart';
 import 'favoritos_api.dart';
 
-/// Menu lateral izquierdo del pasajero: sus lugares favoritos, añadir lugar y cerrar sesion.
-class MenuFavoritos extends StatelessWidget {
-  final UsuarioSesion? usuario;
+/// Seccion Favoritos de la barra inferior: los lugares guardados del pasajero. Tocar uno lo pone
+/// como destino en el mapa; "Añadir lugar" vuelve al mapa para marcar el lugar nuevo.
+class SeccionFavoritos extends StatelessWidget {
   final List<Favorito> favoritos;
   final bool cargando;
   final String? error;
-  final void Function(Favorito favorito) onElegir;
-  final void Function(Favorito favorito) onEliminar;
+  final ValueChanged<Favorito> onElegir;
+  final ValueChanged<Favorito> onEliminar;
   final VoidCallback onAnadir;
   final VoidCallback onReintentar;
-  final VoidCallback onCerrarSesion;
-  final VoidCallback onPerfil;
-  final Uint8List? foto;
 
-  /// Solo si la persona tambien tiene cuenta de conductor.
-  final VoidCallback? onCambiarModo;
-
-  const MenuFavoritos({
+  const SeccionFavoritos({
     super.key,
-    required this.usuario,
     required this.favoritos,
     required this.cargando,
     required this.error,
@@ -35,74 +25,24 @@ class MenuFavoritos extends StatelessWidget {
     required this.onEliminar,
     required this.onAnadir,
     required this.onReintentar,
-    required this.onCerrarSesion,
-    required this.onPerfil,
-    this.foto,
-    this.onCambiarModo,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Drawer(
-      width: 310,
-      backgroundColor: ColoresApp.fondo,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.horizontal(right: Radius.circular(20))),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    return PaginaSeccion(
+      titulo: 'Favoritos',
+      subtitulo: 'Tus lugares guardados',
+      constructor: (context, relleno) => ListView(
+        padding: relleno,
         children: [
-          CabeceraMenu(usuario: usuario, rol: 'Pasajero', foto: foto),
-          ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-            leading: const FaIcon(FontAwesomeIcons.solidCircleUser, color: ColoresApp.azul, size: 18),
-            title: const Text('Mi perfil', style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w600)),
-            subtitle: const Text('Tu foto y tus datos', style: TextStyle(color: ColoresApp.textoSuave)),
-            onTap: onPerfil,
+          const Text(
+            'Toca un lugar para pedir un taxi hasta ahí',
+            style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
           ),
-          if (onCambiarModo != null)
-            ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              leading: const FaIcon(FontAwesomeIcons.motorcycle, color: ColoresApp.rojo, size: 18),
-              title: const Text(
-                'Cambiar a modo conductor',
-                style: TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w600),
-              ),
-              subtitle: const Text('Recibe solicitudes de viaje', style: TextStyle(color: ColoresApp.textoSuave)),
-              onTap: onCambiarModo,
-            ),
-          const Divider(height: 1, color: ColoresApp.borde),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
-              children: [
-                const Text(
-                  'Tus favoritos',
-                  style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Toca un lugar para ir ahí',
-                  style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
-                ),
-                const SizedBox(height: 14),
-                ..._lista(),
-                const SizedBox(height: 4),
-                _BotonAnadir(onTap: onAnadir),
-              ],
-            ),
-          ),
-          const Divider(height: 1, color: ColoresApp.borde),
-          SafeArea(
-            top: false,
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-              leading: const FaIcon(FontAwesomeIcons.rightFromBracket, color: ColoresApp.rojo, size: 18),
-              title: const Text(
-                'Cerrar sesión',
-                style: TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w600),
-              ),
-              onTap: onCerrarSesion,
-            ),
-          ),
+          const SizedBox(height: 14),
+          ..._lista(),
+          const SizedBox(height: 4),
+          _BotonAnadir(onTap: onAnadir),
         ],
       ),
     );
@@ -161,17 +101,22 @@ class _TarjetaFavorito extends StatelessWidget {
     return Material(
       color: ColoresApp.blanco,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         side: const BorderSide(color: ColoresApp.borde),
       ),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(18),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
           child: Row(
             children: [
-              SizedBox(width: 26, child: FaIcon(favorito.icono, color: ColoresApp.rojo, size: 20)),
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(color: ColoresApp.rojoSuave, shape: BoxShape.circle),
+                child: Center(child: FaIcon(favorito.icono, color: ColoresApp.rojo, size: 18)),
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -188,7 +133,7 @@ class _TarjetaFavorito extends StatelessWidget {
                       favorito.direccion,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12),
+                      style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
                     ),
                   ],
                 ),

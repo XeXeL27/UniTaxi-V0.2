@@ -64,7 +64,7 @@ class PanelEligiendo extends StatelessWidget {
           const SizedBox(height: 10),
           const _Indicacion(
             icono: FontAwesomeIcons.handPointer,
-            texto: 'Toca el mapa en el lugar a donde quieres ir, o elige uno de tus favoritos en el menú.',
+            texto: 'Busca tu destino arriba o tócalo en el mapa.',
           ),
         ],
         if (b != null) ...[

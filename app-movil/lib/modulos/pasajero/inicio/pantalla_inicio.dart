@@ -3,33 +3,42 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../../../comun/historial_viajes.dart';
+import '../../../comun/modelos_viaje.dart';
+import '../../../comun/pantalla_mas.dart';
+import '../../../comun/perfil_api.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
 import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
+import '../../../mapa/posiciones_animadas.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
+import '../../../widgets/barra_inferior.dart';
 import '../../../widgets/dialogos.dart';
+import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import '../favoritos/favoritos_api.dart';
 import '../favoritos/formulario_lugar.dart';
-import '../favoritos/menu_favoritos.dart';
+import '../favoritos/seccion_favoritos.dart';
 import '../perfil/pantalla_perfil.dart';
-import '../../../comun/perfil_api.dart';
 import '../viaje/flujo_pasajero.dart';
-import '../../../comun/modelos_viaje.dart';
 import '../viaje/paneles_pasajero.dart';
 import '../viaje/viaje_api.dart';
 import '../viaje/vista_calificacion.dart';
+import 'buscador_destino.dart';
 
-/// Vista principal del pasajero: mapa de fondo con su ubicacion GPS como partida; toca el mapa
-/// para marcar el destino, ve el precio y solicita el taxi. Menu lateral con sus favoritos.
+/// Vista principal del pasajero, con la barra inferior Inicio / Historial / Favoritos / Mas.
+///
+/// Inicio: mapa con su ubicacion GPS como partida (al entrar se centra en ella), el buscador de
+/// destino, los mototaxis libres moviendose y el boton del centro para pedir el taxi.
 class PantallaInicioPasajero extends StatefulWidget {
   const PantallaInicioPasajero({super.key});
 
@@ -37,24 +46,28 @@ class PantallaInicioPasajero extends StatefulWidget {
   State<PantallaInicioPasajero> createState() => _PantallaInicioPasajeroState();
 }
 
-class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
-  final _claveScaffold = GlobalKey<ScaffoldState>();
+class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with SingleTickerProviderStateMixin {
+  static const _seccionInicio = 0;
+  static const _seccionHistorial = 1;
+
   final _mapa = ControladorMapa();
+  final _historial = GlobalKey<PantallaHistorialState>();
   late final FavoritosApi _favoritosApi = FavoritosApi(context.read<ClienteApi>());
   late final FlujoPasajero _flujo = FlujoPasajero(api: ViajeApi(context.read<ClienteApi>()), mapa: _mapa);
 
+  int _seccion = _seccionInicio;
   List<Favorito> _favoritos = const [];
   bool _cargandoFavoritos = true;
   String? _errorFavoritos;
   bool _enviando = false;
 
-  /// Icono de mototaxistas activo: se ven los conductores libres y no se pueden marcar A ni B.
-  bool _verConductores = false;
+  /// Mototaxistas libres en linea: siempre visibles mientras elige o espera; se deslizan entre
+  /// una consulta y la siguiente.
   List<ConductorEnLinea> _conductores = const [];
   bool _conductoresCargados = false;
+  late final PosicionesAnimadas _posiciones = PosicionesAnimadas(vsync: this, duracion: const Duration(milliseconds: 2800));
   Timer? _sondeoConductores;
 
-  /// Foto de perfil para la cabecera del menu lateral.
   Uint8List? _foto;
   bool _calificando = false;
 
@@ -65,11 +78,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
     _flujo.iniciar();
     _cargarFavoritos();
     _cargarFoto();
+    _cargarConductores();
+    _sondeoConductores = Timer.periodic(const Duration(seconds: 5), (_) => _cargarConductores());
   }
 
   @override
   void dispose() {
     _sondeoConductores?.cancel();
+    _posiciones.dispose();
     _flujo.removeListener(_alCambiarFlujo);
     _flujo.dispose();
     _mapa.dispose();
@@ -84,8 +100,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
     if (aviso != null) mostrarMensaje(context, aviso, error: true);
     if (_flujo.etapa == EtapaPasajero.calificando && !_calificando) {
       _calificando = true;
+      _irA(_seccionInicio);
       mostrarCalificacion(context, _flujo).whenComplete(() => _calificando = false);
     }
+  }
+
+  void _irA(int seccion) {
+    if (seccion == _seccion) return;
+    setState(() => _seccion = seccion);
+    if (seccion == _seccionHistorial) _historial.currentState?.recargar();
   }
 
   Future<void> _cargarFoto() async {
@@ -98,7 +121,6 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
   }
 
   Future<void> _abrirPerfil() async {
-    Navigator.of(context).pop();
     await Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PantallaPerfilPasajero()));
     _cargarFoto();
   }
@@ -119,13 +141,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
   }
 
   void _elegirFavorito(Favorito favorito) {
-    Navigator.of(context).pop();
     final posicion = favorito.posicion;
     if (posicion == null) return;
     if (_flujo.etapa != EtapaPasajero.eligiendo) {
       mostrarMensaje(context, 'Ya tienes un viaje en curso.', error: true);
       return;
     }
+    _irA(_seccionInicio);
     _flujo.irAFavorito(posicion, favorito.nombre);
   }
 
@@ -152,52 +174,48 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
   }
 
   void _iniciarAnadir() {
-    Navigator.of(context).pop();
     if (_flujo.etapa != EtapaPasajero.eligiendo) {
       mostrarMensaje(context, 'Podrás añadir lugares cuando termine tu viaje.', error: true);
       return;
     }
+    _irA(_seccionInicio);
     _flujo.cambiarGuardandoLugar(true);
   }
 
-  void _cambiarVerConductores() {
-    _sondeoConductores?.cancel();
-    setState(() {
-      _verConductores = !_verConductores;
-      _conductores = const [];
-      _conductoresCargados = false;
-    });
-    if (_verConductores) {
-      _flujo.cambiarGuardandoLugar(false);
-      _cargarConductores();
-      _sondeoConductores = Timer.periodic(const Duration(seconds: 5), (_) => _cargarConductores());
-    }
-  }
-
   Future<void> _cargarConductores() async {
+    final etapa = _flujo.etapa;
+    // Con el viaje ya asignado se sigue solo al conductor propio (lo dibuja el flujo).
+    if (etapa != EtapaPasajero.eligiendo && etapa != EtapaPasajero.buscando) {
+      if (_conductores.isNotEmpty && mounted) setState(() => _conductores = const []);
+      return;
+    }
     try {
       final lista = await _flujo.api.conductoresEnLinea();
-      if (mounted && _verConductores) {
-        setState(() {
-          _conductores = lista;
-          _conductoresCargados = true;
-        });
-      }
+      if (!mounted) return;
+      _posiciones.conservar({for (final c in lista) c.id});
+      _posiciones.mover({for (final c in lista) c.id: c.posicion});
+      setState(() {
+        _conductores = lista;
+        _conductoresCargados = true;
+      });
     } catch (_) {
       // Si falla una consulta se mantienen los ultimos marcadores hasta la siguiente.
     }
   }
 
   void _tocarMapa(LatLng punto) {
-    if (_verConductores) {
-      mostrarMensaje(context, 'Desactiva el ícono de mototaxistas para marcar tu viaje.', error: true);
-      return;
-    }
     if (_flujo.guardandoLugar) {
       _guardarLugar(punto, null);
       return;
     }
     _flujo.tocarMapa(punto);
+  }
+
+  Future<void> _abrirBuscador() async {
+    if (_flujo.etapa != EtapaPasajero.eligiendo) return;
+    final elegido = await buscarDestino(context, favoritos: _favoritos, cerca: _mapa.miUbicacion);
+    if (elegido == null || !mounted) return;
+    _flujo.irAFavorito(elegido.posicion, elegido.nombre);
   }
 
   Future<void> _guardarLugar(LatLng punto, String? texto) async {
@@ -210,8 +228,23 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
     await mostrarExito(
       context,
       titulo: 'Lugar guardado',
-      mensaje: '"${favorito.nombre}" ya está en tus favoritos. Lo encuentras en el menú lateral.',
+      mensaje: '"${favorito.nombre}" ya está en tus favoritos. Lo encuentras en la sección Favoritos.',
     );
+  }
+
+  /// Boton del centro: pide el taxi si ya hay destino; si no, explica que falta.
+  void _botonCentral() {
+    if (_flujo.puedeSolicitar) {
+      _solicitar();
+      return;
+    }
+    final mensaje = switch (_flujo.etapa) {
+      EtapaPasajero.buscando => 'Ya estamos buscando un conductor para ti.',
+      EtapaPasajero.enViaje => 'Tienes un viaje en curso.',
+      _ when _mapa.b == null => 'Primero elige tu destino: búscalo arriba o tócalo en el mapa.',
+      _ => 'Espera a que termine de trazarse la ruta.',
+    };
+    mostrarMensaje(context, mensaje);
   }
 
   Future<void> _solicitar() async {
@@ -259,14 +292,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
     }
   }
 
-  Future<void> _cerrarSesion() async {
-    Navigator.of(context).pop();
-    await _confirmarCerrarSesion();
-  }
-
   /// Pasa al modo conductor (misma persona, otra cuenta) sin cerrar sesion.
   Future<void> _cambiarModo() async {
-    Navigator.of(context).pop();
     if (_flujo.etapa == EtapaPasajero.buscando || _flujo.etapa == EtapaPasajero.enViaje) {
       mostrarMensaje(context, 'Termina tu viaje o cancela tu solicitud antes de cambiar de modo.', error: true);
       return;
@@ -295,120 +322,205 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
     if (confirmado && mounted) await context.read<Sesion>().cerrar();
   }
 
-  String _subtitulo() => switch (_flujo.etapa) {
+  String _ubicacionCabecera() => switch (_flujo.etapa) {
     EtapaPasajero.buscando => 'Buscando un conductor para ti',
     EtapaPasajero.enViaje => SituacionViaje.nombre(_flujo.viaje?.situacion ?? ''),
-    _ => '¿A dónde vamos hoy?',
+    _ when _flujo.direccionOrigen != null => _flujo.direccionOrigen!,
+    _ when _mapa.gpsDisponible == false => 'Ubicación no disponible',
+    _ => 'Buscando tu ubicación...',
   };
 
   @override
   Widget build(BuildContext context) {
-    final usuario = context.watch<Sesion>().usuario;
-    final margen = MediaQuery.paddingOf(context);
-    final alto = MediaQuery.sizeOf(context).height;
-    // Lo que tapan la cabecera y el panel inferior, para encuadrar la ruta entre ambos.
-    _mapa.margenesVista = EdgeInsets.fromLTRB(48, margen.top + 130, 48, alto * 0.45);
+    final sesion = context.watch<Sesion>();
     return Scaffold(
-      key: _claveScaffold,
-      drawerScrimColor: const Color(0x66000000),
-      drawer: MenuFavoritos(
-        usuario: usuario,
-        favoritos: _favoritos,
-        cargando: _cargandoFavoritos,
-        error: _errorFavoritos,
-        onElegir: _elegirFavorito,
-        onEliminar: _eliminarFavorito,
-        onAnadir: _iniciarAnadir,
-        onReintentar: _cargarFavoritos,
-        onCerrarSesion: _cerrarSesion,
-        onPerfil: _abrirPerfil,
-        onCambiarModo: context.watch<Sesion>().otroModo == null ? null : _cambiarModo,
-        foto: _foto,
-      ),
-      body: ListenableBuilder(
-        listenable: Listenable.merge([_flujo, _mapa]),
-        builder: (context, _) {
-          final etapa = _flujo.etapa;
-          return Stack(
-            children: [
-              Positioned.fill(
-                child: MapaBase(
-                  controlador: _mapa,
-                  onTap: etapa == EtapaPasajero.eligiendo ? _tocarMapa : null,
-                  marcadoresExtra: [
-                    for (final conductor in _conductores)
-                      Marker(
-                        point: conductor.posicion,
-                        width: _MarcadorMototaxi.ancho,
-                        height: _MarcadorMototaxi.alto,
-                        child: const _MarcadorMototaxi(),
-                      ),
-                  ],
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: IndexedStack(
+              index: _seccion,
+              children: [
+                _vistaInicio(sesion.usuario),
+                PantallaHistorial(key: _historial, cargar: _flujo.api.misViajes, esConductor: false),
+                SeccionFavoritos(
+                  favoritos: _favoritos,
+                  cargando: _cargandoFavoritos,
+                  error: _errorFavoritos,
+                  onElegir: _elegirFavorito,
+                  onEliminar: _eliminarFavorito,
+                  onAnadir: _iniciarAnadir,
+                  onReintentar: _cargarFavoritos,
                 ),
-              ),
-              Positioned(
-                top: 0,
-                left: 0,
-                right: 0,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Cabecera(
-                      titulo: 'Hola, ${usuario?.primerNombre ?? 'Pasajero'}',
-                      subtitulo: _subtitulo(),
-                      onMenu: () => _claveScaffold.currentState?.openDrawer(),
-                      onCerrarSesion: _confirmarCerrarSesion,
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                      child: Row(
-                        children: [
-                          if (_verConductores)
-                            _ChipAviso(
-                              texto: !_conductoresCargados
-                                  ? 'Buscando mototaxistas en línea...'
-                                  : _conductores.isEmpty
-                                  ? 'No hay mototaxistas libres en este momento'
-                                  : _conductores.length == 1
-                                  ? '1 mototaxista en línea'
-                                  : '${_conductores.length} mototaxistas en línea',
-                            ),
-                          const Spacer(),
-                          _BotonMototaxis(activo: _verConductores, onTap: _cambiarVerConductores),
-                        ],
-                      ),
-                    ),
-                  ],
+                PantallaMas(
+                  foto: _foto,
+                  onDatosPersonales: _abrirPerfil,
+                  onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
+                  onCerrarSesion: _confirmarCerrarSesion,
                 ),
+              ],
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: ListenableBuilder(
+              listenable: Listenable.merge([_flujo, _mapa]),
+              builder: (context, _) => BarraInferior(
+                indice: _seccion,
+                onCambiar: _irA,
+                items: const [
+                  ItemBarra(FontAwesomeIcons.house, 'Inicio'),
+                  ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial'),
+                  ItemBarra(FontAwesomeIcons.solidHeart, 'Favoritos'),
+                  ItemBarra(FontAwesomeIcons.ellipsis, 'Más'),
+                ],
+                botonCentral: _seccion == _seccionInicio
+                    ? BotonCentral(
+                        icono: FontAwesomeIcons.solidPaperPlane,
+                        tooltip: 'Pedir taxi',
+                        activo: _flujo.puedeSolicitar,
+                        cargando: _enviando,
+                        onTap: _botonCentral,
+                      )
+                    : null,
               ),
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(0, 0, 16, 12),
-                      child: BotonUbicacion(controlador: _mapa),
-                    ),
-                    PanelInferior(child: _panel(etapa)),
-                  ],
-                ),
-              ),
-            ],
-          );
-        },
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _panel(EtapaPasajero etapa) => switch (etapa) {
+  Widget _vistaInicio(UsuarioSesion? usuario) {
+    final margen = MediaQuery.paddingOf(context);
+    final alto = MediaQuery.sizeOf(context).height;
+    final abajo = BarraInferior.espacio(context);
+    // Lo que tapan la cabecera con el buscador y el panel con la barra, para encuadrar la ruta.
+    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 200, 110, abajo + alto * 0.36);
+    return ListenableBuilder(
+      listenable: Listenable.merge([_flujo, _mapa]),
+      builder: (context, _) {
+        final etapa = _flujo.etapa;
+        final eligiendo = etapa == EtapaPasajero.eligiendo;
+        final panel = _panel(etapa);
+        return Stack(
+          children: [
+            Positioned.fill(
+              child: MapaBase(
+                controlador: _mapa,
+                onTap: eligiendo ? _tocarMapa : null,
+                capaAnimada: ListenableBuilder(
+                  listenable: _posiciones,
+                  builder: (context, _) => MarkerLayer(
+                    markers: [
+                      for (final conductor in _conductores)
+                        Marker(
+                          point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
+                          width: _MarcadorMototaxi.ancho,
+                          height: _MarcadorMototaxi.alto,
+                          child: const _MarcadorMototaxi(),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: Column(
+                children: [
+                  CabeceraInicio(
+                    nombre: 'Hola, ${usuario?.nombres.split(' ').take(2).join(' ').toUpperCase() ?? 'PASAJERO'}',
+                    ubicacion: _ubicacionCabecera(),
+                    onBoton: () => mostrarAyuda(context, esConductor: false),
+                    solape: eligiendo ? 34 : 0,
+                  ),
+                  if (eligiendo)
+                    Transform.translate(
+                      offset: const Offset(0, -34),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
+                          child: BarraDestino(
+                            destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
+                            onBuscar: _abrirBuscador,
+                            onQuitar: _flujo.quitarDestino,
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            // Con el panel abierto (ruta, busqueda) el selector se esconde para no tapar los botones.
+            if (eligiendo && panel == null)
+              Positioned(
+                right: 14,
+                top: margen.top + 222,
+                child: SelectorVehiculo(
+                  contador: _conductoresCargados ? _conductores.length : null,
+                  tooltipContador: _conductores.length == 1
+                      ? '1 mototaxista libre cerca'
+                      : '${_conductores.length} mototaxistas libres cerca',
+                  opciones: [
+                    OpcionVehiculo(
+                      nombre: 'Moto',
+                      activa: true,
+                      icono: Image.asset('assets/mototaxi.png', height: 42, fit: BoxFit.contain),
+                      onTap: () => mostrarMensaje(
+                        context,
+                        _conductores.isEmpty
+                            ? 'Viajas en mototaxi. Ahora no hay mototaxistas libres cerca.'
+                            : 'Viajas en mototaxi. Hay ${_conductores.length} libres cerca de ti.',
+                      ),
+                    ),
+                    OpcionVehiculo(
+                      nombre: 'Auto',
+                      proximamente: true,
+                      icono: const FaIcon(FontAwesomeIcons.carSide, color: ColoresApp.rojo, size: 30),
+                      onTap: () => mostrarMensaje(context, 'Muy pronto podrás pedir un auto.'),
+                    ),
+                  ],
+                ),
+              ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: abajo + 10,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                    child: Row(
+                      children: [
+                        BotonCapas(controlador: _mapa),
+                        const Spacer(),
+                        BotonUbicacion(controlador: _mapa),
+                      ],
+                    ),
+                  ),
+                  if (panel != null) PanelInferior(flotante: true, altoMaximo: 0.42, child: panel),
+                ],
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// Panel sobre la barra; sin destino elegido no hace falta (el buscador ya invita a elegirlo).
+  Widget? _panel(EtapaPasajero etapa) => switch (etapa) {
     EtapaPasajero.cargando => const Padding(
-      padding: EdgeInsets.symmetric(vertical: 12),
+      padding: EdgeInsets.symmetric(vertical: 8),
       child: Center(child: CircularProgressIndicator()),
     ),
+    EtapaPasajero.eligiendo when _mapa.a != null && _mapa.b == null && !_flujo.guardandoLugar => null,
     EtapaPasajero.eligiendo => PanelEligiendo(
       flujo: _flujo,
       enviando: _enviando,
@@ -420,7 +532,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> {
     ),
     EtapaPasajero.buscando => PanelBuscando(flujo: _flujo, cancelando: _enviando, onCancelar: _cancelarSolicitud),
     EtapaPasajero.enViaje => PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje),
-    EtapaPasajero.calificando => const SizedBox.shrink(),
+    EtapaPasajero.calificando => null,
   };
 }
 
@@ -439,61 +551,6 @@ class _MarcadorMototaxi extends StatelessWidget {
       height: alto,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.medium,
-    );
-  }
-}
-
-/// Boton redondo que muestra u oculta a los mototaxistas en linea.
-class _BotonMototaxis extends StatelessWidget {
-  final bool activo;
-  final VoidCallback onTap;
-
-  const _BotonMototaxis({required this.activo, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: activo ? 'Ocultar mototaxistas' : 'Ver mototaxistas en línea',
-      child: Material(
-        color: activo ? ColoresApp.azul : ColoresApp.blanco,
-        shape: CircleBorder(side: BorderSide(color: activo ? ColoresApp.rojo : ColoresApp.blanco, width: 2.5)),
-        elevation: 4,
-        shadowColor: const Color(0x55000000),
-        child: InkWell(
-          customBorder: const CircleBorder(),
-          onTap: onTap,
-          child: SizedBox(
-            width: 52,
-            height: 52,
-            child: Padding(
-              padding: const EdgeInsets.all(8),
-              child: Image.asset('assets/mototaxi.png', fit: BoxFit.contain),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ChipAviso extends StatelessWidget {
-  final String texto;
-
-  const _ChipAviso({required this.texto});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-      decoration: BoxDecoration(
-        color: ColoresApp.azul,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 8, offset: Offset(0, 2))],
-      ),
-      child: Text(
-        texto,
-        style: const TextStyle(color: ColoresApp.blanco, fontSize: 13, fontWeight: FontWeight.w600),
-      ),
     );
   }
 }

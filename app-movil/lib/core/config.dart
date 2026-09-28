@@ -27,6 +27,10 @@ class Config {
 
   static const String rolPasajero = 'PASAJERO';
   static const String rolConductor = 'CONDUCTOR';
+  static const String rolAdmin = 'ADMIN';
+
+  /// Version que se muestra en la pantalla Mas (la misma de pubspec.yaml).
+  static const String version = '1.0.0';
 
   /// Identificador enviado a los servidores de mapas (politica de uso de OpenStreetMap).
   static const String agenteMapas = 'com.taxiuap.movil';

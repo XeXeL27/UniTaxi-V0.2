@@ -1,16 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:provider/provider.dart';
 
-import '../../../core/api_excepcion.dart';
-import '../../../core/cliente_api.dart';
-import '../../../core/formato.dart';
-import '../../../core/tema.dart';
-import '../../../mapa/controlador_mapa.dart';
-import '../../../mapa/vista_mapa.dart';
-import '../../../widgets/paneles.dart';
-import '../viaje/conductor_api.dart';
-import '../../../comun/modelos_viaje.dart';
+import '../core/api_excepcion.dart';
+import '../core/formato.dart';
+import '../core/tema.dart';
+import '../mapa/controlador_mapa.dart';
+import '../mapa/vista_mapa.dart';
+import '../widgets/pagina_seccion.dart';
+import '../widgets/paneles.dart';
+import 'modelos_viaje.dart';
 
 /// Barra superior azul de las pantallas secundarias.
 PreferredSizeWidget barraSecundaria(String titulo) => AppBar(
@@ -25,16 +23,19 @@ Color colorSituacion(String situacion) => switch (situacion) {
   _ => ColoresApp.ruta,
 };
 
-/// Historial de los viajes que acepto el conductor, del mas reciente al mas antiguo.
+/// Seccion Historial de la barra inferior: los viajes del conductor (los que acepto) o del pasajero
+/// (los que pidio), del mas reciente al mas antiguo. Tocar uno abre su ruta en el mapa.
 class PantallaHistorial extends StatefulWidget {
-  const PantallaHistorial({super.key});
+  final Future<List<Viaje>> Function() cargar;
+  final bool esConductor;
+
+  const PantallaHistorial({super.key, required this.cargar, required this.esConductor});
 
   @override
-  State<PantallaHistorial> createState() => _PantallaHistorialState();
+  State<PantallaHistorial> createState() => PantallaHistorialState();
 }
 
-class _PantallaHistorialState extends State<PantallaHistorial> {
-  late final ConductorApi _api = ConductorApi(context.read<ClienteApi>());
+class PantallaHistorialState extends State<PantallaHistorial> {
   List<Viaje>? _viajes;
   String? _error;
 
@@ -44,10 +45,13 @@ class _PantallaHistorialState extends State<PantallaHistorial> {
     _cargar();
   }
 
+  /// Vuelve a consultar (al entrar a la seccion, por si termino un viaje mientras tanto).
+  Future<void> recargar() => _cargar();
+
   Future<void> _cargar() async {
     setState(() => _error = null);
     try {
-      final lista = await _api.misViajes();
+      final lista = await widget.cargar();
       // Primero el viaje activo (si hay); despues los terminados del mas reciente al mas antiguo.
       // Un viaje cancelado antes de iniciar no tiene fechas: va al final.
       lista.sort((a, b) {
@@ -69,17 +73,18 @@ class _PantallaHistorialState extends State<PantallaHistorial> {
   Widget build(BuildContext context) {
     final viajes = _viajes;
     final completados = viajes?.where((v) => v.situacion == SituacionViaje.completado).toList() ?? const [];
-    final ganado = completados.fold<double>(0, (suma, v) => suma + (v.precioFinal ?? 0));
-    return Scaffold(
-      appBar: barraSecundaria('Historial de viajes'),
-      body: _error != null
+    final total = completados.fold<double>(0, (suma, v) => suma + (v.precioFinal ?? 0));
+    return PaginaSeccion(
+      titulo: 'Historial',
+      subtitulo: widget.esConductor ? 'Los viajes que aceptaste' : 'Los viajes que pediste',
+      constructor: (context, relleno) => _error != null
           ? _ErrorCarga(mensaje: _error!, onReintentar: _cargar)
           : viajes == null
           ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
           : RefreshIndicator(
               onRefresh: _cargar,
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: relleno,
                 children: [
                   Row(
                     children: [
@@ -87,17 +92,19 @@ class _PantallaHistorialState extends State<PantallaHistorial> {
                         child: _Resumen(titulo: 'Viajes completados', valor: '${completados.length}'),
                       ),
                       const SizedBox(width: 12),
-                      Expanded(child: _Resumen(titulo: 'Cobrado', valor: formatoBs(ganado))),
+                      Expanded(
+                        child: _Resumen(titulo: widget.esConductor ? 'Cobrado' : 'Pagado', valor: formatoBs(total)),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
                   if (viajes.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 40),
+                    Padding(
+                      padding: const EdgeInsets.only(top: 40),
                       child: Text(
-                        'Todavía no aceptaste viajes.',
+                        widget.esConductor ? 'Todavía no aceptaste viajes.' : 'Todavía no pediste viajes.',
                         textAlign: TextAlign.center,
-                        style: TextStyle(color: ColoresApp.textoSuave),
+                        style: const TextStyle(color: ColoresApp.textoSuave),
                       ),
                     ),
                   for (final viaje in viajes)
@@ -105,9 +112,12 @@ class _PantallaHistorialState extends State<PantallaHistorial> {
                       padding: const EdgeInsets.only(bottom: 10),
                       child: _TarjetaViaje(
                         viaje: viaje,
-                        onTap: () => Navigator.of(
-                          context,
-                        ).push(MaterialPageRoute<void>(builder: (_) => PantallaDetalleViaje(viaje: viaje))),
+                        esConductor: widget.esConductor,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => PantallaDetalleViaje(viaje: viaje, esConductor: widget.esConductor),
+                          ),
+                        ),
                       ),
                     ),
                 ],
@@ -146,9 +156,10 @@ class _Resumen extends StatelessWidget {
 
 class _TarjetaViaje extends StatelessWidget {
   final Viaje viaje;
+  final bool esConductor;
   final VoidCallback onTap;
 
-  const _TarjetaViaje({required this.viaje, required this.onTap});
+  const _TarjetaViaje({required this.viaje, required this.esConductor, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -196,10 +207,17 @@ class _TarjetaViaje extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  const FaIcon(FontAwesomeIcons.solidUser, color: ColoresApp.textoSuave, size: 12),
+                  FaIcon(
+                    esConductor ? FontAwesomeIcons.solidUser : FontAwesomeIcons.motorcycle,
+                    color: ColoresApp.textoSuave,
+                    size: 12,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
-                    child: Text(viaje.nombrePasajero, style: const TextStyle(color: ColoresApp.texto, fontSize: 13)),
+                    child: Text(
+                      esConductor ? viaje.nombrePasajero : _conductorYPlaca(viaje),
+                      style: const TextStyle(color: ColoresApp.texto, fontSize: 13),
+                    ),
                   ),
                   Text(
                     formatoBs(viaje.precioFinal),
@@ -215,11 +233,15 @@ class _TarjetaViaje extends StatelessWidget {
   }
 }
 
+String _conductorYPlaca(Viaje viaje) =>
+    [viaje.nombreConductor, if (viaje.placa != null && viaje.placa!.isNotEmpty) viaje.placa!].join(' - ');
+
 /// Detalle de un viaje del historial con su ruta dibujada en el mapa.
 class PantallaDetalleViaje extends StatefulWidget {
   final Viaje viaje;
+  final bool esConductor;
 
-  const PantallaDetalleViaje({super.key, required this.viaje});
+  const PantallaDetalleViaje({super.key, required this.viaje, required this.esConductor});
 
   @override
   State<PantallaDetalleViaje> createState() => _PantallaDetalleViajeState();
@@ -262,7 +284,7 @@ class _PantallaDetalleViajeState extends State<PantallaDetalleViaje> {
                   children: [
                     Expanded(
                       child: Text(
-                        viaje.nombrePasajero,
+                        widget.esConductor ? viaje.nombrePasajero : _conductorYPlaca(viaje),
                         style: const TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700),
                       ),
                     ),

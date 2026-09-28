@@ -42,6 +42,9 @@ class FlujoConductor extends ChangeNotifier {
   /// Accion en curso (aceptar, cambiar estado): bloquea los botones.
   bool ocupado = false;
 
+  /// Conectado para recibir solicitudes (boton del centro). Desconectado no se consulta la lista.
+  bool enLinea = true;
+
   Timer? _sondeo;
   bool _consultando = false;
   bool _finalizandoSolo = false;
@@ -76,7 +79,21 @@ class FlujoConductor extends ChangeNotifier {
     mapa.limpiar();
     final gps = mapa.miUbicacion;
     if (gps != null) mapa.centrarEn(gps, zoom: 15);
-    _iniciarSondeo(_consultarLista, _intervaloLista, inmediato: true);
+    if (enLinea) {
+      _iniciarSondeo(_consultarLista, _intervaloLista, inmediato: true);
+    } else {
+      _detenerSondeo();
+      solicitudes = const [];
+    }
+    _avisar();
+  }
+
+  /// Se conecta o desconecta para recibir solicitudes. Con un viaje en curso no cambia nada: el
+  /// viaje sigue hasta terminar.
+  void cambiarEnLinea(bool valor) {
+    if (enLinea == valor || etapa == EtapaConductor.enViaje) return;
+    enLinea = valor;
+    if (etapa == EtapaConductor.lista || etapa == EtapaConductor.detalle) _entrarLista();
     _avisar();
   }
 

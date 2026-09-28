@@ -14,6 +14,20 @@ import '../../core/stomp/cliente_stomp.dart';
 import '../../core/tema.dart';
 import 'flota_api.dart';
 import 'modelos.dart';
+import 'posiciones_animadas.dart';
+
+/// Filtro de la barra superior del mapa. Desconectados incluye a los que se quedaron sin senal.
+enum FiltroFlota {
+  todos('Todos', FontAwesomeIcons.layerGroup),
+  disponibles('Disponibles', FontAwesomeIcons.circleCheck),
+  ocupados('Ocupados', FontAwesomeIcons.route),
+  desconectados('Desconectados', FontAwesomeIcons.powerOff);
+
+  final String etiqueta;
+  final FaIconData icono;
+
+  const FiltroFlota(this.etiqueta, this.icono);
+}
 
 /// Mapa de la flota de conductores en tiempo real.
 ///
@@ -27,12 +41,13 @@ class PantallaFlota extends StatefulWidget {
   State<PantallaFlota> createState() => _PantallaFlotaState();
 }
 
-class _PantallaFlotaState extends State<PantallaFlota> {
+class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProviderStateMixin {
   /// Centro de Cobija, el mismo que usa el mapa de zonas.
   static const LatLng _centroCobija = LatLng(-11.035287, -68.759348);
 
-  /// Sin reportes por mas de este tiempo, el conductor se dibuja como sin senal.
-  static const Duration _limiteSenal = Duration(seconds: 30);
+  /// Sin reportes por mas de este tiempo, el conductor se dibuja como sin senal. La app del conductor
+  /// reporta cada 30 s aunque este quieto, asi que el limite deja pasar dos latidos perdidos.
+  static const Duration _limiteSenal = Duration(seconds: 75);
 
   /// Los mensajes se acumulan y se pintan de a uno cada este tiempo. Con cuatro conductores da igual,
   /// pero con decenas el mapa se volveria a pintar dozens de veces por segundo.
@@ -42,6 +57,13 @@ class _PantallaFlotaState extends State<PantallaFlota> {
   late final FlotaApi _api;
 
   final Map<int, ConductorFlota> _conductores = {};
+
+  /// Posicion que se dibuja de cada conductor: se desliza hasta la ultima reportada.
+  late final PosicionesAnimadas _posiciones = PosicionesAnimadas(vsync: this, duracion: const Duration(milliseconds: 2600))..addListener(_seguirConCamara);
+  FiltroFlota _filtro = FiltroFlota.todos;
+
+  /// Llego la posicion de un conductor que no estaba en la lista (por ejemplo, recien aprobado).
+  Timer? _temporizadorRecarga;
   final Map<int, Map<String, dynamic>> _pendientes = {};
   Set<int> _sinSenal = {};
 
@@ -69,6 +91,8 @@ class _PantallaFlotaState extends State<PantallaFlota> {
   void dispose() {
     _temporizadorLote?.cancel();
     _temporizadorSenal?.cancel();
+    _temporizadorRecarga?.cancel();
+    _posiciones.dispose();
     _suscripcionMensajes?.cancel();
     _suscripcionEstado?.cancel();
     _ws?.dispose();
@@ -77,11 +101,14 @@ class _PantallaFlotaState extends State<PantallaFlota> {
 
   // ---------------------------------------------------------------- carga
 
-  Future<void> _cargar() async {
-    setState(() {
-      _cargando = true;
-      _error = null;
-    });
+  /// [silencioso]: recarga en segundo plano (llego un conductor nuevo), sin tapar el mapa.
+  Future<void> _cargar({bool silencioso = false}) async {
+    if (!silencioso) {
+      setState(() {
+        _cargando = true;
+        _error = null;
+      });
+    }
     try {
       final flota = await _api.listarFlota();
       if (!mounted) return;
@@ -91,12 +118,14 @@ class _PantallaFlotaState extends State<PantallaFlota> {
           ..addEntries(flota.map((c) => MapEntry(c.idConductor, c)));
         _cargando = false;
       });
-      _encuadrar();
+      _posiciones.conservar(_conductores.keys.toSet());
+      _posiciones.mover(_posicionesDe(flota), animar: false);
+      if (!silencioso) _encuadrar();
       _revisarSenales();
-      _conectar();
+      if (_ws == null) _conectar();
       _temporizadorSenal ??= Timer.periodic(const Duration(seconds: 5), (_) => _revisarSenales());
     } on ApiExcepcion catch (e) {
-      if (!mounted) return;
+      if (!mounted || silencioso) return;
       setState(() {
         _error = e.mensaje;
         _cargando = false;
@@ -142,33 +171,63 @@ class _PantallaFlotaState extends State<PantallaFlota> {
     _temporizadorLote = null;
     if (!mounted) return;
 
-    bool cambio = false;
+    final movidos = <ConductorFlota>[];
+    bool desconocido = false;
     for (final entrada in _pendientes.entries) {
       final conductor = _conductores[entrada.key];
-      // Un id que no vino en la consulta de arranque se ignora: sin nombres ni placa no se puede
-      // dibujar bien, y el siguiente reporte del mismo conductor ya estara en la lista.
-      if (conductor == null) continue;
-      _conductores[entrada.key] = conductor.conPosicion(entrada.value);
-      cambio = true;
+      // Un id que no vino en la consulta de arranque no tiene nombre ni placa: se recarga la lista
+      // (una sola vez aunque lleguen varios) para que aparezca con sus datos.
+      if (conductor == null) {
+        desconocido = true;
+        continue;
+      }
+      final actualizado = conductor.conPosicion(entrada.value);
+      _conductores[entrada.key] = actualizado;
+      movidos.add(actualizado);
     }
     _pendientes.clear();
+    if (desconocido) {
+      _temporizadorRecarga ??= Timer(const Duration(seconds: 2), () {
+        _temporizadorRecarga = null;
+        if (mounted) _cargar(silencioso: true);
+      });
+    }
 
-    if (!cambio) return;
+    if (movidos.isEmpty) return;
     setState(() {});
+    _posiciones.mover(_posicionesDe(movidos));
     _revisarSenales();
-    _moverAlConductorSeguido();
   }
 
-  /// Lleva la camara al conductor que se esta siguiendo, si hay alguno. Va aparte porque al
-  /// acumular los mensajes no se puede saber cual de ellos es el del conductor elegido, ya que se
-  /// recorren en un orden que no depende de cual se sigue.
-  void _moverAlConductorSeguido() {
+  Map<int, LatLng> _posicionesDe(Iterable<ConductorFlota> conductores) => {
+    for (final c in conductores)
+      if (c.tienePosicion) c.idConductor: LatLng(c.latitud!, c.longitud!),
+  };
+
+  /// Con un conductor seguido, la camara acompana a su marcador cuadro a cuadro mientras se desliza.
+  void _seguirConCamara() {
     final id = _siguiendoId;
-    if (id == null) return;
-    final conductor = _conductores[id];
-    if (conductor == null || !conductor.tienePosicion) return;
-    _controlador.move(LatLng(conductor.latitud!, conductor.longitud!), _controlador.camera.zoom);
+    if (id == null || !_mapaListo) return;
+    final punto = _posiciones.posicion(id);
+    if (punto == null) return;
+    _controlador.move(punto, _controlador.camera.zoom);
   }
+
+  /// Estado con el que se agrupa al conductor en los filtros.
+  FiltroFlota _grupoDe(ConductorFlota conductor) {
+    if (_sinSenal.contains(conductor.idConductor)) return FiltroFlota.desconectados;
+    return switch (conductor.disponibilidad) {
+      DisponibilidadConductor.disponible => FiltroFlota.disponibles,
+      DisponibilidadConductor.ocupado => FiltroFlota.ocupados,
+      _ => FiltroFlota.desconectados,
+    };
+  }
+
+  int _cuantos(FiltroFlota filtro) => filtro == FiltroFlota.todos
+      ? _conductores.values.where((c) => c.tienePosicion).length
+      : _conductores.values.where((c) => c.tienePosicion && _grupoDe(c) == filtro).length;
+
+  bool _pasaFiltro(ConductorFlota conductor) => _filtro == FiltroFlota.todos || _grupoDe(conductor) == _filtro;
 
   /// Recalcula quienes estan sin senal. Solo repinta si el grupo cambio, para no reconstruir el mapa
   /// entero cada cinco segundos sin motivo.
@@ -216,7 +275,7 @@ class _PantallaFlotaState extends State<PantallaFlota> {
     final color = _colorDe(conductor);
     final siguiendo = conductor.idConductor == _siguiendoId;
     return Marker(
-      point: LatLng(conductor.latitud!, conductor.longitud!),
+      point: _posiciones.posicion(conductor.idConductor) ?? LatLng(conductor.latitud!, conductor.longitud!),
       width: 40,
       height: 40,
       alignment: Alignment.center,
@@ -231,10 +290,12 @@ class _PantallaFlotaState extends State<PantallaFlota> {
               BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: siguiendo ? 14 : 8, spreadRadius: siguiendo ? 2 : 1),
             ],
           ),
-          child: Icon(
-            siguiendo ? Icons.location_searching : Icons.directions_car,
-            size: 18,
-            color: ColoresApp.superficie,
+          child: Center(
+            child: FaIcon(
+              siguiendo ? FontAwesomeIcons.crosshairs : FontAwesomeIcons.motorcycle,
+              size: 17,
+              color: ColoresApp.superficie,
+            ),
           ),
         ),
       ),
@@ -295,7 +356,7 @@ class _PantallaFlotaState extends State<PantallaFlota> {
                     color: _colorDe(conductor).withValues(alpha: 0.14),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.directions_car, color: _colorDe(conductor), size: 22),
+                  child: Center(child: FaIcon(FontAwesomeIcons.motorcycle, color: _colorDe(conductor), size: 20)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -359,7 +420,8 @@ class _PantallaFlotaState extends State<PantallaFlota> {
     final estabaSiguiendo = _siguiendoId == conductor.idConductor;
     setState(() => _siguiendoId = estabaSiguiendo ? null : conductor.idConductor);
     if (estabaSiguiendo || !conductor.tienePosicion) return;
-    _controlador.move(LatLng(conductor.latitud!, conductor.longitud!), 15.5);
+    final punto = _posiciones.posicion(conductor.idConductor) ?? LatLng(conductor.latitud!, conductor.longitud!);
+    _controlador.move(punto, 15.5);
   }
 
   Widget _dato(FaIconData icono, String etiqueta, String valor) {
@@ -456,6 +518,7 @@ class _PantallaFlotaState extends State<PantallaFlota> {
     }
 
     final conPosicion = _conductores.values.where((c) => c.tienePosicion).toList();
+    final visibles = conPosicion.where(_pasaFiltro).toList();
     return Stack(
       children: [
         FlutterMap(
@@ -473,15 +536,26 @@ class _PantallaFlotaState extends State<PantallaFlota> {
               urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
               userAgentPackageName: 'taxiuap.admin',
             ),
-            MarkerLayer(markers: [for (final c in conPosicion) _marcador(c)]),
+            ListenableBuilder(
+              listenable: _posiciones,
+              builder: (context, _) => MarkerLayer(markers: [for (final c in visibles) _marcador(c)]),
+            ),
           ],
         ),
+        Positioned(top: 12, left: 12, right: 12, child: _barraFiltros()),
         if (conPosicion.isEmpty)
           Positioned(
             left: 0,
             right: 0,
             bottom: 20,
             child: Center(child: _pastilla('Ningun conductor ha reportado su posicion todavia')),
+          )
+        else if (visibles.isEmpty)
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 20,
+            child: Center(child: _pastilla('No hay conductores ${_filtro.etiqueta.toLowerCase()} en este momento')),
           ),
         if (_siguiendoId != null)
           Positioned(
@@ -507,9 +581,6 @@ class _PantallaFlotaState extends State<PantallaFlota> {
       EstadoWs.reconectando => (ColoresApp.rojo, 'Reconectando', FontAwesomeIcons.arrowsRotate),
       EstadoWs.desconectado => (ColoresApp.textoSuave, 'Sin conexión', FontAwesomeIcons.plugCircleXmark),
     };
-    final disponibles = _conductores.values
-        .where((c) => c.disponibilidad == DisponibilidadConductor.disponible && !_sinSenal.contains(c.idConductor))
-        .length;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 13),
@@ -534,12 +605,10 @@ class _PantallaFlotaState extends State<PantallaFlota> {
             ],
           ),
           _contador('En el mapa', conPosicionTotal),
-          _contador('Disponibles', disponibles),
-          _contador('Sin senal', _sinSenal.length),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const FaIcon(FontAwesomeIcons.carSide, color: ColoresApp.azul, size: 15),
+              const FaIcon(FontAwesomeIcons.motorcycle, color: ColoresApp.azul, size: 15),
               const SizedBox(width: 8),
               Text(
                 'Conductores',
@@ -552,6 +621,91 @@ class _PantallaFlotaState extends State<PantallaFlota> {
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  /// Filtros como iconos sobre el mapa: cada uno con su color, su nombre y cuantos hay.
+  Widget _barraFiltros() {
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Container(
+        padding: const EdgeInsets.all(5),
+        decoration: BoxDecoration(
+          color: ColoresApp.superficie,
+          borderRadius: BorderRadius.circular(14),
+          boxShadow: [
+            BoxShadow(color: ColoresApp.azul.withValues(alpha: 0.18), blurRadius: 12, offset: const Offset(0, 4)),
+          ],
+        ),
+        child: Wrap(
+          spacing: 4,
+          runSpacing: 4,
+          children: [for (final filtro in FiltroFlota.values) _botonFiltro(filtro)],
+        ),
+      ),
+    );
+  }
+
+  Color _colorFiltro(FiltroFlota filtro) => switch (filtro) {
+    FiltroFlota.todos => ColoresApp.azul,
+    FiltroFlota.disponibles => ColoresApp.exito,
+    FiltroFlota.ocupados => ColoresApp.rojo,
+    FiltroFlota.desconectados => ColoresApp.textoSuave,
+  };
+
+  Widget _botonFiltro(FiltroFlota filtro) {
+    final activo = _filtro == filtro;
+    final color = _colorFiltro(filtro);
+    // En pantallas angostas solo el icono y el numero; el nombre queda en el tooltip.
+    final conTexto = MediaQuery.sizeOf(context).width >= 700;
+    return Tooltip(
+      message: '${filtro.etiqueta}: ${_cuantos(filtro)}',
+      child: Material(
+        color: activo ? color : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => setState(() => _filtro = filtro),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FaIcon(filtro.icono, size: 15, color: activo ? ColoresApp.superficie : color),
+                if (conTexto) ...[
+                  const SizedBox(width: 8),
+                  Text(
+                    filtro.etiqueta,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: activo ? ColoresApp.superficie : ColoresApp.texto,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 22),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: activo ? ColoresApp.superficie.withValues(alpha: 0.25) : color.withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    '${_cuantos(filtro)}',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: activo ? ColoresApp.superficie : color,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
