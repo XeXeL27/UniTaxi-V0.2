@@ -14,6 +14,7 @@ import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +22,7 @@ import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
+import com.taxiuap.backend.location.dto.ConductorEnLineaResponse;
 import com.taxiuap.backend.location.dto.PosicionConductor;
 import com.taxiuap.backend.location.dto.PosicionConductorMensaje;
 import com.taxiuap.backend.location.dto.UbicacionConductorRequest;
@@ -56,6 +58,9 @@ public class UbicacionService {
     private final ConductorRepository conductorRepository;
     private final VehiculoRepository vehiculoRepository;
     private final ConductorUbicacionPublisher publisher;
+
+    @Value("${taxiuap.conductores.segundos-en-linea:120}")
+    private long segundosEnLinea;
 
     /**
      * Registra la posicion de quien se identifica por su cuenta de usuario, que es como llega el
@@ -172,6 +177,23 @@ public class UbicacionService {
                     ubicacion == null || ubicacion.getActualizadoEn() == null
                             ? null : aInstante(ubicacion.getActualizadoEn()));
         }).toList();
+    }
+
+    /**
+     * Conductores libres que el pasajero ve en su mapa: aprobados, con la app abierta (reportaron
+     * su GPS hace menos de taxiuap.conductores.segundos-en-linea) y con disponibilidad DISPONIBLE.
+     * Solo se expone la posicion, no los datos personales.
+     */
+    @Transactional(readOnly = true)
+    public List<ConductorEnLineaResponse> conductoresLibres() {
+        LocalDateTime limite = LocalDateTime.now().minusSeconds(segundosEnLinea);
+        return listaFlota().stream()
+                .filter(posicion -> posicion.disponibilidad() == Disponibilidad.DISPONIBLE)
+                .filter(posicion -> posicion.latitud() != null && posicion.actualizadoEn() != null)
+                .filter(posicion -> posicion.actualizadoEn().isAfter(limite.atZone(ZoneId.systemDefault()).toInstant()))
+                .map(posicion -> new ConductorEnLineaResponse(
+                        posicion.idConductor(), posicion.latitud(), posicion.longitud(), posicion.rumbo()))
+                .toList();
     }
 
     private Conductor buscarConductorOperativo(Long idConductor) {

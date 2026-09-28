@@ -1,5 +1,6 @@
 package com.taxiuap.backend.trip.service;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -12,6 +13,7 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.locationtech.jts.io.ParseException;
 import org.locationtech.jts.io.WKTReader;
 import org.locationtech.jts.io.WKTWriter;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,9 +22,11 @@ import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
+import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
 import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
@@ -57,6 +61,14 @@ public class SolicitudViajeService {
     private final CategoriaServicioRepository categoriaServicioRepository;
     private final DocumentoConductorService documentoConductorService;
     private final ViajeEventPublisher viajeEventPublisher;
+    private final ViajeService viajeService;
+    private final CalculoPrecioService calculoPrecioService;
+
+    @Value("${taxiuap.comision.porcentaje:15}")
+    private BigDecimal porcentajeComision;
+
+    /** Categoria usada cuando la app no elige una: el taxi comun. */
+    private static final String CATEGORIA_POR_DEFECTO = "ESTANDAR";
 
     @Transactional
     public SolicitudViajeResponse crear(SolicitudViajeRequest request) {
@@ -68,12 +80,13 @@ public class SolicitudViajeService {
         if (tieneSolicitudActiva) {
             throw new NegocioException("Ya tiene una solicitud de viaje activa");
         }
-
-        CategoriaServicio categoriaServicio = categoriaServicioRepository.findById(request.idCategoriaServicio())
-                .orElseThrow(() -> RecursoNoEncontradoException.de("CategoriaServicio", request.idCategoriaServicio()));
-        if (categoriaServicio.getEstadoCategoriaServicio() != EstadoRegistro.A) {
-            throw new NegocioException("La categoria de servicio no esta activa");
+        if (viajeService.pasajeroTieneViajeActivo(pasajero.getId())) {
+            throw new NegocioException("Ya tiene un viaje en curso");
         }
+
+        CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
+        // Con precio fijo, el precio lo pone la plataforma y no el pasajero.
+        BigDecimal precioFijo = calculoPrecioService.precioFijo();
 
         SolicitudViaje solicitud = new SolicitudViaje();
         solicitud.setPasajero(pasajero);
@@ -82,7 +95,7 @@ public class SolicitudViajeService {
         solicitud.setDestino(convertirAPunto(request.destinoWkt()));
         solicitud.setOrigenDireccion(request.origenDireccion());
         solicitud.setDestinoDireccion(request.destinoDireccion());
-        solicitud.setPrecioSugerido(request.precioSugerido());
+        solicitud.setPrecioSugerido(precioFijo != null ? precioFijo : request.precioSugerido());
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         solicitud.setFechaSolicitud(LocalDateTime.now());
         solicitud.setEstadoSolViaje(EstadoRegistro.A);
@@ -90,6 +103,11 @@ public class SolicitudViajeService {
         SolicitudViajeResponse creada = aResponse(solicitudViajeRepository.save(solicitud));
         viajeEventPublisher.publicarSolicitudNueva(creada);
         return creada;
+    }
+
+    /** Precio que se muestra antes de confirmar (pasajero) o de aceptar (conductor). */
+    public PrecioViajeResponse precioVigente() {
+        return new PrecioViajeResponse(calculoPrecioService.precioFijo(), "Bs", porcentajeComision);
     }
 
     public List<SolicitudViajeResponse> listarPropias() {
@@ -139,9 +157,26 @@ public class SolicitudViajeService {
         return Stream.concat(
                         solicitudViajeRepository.findBySituacionSolicitud(SituacionSolicitud.PENDIENTE).stream(),
                         solicitudViajeRepository.findBySituacionSolicitud(SituacionSolicitud.CON_OFERTAS).stream())
-                .sorted(Comparator.comparing(SolicitudViaje::getFechaSolicitud))
+                // Las mas recientes primero.
+                .sorted(Comparator.comparing(SolicitudViaje::getFechaSolicitud,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
                 .map(this::aResponse)
                 .toList();
+    }
+
+    private CategoriaServicio resolverCategoria(Integer idCategoriaServicio) {
+        CategoriaServicio categoriaServicio = idCategoriaServicio != null
+                ? categoriaServicioRepository.findById(idCategoriaServicio)
+                        .orElseThrow(() -> RecursoNoEncontradoException.de("CategoriaServicio", idCategoriaServicio))
+                : categoriaServicioRepository.findAll().stream()
+                        .filter(categoria -> CATEGORIA_POR_DEFECTO.equalsIgnoreCase(categoria.getNombre()))
+                        .filter(categoria -> categoria.getEstadoCategoriaServicio() == EstadoRegistro.A)
+                        .findFirst()
+                        .orElseThrow(() -> new NegocioException("No hay una categoria de servicio ESTANDAR activa"));
+        if (categoriaServicio.getEstadoCategoriaServicio() != EstadoRegistro.A) {
+            throw new NegocioException("La categoria de servicio no esta activa");
+        }
+        return categoriaServicio;
     }
 
     private Pasajero buscarPasajero() {
@@ -188,6 +223,7 @@ public class SolicitudViajeService {
         String destinoWkt = solicitud.getDestino() != null ? new WKTWriter().write(solicitud.getDestino()) : null;
         int cantidadOfertas = ofertaViajeRepository.findBySolicitudIdAndSituacionOferta(
                 solicitud.getId(), SituacionOferta.PENDIENTE).size();
+        BigDecimal precioFijo = calculoPrecioService.precioFijo();
 
         return new SolicitudViajeResponse(
                 solicitud.getId(),
@@ -199,7 +235,8 @@ public class SolicitudViajeService {
                 destinoWkt,
                 solicitud.getOrigenDireccion(),
                 solicitud.getDestinoDireccion(),
-                solicitud.getPrecioSugerido(),
+                // Con precio fijo se muestra el que se cobrara, aunque la solicitud se haya creado antes.
+                precioFijo != null ? precioFijo : solicitud.getPrecioSugerido(),
                 solicitud.getSituacionSolicitud(),
                 solicitud.getFechaSolicitud(),
                 cantidadOfertas);

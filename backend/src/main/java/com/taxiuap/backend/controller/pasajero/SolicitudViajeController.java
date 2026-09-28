@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.trip.dto.OfertaViajeResponse;
+import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
 import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
@@ -42,6 +43,12 @@ public class SolicitudViajeController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<SolicitudViajeResponse>>> listarPropias() {
         return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.listarPropias()));
+    }
+
+    /** Precio del viaje que se muestra antes de confirmar la solicitud. */
+    @GetMapping("/precio")
+    public ResponseEntity<ApiResponse<PrecioViajeResponse>> precio() {
+        return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.precioVigente()));
     }
 
     @GetMapping("/{id}")

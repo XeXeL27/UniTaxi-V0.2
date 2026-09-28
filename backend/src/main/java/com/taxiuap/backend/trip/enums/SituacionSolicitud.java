@@ -6,5 +6,7 @@ public enum SituacionSolicitud {
     CON_OFERTAS,
     ACEPTADA,
     CANCELADA,
-    EXPIRADA
+    EXPIRADA,
+    /** El viaje que salio de esta solicitud se completo. */
+    FINALIZADA
 }

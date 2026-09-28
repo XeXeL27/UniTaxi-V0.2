@@ -162,6 +162,60 @@ public class OfertaViajeService {
         return viajeService.obtenerPorId(viaje.getId());
     }
 
+    /**
+     * El conductor toma una solicitud directamente (estilo Uber) al precio de la solicitud, que
+     * con precio fijo es el de la plataforma. Usa el mismo UPDATE condicional de la regla 5 que
+     * aceptar(): si dos conductores tocan "Aceptar" a la vez, solo uno gana la fila y el otro
+     * recibe 409. La oferta queda registrada ya ACEPTADA para conservar el rastro del modelo de
+     * datos (solicitud -> oferta -> viaje), y las ofertas pendientes de otros se rechazan.
+     */
+    @Transactional
+    public ViajeResponse aceptarDirecto(Long idSolicitud) {
+        Conductor conductor = buscarConductor();
+        // Reglas de negocio 1 y 2.
+        if (!documentoConductorService.puedeOperar(conductor.getId())) {
+            throw new NegocioException("El conductor no esta habilitado para recibir solicitudes");
+        }
+        if (viajeService.conductorTieneViajeActivo(conductor.getId())) {
+            throw new NegocioException("Ya tiene un viaje en curso");
+        }
+        if (!solicitudViajeRepository.existsById(idSolicitud)) {
+            throw RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud);
+        }
+        Long idConductor = conductor.getId();
+
+        int filasAfectadas = solicitudViajeRepository.aceptarSiDisponible(idSolicitud);
+        if (filasAfectadas == 0) {
+            throw new ConflictoException("Otro conductor ya tomo esta solicitud o fue cancelada");
+        }
+
+        // El UPDATE limpia el contexto de persistencia: se vuelve a leer desde la base.
+        SolicitudViaje solicitud = solicitudViajeRepository.findById(idSolicitud)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud));
+        Conductor conductorActual = conductorRepository.findById(idConductor)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Conductor", idConductor));
+
+        OfertaViaje oferta = new OfertaViaje();
+        oferta.setSolicitud(solicitud);
+        oferta.setConductor(conductorActual);
+        oferta.setPrecioOfertado(solicitud.getPrecioSugerido());
+        oferta.setSituacionOferta(SituacionOferta.ACEPTADA);
+        oferta.setFechaOferta(LocalDateTime.now());
+        oferta.setEstadoOferViaje(EstadoRegistro.A);
+        ofertaViajeRepository.save(oferta);
+
+        List<OfertaViaje> otrasOfertas = ofertaViajeRepository
+                .findBySolicitudIdAndSituacionOferta(idSolicitud, SituacionOferta.PENDIENTE);
+        otrasOfertas.forEach(otra -> otra.setSituacionOferta(SituacionOferta.RECHAZADA));
+        ofertaViajeRepository.saveAll(otrasOfertas);
+
+        Viaje viaje = viajeService.crearDesdeOferta(solicitud, oferta);
+
+        viajeEventPublisher.publicarSolicitudCerrada(idSolicitud, "Solicitud aceptada");
+
+        return viajeService.obtenerPorId(viaje.getId());
+    }
+
     private Pasajero buscarPasajero() {
         return pasajeroRepository.findByUsuarioId(UsuarioActual.idUsuario())
                 .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de pasajero"));

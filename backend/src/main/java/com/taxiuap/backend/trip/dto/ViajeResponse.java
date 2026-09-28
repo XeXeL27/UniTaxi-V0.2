@@ -15,6 +15,10 @@ public record ViajeResponse(
         Long idConductor,
         String nombreConductor,
         String placaVehiculo,
+        String marcaVehiculo,
+        String modeloVehiculo,
+        String colorVehiculo,
+        BigDecimal calificacionConductor,
         String origenWkt,
         String destinoWkt,
         String origenDireccion,
@@ -27,5 +31,6 @@ public record ViajeResponse(
         SituacionViaje situacionViaje,
         CanceladoPor canceladoPor,
         LocalDateTime fechaInicio,
-        LocalDateTime fechaFin) {
+        LocalDateTime fechaFin,
+        boolean calificadoPorPasajero) {
 }

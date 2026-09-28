@@ -28,6 +28,7 @@ import com.taxiuap.backend.pricing.enums.SituacionPago;
 import com.taxiuap.backend.pricing.repository.BilleteraConductorRepository;
 import com.taxiuap.backend.pricing.repository.ComisionRepository;
 import com.taxiuap.backend.pricing.repository.PagoRepository;
+import com.taxiuap.backend.rating.repository.CalificacionRepository;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
@@ -39,6 +40,7 @@ import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
+import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 import com.taxiuap.backend.trip.repository.ViajeRepository;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
@@ -71,6 +73,7 @@ public class ViajeService {
     private final CalculoPrecioService calculoPrecioService;
     private final HistorialViajeService historialViajeService;
     private final SimpMessagingTemplate mensajeriaTemplate;
+    private final CalificacionRepository calificacionRepository;
 
     @Value("${taxiuap.comision.porcentaje:15}")
     private BigDecimal porcentajeComision;
@@ -152,6 +155,9 @@ public class ViajeService {
         Viaje viaje = obtenerViajeDelConductor(idViaje);
         validarTransicion(viaje, SituacionViaje.EN_CURSO, SituacionViaje.COMPLETADO);
         viaje.setFechaFin(LocalDateTime.now());
+        // La solicitud que origino el viaje queda cerrada como FINALIZADA (entidad administrada:
+        // se guarda con la transaccion).
+        viaje.getSolicitud().setSituacionSolicitud(SituacionSolicitud.FINALIZADA);
         viaje = viajeRepository.save(viaje);
 
         // Regla de negocio 7: al completar el viaje se crea el pago, la comision y se actualiza
@@ -176,6 +182,7 @@ public class ViajeService {
 
         viaje.setSituacionViaje(SituacionViaje.CANCELADO);
         viaje.setCanceladoPor(canceladoPor);
+        viaje.getSolicitud().setSituacionSolicitud(SituacionSolicitud.CANCELADA);
         viaje = viajeRepository.save(viaje);
 
         return registrarYNotificar(viaje);
@@ -236,6 +243,16 @@ public class ViajeService {
         return Optional.empty();
     }
 
+    /** true si el pasajero tiene un viaje asignado que todavia no termino ni se cancelo. */
+    public boolean pasajeroTieneViajeActivo(Long idPasajero) {
+        return viajeRepository.findFirstByPasajeroIdAndSituacionViajeNotIn(idPasajero, ESTADOS_FINALES).isPresent();
+    }
+
+    /** true si el conductor tiene un viaje asignado que todavia no termino ni se cancelo. */
+    public boolean conductorTieneViajeActivo(Long idConductor) {
+        return viajeRepository.findFirstByConductorIdAndSituacionViajeNotIn(idConductor, ESTADOS_FINALES).isPresent();
+    }
+
     /** Convierte la entidad Viaje en su respuesta publica. La usa tambien OfertaViajeService al aceptar. */
     public ViajeResponse aRespuesta(Viaje viaje) {
         Usuario usuarioPasajero = viaje.getPasajero().getUsuario();
@@ -250,6 +267,10 @@ public class ViajeService {
                 viaje.getConductor().getId(),
                 usuarioConductor.getPersona().getNombres() + " " + usuarioConductor.getPersona().getApellidos(),
                 viaje.getVehiculo().getPlaca(),
+                viaje.getVehiculo().getMarca(),
+                viaje.getVehiculo().getModelo(),
+                viaje.getVehiculo().getColor(),
+                viaje.getConductor().getCalificacionPromedio(),
                 escritorWkt.write(viaje.getOrigen()),
                 escritorWkt.write(viaje.getDestino()),
                 viaje.getSolicitud().getOrigenDireccion(),
@@ -262,7 +283,8 @@ public class ViajeService {
                 viaje.getSituacionViaje(),
                 viaje.getCanceladoPor(),
                 viaje.getFechaInicio(),
-                viaje.getFechaFin());
+                viaje.getFechaFin(),
+                calificacionRepository.existsByViajeIdAndUsuarioEmisorId(viaje.getId(), usuarioPasajero.getId()));
     }
 
     /**

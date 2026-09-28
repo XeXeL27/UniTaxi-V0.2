@@ -14,7 +14,9 @@ import org.springframework.web.bind.annotation.RestController;
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.trip.dto.OfertaViajeRequest;
 import com.taxiuap.backend.trip.dto.OfertaViajeResponse;
+import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
+import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.service.OfertaViajeService;
 import com.taxiuap.backend.trip.service.SolicitudViajeService;
 
@@ -40,6 +42,19 @@ public class OfertaViajeController {
             @PathVariable Long idSolicitud, @Valid @RequestBody OfertaViajeRequest request) {
         OfertaViajeResponse creada = ofertaViajeService.ofertar(idSolicitud, request);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Oferta registrada", creada));
+    }
+
+    /** Precio del viaje y comision de la plataforma, para mostrar la ganancia antes de aceptar. */
+    @GetMapping("/precio")
+    public ResponseEntity<ApiResponse<PrecioViajeResponse>> precio() {
+        return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.precioVigente()));
+    }
+
+    /** El conductor toma la solicitud al precio de la plataforma y el viaje queda asignado a el. */
+    @PostMapping("/solicitudes/{idSolicitud}/aceptar")
+    public ResponseEntity<ApiResponse<ViajeResponse>> aceptar(@PathVariable Long idSolicitud) {
+        ViajeResponse viaje = ofertaViajeService.aceptarDirecto(idSolicitud);
+        return ResponseEntity.ok(ApiResponse.exito("Viaje asignado", viaje));
     }
 
     @GetMapping("/ofertas")

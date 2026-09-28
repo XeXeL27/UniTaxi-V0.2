@@ -7,6 +7,7 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.locationtech.jts.geom.Point;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +52,18 @@ public class CalculoPrecioService {
     private final EstudianteService estudianteService;
     private final MatriculaEstudianteService matriculaEstudianteService;
     private final ViajeRepository viajeRepository;
+
+    /** Precio fijo del viaje (Bs), 8.00 si no se configura; vacio: el precio sale de la tarifa vigente. */
+    @Value("${taxiuap.viaje.precio-fijo:8.00}")
+    private BigDecimal precioFijo;
+
+    @Value("${taxiuap.descuento-estudiantil.habilitado:false}")
+    private boolean descuentoEstudiantilHabilitado;
+
+    /** Precio fijo configurado, o null si el precio se calcula con la tarifa. */
+    public BigDecimal precioFijo() {
+        return precioFijo != null ? precioFijo.setScale(2, RoundingMode.HALF_UP) : null;
+    }
 
     public CalculoPrecio calcular(SolicitudViaje solicitud, OfertaViaje oferta, Pasajero pasajero) {
         BigDecimal distanciaKm = calcularDistanciaKm(solicitud.getOrigen(), solicitud.getDestino());
@@ -145,6 +158,10 @@ public class CalculoPrecioService {
      */
     private BigDecimal calcularPrecioOriginal(OfertaViaje oferta, Tarifa tarifa, BigDecimal distanciaKm,
             Integer duracionMin) {
+        // Mientras haya precio fijo, todos los viajes cuestan lo mismo sin importar la oferta.
+        if (precioFijo != null) {
+            return precioFijo;
+        }
         if (oferta.getPrecioOfertado() != null) {
             return oferta.getPrecioOfertado();
         }
@@ -163,6 +180,9 @@ public class CalculoPrecioService {
      */
     private ResultadoDescuento calcularDescuento(Pasajero pasajero, SolicitudViaje solicitud,
             BigDecimal precioOriginal) {
+        if (!descuentoEstudiantilHabilitado) {
+            return ResultadoDescuento.sinDescuento();
+        }
         Optional<Estudiante> estudianteOpt = estudianteService.buscarPorUsuario(pasajero.getUsuario().getId());
         if (estudianteOpt.isEmpty()) {
             return ResultadoDescuento.sinDescuento();
