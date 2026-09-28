@@ -19,11 +19,15 @@ String _km(double? metros) {
 class PanelSolicitudes extends StatelessWidget {
   final FlujoConductor flujo;
 
-  const PanelSolicitudes({super.key, required this.flujo});
+  /// Vuelve a consultar si la administracion ya aprobo la cuenta (solo en revision).
+  final VoidCallback? onRevisarAprobacion;
+
+  const PanelSolicitudes({super.key, required this.flujo, this.onRevisarAprobacion});
 
   @override
   Widget build(BuildContext context) {
     final lista = flujo.solicitudes;
+    if (flujo.enRevision) return _EnRevision(situacion: flujo.situacionAprobacion, onRevisar: onRevisarAprobacion);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -325,6 +329,67 @@ class PanelViajeConductor extends StatelessWidget {
             onPressed: flujo.ocupado ? null : onCancelar,
             style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
             child: const Text('Cancelar viaje', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// La cuenta todavia no esta aprobada: explica que falta y deja volver a consultar.
+class _EnRevision extends StatelessWidget {
+  final String? situacion;
+  final VoidCallback? onRevisar;
+
+  const _EnRevision({required this.situacion, required this.onRevisar});
+
+  @override
+  Widget build(BuildContext context) {
+    final (titulo, texto, color) = switch (situacion) {
+      'RECHAZADO' => (
+        'Registro rechazado',
+        'La administración rechazó tu registro. Revisa tus documentos en Más > Mis documentos o comunícate con TaxiUAP.',
+        ColoresApp.rojo,
+      ),
+      'SUSPENDIDO' => (
+        'Cuenta suspendida',
+        'Tu cuenta de conductor está suspendida. Comunícate con la administración de TaxiUAP.',
+        ColoresApp.rojo,
+      ),
+      _ => (
+        'Cuenta en revisión',
+        'La administración está revisando tus datos y documentos. Cuando te aprueben podrás conectarte y recibir solicitudes.',
+        const Color(0xFFE67E22),
+      ),
+    };
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.14), shape: BoxShape.circle),
+              child: Center(child: FaIcon(FontAwesomeIcons.hourglassHalf, color: color, size: 18)),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(titulo, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14, height: 1.4)),
+        if (onRevisar != null) ...[
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: onRevisar,
+              icon: const FaIcon(FontAwesomeIcons.arrowsRotate, size: 14),
+              label: const Text('Ver si ya me aprobaron'),
+            ),
           ),
         ],
       ],

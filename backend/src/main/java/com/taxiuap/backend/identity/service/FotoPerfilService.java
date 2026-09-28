@@ -50,6 +50,23 @@ public class FotoPerfilService {
         return ruta;
     }
 
+    /**
+     * Guarda como foto de perfil una imagen que no llego por la app (la de la cuenta de Google).
+     * Si la imagen no se puede leer no pasa nada: la cuenta queda con las iniciales.
+     */
+    @Transactional
+    public void guardarImagen(Usuario usuario, byte[] imagen) {
+        try {
+            byte[] procesada = ProcesadorImagen.fotoPerfil(imagen);
+            String ruta = almacenamientoArchivos.carpetaGeneral(usuario.getPersona())
+                    + "/foto_perfil_" + usuario.getRol().getCodigo().toLowerCase() + ".jpg";
+            almacenamientoArchivos.guardar(procesada, ruta);
+            usuario.setFotoUrl(ruta);
+        } catch (Exception e) {
+            // La foto es opcional.
+        }
+    }
+
     public Resource leer(Long idUsuario) {
         Usuario usuario = buscar(idUsuario);
         if (usuario.getFotoUrl() == null || !almacenamientoArchivos.existe(usuario.getFotoUrl())) {

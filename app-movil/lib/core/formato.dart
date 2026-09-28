@@ -8,6 +8,13 @@ String formatoBs(num? monto) {
   return '$texto Bs';
 }
 
+/// Fecha dd/mm/aaaa; guion si no hay.
+String formatoFecha(DateTime? fecha) {
+  if (fecha == null) return '-';
+  String dos(int n) => n.toString().padLeft(2, '0');
+  return '${dos(fecha.day)}/${dos(fecha.month)}/${fecha.year}';
+}
+
 /// Fecha y hora cortas: "28/09/2026 14:05".
 String formatoFechaHora(DateTime? fecha) {
   if (fecha == null) return '-';

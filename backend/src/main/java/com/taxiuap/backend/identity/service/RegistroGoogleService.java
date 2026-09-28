@@ -1,0 +1,193 @@
+package com.taxiuap.backend.identity.service;
+
+import java.security.SecureRandom;
+import java.util.Base64;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.taxiuap.backend.config.security.RolSistema;
+import com.taxiuap.backend.identity.dto.PerfilGoogle;
+import com.taxiuap.backend.identity.dto.PersonaRequest;
+import com.taxiuap.backend.identity.dto.RegistroConductorGoogleRequest;
+import com.taxiuap.backend.identity.dto.TokenResponse;
+import com.taxiuap.backend.identity.entity.Conductor;
+import com.taxiuap.backend.identity.entity.Persona;
+import com.taxiuap.backend.identity.entity.Usuario;
+import com.taxiuap.backend.identity.repository.PersonaRepository;
+import com.taxiuap.backend.identity.repository.UsuarioRepository;
+import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.shared.exception.ConflictoException;
+import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.vehicle.enums.TipoDocumento;
+import com.taxiuap.backend.vehicle.service.RegistroMotoConductorService;
+
+import lombok.RequiredArgsConstructor;
+
+/**
+ * Ingreso y registro con Google. La persona se reconoce por su correo.
+ *
+ * Una cuenta creada con Google recibe una contrasena aleatoria que nadie conoce, asi que entra
+ * siempre con Google. Si la persona ya tenia otra cuenta de la app, la nueva
+ * reutiliza su nombre de usuario y su contrasena (regla 12: pasajero y conductor comparten
+ * credenciales).
+ */
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class RegistroGoogleService {
+
+    private static final SecureRandom AZAR = new SecureRandom();
+    private static final List<RolSistema> ROLES_APP = List.of(RolSistema.PASAJERO, RolSistema.CONDUCTOR);
+
+    private final PersonaRepository personaRepository;
+    private final UsuarioRepository usuarioRepository;
+    private final GestionPersonaService gestionPersonaService;
+    private final CuentaUsuarioService cuentaUsuarioService;
+    private final RegistroMotoConductorService registroMotoConductorService;
+    private final FotoPerfilService fotoPerfilService;
+    private final AutenticacionService autenticacionService;
+
+    /**
+     * Boton "Continuar con Google" del login: entra con la cuenta que ya tenga (pasajero antes que
+     * conductor; desde Mas cambia de modo). Sin cuentas de la app se registra como pasajero.
+     */
+    public TokenResponse ingresar(PerfilGoogle perfil, byte[] foto) {
+        Optional<Persona> existente = personaActiva(perfil);
+        if (existente.isPresent()) {
+            Persona persona = existente.get();
+            for (RolSistema rol : ROLES_APP) {
+                Optional<Usuario> cuenta = cuentaActiva(persona, rol);
+                if (cuenta.isPresent()) return autenticacionService.tokensDe(cuenta.get());
+            }
+            if (!cuentasActivas(persona).isEmpty()) {
+                throw new NegocioException("Esta cuenta es de administrador: ingresa con tu usuario y contraseña");
+            }
+        }
+        return registrarPasajero(perfil, foto);
+    }
+
+    /** Registro de pasajero: si ya lo es, simplemente entra. */
+    public TokenResponse registrarPasajero(PerfilGoogle perfil, byte[] foto) {
+        Persona persona = personaActiva(perfil).orElseGet(() -> nuevaPersona(perfil));
+        Optional<Usuario> cuenta = cuentaActiva(persona, RolSistema.PASAJERO);
+        if (cuenta.isPresent()) return autenticacionService.tokensDe(cuenta.get());
+
+        Usuario usuario = crearCuenta(persona, RolSistema.PASAJERO);
+        cuentaUsuarioService.crearPasajero(usuario);
+        if (foto != null) fotoPerfilService.guardarImagen(usuario, foto);
+        return autenticacionService.tokensDe(usuario);
+    }
+
+    /** Si ya es conductor entra directo; si no, hace falta el formulario (licencia, moto, PDF). */
+    @Transactional(readOnly = true)
+    public Optional<TokenResponse> conductorExistente(PerfilGoogle perfil) {
+        return personaActiva(perfil)
+                .flatMap(persona -> cuentaActiva(persona, RolSistema.CONDUCTOR))
+                .map(autenticacionService::tokensDe);
+    }
+
+    /**
+     * Registro de conductor con los datos de Google y el formulario. Queda PENDIENTE hasta que el
+     * admin lo apruebe, con la moto y los PDF en revision.
+     */
+    public TokenResponse registrarConductor(PerfilGoogle perfil, RegistroConductorGoogleRequest datos,
+            Map<String, MultipartFile> archivos) {
+        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+
+        Optional<Persona> existente = personaActiva(perfil);
+        Persona persona;
+        if (existente.isPresent()) {
+            persona = existente.get();
+            if (cuentaActiva(persona, RolSistema.CONDUCTOR).isPresent()) {
+                throw new ConflictoException("Ya tienes una cuenta de conductor: ingresa con Google desde el inicio");
+            }
+            completarDatos(persona, datos);
+        } else {
+            persona = gestionPersonaService.registrarEntidad(new PersonaRequest(datos.ci(), datos.complementoCi(),
+                    perfil.nombres(), perfil.apellidos(), datos.fechaNacimiento(), perfil.correo(), datos.telefono()));
+        }
+
+        Usuario usuario = crearCuenta(persona, RolSistema.CONDUCTOR);
+        Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
+                datos.conductor().categoriaLicencia());
+        registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
+        return autenticacionService.tokensDe(usuario);
+    }
+
+    // ------------------------------------------------------------------ apoyo
+
+    private Optional<Persona> personaActiva(PerfilGoogle perfil) {
+        Optional<Persona> persona = personaRepository.findByCorreo(perfil.correo());
+        if (persona.isPresent() && persona.get().getEstadoPersona() != EstadoRegistro.A) {
+            throw new NegocioException("La cuenta de " + perfil.correo() + " no esta activa");
+        }
+        return persona;
+    }
+
+    private Persona nuevaPersona(PerfilGoogle perfil) {
+        // Google no da CI ni telefono: quedan null (se completan al registrarse como conductor).
+        return gestionPersonaService.registrarEntidad(new PersonaRequest(null, null, perfil.nombres(),
+                perfil.apellidos(), null, perfil.correo(), null));
+    }
+
+    private List<Usuario> cuentasActivas(Persona persona) {
+        return usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+                .toList();
+    }
+
+    private Optional<Usuario> cuentaActiva(Persona persona, RolSistema rol) {
+        return cuentasActivas(persona).stream().filter(u -> rol.getCodigo().equals(u.getRol().getCodigo())).findFirst();
+    }
+
+    /** Reutiliza las credenciales de la otra cuenta de la app; si no hay, genera unas nuevas. */
+    private Usuario crearCuenta(Persona persona, RolSistema rol) {
+        Optional<Usuario> otra = cuentasActivas(persona).stream()
+                .filter(u -> ROLES_APP.stream().anyMatch(r -> r.getCodigo().equals(u.getRol().getCodigo())))
+                .findFirst();
+        String nombreUsuario = otra.map(Usuario::getNombreUsuario).orElseGet(() -> nombreUsuarioLibre(persona.getCorreo()));
+        String hash = otra.map(Usuario::getPasswordHash)
+                .orElseGet(() -> cuentaUsuarioService.codificar(contrasenaAleatoria()));
+        return cuentaUsuarioService.crearUsuario(persona, rol, nombreUsuario, hash);
+    }
+
+    /** 48 caracteres al azar (288 bits): nadie la conoce y entra en el limite de 72 bytes de BCrypt. */
+    private static String contrasenaAleatoria() {
+        byte[] bytes = new byte[36];
+        AZAR.nextBytes(bytes);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+    }
+
+    /**
+     * Nombre de usuario a partir del correo (lo de antes de la @, con las reglas de NombreUsuario);
+     * si ya existe se le agrega un numero.
+     */
+    private String nombreUsuarioLibre(String correo) {
+        String base = correo.split("@")[0].toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", ".");
+        if (base.length() < 3) base = base + "usuario";
+        if (base.length() > 40) base = base.substring(0, 40);
+        String candidato = base;
+        for (int i = 2; !usuarioRepository.findByNombreUsuario(candidato).isEmpty(); i++) {
+            candidato = base + i;
+        }
+        return candidato;
+    }
+
+    /** La persona ya existia (por ejemplo, pasajero de Google sin CI): se completa lo que falte. */
+    private void completarDatos(Persona persona, RegistroConductorGoogleRequest datos) {
+        gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(
+                persona.getCi() != null ? persona.getCi() : datos.ci(),
+                persona.getCi() != null ? persona.getComplementoCi() : datos.complementoCi(),
+                persona.getNombres(),
+                persona.getApellidos(),
+                persona.getFechaNacimiento() != null ? persona.getFechaNacimiento() : datos.fechaNacimiento(),
+                persona.getCorreo(),
+                persona.getTelefono() != null ? persona.getTelefono() : datos.telefono()));
+    }
+}

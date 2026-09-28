@@ -1,13 +1,18 @@
 package com.taxiuap.backend.controller.auth;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.dto.LoginRequest;
 import com.taxiuap.backend.identity.dto.RefreshRequest;
@@ -35,11 +40,16 @@ public class AutenticacionController {
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro exitoso", token));
     }
 
-    @PostMapping("/registro/conductor")
+    /**
+     * Registro publico de conductor con el formulario. Multipart: "datos" (JSON) y un PDF por parte
+     * con el tipo de documento como nombre (CI y LICENCIA obligatorios). Queda PENDIENTE de revision.
+     */
+    @PostMapping(value = "/registro/conductor", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<TokenResponse>> registrarConductor(
-            @Valid @RequestBody RegistroConductorRequest datos) {
-        TokenResponse token = autenticacionService.registrarConductor(datos);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro exitoso", token));
+            @Valid @RequestPart("datos") RegistroConductorRequest datos,
+            @RequestParam Map<String, MultipartFile> archivos) {
+        TokenResponse token = autenticacionService.registrarConductor(datos, archivos);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro enviado a revision", token));
     }
 
     @PostMapping("/login")

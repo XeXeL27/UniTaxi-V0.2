@@ -1,42 +1,73 @@
 package com.taxiuap.backend.controller.auth;
 
+import java.net.URI;
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.util.LinkedMultiValueMap;
+import org.springframework.util.MultiValueMap;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.multipart.MultipartFile;
 
+import com.taxiuap.backend.identity.dto.CanjeGoogleRequest;
+import com.taxiuap.backend.identity.dto.PerfilGoogle;
+import com.taxiuap.backend.identity.dto.PerfilGoogleResponse;
+import com.taxiuap.backend.identity.dto.RegistroConductorGoogleRequest;
 import com.taxiuap.backend.identity.dto.TokenResponse;
-import com.taxiuap.backend.identity.service.AutenticacionService;
+import com.taxiuap.backend.identity.enums.ModoIngresoGoogle;
+import com.taxiuap.backend.identity.service.IngresoGoogleTemporal;
+import com.taxiuap.backend.identity.service.IngresoGoogleTemporal.Pedido;
+import com.taxiuap.backend.identity.service.RegistroGoogleService;
+import com.taxiuap.backend.shared.exception.ConflictoException;
+import com.taxiuap.backend.shared.exception.CredencialesInvalidasException;
+import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.response.ApiResponse;
 
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Inicio de sesion con Google OAuth2 (flujo manual de codigo de autorizacion).
- * GET /api/auth/google redirige a la pantalla de consentimiento de Google y
- * GET /api/auth/google/callback recibe el codigo, lo intercambia por un token
- * de acceso, obtiene el perfil y emite los tokens JWT propios.
+ * Ingreso y registro con Google (flujo de codigo de autorizacion de OAuth2).
+ *
+ * 1. La app abre GET /api/auth/google?modo=...&volver=... y el navegador va a Google.
+ * 2. Google vuelve a /api/auth/google/callback; se canjea el codigo por el perfil de la persona.
+ * 3. Se redirige a la app (volver) con ?google=codigo (sesion lista, se recoge con POST
+ *    /api/auth/google/canje), ?google_registro=codigo (conductor nuevo: falta el formulario) o
+ *    ?google_error=mensaje. Los JWT nunca viajan en la URL.
  */
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
 public class GoogleAuthController {
 
-    private static final String GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
-    private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
-    private static final String GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
+    private static final Logger LOG = LoggerFactory.getLogger(GoogleAuthController.class);
 
-    private final AutenticacionService autenticacionService;
+    private final RegistroGoogleService registroGoogleService;
+    private final IngresoGoogleTemporal temporal;
 
     /** Cliente HTTP para llamar a los endpoints de Google (no requiere bean). */
     private final RestTemplate restTemplate = new RestTemplate();
@@ -50,117 +81,211 @@ public class GoogleAuthController {
     @Value("${google.redirect-uri:http://localhost:8080/api/auth/google/callback}")
     private String googleRedirectUri;
 
-    /**
-     * Redirige al usuario a la pantalla de consentimiento de Google.
-     * Se piden los scopes openid, email y profile (nombre y foto).
-     */
+    /** URLs de Google; se pueden cambiar solo para probar el flujo contra un servidor falso. */
+    @Value("${google.auth-url:https://accounts.google.com/o/oauth2/v2/auth}")
+    private String googleAuthUrl;
+
+    @Value("${google.token-url:https://oauth2.googleapis.com/token}")
+    private String googleTokenUrl;
+
+    @Value("${google.userinfo-url:https://www.googleapis.com/oauth2/v2/userinfo}")
+    private String googleUserinfoUrl;
+
+    /** Origenes del panel y la app con flutter run: tambien pueden recibir la vuelta de Google. */
+    @Value("${cors.origenes:}")
+    private String origenesCors;
+
+    /** Envia a la pantalla de Google para elegir la cuenta. */
     @GetMapping("/google")
-    public ResponseEntity<ApiResponse<Void>> googleLogin() {
+    public ResponseEntity<?> iniciar(
+            @RequestParam(name = "modo", defaultValue = "INGRESO") ModoIngresoGoogle modo,
+            @RequestParam(name = "volver", required = false) String volver) {
         if (googleClientId == null || googleClientId.isBlank()) {
-            return ResponseEntity.status(503)
+            return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                     .body(ApiResponse.error("Login con Google no configurado: falta GOOGLE_CLIENT_ID en el .env"));
         }
-
-        String state = UUID.randomUUID().toString();
-        String scope = "openid email profile";
-
-        StringBuilder authUrl = new StringBuilder(GOOGLE_AUTH_BASE);
-        authUrl.append("?response_type=code")
-               .append("&client_id=").append(googleClientId)
-               .append("&redirect_uri=").append(googleRedirectUri)
-               .append("&scope=").append(scope.replace(' ', '+'))
-               .append("&state=").append(state);
-
-        return ResponseEntity.status(302)
-                .header("Location", authUrl.toString())
-                .body(ApiResponse.exito("Redirigiendo a Google", null));
+        String destino = volverPermitido(volver);
+        String estado = temporal.guardarEstado(new Pedido(modo, destino));
+        String url = googleAuthUrl
+                + "?response_type=code"
+                + "&client_id=" + codificar(googleClientId)
+                + "&redirect_uri=" + codificar(googleRedirectUri)
+                + "&scope=" + codificar("openid email profile")
+                + "&prompt=select_account"
+                + "&state=" + codificar(estado);
+        return redirigir(url);
     }
 
-    /**
-     * Callback de Google: intercambia el codigo de autorizacion por un token
-     * de acceso, consulta el perfil del usuario y emite los tokens JWT.
-     */
+    /** Vuelta de Google: siempre termina redirigiendo a la app, con la sesion o con el error. */
     @GetMapping("/google/callback")
-    public ResponseEntity<ApiResponse<TokenResponse>> googleCallback(
-            @RequestParam(name = "code", required = false) String authorizationCode,
+    public ResponseEntity<?> vuelta(
+            @RequestParam(name = "code", required = false) String codigoGoogle,
+            @RequestParam(name = "state", required = false) String estado,
             @RequestParam(name = "error", required = false) String error) {
-
-        if (error != null && !error.isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Google rechazo la autorizacion: " + error));
+        Pedido pedido = temporal.tomarEstado(estado).orElse(null);
+        if (pedido == null) {
+            return volverCon(volverPorDefecto(), "google_error",
+                    "El ingreso con Google vencio o no se inicio desde la app. Vuelve a intentarlo.");
         }
-        if (authorizationCode == null || authorizationCode.isBlank()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("Falta el codigo de autorizacion de Google"));
+        if (error != null && !error.isBlank()) {
+            return volverCon(pedido.volver(), "google_error",
+                    "access_denied".equals(error) ? "Cancelaste el ingreso con Google." : "Google rechazo el ingreso: " + error);
+        }
+        if (codigoGoogle == null || codigoGoogle.isBlank()) {
+            return volverCon(pedido.volver(), "google_error", "Google no devolvio el codigo de autorizacion.");
         }
 
         try {
-            String accessToken = exchangeCodeForAccessToken(authorizationCode);
-            Map<String, Object> userInfo = getGoogleUserInfo(accessToken);
-            String email = (String) userInfo.get("email");
-            String nombre = (String) userInfo.get("name");
-            String picture = (String) userInfo.get("picture");
-
-            if (email == null || email.isBlank()) {
-                return ResponseEntity.badRequest()
-                        .body(ApiResponse.error("No se pudo obtener el email de Google"));
-            }
-
-            TokenResponse tokenResponse = autenticacionService.loginConGoogle(email, nombre, picture);
-
-            return ResponseEntity.ok(ApiResponse.exito("Sesion iniciada con Google", tokenResponse));
-
-        } catch (org.springframework.web.client.RestClientException e) {
-            return ResponseEntity.status(502)
-                    .body(ApiResponse.error("No se pudo comunicar con Google: " + e.getMessage()));
-        } catch (Exception e) {
-            return ResponseEntity.status(500)
-                    .body(ApiResponse.error("Error en login con Google: " + e.getMessage()));
+            PerfilGoogle perfil = perfilDe(codigoGoogle);
+            return switch (pedido.modo()) {
+                case INGRESO -> volverCon(pedido.volver(), "google",
+                        temporal.guardarCanje(registroGoogleService.ingresar(perfil, foto(perfil))));
+                case PASAJERO -> volverCon(pedido.volver(), "google",
+                        temporal.guardarCanje(registroGoogleService.registrarPasajero(perfil, foto(perfil))));
+                case CONDUCTOR -> registroGoogleService.conductorExistente(perfil)
+                        .map(tokens -> volverCon(pedido.volver(), "google", temporal.guardarCanje(tokens)))
+                        .orElseGet(() -> volverCon(pedido.volver(), "google_registro", temporal.guardarRegistro(perfil)));
+            };
+        } catch (NegocioException | ConflictoException e) {
+            return volverCon(pedido.volver(), "google_error", e.getMessage());
+        } catch (RestClientException | IllegalStateException e) {
+            LOG.warn("Fallo el ingreso con Google", e);
+            return volverCon(pedido.volver(), "google_error", "No se pudo comunicar con Google. Intentalo de nuevo.");
+        } catch (RuntimeException e) {
+            // Siempre se vuelve a la app: un JSON de error en el navegador dejaria al usuario varado.
+            LOG.error("Error inesperado en el ingreso con Google", e);
+            return volverCon(pedido.volver(), "google_error", "No se pudo completar el ingreso con Google.");
         }
     }
 
+    /** La app recoge la sesion con el codigo de la URL de vuelta (una sola vez, 2 minutos). */
+    @PostMapping("/google/canje")
+    public ResponseEntity<ApiResponse<TokenResponse>> canjear(@Valid @RequestBody CanjeGoogleRequest datos) {
+        TokenResponse tokens = temporal.tomarCanje(datos.codigo())
+                .orElseThrow(() -> new CredencialesInvalidasException("El ingreso con Google vencio: vuelve a intentarlo"));
+        return ResponseEntity.ok(ApiResponse.exito("Sesion iniciada con Google", tokens));
+    }
+
+    /** Nombre y correo de Google para mostrarlos en el formulario de conductor. */
+    @GetMapping("/google/registro/{codigo}")
+    public ResponseEntity<ApiResponse<PerfilGoogleResponse>> perfilRegistro(@PathVariable String codigo) {
+        PerfilGoogle perfil = perfilRegistroVigente(codigo);
+        return ResponseEntity.ok(ApiResponse.exito(
+                new PerfilGoogleResponse(perfil.correo(), perfil.nombres(), perfil.apellidos())));
+    }
+
     /**
-     * Intercambia el codigo de autorizacion por un token de acceso en el
-     * endpoint de tokens de Google.
+     * Termina el registro de conductor con Google. Multipart: "datos" (JSON) y un PDF por parte con
+     * el tipo de documento como nombre (CI y LICENCIA obligatorios).
      */
-    @SuppressWarnings("unchecked")
-    private String exchangeCodeForAccessToken(String code) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+    @PostMapping(value = "/registro/conductor/google", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<TokenResponse>> registrarConductor(
+            @Valid @RequestPart("datos") RegistroConductorGoogleRequest datos,
+            @RequestParam Map<String, MultipartFile> archivos) {
+        PerfilGoogle perfil = perfilRegistroVigente(datos.codigo());
+        TokenResponse tokens = registroGoogleService.registrarConductor(perfil, datos, archivos);
+        temporal.terminarRegistro(datos.codigo());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro enviado a revision", tokens));
+    }
 
-        String body = "code=" + code +
-                "&client_id=" + googleClientId +
-                "&client_secret=" + googleClientSecret +
-                "&redirect_uri=" + googleRedirectUri +
-                "&grant_type=authorization_code";
+    // ------------------------------------------------------------------ Google
 
-        HttpEntity<String> entity = new HttpEntity<>(body, headers);
-
-        ResponseEntity<Map> response = restTemplate.postForEntity(GOOGLE_TOKEN_URL, entity, Map.class);
-        Map<String, Object> cuerpo = response.getBody();
-        if (cuerpo == null || cuerpo.get("access_token") == null) {
+    private PerfilGoogle perfilDe(String codigoGoogle) {
+        HttpHeaders cabeceras = new HttpHeaders();
+        cabeceras.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        MultiValueMap<String, String> cuerpo = new LinkedMultiValueMap<>();
+        cuerpo.add("code", codigoGoogle);
+        cuerpo.add("client_id", googleClientId);
+        cuerpo.add("client_secret", googleClientSecret);
+        cuerpo.add("redirect_uri", googleRedirectUri);
+        cuerpo.add("grant_type", "authorization_code");
+        Map<String, Object> token = restTemplate.exchange(googleTokenUrl, HttpMethod.POST,
+                new HttpEntity<>(cuerpo, cabeceras), new ParameterizedTypeReference<Map<String, Object>>() { }).getBody();
+        if (token == null || token.get("access_token") == null) {
             throw new IllegalStateException("Google no devolvio access_token");
         }
-        return (String) cuerpo.get("access_token");
+
+        HttpHeaders autorizacion = new HttpHeaders();
+        autorizacion.setBearerAuth((String) token.get("access_token"));
+        Map<String, Object> datos = restTemplate.exchange(googleUserinfoUrl, HttpMethod.GET,
+                new HttpEntity<>(autorizacion), new ParameterizedTypeReference<Map<String, Object>>() { }).getBody();
+        if (datos == null || !(datos.get("email") instanceof String correo) || correo.isBlank()) {
+            throw new NegocioException("Google no compartio el correo de la cuenta");
+        }
+        if (Boolean.FALSE.equals(datos.get("verified_email"))) {
+            throw new NegocioException("El correo de esa cuenta de Google no esta verificado");
+        }
+        return PerfilGoogle.desde(correo, texto(datos.get("name")), texto(datos.get("given_name")),
+                texto(datos.get("family_name")), texto(datos.get("picture")));
     }
 
-    /**
-     * Obtiene el perfil del usuario (email, nombre, foto) desde el endpoint
-     * userinfo de Google usando el token de acceso.
-     */
-    @SuppressWarnings("unchecked")
-    private Map<String, Object> getGoogleUserInfo(String accessToken) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Authorization", "Bearer " + accessToken);
-
-        HttpEntity<String> entity = new HttpEntity<>(headers);
-
-        ResponseEntity<Map> response = restTemplate.exchange(
-                GOOGLE_USERINFO_URL, HttpMethod.GET, entity, Map.class);
-        Map<String, Object> cuerpo = response.getBody();
-        if (cuerpo == null) {
-            throw new IllegalStateException("Google no devolvio informacion del usuario");
+    /** Foto de la cuenta de Google en 512 px; null si no hay o no se pudo bajar (es opcional). */
+    private byte[] foto(PerfilGoogle perfil) {
+        if (perfil.foto() == null) return null;
+        try {
+            return restTemplate.getForObject(perfil.foto().replaceAll("=s\\d+(-c)?$", "=s512-c"), byte[].class);
+        } catch (RestClientException e) {
+            return null;
         }
-        return cuerpo;
+    }
+
+    private PerfilGoogle perfilRegistroVigente(String codigo) {
+        return temporal.verRegistro(codigo)
+                .orElseThrow(() -> new NegocioException(
+                        "El registro con Google vencio: vuelve a elegir tu cuenta de Google"));
+    }
+
+    // ------------------------------------------------------------------ vuelta a la app
+
+    /**
+     * Solo se vuelve a origenes conocidos (el del backend y los de cors.origenes); cualquier otro
+     * seria una redireccion abierta que entregaria el codigo de la sesion a un sitio ajeno.
+     */
+    private String volverPermitido(String volver) {
+        if (volver == null || volver.isBlank()) return volverPorDefecto();
+        try {
+            URI uri = URI.create(volver);
+            String origen = origenDe(uri);
+            if (origen != null && origenesPermitidos().contains(origen)) {
+                // Sin query ni fragmento: la app lee solo los parametros de esta vuelta.
+                return origen + (uri.getPath() == null || uri.getPath().isEmpty() ? "/" : uri.getPath());
+            }
+        } catch (IllegalArgumentException e) {
+            // URL mal formada: se usa la de siempre.
+        }
+        return volverPorDefecto();
+    }
+
+    private Set<String> origenesPermitidos() {
+        Stream<String> cors = origenesCors == null ? Stream.empty() : Arrays.stream(origenesCors.split("\\s*,\\s*"));
+        return Stream.concat(Stream.of(origenDe(URI.create(googleRedirectUri))), cors)
+                .filter(o -> o != null && !o.isBlank())
+                .map(o -> o.replaceAll("/+$", ""))
+                .collect(Collectors.toSet());
+    }
+
+    private String volverPorDefecto() {
+        return origenDe(URI.create(googleRedirectUri)) + "/app/";
+    }
+
+    private static String origenDe(URI uri) {
+        if (uri.getScheme() == null || uri.getHost() == null) return null;
+        return uri.getScheme() + "://" + uri.getHost() + (uri.getPort() == -1 ? "" : ":" + uri.getPort());
+    }
+
+    private ResponseEntity<Void> volverCon(String volver, String parametro, String valor) {
+        return redirigir(volver + (volver.contains("?") ? "&" : "?") + parametro + "=" + codificar(valor));
+    }
+
+    private static <T> ResponseEntity<T> redirigir(String url) {
+        return ResponseEntity.status(HttpStatus.FOUND).header(HttpHeaders.LOCATION, url).build();
+    }
+
+    private static String codificar(String valor) {
+        return URLEncoder.encode(valor, StandardCharsets.UTF_8);
+    }
+
+    private static String texto(Object valor) {
+        return valor instanceof String s ? s : null;
     }
 }

@@ -79,9 +79,43 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     super.initState();
     _flujo.addListener(_alCambiarFlujo);
     _mapa.addListener(_revisarDireccion);
-    _flujo.iniciar();
-    _emisor.iniciar();
+    _arrancar();
     _cargarFoto();
+  }
+
+  /// Un conductor recien registrado queda en revision: no recibe solicitudes ni aparece en el mapa
+  /// hasta que la administracion lo apruebe (regla 1).
+  Future<void> _arrancar() async {
+    final situacion = await _situacionAprobacion();
+    if (!mounted) return;
+    final aprobado = situacion == null || situacion == 'APROBADO';
+    _flujo.enRevision = !aprobado;
+    _flujo.situacionAprobacion = situacion;
+    _flujo.iniciar();
+    if (aprobado) _emisor.iniciar();
+  }
+
+  /// null si no se pudo consultar (se sigue como antes; el backend igual exige la aprobacion).
+  Future<String?> _situacionAprobacion() async {
+    try {
+      return (await PerfilApi(context.read<ClienteApi>()).perfil()).situacionAprobacion;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _revisarAprobacion() async {
+    final situacion = await _situacionAprobacion();
+    if (!mounted) return;
+    if (situacion == 'APROBADO') {
+      _flujo.aprobado();
+      _emisor.iniciar();
+      mostrarMensaje(context, '¡Tu cuenta fue aprobada! Ya puedes recibir solicitudes.');
+    } else {
+      _flujo.situacionAprobacion = situacion ?? _flujo.situacionAprobacion;
+      setState(() {});
+      mostrarMensaje(context, 'Tu cuenta sigue en revisión.');
+    }
   }
 
   /// Calcula la direccion de la cabecera con el primer GPS y otra vez si se movio mas de 300 m.
@@ -104,6 +138,10 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
 
   /// Boton del centro: conectarse (aparece en linea y recibe solicitudes) o desconectarse.
   Future<void> _alternarEnLinea() async {
+    if (_flujo.enRevision) {
+      mostrarMensaje(context, 'Podrás conectarte cuando la administración apruebe tu cuenta.');
+      return;
+    }
     if (_flujo.etapa == EtapaConductor.enViaje) {
       mostrarMensaje(context, 'Termina el viaje en curso antes de desconectarte.', error: true);
       return;
@@ -312,7 +350,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   botonCentral: BotonCentral(
                     icono: FontAwesomeIcons.powerOff,
                     tooltip: enLinea ? 'Desconectarme' : 'Conectarme',
-                    activo: enLinea,
+                    activo: enLinea && !_flujo.enRevision,
                     color: ColoresApp.exito,
                     onTap: _alternarEnLinea,
                   ),
@@ -361,7 +399,11 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               Positioned(
                 left: 16,
                 top: margen.top + 128,
-                child: _EstadoEnLinea(enLinea: enLinea, enViaje: etapa == EtapaConductor.enViaje),
+                child: _EstadoEnLinea(
+                  enLinea: enLinea,
+                  enViaje: etapa == EtapaConductor.enViaje,
+                  enRevision: _flujo.enRevision,
+                ),
               ),
               // En pantallas bajas el selector chocaria con el panel de solicitudes.
               if (etapa == EtapaConductor.lista && alto >= 760)
@@ -414,7 +456,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                           padding: EdgeInsets.symmetric(vertical: 8),
                           child: Center(child: CircularProgressIndicator()),
                         ),
-                        EtapaConductor.lista => PanelSolicitudes(flujo: _flujo),
+                        EtapaConductor.lista => PanelSolicitudes(flujo: _flujo, onRevisarAprobacion: _revisarAprobacion),
                         EtapaConductor.detalle => PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
                         EtapaConductor.enViaje => PanelViajeConductor(
                           flujo: _flujo,
@@ -438,12 +480,15 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
 class _EstadoEnLinea extends StatelessWidget {
   final bool enLinea;
   final bool enViaje;
+  final bool enRevision;
 
-  const _EstadoEnLinea({required this.enLinea, required this.enViaje});
+  const _EstadoEnLinea({required this.enLinea, required this.enViaje, required this.enRevision});
 
   @override
   Widget build(BuildContext context) {
-    final (color, texto) = enViaje
+    final (color, texto) = enRevision
+        ? (const Color(0xFFE67E22), 'En revisión')
+        : enViaje
         ? (ColoresApp.rojo, 'En viaje')
         : enLinea
         ? (ColoresApp.exito, 'En línea')

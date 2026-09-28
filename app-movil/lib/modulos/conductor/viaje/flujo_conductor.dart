@@ -45,6 +45,12 @@ class FlujoConductor extends ChangeNotifier {
   /// Conectado para recibir solicitudes (boton del centro). Desconectado no se consulta la lista.
   bool enLinea = true;
 
+  /// La administracion todavia no aprobo al conductor (regla 1): no se consulta la lista.
+  bool enRevision = false;
+
+  /// situacion_aprobacion del conductor (PENDIENTE, RECHAZADO, SUSPENDIDO...) mientras [enRevision].
+  String? situacionAprobacion;
+
   Timer? _sondeo;
   bool _consultando = false;
   bool _finalizandoSolo = false;
@@ -79,12 +85,21 @@ class FlujoConductor extends ChangeNotifier {
     mapa.limpiar();
     final gps = mapa.miUbicacion;
     if (gps != null) mapa.centrarEn(gps, zoom: 15);
-    if (enLinea) {
+    if (enLinea && !enRevision) {
       _iniciarSondeo(_consultarLista, _intervaloLista, inmediato: true);
     } else {
       _detenerSondeo();
       solicitudes = const [];
     }
+    _avisar();
+  }
+
+  /// La administracion aprobo la cuenta: empieza a recibir solicitudes.
+  void aprobado() {
+    if (!enRevision) return;
+    enRevision = false;
+    situacionAprobacion = null;
+    if (etapa == EtapaConductor.lista) _entrarLista();
     _avisar();
   }
 

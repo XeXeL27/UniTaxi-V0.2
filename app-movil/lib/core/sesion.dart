@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_excepcion.dart';
@@ -63,6 +64,14 @@ class UsuarioSesion {
     'telefono': telefono,
     'rol': rol,
   };
+}
+
+/// PDF elegido para subir con el registro de conductor.
+class ArchivoPdf {
+  final String nombre;
+  final Uint8List bytes;
+
+  const ArchivoPdf(this.nombre, this.bytes);
 }
 
 /// Estado de la sesion: tokens JWT, usuario y los modos (pasajero, conductor) que tiene la persona.
@@ -164,6 +173,46 @@ class Sesion extends ChangeNotifier {
     await prefs.setString(_clavesPanel.refresco, datos['tokenRefresco'] as String);
     await prefs.setString(_clavesPanel.usuario, jsonEncode(datos['usuario']));
     Navegador.abrirPanelAdmin();
+  }
+
+  // ---------------------------------------------------------------- Google y registro
+
+  /// Direccion que abre la pantalla de Google. [modo]: INGRESO (boton del login), PASAJERO o
+  /// CONDUCTOR (registro). Google devuelve a esta misma pagina con ?google=... (ver [canjearGoogle]).
+  static String urlGoogle(String modo) =>
+      '${Config.apiUrl}/api/auth/google?modo=$modo&volver=${Uri.encodeQueryComponent(Navegador.direccionActual)}';
+
+  /// Recoge la sesion que dejo lista el backend al volver de Google.
+  Future<void> canjearGoogle(String codigo) async {
+    final datos = await _postAuth('/api/auth/google/canje', {'codigo': codigo}) as Map<String, dynamic>;
+    await _guardar(datos);
+  }
+
+  /// Registro de conductor (con el formulario o con Google): [ruta] multipart con la parte "datos"
+  /// en JSON y un PDF por tipo de documento. Al terminar la sesion queda iniciada.
+  Future<void> registrarConductor(String ruta, Map<String, dynamic> datos, Map<String, ArchivoPdf> documentos) async {
+    final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
+    peticion.files.add(
+      http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
+    );
+    documentos.forEach((tipo, archivo) {
+      peticion.files.add(
+        http.MultipartFile.fromBytes(tipo, archivo.bytes, filename: archivo.nombre, contentType: MediaType('application', 'pdf')),
+      );
+    });
+    final http.Response respuesta;
+    try {
+      respuesta = await http.Response.fromStream(await peticion.send().timeout(const Duration(seconds: 60)));
+    } catch (_) {
+      throw ApiExcepcion('No se pudo conectar con el servidor');
+    }
+    final json = _decodificar(respuesta);
+    if (respuesta.statusCode >= 400 || json['ok'] != true) {
+      final errores = json['errores'];
+      final detalle = errores is Map && errores.isNotEmpty ? ': ${errores.values.join(', ')}' : '';
+      throw ApiExcepcion('${json['mensaje'] ?? 'Error ${respuesta.statusCode}'}$detalle', codigo: respuesta.statusCode);
+    }
+    await _guardar(json['datos'] as Map<String, dynamic>);
   }
 
   /// Pasa a la otra cuenta de la persona (pasajero o conductor) sin pedir la contrasena.

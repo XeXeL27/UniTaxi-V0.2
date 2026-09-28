@@ -6,13 +6,20 @@ import '../../core/api_excepcion.dart';
 import '../../core/config.dart';
 import '../../core/credenciales.dart';
 import '../../core/huella.dart';
+import '../../core/navegador.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
+import '../../widgets/marco_acceso.dart';
+import '../registro/pantalla_registro.dart';
 
-/// Inicio de sesion con usuario, correo o telefono y contrasena.
+/// Inicio de sesion con usuario, correo o telefono y contrasena, o con Google. Desde aqui se abre
+/// el registro de pasajero o conductor.
 class PantallaLogin extends StatefulWidget {
-  const PantallaLogin({super.key});
+  /// Mensaje con que se abre (por ejemplo, el ingreso con Google fallo o se cancelo).
+  final String? errorInicial;
+
+  const PantallaLogin({super.key, this.errorInicial});
 
   @override
   State<PantallaLogin> createState() => _PantallaLoginState();
@@ -25,7 +32,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
   bool _ocultarPassword = true;
   bool _recordar = false;
   bool _cargando = false;
-  String? _error;
+  late String? _error = widget.errorInicial;
 
   /// La huella esta activada en este telefono (solo el APK de Android).
   bool _huellaActiva = false;
@@ -164,60 +171,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final ancho = MediaQuery.sizeOf(context).width;
-    // Desde 900 px (PC o tablet horizontal) la marca va a la izquierda y el formulario a la derecha,
-    // igual que el login del panel admin; mas angosto, la marca pasa arriba y todo se desplaza.
-    if (ancho >= 900) {
-      return Scaffold(
-        backgroundColor: ColoresApp.blanco,
-        body: Row(
-          children: [
-            const Expanded(flex: 5, child: _PanelMarca()),
-            Expanded(
-              flex: 6,
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
-                  child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 420), child: _formulario()),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-    return Scaffold(
-      backgroundColor: ColoresApp.fondo,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            const _PanelMarca(compacta: true),
-            Transform.translate(
-              offset: const Offset(0, -28),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 460),
-                    child: Container(
-                      padding: const EdgeInsets.fromLTRB(22, 26, 22, 22),
-                      decoration: BoxDecoration(
-                        color: ColoresApp.blanco,
-                        borderRadius: BorderRadius.circular(22),
-                        boxShadow: const [BoxShadow(color: Color(0x1F0A2342), blurRadius: 24, offset: Offset(0, 10))],
-                      ),
-                      child: _formulario(),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) => MarcoAcceso(child: _formulario());
 
   Widget _formulario() {
     return AutofillGroup(
@@ -324,122 +278,37 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 label: const Text('Ingresar con huella', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
-            const SizedBox(height: 22),
-            const Row(
+            if (Navegador.puedeUsarGoogle) ...[
+              const SizedBox(height: 18),
+              const Row(
+                children: [
+                  Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('o', style: TextStyle(color: ColoresApp.textoSuave)),
+                  ),
+                  Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
+                ],
+              ),
+              const SizedBox(height: 18),
+              BotonGoogle(onPressed: _cargando ? null : () => Navegador.ir(Sesion.urlGoogle('INGRESO'))),
+            ],
+            const SizedBox(height: 18),
+            Wrap(
+              alignment: WrapAlignment.center,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
-                Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
-                Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12),
-                  child: FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 11),
+                const Text('¿No tienes cuenta?', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14)),
+                TextButton(
+                  onPressed: _cargando
+                      ? null
+                      : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PantallaRegistro())),
+                  child: const Text('Regístrate', style: TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w700)),
                 ),
-                Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
               ],
-            ),
-            const SizedBox(height: 14),
-            const Text(
-              'Un solo acceso para pasajeros, conductores y administradores. '
-              'Las cuentas las habilita la administración de TaxiUAP.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5, height: 1.4),
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-/// Marca de TaxiUAP: a la izquierda en pantallas anchas y como cabecera en el celular.
-class _PanelMarca extends StatelessWidget {
-  final bool compacta;
-
-  const _PanelMarca({this.compacta = false});
-
-  @override
-  Widget build(BuildContext context) {
-    final arriba = MediaQuery.paddingOf(context).top;
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF16386B), ColoresApp.azul],
-        ),
-        borderRadius: compacta ? const BorderRadius.vertical(bottom: Radius.circular(28)) : null,
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: Stack(
-        children: [
-          Positioned(
-            left: compacta ? null : -140,
-            right: compacta ? -90 : null,
-            bottom: compacta ? -120 : -180,
-            child: Container(
-              width: compacta ? 260 : 440,
-              height: compacta ? 260 : 440,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: RadialGradient(colors: [ColoresApp.rojo.withValues(alpha: 0.42), Colors.transparent]),
-              ),
-            ),
-          ),
-          Padding(
-            padding: compacta
-                ? EdgeInsets.fromLTRB(24, arriba + 40, 24, 64)
-                : const EdgeInsets.symmetric(horizontal: 56, vertical: 40),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: compacta ? CrossAxisAlignment.center : CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: compacta ? 62 : 70,
-                  height: compacta ? 62 : 70,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [ColoresApp.rojo, ColoresApp.rojoOscuro],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(color: ColoresApp.rojoOscuro.withValues(alpha: 0.45), blurRadius: 22, offset: const Offset(0, 10)),
-                    ],
-                  ),
-                  child: const Center(child: FaIcon(FontAwesomeIcons.taxi, color: ColoresApp.blanco, size: 28)),
-                ),
-                SizedBox(height: compacta ? 16 : 26),
-                Text(
-                  'TaxiUAP',
-                  style: TextStyle(
-                    fontSize: compacta ? 30 : 40,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: -0.5,
-                    color: ColoresApp.blanco,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Transporte seguro para estudiantes',
-                  style: TextStyle(fontSize: compacta ? 14.5 : 16, color: ColoresApp.blanco.withValues(alpha: 0.78)),
-                ),
-                if (!compacta) ...[
-                  const SizedBox(height: 26),
-                  Container(
-                    width: 56,
-                    height: 4,
-                    decoration: BoxDecoration(color: ColoresApp.rojo, borderRadius: BorderRadius.circular(2)),
-                  ),
-                  const SizedBox(height: 26),
-                  Text(
-                    'Pide tu mototaxi, conduce con nosotros o administra el servicio desde un solo lugar.',
-                    style: TextStyle(fontSize: 15, height: 1.5, color: ColoresApp.blanco.withValues(alpha: 0.72)),
-                  ),
-                ],
-              ],
-            ),
-          ),
-        ],
       ),
     );
   }
