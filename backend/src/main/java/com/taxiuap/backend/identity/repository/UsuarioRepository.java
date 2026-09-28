@@ -1,6 +1,7 @@
 package com.taxiuap.backend.identity.repository;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -24,4 +25,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     boolean existsByNombreUsuarioAndPersonaIdNot(String nombreUsuario, Long idPersona);
 
     boolean existsByPersonaIdAndRolCodigoAndEstadoUsuario(Long idPersona, String codigoRol, EstadoRegistro estado);
+
+    /** Busca un usuario por persona y código de rol (usado para login social/google). */
+    Optional<Usuario> findByPersonaIdAndRolCodigo(Long idPersona, String codigoRol);
 }

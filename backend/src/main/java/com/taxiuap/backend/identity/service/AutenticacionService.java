@@ -1,9 +1,5 @@
 package com.taxiuap.backend.identity.service;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -31,6 +27,10 @@ import com.taxiuap.backend.shared.exception.NegocioException;
 import io.jsonwebtoken.JwtException;
 import lombok.RequiredArgsConstructor;
 
+import java.util.*;
+
+import static com.taxiuap.backend.identity.service.CuentaUsuarioService.normalizarNombreUsuario;
+
 /** Registro publico (desde la app), inicio de sesion y renovacion de tokens. */
 @Service
 @RequiredArgsConstructor
@@ -49,7 +49,7 @@ public class AutenticacionService {
     @Transactional
     public TokenResponse registrarPasajero(RegistroPasajeroRequest datos) {
         validarContacto(datos.correo(), datos.telefono());
-        String nombreUsuario = CuentaUsuarioService.normalizarNombreUsuario(datos.nombreUsuario());
+        String nombreUsuario = normalizarNombreUsuario(datos.nombreUsuario());
         cuentaUsuarioService.validarNombreUsuarioDisponible(nombreUsuario, null);
 
         Persona persona = gestionPersonaService.registrarEntidad(new PersonaRequest(datos.ci(), datos.complementoCi(),
@@ -64,7 +64,7 @@ public class AutenticacionService {
     @Transactional
     public TokenResponse registrarConductor(RegistroConductorRequest datos) {
         validarContacto(datos.correo(), datos.telefono());
-        String nombreUsuario = CuentaUsuarioService.normalizarNombreUsuario(datos.nombreUsuario());
+        String nombreUsuario = normalizarNombreUsuario(datos.nombreUsuario());
         cuentaUsuarioService.validarNombreUsuarioDisponible(nombreUsuario, null);
 
         Persona persona = gestionPersonaService.registrarEntidad(new PersonaRequest(datos.ci(), datos.complementoCi(),
@@ -189,7 +189,7 @@ public class AutenticacionService {
 
     private List<Usuario> buscarCandidatos(String identificador) {
         Map<Long, Usuario> candidatos = new LinkedHashMap<>();
-        usuarioRepository.findByNombreUsuario(CuentaUsuarioService.normalizarNombreUsuario(identificador))
+        usuarioRepository.findByNombreUsuario(normalizarNombreUsuario(identificador))
                 .forEach(u -> candidatos.put(u.getId(), u));
 
         List<Persona> personas = new ArrayList<>();
@@ -235,4 +235,103 @@ public class AutenticacionService {
         return new TokenResponse(tokenAcceso, tokenRefresco, jwtService.getExpiracionMs(), usuarioResponse,
                 rolesDisponibles);
     }
+    /**
+     * Inicio de sesion con Google OAuth2.
+     * Si el usuario no existe, lo crea con rol PASAJERO por defecto.
+     * Si ya existe, valida que la cuenta este activa y emite tokens.
+     */
+    @Transactional
+    public TokenResponse loginConGoogle(String email, String nombre, String picture) {
+        // Buscar usuario por correo electronico (el username normalizado)
+        String nombreUsuario = normalizarNombreUsuario(email);
+
+        // Verificar si ya existe una cuenta con este correo
+        List<Usuario> usuariosConEsteCorreo = usuarioRepository.findByNombreUsuario(nombreUsuario);
+        boolean usuarioExiste = !usuariosConEsteCorreo.isEmpty();
+
+        if (usuarioExiste) {
+            Usuario usuario = usuariosConEsteCorreo.get(0);
+            // Validar que la cuenta y persona esten activas
+            if (usuario.getEstadoUsuario() != EstadoRegistro.A
+                    || usuario.getPersona().getEstadoPersona() != EstadoRegistro.A) {
+                throw new NegocioException("La cuenta no esta activa");
+            }
+            return generarTokens(usuario);
+        }
+
+        // Buscar persona existente con este correo (puede tener cuenta de otro rol)
+        Optional<Persona> optionalPersona = personaRepository.findByCorreo(email.toLowerCase());
+
+        if (optionalPersona.isPresent()) {
+            Persona persona = optionalPersona.get();
+            // Verificar si ya tiene una cuenta de pasajero
+            if (usuarioRepository.existsByPersonaIdAndRolCodigoAndEstadoUsuario(
+                    persona.getId(), RolSistema.PASAJERO.getCodigo(), EstadoRegistro.A)) {
+                // Ya tiene cuenta de pasajero, obtenerla
+                Usuario usuario = usuarioRepository.findByPersonaIdAndRolCodigo(
+                                persona.getId(), RolSistema.PASAJERO.getCodigo())
+                        .orElseThrow();
+                return generarTokens(usuario);
+            }
+            // La persona existe pero tiene otro rol (conductor, admin), lanzar error o crear pasajero
+            throw new NegocioException("Esta persona ya tiene una cuenta con otro rol");
+        }
+
+        // Crear nueva persona con datos de Google. Google entrega el nombre completo en
+        // un solo campo: se reparte entre nombres y apellidos (los dos obligatorios).
+        // Con tres o mas palabras se toman las dos ultimas como apellidos (uso boliviano).
+        String[] partesNombre = nombre != null ? nombre.trim().split("\\s+") : new String[0];
+        String nombres;
+        String apellidos;
+        if (partesNombre.length == 0) {
+            nombres = "Usuario";
+            apellidos = "Google";
+        } else if (partesNombre.length == 1) {
+            nombres = partesNombre[0];
+            apellidos = "Sin especificar";
+        } else if (partesNombre.length == 2) {
+            nombres = partesNombre[0];
+            apellidos = partesNombre[1];
+        } else {
+            nombres = String.join(" ", java.util.Arrays.copyOf(partesNombre, partesNombre.length - 2));
+            apellidos = partesNombre[partesNombre.length - 2] + " " + partesNombre[partesNombre.length - 1];
+        }
+
+        Persona nuevaPersona = new Persona();
+        nuevaPersona.setCorreo(email.toLowerCase());
+        nuevaPersona.setNombres(nombres);
+        nuevaPersona.setApellidos(apellidos);
+        // El CI y el telefono no vienen de Google: van null (la columna es unica y admite
+        // varios null; un valor vacio repetido violaria la restriccion con el segundo usuario).
+        nuevaPersona.setCi(null);
+        nuevaPersona.setComplementoCi(null);
+        nuevaPersona.setTelefono(null);
+        nuevaPersona.setFechaNacimiento(null);
+        personaRepository.save(nuevaPersona);
+
+        // Crear usuario con rol PASAJERO
+        String nombreUsuarioUnico = nombreUsuario;
+        // Verificar que el nombre de usuario no exista (aunque el correo sea unico)
+        if (!usuarioRepository.findByNombreUsuario(nombreUsuarioUnico).isEmpty()) {
+            // Agregar un sufijo para hacer unico
+            nombreUsuarioUnico = nombreUsuarioUnico + "@google";
+        }
+
+        Usuario usuario = cuentaUsuarioService.crearUsuario(nuevaPersona, RolSistema.PASAJERO, nombreUsuarioUnico,
+                // Contrasena aleatoria que nadie conoce: la cuenta entra solo con Google. Una fija
+                // dejaria entrar por usuario y contrasena a cualquiera que sepa el correo.
+                cuentaUsuarioService.codificar(UUID.randomUUID() + "-" + UUID.randomUUID()));
+
+        // Crear perfil de pasajero
+        cuentaUsuarioService.crearPasajero(usuario);
+
+        // Si hay foto, podria guardarse en foto_url del usuario
+        if (picture != null) {
+            usuario.setFotoUrl(picture);
+            usuarioRepository.save(usuario);
+        }
+
+        return generarTokens(usuario);
+    }
+
 }
