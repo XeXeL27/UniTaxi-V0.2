@@ -1,12 +1,8 @@
 package com.taxiuap.backend.controller.auth;
 
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -24,7 +20,6 @@ import com.taxiuap.backend.identity.service.AutenticacionService;
 import com.taxiuap.backend.shared.response.ApiResponse;
 
 import lombok.RequiredArgsConstructor;
-import tools.jackson.databind.ObjectMapper;
 
 /**
  * Inicio de sesion con Google OAuth2 (flujo manual de codigo de autorizacion).
@@ -37,16 +32,11 @@ import tools.jackson.databind.ObjectMapper;
 @RequiredArgsConstructor
 public class GoogleAuthController {
 
-    private static final Logger log = LoggerFactory.getLogger(GoogleAuthController.class);
-
     private static final String GOOGLE_AUTH_BASE = "https://accounts.google.com/o/oauth2/v2/auth";
     private static final String GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
     private static final String GOOGLE_USERINFO_URL = "https://www.googleapis.com/oauth2/v2/userinfo";
 
     private final AutenticacionService autenticacionService;
-
-    /** Serializa mapas a JSON legible para imprimirlos en consola. */
-    private final ObjectMapper objectMapper;
 
     /** Cliente HTTP para llamar a los endpoints de Google (no requiere bean). */
     private final RestTemplate restTemplate = new RestTemplate();
@@ -151,7 +141,6 @@ public class GoogleAuthController {
         if (cuerpo == null || cuerpo.get("access_token") == null) {
             throw new IllegalStateException("Google no devolvio access_token");
         }
-        log.info("Respuesta de tokens de Google: {}", aJson(enmascararTokens(cuerpo)));
         return (String) cuerpo.get("access_token");
     }
 
@@ -172,32 +161,6 @@ public class GoogleAuthController {
         if (cuerpo == null) {
             throw new IllegalStateException("Google no devolvio informacion del usuario");
         }
-        log.info("Perfil de Google (userinfo): {}", aJson(cuerpo));
         return cuerpo;
-    }
-
-    /** Serializa un valor a JSON legible (pretty print) para los logs. */
-    private String aJson(Object valor) {
-        try {
-            return objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(valor);
-        } catch (Exception e) {
-            return String.valueOf(valor);
-        }
-    }
-
-    /**
-     * Copia la respuesta de tokens acortando los valores de los tokens: nunca se
-     * debe imprimir un token completo en los logs.
-     */
-    private Map<String, Object> enmascararTokens(Map<String, Object> cuerpo) {
-        Map<String, Object> copia = new LinkedHashMap<>(cuerpo);
-        for (String clave : List.of("access_token", "id_token", "refresh_token")) {
-            Object valor = copia.get(clave);
-            if (valor != null) {
-                String texto = String.valueOf(valor);
-                copia.put(clave, texto.length() > 20 ? texto.substring(0, 20) + "..." : texto);
-            }
-        }
-        return copia;
     }
 }
