@@ -1,6 +1,9 @@
 # Secretos locales: perfiles de Spring y variables de Docker (solo se suben las plantillas .example)
 backend/src/main/resources/application-*.properties
 !backend/src/main/resources/application-*.properties.example
+# local.properties lo genera el IDE con rutas absolutas de esta maquina (sdk.dir, etc).
+# No aplica a la regla de arriba porque vive fuera de src/main/resources.
+local.properties
 .env
 *.env
 !.env.example

@@ -28,17 +28,18 @@ public class ConductorUbicacionController {
 
     @MessageMapping("/conductor/ubicacion")
     public void registrar(@Payload UbicacionConductorRequest request, SimpMessageHeaderAccessor acc) {
-        ubicacionService.registrar(conductorDe(acc).idUsuario(), request);
+        JwtUser usuario = usuarioDe(acc);
+        ubicacionService.registrarPorUsuario(usuario.idUsuario(), usuario.rol(), request);
     }
 
     /**
      * Saca el JwtUser del frame.
      *
      * El interceptor deja un UsernamePasswordAuthenticationToken como principal del STOMP, asi que
-     * hay que desenvolverlo para llegar al JwtUser. Se acepta tambien el JwtUser directo porque
+     * hay que desarrollarlo para llegar al JwtUser. Se acepta tambien el JwtUser directo porque
      * es lo que devuelve un Principal simple.
      */
-    private JwtUser conductorDe(SimpMessageHeaderAccessor acc) {
+    private JwtUser usuarioDe(SimpMessageHeaderAccessor acc) {
         Object principal = acc.getUser();
         JwtUser usuario = null;
         if (principal instanceof Authentication autenticacion

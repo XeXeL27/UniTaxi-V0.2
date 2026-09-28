@@ -17,6 +17,7 @@ import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
@@ -55,6 +56,29 @@ public class UbicacionService {
     private final ConductorRepository conductorRepository;
     private final VehiculoRepository vehiculoRepository;
     private final ConductorUbicacionPublisher publisher;
+
+    /**
+     * Registra la posicion de quien se identifica por su cuenta de usuario, que es como llega el
+     * reporte por WebSocket: el frame CONNECT trae el id de usuario, no el de conductor.
+     *
+     * Los dos identificadores no son el mismo numero aunque en la base de datos suelen coincidir en
+     * los datos de prueba, y buscar por el equivocado permitiria que cualquier usuario autenticado
+     * moviera el marcador de un conductor ajeno. Por eso se resuelve la cuenta de conductor por
+     * id de usuario y se exige el rol.
+     *
+     * @throws NegocioException si el rol no es CONDUCTOR o la cuenta no es de conductor
+     */
+    @Transactional
+    public PosicionConductorMensaje registrarPorUsuario(Long idUsuario, String rol,
+            UbicacionConductorRequest request) {
+        if (!RolSistema.CONDUCTOR.getCodigo().equals(rol)) {
+            throw new NegocioException("Solo un conductor puede reportar su posicion");
+        }
+        Conductor conductor = conductorRepository.findByUsuarioId(idUsuario)
+                .orElseThrow(() -> new NegocioException(
+                        "El usuario " + idUsuario + " no tiene una cuenta de conductor"));
+        return registrar(conductor.getId(), request);
+    }
 
     /**
      * Registra la posicion que reporto un conductor y la difunde a los administradores.
