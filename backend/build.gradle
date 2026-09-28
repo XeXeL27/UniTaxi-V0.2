@@ -23,6 +23,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 	implementation 'org.springframework.boot:spring-boot-starter-webmvc'
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.hibernate.orm:hibernate-spatial'
 	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
@@ -43,4 +44,21 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// bootRun carga las variables del .env de la raiz del monorepo (la misma que usa docker compose),
+// para que el backend lea GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET sin exportarlas a mano.
+tasks.named('bootRun') {
+	def archivoEnv = file('../.env')
+	if (archivoEnv.exists()) {
+		def vars = [:]
+		archivoEnv.eachLine { linea ->
+			def limpia = linea.trim()
+			if (limpia && !limpia.startsWith('#') && limpia.contains('=')) {
+				def partes = limpia.split('=', 2)
+				vars[partes[0].trim()] = partes[1].trim()
+			}
+		}
+		environment vars
+	}
 }

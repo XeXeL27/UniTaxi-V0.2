@@ -32,3 +32,8 @@ spring.output.ansi.enabled=ALWAYS
 
 # --- Datos de prueba ----------------------------------------
 taxiuap.seed.habilitado=true
+
+# --- Google OAuth2 (login con Google) -----------------------
+google.client-id=${GOOGLE_CLIENT_ID:}
+google.client-secret=${GOOGLE_CLIENT_SECRET:}
+google.redirect-uri=${GOOGLE_REDIRECT_URI:http://localhost:8080/api/auth/google/callback}
