@@ -24,30 +24,47 @@ Color colorSituacion(String situacion) => switch (situacion) {
   _ => ColoresApp.ruta,
 };
 
-/// Seccion Viajes de la barra inferior: los viajes del conductor (los que acepto) o del pasajero
-/// (los que pidio), del mas reciente al mas antiguo. Tocar uno abre su ruta en el mapa.
+/// Seccion Historial de la barra inferior: solo los viajes completados del conductor (los que
+/// acepto) o del pasajero (los que pidio), del mas reciente al mas antiguo. Al entrar se ven los
+/// ultimos 10; arriba se puede elegir el mes actual o el anterior, paginados de a 10. Tocar un viaje
+/// abre su ruta en el mapa.
 ///
 /// Del pasajero tiene ademas una segunda pestana, Favoritos, con sus lugares guardados y los que se
-/// deducen de estos mismos viajes. El constructor de esa pestana recibe los viajes ya cargados, de
-/// donde salen los lugares frecuentes, asi no hace falta una segunda consulta. Sin [pestanaFavoritos]
-/// la seccion se queda en una sola lista, que es como la ve el conductor.
+/// deducen de sus viajes ([cargarTodos], una sola consulta al abrir esa pestana). Sin
+/// [pestanaFavoritos] la seccion se queda en una sola lista, que es como la ve el conductor.
 class PantallaHistorial extends StatefulWidget {
-  final Future<List<Viaje>> Function() cargar;
+  final Future<PaginaHistorial> Function(PeriodoHistorial periodo, int pagina) cargarHistorial;
+  final Future<List<Viaje>> Function()? cargarTodos;
   final bool esConductor;
   final Widget Function(List<Viaje> viajes, EdgeInsets relleno)? pestanaFavoritos;
 
-  const PantallaHistorial({super.key, required this.cargar, required this.esConductor, this.pestanaFavoritos});
+  const PantallaHistorial({
+    super.key,
+    required this.cargarHistorial,
+    required this.esConductor,
+    this.cargarTodos,
+    this.pestanaFavoritos,
+  });
 
   @override
   State<PantallaHistorial> createState() => PantallaHistorialState();
 }
 
 class PantallaHistorialState extends State<PantallaHistorial> {
-  List<Viaje>? _viajes;
+  PeriodoHistorial _periodo = PeriodoHistorial.recientes;
+  int _numeroPagina = 0;
+  PaginaHistorial? _pagina;
+  bool _cargando = false;
   String? _error;
+
+  /// Todos los viajes, solo para los lugares frecuentes de la pestana Favoritos.
+  List<Viaje>? _todos;
 
   /// 0 = Historial, 1 = Favoritos. Se muestra el historial al entrar a la seccion.
   int _pestana = 0;
+
+  /// Descarta respuestas viejas si se cambia de periodo o pagina antes de que lleguen.
+  int _consulta = 0;
 
   @override
   void initState() {
@@ -55,45 +72,68 @@ class PantallaHistorialState extends State<PantallaHistorial> {
     _cargar();
   }
 
-  /// Vuelve a consultar y regresa al historial, que es la pestana que se muestra al entrar a la
-  /// seccion.
+  /// Vuelve a consultar y regresa a los ultimos 10 viajes, que es lo que se ve al entrar.
   Future<void> recargar() {
-    if (_pestana != 0) setState(() => _pestana = 0);
+    setState(() {
+      _pestana = 0;
+      _periodo = PeriodoHistorial.recientes;
+      _numeroPagina = 0;
+      _todos = null;
+    });
     return _cargar();
   }
 
+  void _elegirPeriodo(PeriodoHistorial periodo) {
+    if (periodo == _periodo && _pagina != null) return;
+    setState(() {
+      _periodo = periodo;
+      _numeroPagina = 0;
+    });
+    _cargar();
+  }
+
+  void _irAPagina(int numero) {
+    setState(() => _numeroPagina = numero);
+    _cargar();
+  }
+
   Future<void> _cargar() async {
-    setState(() => _error = null);
+    final consulta = ++_consulta;
+    setState(() {
+      _cargando = true;
+      _error = null;
+    });
     try {
-      final lista = await widget.cargar();
-      // Primero el viaje activo (si hay); despues los terminados del mas reciente al mas antiguo.
-      // Un viaje cancelado antes de iniciar no tiene fechas: va al final.
-      lista.sort((a, b) {
-        if (a.terminado != b.terminado) return a.terminado ? 1 : -1;
-        final fa = a.fechaInicio ?? a.fechaFin;
-        final fb = b.fechaInicio ?? b.fechaFin;
-        if (fa == null && fb == null) return b.id.compareTo(a.id);
-        if (fa == null) return 1;
-        if (fb == null) return -1;
-        return fb.compareTo(fa);
-      });
-      if (mounted) setState(() => _viajes = lista);
+      final pagina = await widget.cargarHistorial(_periodo, _numeroPagina);
+      if (mounted && consulta == _consulta) setState(() => _pagina = pagina);
     } on ApiExcepcion catch (e) {
-      if (mounted) setState(() => _error = e.mensaje);
+      if (mounted && consulta == _consulta) setState(() => _error = e.mensaje);
+    } finally {
+      if (mounted && consulta == _consulta) setState(() => _cargando = false);
+    }
+  }
+
+  Future<void> _cargarTodos() async {
+    final cargar = widget.cargarTodos;
+    if (cargar == null || _todos != null) return;
+    try {
+      final lista = await cargar();
+      if (mounted) setState(() => _todos = lista);
+    } catch (_) {
+      // Sin viajes los lugares frecuentes quedan vacios; los favoritos se ven igual.
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final viajes = _viajes;
     final conPestanas = widget.pestanaFavoritos != null;
     return PaginaSeccion(
       titulo: 'Historial',
       subtitulo: conPestanas
           ? 'Tus viajes y tus lugares'
           : widget.esConductor
-          ? 'Los viajes que aceptaste'
-          : 'Los viajes que pediste',
+          ? 'Los viajes que completaste'
+          : 'Los viajes que realizaste',
       constructor: (context, relleno) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -101,71 +141,223 @@ class PantallaHistorialState extends State<PantallaHistorial> {
             SelectorPestanas(
               titulos: const ['Historial', 'Favoritos'],
               indice: _pestana,
-              onCambiar: (i) => setState(() => _pestana = i),
+              onCambiar: (i) {
+                setState(() => _pestana = i);
+                if (i == 1) _cargarTodos();
+              },
             ),
             const SizedBox(height: 6),
           ],
           Expanded(
             child: _pestana == 0 || !conPestanas
                 ? _listaHistorial(relleno)
-                // Sin viajes cargados (error o primera carga) los frecuentes salen vacios: el grupo
-                // se oculta solo y los favoritos de abajo no se ven afectados.
-                : widget.pestanaFavoritos!(viajes ?? const [], relleno),
+                : widget.pestanaFavoritos!(_todos ?? const [], relleno),
           ),
         ],
       ),
     );
   }
 
+  /// "Septiembre 2026" del mes que se esta viendo.
+  String _nombreMes(PeriodoHistorial periodo) {
+    const meses = [
+      'Enero',
+      'Febrero',
+      'Marzo',
+      'Abril',
+      'Mayo',
+      'Junio',
+      'Julio',
+      'Agosto',
+      'Septiembre',
+      'Octubre',
+      'Noviembre',
+      'Diciembre',
+    ];
+    final hoy = DateTime.now();
+    final mes = periodo == PeriodoHistorial.mesAnterior ? DateTime(hoy.year, hoy.month - 1) : hoy;
+    return '${meses[mes.month - 1]} ${mes.year}';
+  }
+
   Widget _listaHistorial(EdgeInsets relleno) {
-    final viajes = _viajes;
-    final completados = viajes?.where((v) => v.situacion == SituacionViaje.completado).toList() ?? const [];
-    final total = completados.fold<double>(0, (suma, v) => suma + (v.precioFinal ?? 0));
-    if (_error != null) {
-      return _ErrorCarga(mensaje: _error!, onReintentar: _cargar);
-    }
-    if (viajes == null) {
-      return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
-    }
+    final pagina = _pagina;
+    final recientes = _periodo == PeriodoHistorial.recientes;
     return RefreshIndicator(
       onRefresh: _cargar,
       child: ListView(
         padding: relleno,
         children: [
+          _SelectorPeriodo(periodo: _periodo, onElegir: _elegirPeriodo),
+          const SizedBox(height: 14),
           Row(
             children: [
               Expanded(
-                child: _Resumen(titulo: 'Viajes completados', valor: '${completados.length}'),
+                child: _Resumen(
+                  titulo: recientes
+                      ? 'Viajes completados'
+                      : 'Viajes en ${_nombreMes(_periodo).split(' ').first.toLowerCase()}',
+                  valor: pagina == null ? '-' : '${pagina.totalViajes}',
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _Resumen(titulo: widget.esConductor ? 'Cobrado' : 'Pagado', valor: formatoBs(total)),
+                child: _Resumen(
+                  titulo: widget.esConductor ? 'Cobrado' : 'Pagado',
+                  valor: pagina == null ? '-' : formatoBs(pagina.totalMonto),
+                ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          if (viajes.isEmpty)
+          Text(
+            recientes ? 'Tus últimos viajes completados' : _nombreMes(_periodo),
+            style: const TextStyle(color: ColoresApp.azul, fontSize: 15.5, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          if (_error != null)
+            _ErrorCarga(mensaje: _error!, onReintentar: _cargar)
+          else if (pagina == null || (_cargando && pagina.viajes.isEmpty))
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+            )
+          else if (pagina.viajes.isEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 40),
+              padding: const EdgeInsets.only(top: 30),
               child: Text(
-                widget.esConductor ? 'Todavía no aceptaste viajes.' : 'Todavía no pediste viajes.',
+                recientes
+                    ? (widget.esConductor ? 'Todavía no completaste viajes.' : 'Todavía no realizaste viajes.')
+                    : 'No hay viajes completados en ${_nombreMes(_periodo).toLowerCase()}.',
                 textAlign: TextAlign.center,
                 style: const TextStyle(color: ColoresApp.textoSuave),
               ),
+            )
+          else ...[
+            AnimatedOpacity(
+              opacity: _cargando ? 0.45 : 1,
+              duration: const Duration(milliseconds: 150),
+              child: Column(
+                children: [
+                  for (final viaje in pagina.viajes)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _TarjetaViaje(
+                        viaje: viaje,
+                        esConductor: widget.esConductor,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => PantallaDetalleViaje(viaje: viaje, esConductor: widget.esConductor),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
-          for (final viaje in viajes)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _TarjetaViaje(
-                viaje: viaje,
-                esConductor: widget.esConductor,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => PantallaDetalleViaje(viaje: viaje, esConductor: widget.esConductor),
+            if (!recientes && pagina.totalPaginas > 1)
+              _Paginador(
+                pagina: pagina.pagina,
+                totalPaginas: pagina.totalPaginas,
+                cargando: _cargando,
+                onIr: _irAPagina,
+              ),
+            if (recientes && pagina.totalViajes > pagina.viajes.length)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Para ver más viajes elige "Este mes" o "Mes anterior".',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Chips para elegir que parte del historial se ve.
+class _SelectorPeriodo extends StatelessWidget {
+  final PeriodoHistorial periodo;
+  final ValueChanged<PeriodoHistorial> onElegir;
+
+  const _SelectorPeriodo({required this.periodo, required this.onElegir});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final opcion in PeriodoHistorial.values)
+          Expanded(
+            child: Padding(
+              padding: EdgeInsets.only(right: opcion == PeriodoHistorial.values.last ? 0 : 8),
+              child: Material(
+                color: opcion == periodo ? ColoresApp.azul : ColoresApp.blanco,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(20),
+                  side: BorderSide(color: opcion == periodo ? ColoresApp.azul : ColoresApp.borde),
+                ),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => onElegir(opcion),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 9),
+                    child: Text(
+                      opcion.titulo,
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: opcion == periodo ? ColoresApp.blanco : ColoresApp.texto,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 13.5,
+                      ),
+                    ),
                   ),
                 ),
               ),
             ),
+          ),
+      ],
+    );
+  }
+}
+
+/// Anterior / "Pagina 2 de 5" / Siguiente.
+class _Paginador extends StatelessWidget {
+  final int pagina;
+  final int totalPaginas;
+  final bool cargando;
+  final ValueChanged<int> onIr;
+
+  const _Paginador({required this.pagina, required this.totalPaginas, required this.cargando, required this.onIr});
+
+  @override
+  Widget build(BuildContext context) {
+    final hayAnterior = pagina > 0 && !cargando;
+    final haySiguiente = pagina < totalPaginas - 1 && !cargando;
+    return Padding(
+      padding: const EdgeInsets.only(top: 4, bottom: 8),
+      child: Row(
+        children: [
+          IconButton.outlined(
+            tooltip: 'Página anterior',
+            onPressed: hayAnterior ? () => onIr(pagina - 1) : null,
+            icon: const FaIcon(FontAwesomeIcons.chevronLeft, size: 14),
+          ),
+          Expanded(
+            child: Text(
+              'Página ${pagina + 1} de $totalPaginas',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: ColoresApp.texto, fontWeight: FontWeight.w600),
+            ),
+          ),
+          IconButton.outlined(
+            tooltip: 'Página siguiente',
+            onPressed: haySiguiente ? () => onIr(pagina + 1) : null,
+            icon: const FaIcon(FontAwesomeIcons.chevronRight, size: 14),
+          ),
         ],
       ),
     );

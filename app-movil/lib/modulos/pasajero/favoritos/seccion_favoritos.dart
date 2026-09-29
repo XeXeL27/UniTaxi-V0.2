@@ -24,6 +24,9 @@ class SeccionFavoritos extends StatelessWidget {
 
   final ValueChanged<Favorito> onEliminar;
   final ValueChanged<LugarFrecuente> onPromover;
+
+  /// Quita un lugar frecuente de la lista (no esta guardado: solo deja de mostrarse).
+  final ValueChanged<LugarFrecuente> onQuitarFrecuente;
   final VoidCallback onAnadir;
   final VoidCallback onReintentar;
 
@@ -39,6 +42,7 @@ class SeccionFavoritos extends StatelessWidget {
     required this.onElegir,
     required this.onEliminar,
     required this.onPromover,
+    required this.onQuitarFrecuente,
     required this.onAnadir,
     required this.onReintentar,
     required this.relleno,
@@ -64,7 +68,12 @@ class SeccionFavoritos extends StatelessWidget {
           for (final lugar in frecuentes)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _TarjetaFrecuente(lugar: lugar, onElegir: onElegir, onPromover: () => onPromover(lugar)),
+              child: _TarjetaFrecuente(
+                lugar: lugar,
+                onElegir: onElegir,
+                onPromover: () => onPromover(lugar),
+                onQuitar: () => onQuitarFrecuente(lugar),
+              ),
             ),
         ],
         const SizedBox(height: 4),
@@ -162,8 +171,14 @@ class _TarjetaFrecuente extends StatelessWidget {
   final LugarFrecuente lugar;
   final void Function(LatLng posicion, String nombre) onElegir;
   final VoidCallback onPromover;
+  final VoidCallback onQuitar;
 
-  const _TarjetaFrecuente({required this.lugar, required this.onElegir, required this.onPromover});
+  const _TarjetaFrecuente({
+    required this.lugar,
+    required this.onElegir,
+    required this.onPromover,
+    required this.onQuitar,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -172,10 +187,20 @@ class _TarjetaFrecuente extends StatelessWidget {
       titulo: lugar.nombre,
       detalle: lugar.resumen,
       onTap: () => onElegir(lugar.posicion, lugar.nombre),
-      accion: IconButton(
-        onPressed: onPromover,
-        tooltip: 'Agregar a favoritos',
-        icon: const FaIcon(FontAwesomeIcons.plus, color: ColoresApp.azul, size: 16),
+      accion: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: onPromover,
+            tooltip: 'Agregar a favoritos',
+            icon: const FaIcon(FontAwesomeIcons.plus, color: ColoresApp.azul, size: 16),
+          ),
+          IconButton(
+            onPressed: onQuitar,
+            tooltip: 'Quitar de la lista',
+            icon: const FaIcon(FontAwesomeIcons.trashCan, color: ColoresApp.textoSuave, size: 16),
+          ),
+        ],
       ),
     );
   }

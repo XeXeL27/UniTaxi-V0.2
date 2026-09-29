@@ -72,6 +72,12 @@ class ConductorApi {
 
   Future<List<Viaje>> misViajes() => cliente.lista('/api/conductor/viajes', Viaje.desdeJson);
 
+  /// Historial de viajes completados: los ultimos 10 o un mes, de a 10 por pagina.
+  Future<PaginaHistorial> historial(PeriodoHistorial periodo, int pagina) async => PaginaHistorial.desdeJson(
+    await cliente.get('/api/conductor/viajes/historial?periodo=${periodo.codigo}&pagina=$pagina')
+        as Map<String, dynamic>,
+  );
+
   Future<Viaje> enCamino(int id) async => _viaje(await cliente.post('/api/conductor/viajes/$id/en-camino', const {}));
 
   Future<Viaje> llegue(int id) async => _viaje(await cliente.post('/api/conductor/viajes/$id/llegue', const {}));

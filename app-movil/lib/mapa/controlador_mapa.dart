@@ -19,8 +19,7 @@ class PuntoRuta {
 /// Estilo de los tiles del mapa (boton de capas).
 enum CapaMapa {
   calles('Calles', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
-  satelite('Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
-  claro('Claro', 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png');
+  satelite('Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
 
   final String nombre;
   final String url;
@@ -57,6 +56,25 @@ class ControladorMapa extends ChangeNotifier {
   bool aSigueGps = false;
 
   CapaMapa capa = CapaMapa.calles;
+
+  /// Giro del mapa en grados (0 = norte arriba). Aparte del resto del estado para que la brujula se
+  /// actualice sin redibujar el mapa entero.
+  final ValueNotifier<double> rotacion = ValueNotifier(0);
+
+  void alMoverMapa(MapCamera camara) {
+    final grados = camara.rotation % 360;
+    if ((grados - rotacion.value).abs() > 0.5) rotacion.value = grados;
+  }
+
+  /// Vuelve a dejar el norte arriba (boton de la brujula).
+  void orientarAlNorte() {
+    try {
+      mapa.rotate(0);
+    } catch (_) {
+      // El mapa todavia no esta listo.
+    }
+    rotacion.value = 0;
+  }
 
   void cambiarCapa(CapaMapa nueva) {
     if (capa == nueva) return;
@@ -276,6 +294,7 @@ class ControladorMapa extends ChangeNotifier {
     _cerrado = true;
     _gps?.cancel();
     mapa.dispose();
+    rotacion.dispose();
     super.dispose();
   }
 }

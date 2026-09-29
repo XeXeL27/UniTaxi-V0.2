@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'comun/completar_correo.dart';
@@ -16,6 +17,7 @@ import 'widgets/requiere_gps.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  SystemChrome.setSystemUIOverlayStyle(BarraSistema.sobreAzul);
   final sesion = Sesion();
   await sesion.cargar();
   final vuelta = await _vueltaDeGoogle(sesion);
@@ -79,6 +81,10 @@ class _TaxiUapState extends State<TaxiUap> {
       title: 'TaxiUAP',
       debugShowCheckedModeBanner: false,
       theme: temaApp(),
+      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
+        value: BarraSistema.sobreAzul,
+        child: child ?? const SizedBox.shrink(),
+      ),
       // La clave por rol reconstruye la pantalla al cambiar de modo.
       // Pasajero y conductor necesitan un correo (credenciales, restablecer la contrasena) y el GPS
       // encendido.

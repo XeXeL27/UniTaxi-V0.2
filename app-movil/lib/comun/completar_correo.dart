@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
@@ -49,81 +50,91 @@ class _PantallaCompletarCorreoState extends State<PantallaCompletarCorreo> {
   @override
   Widget build(BuildContext context) {
     final nombre = context.select<Sesion, String>((s) => s.usuario?.primerNombre ?? '');
-    return Scaffold(
-      backgroundColor: ColoresApp.fondo,
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 440),
-              child: Form(
-                key: _clave,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 88,
-                        height: 88,
-                        decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
-                        child: const Center(child: FaIcon(FontAwesomeIcons.envelope, color: ColoresApp.azul, size: 36)),
-                      ),
-                    ),
-                    const SizedBox(height: 22),
-                    Text(
-                      nombre.isEmpty ? 'Registra tu correo' : 'Hola, $nombre',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(color: ColoresApp.azul, fontSize: 23, fontWeight: FontWeight.w800),
-                    ),
-                    const SizedBox(height: 10),
-                    const Text(
-                      'Tu cuenta no tiene un correo. Escríbelo para continuar: ahí te llegarán tus datos de '
-                      'ingreso y el código si alguna vez olvidas tu contraseña.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14.5, height: 1.45),
-                    ),
-                    const SizedBox(height: 24),
-                    if (_error != null) ...[
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(12)),
-                        child: Row(
-                          children: [
-                            const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
-                            const SizedBox(width: 10),
-                            Expanded(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro))),
-                          ],
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: BarraSistema.sobreClaro,
+      child: Scaffold(
+        backgroundColor: ColoresApp.fondo,
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 440),
+                child: Form(
+                  key: _clave,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Center(
+                        child: Container(
+                          width: 88,
+                          height: 88,
+                          decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
+                          child: const Center(
+                            child: FaIcon(FontAwesomeIcons.envelope, color: ColoresApp.azul, size: 36),
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 22),
+                      Text(
+                        nombre.isEmpty ? 'Registra tu correo' : 'Hola, $nombre',
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(color: ColoresApp.azul, fontSize: 23, fontWeight: FontWeight.w800),
+                      ),
+                      const SizedBox(height: 10),
+                      const Text(
+                        'Tu cuenta no tiene un correo. Escríbelo para continuar: ahí te llegarán tus datos de '
+                        'ingreso y el código si alguna vez olvidas tu contraseña.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14.5, height: 1.45),
+                      ),
+                      const SizedBox(height: 24),
+                      if (_error != null) ...[
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: ColoresApp.rojoSuave,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      TextFormField(
+                        controller: _correo,
+                        keyboardType: TextInputType.emailAddress,
+                        autofillHints: const [AutofillHints.email],
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _guardar(),
+                        decoration: const InputDecoration(
+                          labelText: 'Correo electrónico',
+                          prefixIcon: SizedBox(
+                            width: 44,
+                            child: Center(child: FaIcon(FontAwesomeIcons.at, size: 15, color: ColoresApp.textoSuave)),
+                          ),
+                        ),
+                        validator: (v) => v != null && RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())
+                            ? null
+                            : 'Escribe un correo válido',
+                      ),
+                      const SizedBox(height: 22),
+                      BotonPrincipal(texto: 'Guardar y continuar', cargando: _enviando, onPressed: _guardar),
+                      const SizedBox(height: 10),
+                      TextButton(
+                        onPressed: _enviando ? null : () => context.read<Sesion>().cerrar(),
+                        child: const Text('Cerrar sesión', style: TextStyle(color: ColoresApp.textoSuave)),
+                      ),
                     ],
-                    TextFormField(
-                      controller: _correo,
-                      keyboardType: TextInputType.emailAddress,
-                      autofillHints: const [AutofillHints.email],
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _guardar(),
-                      decoration: const InputDecoration(
-                        labelText: 'Correo electrónico',
-                        prefixIcon: SizedBox(
-                          width: 44,
-                          child: Center(child: FaIcon(FontAwesomeIcons.at, size: 15, color: ColoresApp.textoSuave)),
-                        ),
-                      ),
-                      validator: (v) => v != null && RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())
-                          ? null
-                          : 'Escribe un correo válido',
-                    ),
-                    const SizedBox(height: 22),
-                    BotonPrincipal(texto: 'Guardar y continuar', cargando: _enviando, onPressed: _guardar),
-                    const SizedBox(height: 10),
-                    TextButton(
-                      onPressed: _enviando ? null : () => context.read<Sesion>().cerrar(),
-                      child: const Text('Cerrar sesión', style: TextStyle(color: ColoresApp.textoSuave)),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),

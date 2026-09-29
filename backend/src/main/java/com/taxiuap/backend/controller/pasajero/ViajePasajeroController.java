@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
@@ -20,7 +21,9 @@ import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.trip.dto.CambioMetodoPagoRequest;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
+import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.enums.PeriodoHistorial;
 import com.taxiuap.backend.trip.service.ViajeService;
 
 import jakarta.validation.Valid;
@@ -39,6 +42,21 @@ public class ViajePasajeroController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<ViajeResponse>>> listar() {
         return ResponseEntity.ok(ApiResponse.exito(viajeService.listarDelPasajero()));
+    }
+
+    /** Historial de la app: solo viajes completados, los ultimos 10 o un mes paginado. */
+    @GetMapping("/historial")
+    public ResponseEntity<ApiResponse<HistorialViajesResponse>> historial(
+            @RequestParam(defaultValue = "RECIENTES") PeriodoHistorial periodo,
+            @RequestParam(defaultValue = "0") int pagina) {
+        return ResponseEntity.ok(ApiResponse.exito(viajeService.historialDelPasajero(periodo, pagina)));
+    }
+
+    /** El cuadro para calificar ya se mostro: no se vuelve a ofrecer (ni tras cerrar sesion). */
+    @PostMapping("/{id}/calificacion/ofrecida")
+    public ResponseEntity<ApiResponse<Void>> calificacionOfrecida(@PathVariable Long id) {
+        viajeService.marcarCalificacionOfrecida(id);
+        return ResponseEntity.ok(ApiResponse.exito("Calificacion ofrecida", null));
     }
 
     @GetMapping("/en-curso")

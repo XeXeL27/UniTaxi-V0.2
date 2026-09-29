@@ -76,6 +76,12 @@ class ViajeApi {
 
   Future<List<Viaje>> misViajes() => cliente.lista('/api/pasajero/viajes', Viaje.desdeJson);
 
+  /// Historial de viajes completados: los ultimos 10 o un mes, de a 10 por pagina.
+  Future<PaginaHistorial> historial(PeriodoHistorial periodo, int pagina) async => PaginaHistorial.desdeJson(
+    await cliente.get('/api/pasajero/viajes/historial?periodo=${periodo.codigo}&pagina=$pagina')
+        as Map<String, dynamic>,
+  );
+
   Future<Viaje> cancelarViaje(int id) async => Viaje.desdeJson(
     await cliente.post('/api/pasajero/viajes/$id/cancelar', {'motivo': 'Cancelado por el pasajero'})
         as Map<String, dynamic>,
@@ -98,6 +104,11 @@ class ViajeApi {
 
   Future<List<Etiqueta>> etiquetasConductor() =>
       cliente.lista('/api/publico/etiquetas-calificacion?aplicaA=CONDUCTOR', Etiqueta.desdeJson);
+
+  /// Marca en el servidor que ya se le ofrecio calificar este viaje: no vuelve a salir aunque
+  /// cierre sesion o entre desde otro telefono.
+  Future<void> marcarCalificacionOfrecida(int idViaje) =>
+      cliente.post('/api/pasajero/viajes/$idViaje/calificacion/ofrecida', const {});
 
   Future<void> calificar(int idViaje, {required int puntuacion, String? comentario, List<int> etiquetas = const []}) =>
       cliente.post('/api/pasajero/viajes/$idViaje/calificacion', {

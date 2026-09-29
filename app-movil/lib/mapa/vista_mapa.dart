@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -54,8 +56,10 @@ class MapaBase extends StatelessWidget {
             minZoom: 5,
             maxZoom: 19,
             backgroundColor: const Color(0xFFE8E6E1),
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+            // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
             onMapReady: c.alListarMapa,
+            onPositionChanged: (camara, _) => c.alMoverMapa(camara),
             onTap: onTap == null ? null : (_, punto) => onTap!(punto),
           ),
           children: [
@@ -92,7 +96,9 @@ class MapaBase extends StatelessWidget {
               ],
             ),
             ?capaAnimada,
+            // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
             MarkerLayer(
+              rotate: true,
               markers: [
                 ...marcadoresExtra,
                 if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
@@ -167,7 +173,95 @@ class BotonUbicacion extends StatelessWidget {
   }
 }
 
-/// Boton redondo que abre la eleccion de capa del mapa (calles, satelite, claro).
+/// Brujula: aparece solo con el mapa girado y, al tocarla, vuelve a poner el norte arriba. La
+/// aguja roja apunta al norte real.
+class BotonBrujula extends StatelessWidget {
+  final ControladorMapa controlador;
+
+  const BotonBrujula({super.key, required this.controlador});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: controlador.rotacion,
+      builder: (context, grados, _) {
+        final girado = grados > 0.5 && grados < 359.5;
+        return AnimatedScale(
+          scale: girado ? 1 : 0,
+          duration: const Duration(milliseconds: 180),
+          child: Material(
+            color: ColoresApp.blanco,
+            shape: const CircleBorder(),
+            elevation: 4,
+            shadowColor: const Color(0x55000000),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: girado ? controlador.orientarAlNorte : null,
+              child: SizedBox(
+                width: 50,
+                height: 50,
+                child: Center(
+                  child: Transform.rotate(
+                    angle: grados * 3.141592653589793 / 180,
+                    child: const _Aguja(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Aguja de brujula: mitad roja (norte) y mitad gris.
+class _Aguja extends StatelessWidget {
+  const _Aguja();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 14,
+      height: 30,
+      child: Column(
+        children: [
+          Expanded(child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.rojo, arriba: true))),
+          Expanded(child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.textoSuave, arriba: false))),
+        ],
+      ),
+    );
+  }
+}
+
+class _Triangulo extends CustomPainter {
+  final Color color;
+  final bool arriba;
+
+  const _Triangulo(this.color, {required this.arriba});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final camino = ui.Path();
+    if (arriba) {
+      camino
+        ..moveTo(size.width / 2, 0)
+        ..lineTo(size.width, size.height)
+        ..lineTo(0, size.height);
+    } else {
+      camino
+        ..moveTo(0, 0)
+        ..lineTo(size.width, 0)
+        ..lineTo(size.width / 2, size.height);
+    }
+    canvas.drawPath(camino..close(), Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_Triangulo anterior) => anterior.color != color || anterior.arriba != arriba;
+}
+
+/// Boton redondo que abre la eleccion de capa del mapa (calles o satelite).
 class BotonCapas extends StatelessWidget {
   final ControladorMapa controlador;
 
@@ -243,7 +337,6 @@ class _OpcionCapa extends StatelessWidget {
     final icono = switch (capa) {
       CapaMapa.calles => FontAwesomeIcons.road,
       CapaMapa.satelite => FontAwesomeIcons.earthAmericas,
-      CapaMapa.claro => FontAwesomeIcons.map,
     };
     return InkWell(
       onTap: onTap,

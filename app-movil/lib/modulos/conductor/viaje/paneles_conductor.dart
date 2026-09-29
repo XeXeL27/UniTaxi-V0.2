@@ -23,11 +23,7 @@ class PanelSolicitudes extends StatelessWidget {
   /// Vuelve a consultar si la administracion ya aprobo la cuenta (solo en revision).
   final VoidCallback? onRevisarAprobacion;
 
-  const PanelSolicitudes({
-    super.key,
-    required this.flujo,
-    this.onRevisarAprobacion,
-  });
+  const PanelSolicitudes({super.key, required this.flujo, this.onRevisarAprobacion});
 
   @override
   Widget build(BuildContext context) {
@@ -282,6 +278,30 @@ class PanelDetalleSolicitud extends StatelessWidget {
   }
 }
 
+/// Texto y color del estado del viaje para el conductor, y el boton del siguiente paso ('' si no hay).
+(String, Color, String, Color) estadoViajeConductor(Viaje viaje) => switch (viaje.situacion) {
+  SituacionViaje.confirmado => (
+    'Viaje aceptado. Avisa que vas en camino.',
+    ColoresApp.exito,
+    'Voy en camino',
+    ColoresApp.azul,
+  ),
+  SituacionViaje.enCamino => (
+    'Ve a recoger a ${viaje.primerNombrePasajero} (punto A)',
+    ColoresApp.ruta,
+    'Llegué al punto de partida',
+    ColoresApp.azul,
+  ),
+  SituacionViaje.llego => (
+    'Esperando a ${viaje.primerNombrePasajero}',
+    ColoresApp.rojo,
+    'Iniciar viaje',
+    ColoresApp.azul,
+  ),
+  SituacionViaje.enCurso => ('En viaje hacia el destino (B)', ColoresApp.azul, 'Finalizar viaje', ColoresApp.rojo),
+  _ => (SituacionViaje.nombre(viaje.situacion), ColoresApp.textoSuave, '', ColoresApp.azul),
+};
+
 /// Viaje en curso del conductor: estado, pasajero, lugares y el boton del siguiente paso.
 class PanelViajeConductor extends StatelessWidget {
   final FlujoConductor flujo;
@@ -307,28 +327,7 @@ class PanelViajeConductor extends StatelessWidget {
   Widget build(BuildContext context) {
     final viaje = flujo.viaje;
     if (viaje == null) return const SizedBox.shrink();
-    final (texto, color, boton, colorBoton) = switch (viaje.situacion) {
-      SituacionViaje.confirmado => (
-        'Viaje aceptado. Avisa que vas en camino.',
-        ColoresApp.exito,
-        'Voy en camino',
-        ColoresApp.azul,
-      ),
-      SituacionViaje.enCamino => (
-        'Ve a recoger a ${viaje.primerNombrePasajero} (punto A)',
-        ColoresApp.ruta,
-        'Llegué al punto de partida',
-        ColoresApp.azul,
-      ),
-      SituacionViaje.llego => (
-        'Esperando a ${viaje.primerNombrePasajero}',
-        ColoresApp.rojo,
-        'Iniciar viaje',
-        ColoresApp.azul,
-      ),
-      SituacionViaje.enCurso => ('En viaje hacia el destino (B)', ColoresApp.azul, 'Finalizar viaje', ColoresApp.rojo),
-      _ => (SituacionViaje.nombre(viaje.situacion), ColoresApp.textoSuave, '', ColoresApp.azul),
-    };
+    final (texto, color, boton, colorBoton) = estadoViajeConductor(viaje);
     final distanciaDestino = flujo.metrosDesdeMi(viaje.destino);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

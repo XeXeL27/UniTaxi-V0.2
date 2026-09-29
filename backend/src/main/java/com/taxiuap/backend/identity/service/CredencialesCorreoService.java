@@ -3,6 +3,7 @@ package com.taxiuap.backend.identity.service;
 import java.security.SecureRandom;
 import java.util.List;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -40,6 +41,10 @@ public class CredencialesCorreoService {
     private final UsuarioRepository usuarioRepository;
     private final CuentaUsuarioService cuentaUsuarioService;
     private final CorreoService correoService;
+
+    /** Direccion del servidor para el enlace "Iniciar sesion" (abre la app o la web, ver /ingresar). */
+    @Value("${taxiuap.url-publica:http://localhost:8080}")
+    private String urlPublica;
 
     /** 10 caracteres faciles de copiar: 8 letras y 2 numeros mezclados. */
     public static String contrasenaLegible() {
@@ -87,6 +92,7 @@ public class CredencialesCorreoService {
                 + "Contraseña: " + (contrasena != null ? contrasena : origenContrasena) + "\n\n"
                 + "También puedes seguir ingresando con Google. "
                 + (contrasena != null ? CAMBIAR : "")
+                + enlace("PASAJERO")
                 + FIRMA;
         correoService.enviar(persona.getCorreo(), "Bienvenido a Unitaxi", cuerpo);
     }
@@ -110,6 +116,7 @@ public class CredencialesCorreoService {
                 + "Contraseña: " + (contrasena != null ? contrasena : "la que ya usas para ingresar a Unitaxi") + "\n\n"
                 + "Ingresa a la app, elige Conductor y conéctate para ver las solicitudes. "
                 + (contrasena != null ? CAMBIAR : "Si no la recuerdas, usa ¿Olvidaste tu contraseña? en el inicio de sesión.")
+                + enlace("CONDUCTOR")
                 + FIRMA;
         correoService.enviar(persona.getCorreo(), "Tu cuenta de conductor fue aprobada", cuerpo);
     }
@@ -119,8 +126,15 @@ public class CredencialesCorreoService {
                 + "Tu código para restablecer la contraseña de Unitaxi es:\n\n"
                 + "    " + codigo + "\n\n"
                 + "Vence en " + minutos + " minutos. Si no lo pediste, puedes ignorar este correo."
+                + enlace("PASAJERO")
                 + FIRMA;
         correoService.enviar(persona.getCorreo(), "Código para restablecer tu contraseña", cuerpo);
+    }
+
+    /** En el celular con la app instalada la abre; si no, abre la web (/app o /admin). */
+    private String enlace(String rol) {
+        String base = urlPublica.endsWith("/") ? urlPublica.substring(0, urlPublica.length() - 1) : urlPublica;
+        return "\n\nIniciar sesión: " + base + "/ingresar?rol=" + rol;
     }
 
     private static String saludo(Persona persona) {

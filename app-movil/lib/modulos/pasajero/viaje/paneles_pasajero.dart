@@ -138,7 +138,8 @@ class PanelEligiendo extends StatelessWidget {
   }
 }
 
-/// Panel mientras la solicitud espera que un conductor la acepte.
+/// Panel pequeno mientras la solicitud espera que un conductor la acepte: el mensaje, el destino y
+/// el precio en una linea y el boton para cancelar. El mapa con la ruta queda a la vista.
 class PanelBuscando extends StatefulWidget {
   final FlujoPasajero flujo;
   final bool cancelando;
@@ -172,85 +173,95 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
   @override
   Widget build(BuildContext context) {
     final solicitud = widget.flujo.solicitud;
+    final sinLibres = widget.libres == 0;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
             SizedBox(
-              width: 56,
-              height: 56,
+              width: 44,
+              height: 44,
               child: AnimatedBuilder(
                 animation: _pulso,
                 builder: (context, _) => Stack(
                   alignment: Alignment.center,
                   children: [
                     Container(
-                      width: 30 + 26 * _pulso.value,
-                      height: 30 + 26 * _pulso.value,
+                      width: 26 + 18 * _pulso.value,
+                      height: 26 + 18 * _pulso.value,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         color: ColoresApp.rojo.withValues(alpha: 0.25 * (1 - _pulso.value)),
                       ),
                     ),
                     Container(
-                      width: 38,
-                      height: 38,
+                      width: 32,
+                      height: 32,
                       alignment: Alignment.center,
                       decoration: const BoxDecoration(color: ColoresApp.rojo, shape: BoxShape.circle),
-                      child: const FaIcon(FontAwesomeIcons.taxi, color: ColoresApp.blanco, size: 16),
+                      child: const FaIcon(FontAwesomeIcons.taxi, color: ColoresApp.blanco, size: 14),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(width: 12),
-            const Expanded(
+            const SizedBox(width: 10),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
+                  const Text(
                     'Buscando conductor...',
-                    style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700),
+                    style: TextStyle(color: ColoresApp.azul, fontSize: 16.5, fontWeight: FontWeight.w700),
                   ),
-                  SizedBox(height: 2),
                   Text(
-                    'Tu solicitud ya les llegó a los taxistas. Espera un momento.',
-                    style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                    sinLibres
+                        ? 'No hay taxistas libres ahora: puede demorar un poco.'
+                        : 'Tu solicitud ya les llegó a los taxistas.',
+                    maxLines: 2,
+                    style: TextStyle(
+                      color: sinLibres ? const Color(0xFFE67E22) : ColoresApp.textoSuave,
+                      fontSize: 12.5,
+                      fontWeight: sinLibres ? FontWeight.w600 : FontWeight.w400,
+                    ),
                   ),
                 ],
               ),
             ),
           ],
         ),
-        const SizedBox(height: 14),
+        const SizedBox(height: 10),
         const ClipRRect(
           borderRadius: BorderRadius.all(Radius.circular(4)),
-          child: LinearProgressIndicator(minHeight: 4, color: ColoresApp.rojo, backgroundColor: ColoresApp.rojoSuave),
+          child: LinearProgressIndicator(minHeight: 3, color: ColoresApp.rojo, backgroundColor: ColoresApp.rojoSuave),
         ),
-        const SizedBox(height: 12),
-        if (widget.libres == 0) ...[
-          const _Aviso(
-            icono: FontAwesomeIcons.hourglassHalf,
-            texto: 'Ahora no hay taxistas libres. Puede demorar un poco encontrar uno que acepte tu viaje: '
-                'tu solicitud sigue activa y te avisaremos aquí.',
-          ),
-          const SizedBox(height: 12),
-        ],
-        if (solicitud != null) ...[
-          FilaLugar.partida(texto: solicitud.origenDireccion),
-          FilaLugar.destino(texto: solicitud.destinoDireccion),
-          const SizedBox(height: 10),
-          RecuadroPrecio(
-            etiqueta: 'Precio del viaje',
-            detalle: solicitud.metodoPago == MetodoPago.qr ? 'Pago por QR' : 'Pago en efectivo',
-            monto: formatoBs(solicitud.precio),
-          ),
-        ],
-        const SizedBox(height: 14),
-        widget.cancelando
-            ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
-            : BotonSecundario(texto: 'Cancelar solicitud', onPressed: widget.onCancelar),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                solicitud == null
+                    ? ''
+                    : 'Hacia ${solicitud.destinoDireccion} - ${formatoBs(solicitud.precio)}'
+                          '${solicitud.metodoPago == MetodoPago.qr ? ' por QR' : ' en efectivo'}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+              ),
+            ),
+            widget.cancelando
+                ? const Padding(
+                    padding: EdgeInsets.all(12),
+                    child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                  )
+                : TextButton(
+                    onPressed: widget.onCancelar,
+                    style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
+                    child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w700)),
+                  ),
+          ],
+        ),
       ],
     );
   }
@@ -578,85 +589,74 @@ class DisponibilidadTaxis extends StatelessWidget {
   }
 }
 
-/// Panel que se puede bajar para ver el mapa completo con la ruta (igual que la lista de
-/// solicitudes del conductor). Cerrado queda solo una barra con el resumen; tocarla, la flecha o
-/// deslizar hacia arriba lo vuelve a abrir con el detalle.
-class PanelPlegable extends StatelessWidget {
-  final bool abierto;
-  final VoidCallback onAlternar;
-  final FaIconData icono;
-  final Color color;
+/// Lo que se ve de la barra compacta mientras el pasajero elige: si hay taxistas libres y como
+/// paga. El viaje se pide con el boton del centro de la barra inferior.
+class OpcionesEligiendo extends StatelessWidget {
+  final FlujoPasajero flujo;
+  final int? libres;
 
-  /// Lo que se ve con el panel cerrado (por ejemplo "Buscando conductor...").
-  final String resumen;
-
-  /// Texto de la barra con el panel abierto.
-  final String tituloAbierto;
-  final Widget child;
-
-  const PanelPlegable({
-    super.key,
-    required this.abierto,
-    required this.onAlternar,
-    required this.icono,
-    required this.color,
-    required this.resumen,
-    required this.tituloAbierto,
-    required this.child,
-  });
+  const OpcionesEligiendo({super.key, required this.flujo, required this.libres});
 
   @override
   Widget build(BuildContext context) {
-    final barra = Semantics(
-      button: true,
-      label: abierto ? 'Esconder detalle y ver el mapa' : 'Ver detalle',
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onAlternar,
-        onVerticalDragEnd: (d) {
-          final v = d.primaryVelocity ?? 0;
-          if ((abierto && v > 150) || (!abierto && v < -150)) onAlternar();
-        },
-        child: Row(
-          children: [
-            if (!abierto) ...[
-              FaIcon(icono, color: color, size: 16),
-              const SizedBox(width: 10),
+    final n = libres;
+    final (color, texto) = switch (n) {
+      null => (ColoresApp.textoSuave, 'Buscando taxistas...'),
+      0 => (const Color(0xFFE67E22), 'Sin taxistas libres'),
+      1 => (ColoresApp.exito, '1 taxista libre'),
+      _ => (ColoresApp.exito, '$n taxistas libres'),
+    };
+    Widget pago(String valor, FaIconData icono, String nombre) {
+      final elegido = flujo.metodoPago == valor;
+      return InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: () => flujo.elegirMetodoPago(valor),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 7),
+          decoration: BoxDecoration(
+            color: elegido ? ColoresApp.azul : ColoresApp.blanco,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: elegido ? ColoresApp.azul : ColoresApp.borde),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaIcon(icono, size: 12, color: elegido ? ColoresApp.blanco : ColoresApp.azul),
+              const SizedBox(width: 6),
+              Text(
+                nombre,
+                style: TextStyle(
+                  color: elegido ? ColoresApp.blanco : ColoresApp.azul,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12.5,
+                ),
+              ),
             ],
-            Expanded(
-              child: Text(
-                abierto ? tituloAbierto : resumen,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: abierto
-                    ? const TextStyle(color: ColoresApp.textoSuave, fontSize: 13, fontWeight: FontWeight.w600)
-                    : TextStyle(color: color, fontSize: 15.5, fontWeight: FontWeight.w700),
-              ),
-            ),
-            if (!abierto)
-              const Padding(
-                padding: EdgeInsets.only(right: 6),
-                child: Text('Ver detalle', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
-              ),
-            IconButton(
-              onPressed: onAlternar,
-              tooltip: abierto ? 'Ver el mapa completo' : 'Ver detalle',
-              style: IconButton.styleFrom(backgroundColor: ColoresApp.azulSuave),
-              icon: AnimatedRotation(
-                turns: abierto ? 0.5 : 0,
-                duration: const Duration(milliseconds: 200),
-                child: const FaIcon(FontAwesomeIcons.chevronUp, color: ColoresApp.azul, size: 15),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
-    );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
+      );
+    }
+
+    return Row(
       children: [
-        barra,
-        if (abierto) ...[const SizedBox(height: 8), child],
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            texto,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+        ),
+        pago(MetodoPago.efectivo, FontAwesomeIcons.moneyBill1, 'Efectivo'),
+        const SizedBox(width: 6),
+        pago(MetodoPago.qr, FontAwesomeIcons.qrcode, 'QR'),
       ],
     );
   }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Paleta de la app movil (diseno de referencia de la vista del pasajero).
 class ColoresApp {
@@ -52,5 +53,27 @@ ThemeData temaApp() {
       ),
     ),
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    appBarTheme: const AppBarTheme(systemOverlayStyle: BarraSistema.sobreAzul),
+  );
+}
+
+/// Estilo de la barra de estado del telefono (hora, bateria, senal) y de la barra de navegacion.
+/// Casi todas las pantallas tienen la cabecera azul detras de la barra de estado: iconos blancos.
+/// Las pocas de fondo claro arriba (pedir el correo, activar el GPS) usan [sobreClaro].
+class BarraSistema {
+  static const sobreAzul = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: ColoresApp.blanco,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  );
+
+  static const sobreClaro = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+    systemNavigationBarColor: ColoresApp.blanco,
+    systemNavigationBarIconBrightness: Brightness.dark,
   );
 }

@@ -21,6 +21,7 @@ import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
 import '../../../widgets/barra_inferior.dart';
+import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
@@ -53,7 +54,6 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   final _historial = GlobalKey<PantallaHistorialState>();
   final _comentarios = GlobalKey<PantallaComentariosState>();
   int _seccion = _seccionInicio;
-
 
   /// Direccion de la ubicacion actual para la cabecera, y donde se calculo.
   String? _direccion;
@@ -364,7 +364,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               index: _seccion,
               children: [
                 _vistaInicio(sesion.usuario),
-                PantallaHistorial(key: _historial, cargar: _flujo.api.misViajes, esConductor: true),
+                PantallaHistorial(key: _historial, cargarHistorial: _flujo.api.historial, esConductor: true),
                 PantallaComentarios(key: _comentarios),
                 PantallaMas(
                   foto: _foto,
@@ -386,6 +386,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               builder: (context, _) {
                 final enLinea = _flujo.enLinea;
                 final pendientes = enLinea && _seccion != _seccionInicio ? _flujo.nuevas : 0;
+                // Mirando una solicitud o con un viaje el boton de conectarse no se muestra: no tapa
+                // los botones del viaje ni se toca por error. Vuelve al terminar o cancelar.
+                final conViaje = _flujo.etapa == EtapaConductor.detalle || _flujo.etapa == EtapaConductor.enViaje;
                 return BarraInferior(
                   indice: _seccion,
                   onCambiar: _irA,
@@ -395,13 +398,15 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                     const ItemBarra(FontAwesomeIcons.solidComments, 'Opiniones'),
                     const ItemBarra(FontAwesomeIcons.ellipsis, 'Más'),
                   ],
-                  botonCentral: BotonCentral(
-                    icono: FontAwesomeIcons.powerOff,
-                    tooltip: enLinea ? 'Desconectarme' : 'Conectarme',
-                    activo: enLinea && !_flujo.enRevision,
-                    color: ColoresApp.exito,
-                    onTap: _alternarEnLinea,
-                  ),
+                  botonCentral: conViaje
+                      ? null
+                      : BotonCentral(
+                          icono: FontAwesomeIcons.powerOff,
+                          tooltip: enLinea ? 'Desconectarme' : 'Conectarme',
+                          activo: enLinea && !_flujo.enRevision,
+                          color: ColoresApp.exito,
+                          onTap: _alternarEnLinea,
+                        ),
                 );
               },
             ),
@@ -411,16 +416,78 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     );
   }
 
+  Widget _panelDetalle() {
+    final solicitud = _flujo.seleccionada;
+    return PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: FontAwesomeIcons.route,
+      color: ColoresApp.azul,
+      resumen: solicitud == null
+          ? 'Solicitud de viaje'
+          : '${solicitud.nombrePasajero.split(' ').first} - ${formatoBs(solicitud.precio)}',
+      tituloAbierto: 'Detalle de la solicitud',
+      accionPlegado: BotonPrincipal(texto: 'Aceptar viaje', cargando: _flujo.ocupado, onPressed: _aceptar),
+      child: PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
+    );
+  }
+
+  Widget _panelViaje() {
+    final viaje = _flujo.viaje;
+    final (texto, color, boton, colorBoton) = viaje == null
+        ? ('Viaje en curso', ColoresApp.azul, '', ColoresApp.azul)
+        : estadoViajeConductor(viaje);
+    return PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: FontAwesomeIcons.motorcycle,
+      color: color,
+      resumen: texto,
+      tituloAbierto: 'Detalle del viaje',
+      accionPlegado: boton.isEmpty
+          ? null
+          : BotonPrincipal(texto: boton, color: colorBoton, cargando: _flujo.ocupado, onPressed: _avanzar),
+      child: PanelViajeConductor(
+        flujo: _flujo,
+        onAvanzar: _avanzar,
+        onCancelar: _cancelarViaje,
+        onCambiarPago: _cambiarPago,
+        onResponderPago: _responderPago,
+      ),
+    );
+  }
+
+  /// Panel del detalle de una solicitud o del viaje: se baja para ver el mapa completo con el tramo
+  /// y se vuelve a abrir solo al cambiar de etapa.
+  bool _panelAbierto = true;
+  EtapaConductor? _etapaPanel;
+
+  bool get _plegable => _flujo.etapa == EtapaConductor.detalle || _flujo.etapa == EtapaConductor.enViaje;
+
+  void _alternarPanel() {
+    setState(() => _panelAbierto = !_panelAbierto);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _mapa.encuadrar();
+    });
+  }
+
   Widget _vistaInicio(UsuarioSesion? usuario) {
     final margen = MediaQuery.paddingOf(context);
     final alto = MediaQuery.sizeOf(context).height;
     final abajo = BarraInferior.espacio(context);
-    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 150, 56, abajo + alto * 0.4);
     return ListenableBuilder(
       listenable: Listenable.merge([_flujo, _mapa]),
       builder: (context, _) {
         final etapa = _flujo.etapa;
         final enLinea = _flujo.enLinea;
+        if (etapa != _etapaPanel) {
+          _etapaPanel = etapa;
+          _panelAbierto = true;
+        }
+        // Lo que tapan la cabecera y el panel, para encuadrar la ruta; con el panel bajado el mapa
+        // queda casi completo.
+        final plegado = _plegable && !_panelAbierto;
+        _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 175, 56, abajo + (plegado ? 190 : alto * 0.4));
         // El boton atras de Android vuelve de la ruta de una solicitud a la lista.
         return PopScope(
           canPop: etapa != EtapaConductor.detalle,
@@ -456,7 +523,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: abajo + 10,
+                // Con el boton de conectarse visible (sobresale ~30 px) el panel sube para no quedar tapado.
+                bottom: abajo + (etapa == EtapaConductor.detalle || etapa == EtapaConductor.enViaje ? 10 : 34),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -466,13 +534,16 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                         children: [
                           BotonCapas(controlador: _mapa),
                           const Spacer(),
+                          BotonBrujula(controlador: _mapa),
+                          const SizedBox(width: 10),
                           BotonUbicacion(controlador: _mapa),
                         ],
                       ),
                     ),
                     PanelInferior(
                       flotante: true,
-                      altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.44,
+                      // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
+                      altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
                       child: switch (etapa) {
                         EtapaConductor.cargando => const Padding(
                           padding: EdgeInsets.symmetric(vertical: 8),
@@ -482,14 +553,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                           flujo: _flujo,
                           onRevisarAprobacion: _revisarAprobacion,
                         ),
-                        EtapaConductor.detalle => PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
-                        EtapaConductor.enViaje => PanelViajeConductor(
-                          flujo: _flujo,
-                          onAvanzar: _avanzar,
-                          onCancelar: _cancelarViaje,
-                          onCambiarPago: _cambiarPago,
-                          onResponderPago: _responderPago,
-                        ),
+                        EtapaConductor.detalle => _panelDetalle(),
+                        EtapaConductor.enViaje => _panelViaje(),
                       },
                     ),
                   ],

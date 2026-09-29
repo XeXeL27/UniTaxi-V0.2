@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -113,7 +114,10 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
     return Stack(
       children: [
         Positioned.fill(child: widget.child),
-        if (bloquea) Positioned.fill(child: _pantalla()),
+        if (bloquea)
+          Positioned.fill(
+            child: AnnotatedRegion<SystemUiOverlayStyle>(value: BarraSistema.sobreClaro, child: _pantalla()),
+          ),
       ],
     );
   }
