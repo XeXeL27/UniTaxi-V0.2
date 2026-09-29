@@ -502,7 +502,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                     solape: eligiendo ? 34 : 0,
                   ),
                   const SizedBox(height: 8),
-                  TarjetaSeguimientoConductor(flujo: _flujo, onTocar: () => setState(() => _panelAbierto = true)),
+                  TarjetaSeguimientoConductor(flujo: _flujo),
                   if (eligiendo)
                     Transform.translate(
                       offset: const Offset(0, -34),
@@ -632,9 +632,8 @@ class _MarcadorMototaxi extends StatelessWidget {
 /// durante el viaje (CONFIRMADO -> EN_CURSO) como una notificacion emergente sobre el mapa.
 class TarjetaSeguimientoConductor extends StatelessWidget {
   final FlujoPasajero flujo;
-  final VoidCallback onTocar;
 
-  const TarjetaSeguimientoConductor({super.key, required this.flujo, required this.onTocar});
+  const TarjetaSeguimientoConductor({super.key, required this.flujo});
 
   @override
   Widget build(BuildContext context) {
@@ -653,7 +652,13 @@ class TarjetaSeguimientoConductor extends StatelessWidget {
         final esEnCurso = situacion == SituacionViaje.enCurso;
         if (!esRecogida && !esEnCurso) return const SizedBox.shrink();
 
-        final (icono, _, color) = estadoViajePasajero(situacion);
+        final (icono, _, color) = switch (situacion) {
+          SituacionViaje.confirmado => (FontAwesomeIcons.circleCheck, 'Tu conductor aceptó el viaje', ColoresApp.exito),
+          SituacionViaje.enCamino => (FontAwesomeIcons.carSide, 'Tu conductor va en camino', ColoresApp.ruta),
+          SituacionViaje.llego => (FontAwesomeIcons.locationDot, 'Tu conductor llegó', ColoresApp.rojo),
+          SituacionViaje.enCurso => (FontAwesomeIcons.route, 'En viaje a tu destino', ColoresApp.azul),
+          _ => (FontAwesomeIcons.circleInfo, SituacionViaje.nombre(situacion), ColoresApp.textoSuave),
+        };
         final titulo = esRecogida
             ? 'Llega en ~${ruta.duracionTexto}'
             : 'Llegas en ~${ruta.duracionTexto}';
@@ -670,49 +675,45 @@ class TarjetaSeguimientoConductor extends StatelessWidget {
               elevation: 5,
               shadowColor: const Color(0x330A2342),
               borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                onTap: onTocar,
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(child: FaIcon(icono, color: color, size: 15)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              titulo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: ColoresApp.azul,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
+                      child: Center(child: FaIcon(icono, color: color, size: 15)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            titulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: ColoresApp.azul,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitulo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),

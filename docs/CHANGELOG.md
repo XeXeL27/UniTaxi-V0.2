@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-09-29 | 🎨 | Rediseño de la hoja de soporte: asistencia, ayuda rápida y canales de atención |
 | 2026-09-29 | 🎨 | Tarjeta flotante de distancia/ETA del conductor debajo de la cabecera (solo pasajero) |
 | 2026-09-29 | ✨ | Seguimiento en vivo del conductor: distancia y ETA al pasajero durante recogida y viaje |
 | 2026-09-29 | ✨ | Favoritos como segunda pestaña de Historial en la app del pasajero |
@@ -18,6 +19,32 @@
 ---
 
 ## 2026-09-29
+
+### 🎨 Mejora · Rediseño de la hoja de soporte (asistencia, ayuda rápida y canales de atención)
+
+- **Módulo / área:** `app-movil` (Flutter, pasajero y conductor)
+- **Descripción:** La hoja de ayuda (`mostrarAyuda`) se rediseñó completamente con una estructura
+  más completa: saludo de asistencia, sección de ayuda rápida con tips prácticos, pasos de uso
+  por rol, y canales de atención con correo, dirección y horario. Se agregó `url_launcher` para
+  abrir enlaces externos (email y mapas).
+- **Cambios clave:**
+  - **Héroe:** ícono de auriculares, pregunta según rol ("¿Necesitas asistencia?" / "¿Necesitas
+    ayuda con la app?") y afirmación "Estamos disponibles para ayudarte en lo que necesites."
+  - **AYUDA RÁPIDA:** dos tips con íconos (activar ubicación, mantener notificaciones activas)
+    seguidos de los 3 pasos de uso del rol (conductor/pasajero).
+  - **CANALES DE ATENCIÓN:** tres filas tipo tarjeta con íconos y colores:
+    - ✉️ Correo: `unitaxi@uap.edu.bo` → abre email (`mailto:`)
+    - 📍 Dirección: "X6JW+Q5P, C. Bruno Racua, Cobija" → abre Google Maps
+    - 🕐 Horario: "Lunes a viernes: 8:00 - 12:00 y 14:00 - 16:00" (informativo)
+  - Si el enlace falla, copia al portapapeles y muestra aviso.
+  - Cierre con línea de emergencia 110 y frase "¿Tienes preguntas? Estamos encantados de ayudarte."
+  - Hoja con `SingleChildScrollView` y altura máxima 85% de la pantalla (contenido más largo).
+  - Nueva dependencia: `url_launcher: ^6.3.1` + queries en `AndroidManifest.xml` para `mailto:` y `https:`.
+- **Archivos afectados:**
+  - `app-movil/pubspec.yaml` (url_launcher)
+  - `app-movil/android/app/src/main/AndroidManifest.xml` (queries para intents)
+  - `app-movil/lib/widgets/inicio_mapa.dart` (mostrarAyuda reescrito + widgets auxiliares)
+- **Verificación:** `flutter pub get`, `flutter analyze` sin incidencias.
 
 ### 🎨 Mejora · Tarjeta flotante de distancia/ETA del conductor (solo pasajero)
 
