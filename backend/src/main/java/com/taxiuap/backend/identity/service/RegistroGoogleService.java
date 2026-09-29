@@ -125,7 +125,7 @@ public class RegistroGoogleService {
      */
     public TokenResponse registrarConductor(PerfilGoogle perfil, RegistroConductorGoogleRequest datos,
             Map<String, MultipartFile> archivos) {
-        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
 
         Optional<Persona> existente = personaActiva(perfil);

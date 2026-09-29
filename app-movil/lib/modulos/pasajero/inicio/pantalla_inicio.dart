@@ -196,7 +196,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       final foto = await PerfilApi(context.read<ClienteApi>()).foto();
       if (mounted) setState(() => _foto = foto);
     } catch (_) {
-      // Sin foto quedan las iniciales.
+      // Sin foto quedan las iniciales (en Mas) y la silueta (en la cabecera).
     }
   }
 
@@ -656,6 +656,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                     ubicacion: _ubicacionCabecera(),
                     onBoton: () => mostrarAyuda(context, esConductor: false),
                     solape: eligiendo ? 34 : 0,
+                    foto: _foto,
                   ),
                   const SizedBox(height: 8),
                   TarjetaSeguimientoConductor(flujo: _flujo, onTocar: () => setState(() => _panelAbierto = true)),

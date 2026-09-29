@@ -183,16 +183,22 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   Future<void> _enviar() async {
     FocusScope.of(context).unfocus();
     final valido = _clave.currentState?.validate() ?? false;
-    final faltan = _documentos.where((d) => d.obligatorio && !_pdf.containsKey(d.tipo)).map((d) => d.nombre).toList();
-    if (!valido || faltan.isNotEmpty || _fechaNacimiento == null) {
-      setState(
-        () => _error = !valido
-            ? 'Revisa los campos marcados en rojo.'
-            : _fechaNacimiento == null
-            ? 'Elige tu fecha de nacimiento.'
-            : 'Falta el PDF de: ${faltan.join(', ')}.',
-      );
+    if (!valido || _fechaNacimiento == null) {
+      setState(() => _error = !valido ? 'Revisa los campos marcados en rojo.' : 'Elige tu fecha de nacimiento.');
       return;
+    }
+    // Se puede registrar sin los PDF obligatorios, pero la app queda bloqueada hasta subirlos.
+    final faltan = _documentos.where((d) => d.obligatorio && !_pdf.containsKey(d.tipo)).map((d) => d.nombre).toList();
+    if (faltan.isNotEmpty) {
+      final seguir = await confirmarAccion(
+        context,
+        titulo: '¿Registrarte sin tus documentos?',
+        mensaje: 'Falta el PDF de: ${faltan.join(' y ')}. Tu cuenta de conductor quedará bloqueada hasta que '
+            'los subas desde Más > Mis documentos.',
+        textoConfirmar: 'Sí, registrarme',
+        textoCancelar: 'Subirlos ahora',
+      );
+      if (!seguir || !mounted) return;
     }
     setState(() {
       _enviando = true;

@@ -5,6 +5,14 @@ import 'package:http_parser/http_parser.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
 
+/// Documentos que pide el registro de conductor: si falta alguno se puede subir desde Mis
+/// documentos. Sin los obligatorios la app queda bloqueada.
+const documentosPedidos = <({String tipo, String nombre, bool obligatorio})>[
+  (tipo: 'CI', nombre: 'Carnet de identidad', obligatorio: true),
+  (tipo: 'LICENCIA', nombre: 'Licencia de conducir', obligatorio: true),
+  (tipo: 'SOAT', nombre: 'SOAT de la moto', obligatorio: false),
+];
+
 /// Documento del conductor (DocumentoConductorResponse).
 class DocumentoPropio {
   final int id;
@@ -69,7 +77,15 @@ class DocumentosApi {
     MediaType('application', 'pdf'),
   );
 
-  Future<List<PermisoVigente>> permisos() => cliente.lista('/api/conductor/permisos', PermisoVigente.desdeJson);
+  /// Sube un documento que no envio al registrarse; solo se acepta si no tiene ninguno de ese tipo.
+  Future<void> agregar(String tipo, Uint8List bytes, String nombre) => cliente.enviarArchivo(
+    'POST',
+    '/api/conductor/documentos?tipo=$tipo',
+    'archivo',
+    bytes,
+    nombre,
+    MediaType('application', 'pdf'),
+  );
 
-  Future<void> actualizarDatos(Map<String, dynamic> datos) => cliente.put('/api/conductor/perfil', datos);
+  Future<List<PermisoVigente>> permisos() => cliente.lista('/api/conductor/permisos', PermisoVigente.desdeJson);
 }

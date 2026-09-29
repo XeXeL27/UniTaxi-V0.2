@@ -12,7 +12,8 @@ import '../../../widgets/visor_pdf.dart';
 import 'documentos_api.dart';
 
 /// Documentos del conductor: los puede ver siempre (en un modal) y reemplazar el PDF solo si el
-/// administrador le dio permiso para ese documento.
+/// administrador le dio permiso para ese documento. Los que no envio al registrarse (CI, licencia,
+/// SOAT) los agrega aqui; mientras falte uno obligatorio la app queda bloqueada.
 class PantallaDocumentos extends StatefulWidget {
   const PantallaDocumentos({super.key});
 
@@ -25,6 +26,9 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
   late Future<(List<DocumentoPropio>, List<PermisoVigente>)> _datos = _cargar();
   int? _subiendo;
 
+  /// Tipo del documento faltante que se esta subiendo.
+  String? _agregando;
+
   Future<(List<DocumentoPropio>, List<PermisoVigente>)> _cargar() async {
     final resultados = await Future.wait([_api.documentos(), _api.permisos()]);
     return (resultados[0] as List<DocumentoPropio>, resultados[1] as List<PermisoVigente>);
@@ -36,7 +40,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Enviar el nuevo PDF?',
-      mensaje: 'Vas a reemplazar tu ${documento.nombre} por "${archivo.name}". Quedará pendiente de revisión.',
+      mensaje: 'Vas a reemplazar tu ${_enFrase(documento.nombre)} por "${archivo.name}". Quedará pendiente de revisión.',
       textoConfirmar: 'Sí, enviar',
     );
     if (!confirmado || !mounted) return;
@@ -48,12 +52,39 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
       await mostrarExito(
         context,
         titulo: '¡Documento enviado!',
-        mensaje: 'Tu ${documento.nombre} quedó pendiente de revisión por la administración.',
+        mensaje: 'Tu ${_enFrase(documento.nombre)} quedó pendiente de revisión por la administración.',
       );
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
       if (mounted) setState(() => _subiendo = null);
+    }
+  }
+
+  Future<void> _agregar(({String tipo, String nombre, bool obligatorio}) pedido) async {
+    final archivo = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: ['pdf']);
+    if (archivo == null || !mounted) return;
+    final confirmado = await confirmarAccion(
+      context,
+      titulo: '¿Enviar el documento?',
+      mensaje: 'Vas a enviar "${archivo.name}" como tu ${_enFrase(pedido.nombre)}. Quedará pendiente de revisión.',
+      textoConfirmar: 'Sí, enviar',
+    );
+    if (!confirmado || !mounted) return;
+    setState(() => _agregando = pedido.tipo);
+    try {
+      await _api.agregar(pedido.tipo, await archivo.readAsBytes(), archivo.name);
+      if (!mounted) return;
+      setState(() => _datos = _cargar());
+      await mostrarExito(
+        context,
+        titulo: '¡Documento enviado!',
+        mensaje: 'Tu ${_enFrase(pedido.nombre)} quedó pendiente de revisión por la administración.',
+      );
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    } finally {
+      if (mounted) setState(() => _agregando = null);
     }
   }
 
@@ -79,20 +110,66 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
           final datos = instantanea.data;
           if (datos == null) return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
           final (documentos, permisos) = datos;
-          final permitidos = {for (final p in permisos) if (!p.esDatos && p.idDocumento != null) p.idDocumento!: p};
+          final permitidos = {
+            for (final p in permisos)
+              if (!p.esDatos && p.idDocumento != null) p.idDocumento!: p,
+          };
+          final enviados = {for (final d in documentos) d.tipo};
+          final faltan = documentosPedidos.where((p) => !enviados.contains(p.tipo)).toList();
+          final obligatoriosFaltantes = faltan.where((p) => p.obligatorio).map((p) => p.nombre.toLowerCase()).toList();
           return RefreshIndicator(
             onRefresh: () async => setState(() => _datos = _cargar()),
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                Text(
-                  permitidos.isEmpty
-                      ? 'Puedes ver tus documentos. Para cambiar alguno, pide permiso a la administración.'
-                      : 'Tienes permiso para reemplazar ${permitidos.length == 1 ? 'un documento' : '${permitidos.length} documentos'}.',
-                  style: const TextStyle(color: ColoresApp.textoSuave),
-                ),
-                const SizedBox(height: 12),
-                if (documentos.isEmpty)
+                if (documentos.isNotEmpty) ...[
+                  Text(
+                    permitidos.isEmpty
+                        ? 'Puedes ver tus documentos. Para cambiar alguno, pide permiso a la administración.'
+                        : 'Tienes permiso para reemplazar ${permitidos.length == 1 ? 'un documento' : '${permitidos.length} documentos'}.',
+                    style: const TextStyle(color: ColoresApp.textoSuave),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                if (obligatoriosFaltantes.isNotEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: ColoresApp.rojoSuave,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: ColoresApp.rojo.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.only(top: 2),
+                          child: FaIcon(FontAwesomeIcons.lock, color: ColoresApp.rojo, size: 15),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            'Tu cuenta está bloqueada hasta que subas el PDF de: ${obligatoriosFaltantes.join(' y ')}.',
+                            style: const TextStyle(
+                              color: ColoresApp.rojoOscuro,
+                              height: 1.35,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+                for (final pedido in faltan)
+                  _DocumentoFaltante(
+                    nombre: pedido.nombre,
+                    obligatorio: pedido.obligatorio,
+                    subiendo: _agregando == pedido.tipo,
+                    onAgregar: _agregando == null && _subiendo == null ? () => _agregar(pedido) : null,
+                  ),
+                if (documentos.isEmpty && faltan.isEmpty)
                   const Padding(
                     padding: EdgeInsets.only(top: 40),
                     child: Text('No tienes documentos registrados.', textAlign: TextAlign.center),
@@ -117,7 +194,10 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(d.nombre, style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
+                                  Text(
+                                    d.nombre,
+                                    style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
+                                  ),
                                   Text(
                                     d.vencimiento == null
                                         ? 'Sin vencimiento'
@@ -171,6 +251,89 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
   }
 }
 
+/// Nombre del documento dentro de una frase: "tu carnet de identidad" (las siglas como SOAT quedan).
+String _enFrase(String nombre) =>
+    nombre.length > 1 && nombre[1] == nombre[1].toLowerCase() ? nombre[0].toLowerCase() + nombre.substring(1) : nombre;
+
+/// Documento que pide el registro y el conductor todavia no envio: solo se puede agregar.
+class _DocumentoFaltante extends StatelessWidget {
+  final String nombre;
+  final bool obligatorio;
+  final bool subiendo;
+  final VoidCallback? onAgregar;
+
+  const _DocumentoFaltante({
+    required this.nombre,
+    required this.obligatorio,
+    required this.subiendo,
+    required this.onAgregar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final color = obligatorio ? ColoresApp.rojo : ColoresApp.textoSuave;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ColoresApp.blanco,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: obligatorio ? ColoresApp.rojo.withValues(alpha: 0.45) : ColoresApp.borde),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              FaIcon(FontAwesomeIcons.fileCircleExclamation, color: color, size: 24),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      nombre,
+                      style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
+                    ),
+                    const Text(
+                      'Todavía no lo enviaste',
+                      style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  obligatorio ? 'Obligatorio' : 'Opcional',
+                  style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: onAgregar,
+            style: FilledButton.styleFrom(backgroundColor: obligatorio ? ColoresApp.rojo : ColoresApp.azul),
+            icon: subiendo
+                ? const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.blanco),
+                  )
+                : const FaIcon(FontAwesomeIcons.fileArrowUp, size: 14),
+            label: const Text('Agregar PDF'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _Situacion extends StatelessWidget {
   final String situacion;
 
@@ -186,7 +349,10 @@ class _Situacion extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-      child: Text(texto, style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700)),
+      child: Text(
+        texto,
+        style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }

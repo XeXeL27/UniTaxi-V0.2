@@ -81,7 +81,7 @@ public class AutenticacionService {
      */
     @Transactional
     public TokenResponse registrarConductor(RegistroConductorRequest datos, Map<String, MultipartFile> archivos) {
-        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
         String nombreUsuario = normalizarNombreUsuario(datos.nombreUsuario());
         cuentaUsuarioService.validarNombreUsuarioDisponible(nombreUsuario, null);

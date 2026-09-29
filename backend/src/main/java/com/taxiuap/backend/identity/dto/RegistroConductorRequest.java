@@ -12,7 +12,8 @@ import jakarta.validation.constraints.Size;
 
 /**
  * Registro publico de conductor con el formulario (sin Google): datos de la persona, la cuenta, la
- * licencia y la moto. Los PDF (CI y LICENCIA obligatorios) viajan como partes del multipart.
+ * licencia y la moto. Los PDF viajan como partes del multipart; si falta el CI o la licencia el
+ * registro se acepta igual y la app queda bloqueada hasta que los suba (Mis documentos).
  */
 public record RegistroConductorRequest(
         @NotBlank @Size(max = 30) String ci,

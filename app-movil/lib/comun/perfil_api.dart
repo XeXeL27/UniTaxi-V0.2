@@ -20,6 +20,10 @@ class Perfil {
   final String? categoriaLicencia;
   final String? situacionAprobacion;
 
+  /// Documentos obligatorios que el conductor todavia no envio (CI, LICENCIA): sin ellos la app
+  /// queda bloqueada hasta que los suba en Mis documentos.
+  final List<String> documentosFaltantes;
+
   const Perfil({
     required this.nombres,
     required this.apellidos,
@@ -33,6 +37,7 @@ class Perfil {
     this.numeroLicencia,
     this.categoriaLicencia,
     this.situacionAprobacion,
+    this.documentosFaltantes = const [],
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -52,6 +57,7 @@ class Perfil {
     numeroLicencia: json['numeroLicencia'] as String?,
     categoriaLicencia: json['categoriaLicencia'] as String?,
     situacionAprobacion: json['situacionAprobacion'] as String?,
+    documentosFaltantes: [for (final t in (json['documentosFaltantes'] as List<dynamic>? ?? const [])) '$t'],
   );
 }
 

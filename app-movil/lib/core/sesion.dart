@@ -101,6 +101,12 @@ class Sesion extends ChangeNotifier {
   UsuarioSesion? _usuario;
   List<String> _roles = const [];
 
+  /// Sesion de administrador recien iniciada en el APK (TokenResponse): la app abre el panel dentro
+  /// de si misma con esos tokens. No se guarda: al cerrar la app vuelve al login.
+  Map<String, dynamic>? _panelAdmin;
+
+  Map<String, dynamic>? get panelAdmin => _panelAdmin;
+
   /// Por que se cerro la sesion sin que la persona lo pidiera (cuenta suspendida o eliminada); el
   /// login lo muestra. Se borra al volver a iniciar sesion.
   String? motivoCierre;
@@ -135,7 +141,8 @@ class Sesion extends ChangeNotifier {
   /// Inicia sesion con nombre de usuario, correo o telefono. Sin [rol] se consulta que cuentas
   /// tiene la persona: con una sola entra directo; con varias (pasajero, conductor, admin) devuelve
   /// los modos para que la pantalla le pregunte como quiere ingresar (y se vuelve a llamar con el rol).
-  /// Con la cuenta de administrador pasa al panel web (/admin) con la sesion ya iniciada.
+  /// Con la cuenta de administrador pasa al panel (/admin) con la sesion ya iniciada: en el
+  /// navegador en la misma pestana y en el APK dentro de la app ([panelAdmin]).
   Future<List<String>?> iniciar(String usuario, String password, {String? rol}) async {
     var elegido = rol;
     if (elegido == null) {
@@ -150,7 +157,12 @@ class Sesion extends ChangeNotifier {
       'rol': elegido,
     }) as Map<String, dynamic>;
     if (elegido == Config.rolAdmin) {
-      await _entregarAlPanel(datos);
+      if (Navegador.puedeAbrirPanel) {
+        await _entregarAlPanel(datos);
+      } else {
+        _panelAdmin = datos;
+        notifyListeners();
+      }
       return null;
     }
     await _guardar(datos);
@@ -158,21 +170,17 @@ class Sesion extends ChangeNotifier {
   }
 
   /// Roles de las cuentas con estas credenciales que se pueden usar desde este login, sin iniciar
-  /// sesion (valida la contrasena). El de admin solo cuenta si se puede abrir el panel.
+  /// sesion (valida la contrasena): pasajero, conductor y administrador.
   Future<List<String>> cuentas(String usuario, String password) async {
     final datos = await _postAuth('/api/auth/cuentas', {'usuario': usuario.trim(), 'password': password});
     final roles = [for (final r in (datos as List<dynamic>)) '$r'];
-    final modos = roles.where(rolesApp.contains).toList();
-    if (roles.contains(Config.rolAdmin)) {
-      if (!Navegador.puedeAbrirPanel) {
-        if (modos.isEmpty) {
-          throw ApiExcepcion('El panel de administración se abre en el navegador: ${Config.apiUrl}/admin');
-        }
-      } else {
-        modos.add(Config.rolAdmin);
-      }
-    }
-    return modos;
+    return [...roles.where(rolesApp.contains), if (roles.contains(Config.rolAdmin)) Config.rolAdmin];
+  }
+
+  /// El administrador sale del panel abierto dentro del APK y vuelve al login.
+  void salirDelPanel() {
+    _panelAdmin = null;
+    notifyListeners();
   }
 
   /// Deja la sesion del administrador donde la busca el panel (mismo origen) y lo abre en esta
@@ -320,7 +328,13 @@ class Sesion extends ChangeNotifier {
     }
     final actual = _usuario;
     if (actual == null) return;
-    _usuario = UsuarioSesion.desdeJson({...actual.aJson(), 'correo': json['datos'] as String? ?? correo.trim()});
+    await reemplazarUsuario({...actual.aJson(), 'correo': json['datos'] as String? ?? correo.trim()});
+  }
+
+  /// Deja en la sesion los datos nuevos del usuario (UsuarioResponse), por ejemplo tras cambiarlos
+  /// en Mi perfil: el saludo de la cabecera usa el nombre.
+  Future<void> reemplazarUsuario(Map<String, dynamic> json) async {
+    _usuario = UsuarioSesion.desdeJson(json);
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_claveUsuario, jsonEncode(_usuario!.aJson()));
@@ -344,6 +358,7 @@ class Sesion extends ChangeNotifier {
 
   Future<void> cerrar({String? motivo}) async {
     motivoCierre = motivo;
+    _panelAdmin = null;
     _tokenAcceso = null;
     _tokenRefresco = null;
     _usuario = null;

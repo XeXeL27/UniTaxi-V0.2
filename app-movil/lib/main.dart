@@ -10,6 +10,7 @@ import 'core/navegador.dart';
 import 'core/sesion.dart';
 import 'core/tema.dart';
 import 'modulos/conductor/inicio/pantalla_inicio.dart';
+import 'modulos/login/panel_admin.dart';
 import 'modulos/login/pantalla_login.dart';
 import 'modulos/pasajero/inicio/pantalla_inicio.dart';
 import 'modulos/registro/formulario_conductor.dart';
@@ -72,6 +73,8 @@ class _TaxiUapState extends State<TaxiUap> {
     final rol = context.select<Sesion, String?>((s) => s.autenticado ? s.usuario?.rol : null);
     final motivoCierre = context.select<Sesion, String?>((s) => s.motivoCierre);
     final sinCorreo = context.select<Sesion, bool>((s) => (s.usuario?.correo ?? '').trim().isEmpty);
+    // Administrador que entro desde el login del APK: el panel se abre dentro de la app.
+    final panelAdmin = context.select<Sesion, Map<String, dynamic>?>((s) => s.panelAdmin);
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
     if (rol != null) {
       _error = null;
@@ -89,6 +92,10 @@ class _TaxiUapState extends State<TaxiUap> {
       // Pasajero y conductor necesitan un correo (credenciales, restablecer la contrasena) y el GPS
       // encendido.
       home: switch (rol) {
+        _ when panelAdmin != null => PantallaPanelAdmin(
+          datos: panelAdmin,
+          onSalir: context.read<Sesion>().salirDelPanel,
+        ),
         _ when rol != null && sinCorreo => const PantallaCompletarCorreo(),
         Config.rolConductor => const RequiereGps(
           key: ValueKey(Config.rolConductor),

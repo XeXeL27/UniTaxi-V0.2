@@ -49,11 +49,16 @@ class FlujoConductor extends ChangeNotifier {
   /// Conectado para recibir solicitudes (boton del centro). Desconectado no se consulta la lista.
   bool enLinea = true;
 
-  /// La administracion todavia no aprobo al conductor (regla 1): no se consulta la lista.
+  /// La administracion todavia no aprobo al conductor (regla 1) o le faltan documentos
+  /// obligatorios: no se consulta la lista ni se envia el GPS.
   bool enRevision = false;
 
   /// situacion_aprobacion del conductor (PENDIENTE, RECHAZADO, SUSPENDIDO...) mientras [enRevision].
   String? situacionAprobacion;
+
+  /// Documentos obligatorios que no envio (CI, LICENCIA); mientras haya alguno la app queda
+  /// bloqueada salvo Mas, donde los sube.
+  List<String> documentosFaltantes = const [];
 
   /// Panel "Solicitudes de viaje" desplegado. Empieza cerrado para no tapar el mapa.
   bool listaAbierta = false;
@@ -114,11 +119,12 @@ class FlujoConductor extends ChangeNotifier {
     _avisar();
   }
 
-  /// La administracion aprobo la cuenta: empieza a recibir solicitudes.
+  /// La administracion aprobo la cuenta y tiene sus documentos: empieza a recibir solicitudes.
   void aprobado() {
     if (!enRevision) return;
     enRevision = false;
     situacionAprobacion = null;
+    documentosFaltantes = const [];
     if (etapa == EtapaConductor.lista) _entrarLista();
     _avisar();
   }

@@ -66,7 +66,7 @@ public class RegistroConductorPasajeroService {
             throw new ConflictoException("Ya enviaste tu registro de conductor");
         }
         // Se valida todo antes de crear nada para no dejar registros a medias.
-        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
 
         gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(datos.ci(), datos.complementoCi(),

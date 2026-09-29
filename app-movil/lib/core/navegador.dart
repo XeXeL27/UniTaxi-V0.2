@@ -2,7 +2,8 @@ import 'navegador_movil.dart' if (dart.library.js_interop) 'navegador_web.dart' 
 
 /// Acciones que solo existen cuando la app corre en el navegador (servida en /app).
 class Navegador {
-  /// En el navegador el panel admin esta en el mismo servidor; en el APK no hay panel.
+  /// En el navegador el panel admin esta en el mismo servidor y se abre en la misma pestana; en el
+  /// APK se abre dentro de la app (PantallaPanelAdmin).
   static bool get puedeAbrirPanel => plataforma.puedeAbrirPanel;
 
   /// El ingreso con Google por redireccion solo funciona en el navegador; en el APK hara falta el

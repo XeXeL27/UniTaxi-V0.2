@@ -1,4 +1,5 @@
-/// En Android no hay panel admin dentro de la app ni ingreso con Google por redireccion.
+/// En Android el panel admin se abre dentro de la app (PantallaPanelAdmin) y el ingreso con Google
+/// es nativo, no por redireccion.
 bool get puedeAbrirPanel => false;
 
 bool get puedeUsarGoogle => false;

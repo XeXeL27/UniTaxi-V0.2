@@ -81,38 +81,62 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   }
 
   /// Un conductor recien registrado queda en revision: no recibe solicitudes ni aparece en el mapa
-  /// hasta que la administracion lo apruebe (regla 1).
+  /// hasta que la administracion lo apruebe (regla 1). Tampoco si le falta el PDF de algun
+  /// documento obligatorio: la app queda bloqueada salvo Mas, donde lo sube.
   Future<void> _arrancar() async {
-    final situacion = await _situacionAprobacion();
+    final perfil = await _perfil();
     if (!mounted) return;
-    final aprobado = situacion == null || situacion == 'APROBADO';
-    _flujo.enRevision = !aprobado;
-    _flujo.situacionAprobacion = situacion;
+    final habilitado = _aplicarPerfil(perfil);
     _flujo.iniciar();
-    if (aprobado) _emisor.iniciar();
+    if (habilitado) _emisor.iniciar();
   }
 
-  /// null si no se pudo consultar (se sigue como antes; el backend igual exige la aprobacion).
-  Future<String?> _situacionAprobacion() async {
+  /// Pasa al flujo la situacion y los documentos que faltan; devuelve si puede operar. Sin perfil
+  /// (no se pudo consultar) se sigue como antes: el backend igual exige la aprobacion.
+  bool _aplicarPerfil(Perfil? perfil) {
+    final situacion = perfil?.situacionAprobacion;
+    final faltantes = perfil?.documentosFaltantes ?? const <String>[];
+    final habilitado = (situacion == null || situacion == 'APROBADO') && faltantes.isEmpty;
+    _flujo.enRevision = !habilitado;
+    _flujo.situacionAprobacion = situacion;
+    _flujo.documentosFaltantes = faltantes;
+    return habilitado;
+  }
+
+  Future<Perfil?> _perfil() async {
     try {
-      return (await PerfilApi(context.read<ClienteApi>()).perfil()).situacionAprobacion;
+      return await PerfilApi(context.read<ClienteApi>()).perfil();
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> _revisarAprobacion() async {
-    final situacion = await _situacionAprobacion();
-    if (!mounted) return;
-    if (situacion == 'APROBADO') {
+  /// Vuelve a consultar la aprobacion y los documentos. [silencioso]: sin aviso si nada cambio
+  /// (al volver de Mis documentos).
+  Future<void> _revisarAprobacion({bool silencioso = false}) async {
+    if (!_flujo.enRevision) return;
+    final perfil = await _perfil();
+    if (!mounted || perfil == null) return;
+    final situacion = perfil.situacionAprobacion;
+    if (situacion == 'APROBADO' && perfil.documentosFaltantes.isEmpty) {
       _flujo.aprobado();
       _emisor.iniciar();
-      mostrarMensaje(context, '¡Tu cuenta fue aprobada! Ya puedes recibir solicitudes.');
-    } else {
-      _flujo.situacionAprobacion = situacion ?? _flujo.situacionAprobacion;
-      setState(() {});
-      mostrarMensaje(context, 'Tu cuenta sigue en revisión.');
+      mostrarMensaje(context, '¡Tu cuenta está habilitada! Ya puedes recibir solicitudes.');
+      return;
     }
+    _aplicarPerfil(perfil);
+    setState(() {});
+    if (silencioso) return;
+    mostrarMensaje(
+      context,
+      perfil.documentosFaltantes.isNotEmpty ? 'Todavía te falta subir documentos.' : 'Tu cuenta sigue en revisión.',
+    );
+  }
+
+  /// Mis documentos; al volver se revisa si ya no falta ninguno.
+  Future<void> _abrirDocumentos() async {
+    await _abrirYRecargar(const PantallaDocumentos());
+    if (mounted) await _revisarAprobacion(silencioso: true);
   }
 
   /// Calcula la direccion de la cabecera con el primer GPS y otra vez si se movio mas de 300 m.
@@ -137,7 +161,12 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   /// Boton del centro: conectarse (aparece en linea y recibe solicitudes) o desconectarse.
   Future<void> _alternarEnLinea() async {
     if (_flujo.enRevision) {
-      mostrarMensaje(context, 'Podrás conectarte cuando la administración apruebe tu cuenta.');
+      mostrarMensaje(
+        context,
+        _flujo.documentosFaltantes.isNotEmpty
+            ? 'Sube tus documentos en Más > Mis documentos para poder conectarte.'
+            : 'Podrás conectarte cuando la administración apruebe tu cuenta.',
+      );
       return;
     }
     if (_flujo.etapa == EtapaConductor.enViaje) {
@@ -168,7 +197,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       final foto = await PerfilApi(context.read<ClienteApi>()).foto();
       if (mounted) setState(() => _foto = foto);
     } catch (_) {
-      // Sin foto quedan las iniciales.
+      // Sin foto quedan las iniciales (en Mas) y la moto (en la cabecera).
     }
   }
 
@@ -369,7 +398,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                 PantallaMas(
                   foto: _foto,
                   onDatosPersonales: () => _abrirYRecargar(const PantallaPerfilConductor()),
-                  onDocumentos: () => _abrirYRecargar(const PantallaDocumentos()),
+                  onDocumentos: _abrirDocumentos,
                   onMisQr: () => _abrirYRecargar(const PantallaMisQr()),
                   onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
                   onCerrarSesion: _confirmarCerrarSesion,
@@ -509,6 +538,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   ubicacion: _ubicacionCabecera(),
                   onAtras: etapa == EtapaConductor.detalle ? _flujo.volverALista : null,
                   onBoton: () => mostrarAyuda(context, esConductor: true),
+                  foto: _foto,
+                  iconoSinFoto: FontAwesomeIcons.motorcycle,
                 ),
               ),
               Positioned(
@@ -518,6 +549,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   enLinea: enLinea,
                   enViaje: etapa == EtapaConductor.enViaje,
                   enRevision: _flujo.enRevision,
+                  faltanDocumentos: _flujo.documentosFaltantes.isNotEmpty,
                 ),
               ),
               Positioned(
@@ -552,6 +584,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                         EtapaConductor.lista => PanelSolicitudes(
                           flujo: _flujo,
                           onRevisarAprobacion: _revisarAprobacion,
+                          onSubirDocumentos: _abrirDocumentos,
                         ),
                         EtapaConductor.detalle => _panelDetalle(),
                         EtapaConductor.enViaje => _panelViaje(),
@@ -573,12 +606,20 @@ class _EstadoEnLinea extends StatelessWidget {
   final bool enLinea;
   final bool enViaje;
   final bool enRevision;
+  final bool faltanDocumentos;
 
-  const _EstadoEnLinea({required this.enLinea, required this.enViaje, required this.enRevision});
+  const _EstadoEnLinea({
+    required this.enLinea,
+    required this.enViaje,
+    required this.enRevision,
+    required this.faltanDocumentos,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final (color, texto) = enRevision
+    final (color, texto) = faltanDocumentos
+        ? (ColoresApp.rojo, 'Faltan documentos')
+        : enRevision
         ? (const Color(0xFFE67E22), 'En revisión')
         : enViaje
         ? (ColoresApp.rojo, 'En viaje')

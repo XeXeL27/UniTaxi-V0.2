@@ -23,7 +23,10 @@ class PanelSolicitudes extends StatelessWidget {
   /// Vuelve a consultar si la administracion ya aprobo la cuenta (solo en revision).
   final VoidCallback? onRevisarAprobacion;
 
-  const PanelSolicitudes({super.key, required this.flujo, this.onRevisarAprobacion});
+  /// Abre Mis documentos para subir los que faltan (cuenta bloqueada por documentos).
+  final VoidCallback? onSubirDocumentos;
+
+  const PanelSolicitudes({super.key, required this.flujo, this.onRevisarAprobacion, this.onSubirDocumentos});
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +34,14 @@ class PanelSolicitudes extends StatelessWidget {
     final abierto = flujo.listaAbierta;
     final onAlternar = flujo.alternarLista;
     final nuevas = flujo.nuevas;
-    if (flujo.enRevision) return _EnRevision(situacion: flujo.situacionAprobacion, onRevisar: onRevisarAprobacion);
+    if (flujo.enRevision) {
+      return _EnRevision(
+        situacion: flujo.situacionAprobacion,
+        faltantes: flujo.documentosFaltantes,
+        onRevisar: onRevisarAprobacion,
+        onSubirDocumentos: onSubirDocumentos,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -467,16 +477,31 @@ class _PedidoCambioPago extends StatelessWidget {
   }
 }
 
-/// La cuenta todavia no esta aprobada: explica que falta y deja volver a consultar.
+/// Nombre de un documento obligatorio para los avisos.
+String _nombreDocumento(String tipo) => switch (tipo) {
+  'CI' => 'carnet de identidad',
+  'LICENCIA' => 'licencia de conducir',
+  _ => tipo.toLowerCase(),
+};
+
+/// La cuenta todavia no esta aprobada o le faltan documentos: explica que falta y deja subirlos o
+/// volver a consultar.
 class _EnRevision extends StatelessWidget {
   final String? situacion;
+  final List<String> faltantes;
   final VoidCallback? onRevisar;
+  final VoidCallback? onSubirDocumentos;
 
-  const _EnRevision({required this.situacion, required this.onRevisar});
+  const _EnRevision({required this.situacion, required this.faltantes, required this.onRevisar, this.onSubirDocumentos});
 
   @override
   Widget build(BuildContext context) {
     final (titulo, texto, color) = switch (situacion) {
+      _ when faltantes.isNotEmpty => (
+        'Faltan documentos',
+        'Para usar la app sube el PDF de tu ${faltantes.map(_nombreDocumento).join(' y ')}. Puedes hacerlo en Más > Mis documentos.',
+        ColoresApp.rojo,
+      ),
       'RECHAZADO' => (
         'Registro rechazado',
         'La administración rechazó tu registro. Revisa tus documentos en Más > Mis documentos o comunícate con TaxiUAP.',
@@ -502,7 +527,13 @@ class _EnRevision extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(color: color.withValues(alpha: 0.14), shape: BoxShape.circle),
-              child: Center(child: FaIcon(FontAwesomeIcons.hourglassHalf, color: color, size: 18)),
+              child: Center(
+                child: FaIcon(
+                  faltantes.isNotEmpty ? FontAwesomeIcons.fileCircleExclamation : FontAwesomeIcons.hourglassHalf,
+                  color: color,
+                  size: 18,
+                ),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -515,7 +546,19 @@ class _EnRevision extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14, height: 1.4)),
-        if (onRevisar != null) ...[
+        if (faltantes.isNotEmpty && onSubirDocumentos != null) ...[
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: onSubirDocumentos,
+            style: FilledButton.styleFrom(
+              backgroundColor: ColoresApp.rojo,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const FaIcon(FontAwesomeIcons.fileArrowUp, size: 15),
+            label: const Text('Subir mis documentos', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+        ] else if (onRevisar != null) ...[
           const SizedBox(height: 12),
           Align(
             alignment: Alignment.centerRight,
