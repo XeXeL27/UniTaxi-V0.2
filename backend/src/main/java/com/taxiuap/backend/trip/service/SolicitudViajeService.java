@@ -23,6 +23,7 @@ import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
+import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
@@ -64,7 +65,7 @@ public class SolicitudViajeService {
     private final ViajeService viajeService;
     private final CalculoPrecioService calculoPrecioService;
 
-    @Value("${taxiuap.comision.porcentaje:15}")
+    @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
 
     /** Categoria usada cuando la app no elige una: el taxi comun. */
@@ -96,6 +97,7 @@ public class SolicitudViajeService {
         solicitud.setOrigenDireccion(request.origenDireccion());
         solicitud.setDestinoDireccion(request.destinoDireccion());
         solicitud.setPrecioSugerido(precioFijo != null ? precioFijo : request.precioSugerido());
+        solicitud.setMetodoPago(metodoPagoPermitido(request.metodoPago()));
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         solicitud.setFechaSolicitud(LocalDateTime.now());
         solicitud.setEstadoSolViaje(EstadoRegistro.A);
@@ -154,9 +156,15 @@ public class SolicitudViajeService {
             throw new NegocioException("El conductor no esta habilitado para recibir solicitudes");
         }
 
+        Long idPersona = conductor.getUsuario().getPersona().getId();
         return Stream.concat(
                         solicitudViajeRepository.findBySituacionSolicitud(SituacionSolicitud.PENDIENTE).stream(),
                         solicitudViajeRepository.findBySituacionSolicitud(SituacionSolicitud.CON_OFERTAS).stream())
+                // Las que este conductor ya dejo (cancelo el viaje) no le vuelven a aparecer.
+                .filter(s -> !ofertaViajeRepository.existsBySolicitudIdAndConductorIdAndSituacionOferta(
+                        s.getId(), conductor.getId(), SituacionOferta.RECHAZADA))
+                // Ni su propio pedido si la misma persona tambien es pasajero.
+                .filter(s -> !s.getPasajero().getUsuario().getPersona().getId().equals(idPersona))
                 // Las mas recientes primero.
                 .sorted(Comparator.comparing(SolicitudViaje::getFechaSolicitud,
                         Comparator.nullsLast(Comparator.reverseOrder())))
@@ -239,6 +247,18 @@ public class SolicitudViajeService {
                 precioFijo != null ? precioFijo : solicitud.getPrecioSugerido(),
                 solicitud.getSituacionSolicitud(),
                 solicitud.getFechaSolicitud(),
-                cantidadOfertas);
+                cantidadOfertas,
+                solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO);
+    }
+
+    /** Por ahora el pasajero paga en efectivo o con el QR del conductor. */
+    private static MetodoPago metodoPagoPermitido(MetodoPago metodoPago) {
+        if (metodoPago == null) {
+            return MetodoPago.EFECTIVO;
+        }
+        if (metodoPago != MetodoPago.EFECTIVO && metodoPago != MetodoPago.QR) {
+            throw new NegocioException("Metodo de pago no disponible: " + metodoPago);
+        }
+        return metodoPago;
     }
 }

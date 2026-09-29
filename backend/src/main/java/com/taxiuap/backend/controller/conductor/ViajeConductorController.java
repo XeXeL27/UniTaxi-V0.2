@@ -6,13 +6,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.shared.response.ApiResponse;
+import com.taxiuap.backend.trip.dto.CambioMetodoPagoRequest;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
+import com.taxiuap.backend.trip.dto.RespuestaCambioPagoRequest;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.service.ViajeService;
 
@@ -59,7 +62,7 @@ public class ViajeConductorController {
 
     @PostMapping("/{id}/finalizar")
     public ResponseEntity<ApiResponse<ViajeResponse>> finalizar(
-            @PathVariable Long id, @Valid @RequestBody FinalizarViajeRequest request) {
+            @PathVariable Long id, @Valid @RequestBody(required = false) FinalizarViajeRequest request) {
         return ResponseEntity.ok(ApiResponse.exito("Viaje finalizado", viajeService.finalizar(id, request)));
     }
 
@@ -67,5 +70,22 @@ public class ViajeConductorController {
     public ResponseEntity<ApiResponse<ViajeResponse>> cancelar(
             @PathVariable Long id, @RequestBody(required = false) CancelarViajeRequest request) {
         return ResponseEntity.ok(ApiResponse.exito("Viaje cancelado", viajeService.cancelar(id, request)));
+    }
+
+    /** Cambia el metodo de pago directamente (sin que el pasajero lo pida). */
+    @PutMapping("/{id}/metodo-pago")
+    public ResponseEntity<ApiResponse<ViajeResponse>> cambiarMetodoPago(
+            @PathVariable Long id, @Valid @RequestBody CambioMetodoPagoRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Metodo de pago actualizado",
+                viajeService.cambiarMetodoPago(id, request.metodoPago())));
+    }
+
+    /** Acepta o rechaza el cambio de metodo de pago que pidio el pasajero. */
+    @PostMapping("/{id}/metodo-pago/respuesta")
+    public ResponseEntity<ApiResponse<ViajeResponse>> responderCambioMetodoPago(
+            @PathVariable Long id, @Valid @RequestBody RespuestaCambioPagoRequest request) {
+        boolean aceptar = request.aceptar();
+        return ResponseEntity.ok(ApiResponse.exito(aceptar ? "Cambio de pago aceptado" : "Cambio de pago rechazado",
+                viajeService.responderCambioMetodoPago(id, aceptar)));
     }
 }

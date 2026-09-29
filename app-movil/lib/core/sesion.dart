@@ -189,8 +189,14 @@ class Sesion extends ChangeNotifier {
   }
 
   /// Registro de conductor (con el formulario o con Google): [ruta] multipart con la parte "datos"
-  /// en JSON y un PDF por tipo de documento. Al terminar la sesion queda iniciada.
-  Future<void> registrarConductor(String ruta, Map<String, dynamic> datos, Map<String, ArchivoPdf> documentos) async {
+  /// en JSON, un PDF por tipo de documento y los QR de cobro opcionales (partes QR1..QR3). Al
+  /// terminar la sesion queda iniciada.
+  Future<void> registrarConductor(
+    String ruta,
+    Map<String, dynamic> datos,
+    Map<String, ArchivoPdf> documentos, {
+    List<ArchivoPdf> qrs = const [],
+  }) async {
     final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
     peticion.files.add(
       http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
@@ -200,6 +206,17 @@ class Sesion extends ChangeNotifier {
         http.MultipartFile.fromBytes(tipo, archivo.bytes, filename: archivo.nombre, contentType: MediaType('application', 'pdf')),
       );
     });
+    for (var i = 0; i < qrs.length; i++) {
+      final png = qrs[i].nombre.toLowerCase().endsWith('.png');
+      peticion.files.add(
+        http.MultipartFile.fromBytes(
+          'QR${i + 1}',
+          qrs[i].bytes,
+          filename: qrs[i].nombre,
+          contentType: png ? MediaType('image', 'png') : MediaType('image', 'jpeg'),
+        ),
+      );
+    }
     final http.Response respuesta;
     try {
       respuesta = await http.Response.fromStream(await peticion.send().timeout(const Duration(seconds: 60)));

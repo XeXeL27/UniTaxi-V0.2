@@ -7,6 +7,7 @@ import org.locationtech.jts.geom.Point;
 
 import com.taxiuap.backend.config.EntidadAuditable;
 import com.taxiuap.backend.identity.entity.Pasajero;
+import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
@@ -65,6 +66,11 @@ public class SolicitudViaje extends EntidadAuditable {
     @Enumerated(EnumType.STRING)
     @Column(name = "situacion_solicitud", length = 20)
     private SituacionSolicitud situacionSolicitud;
+
+    /** Como pagara el pasajero (EFECTIVO o QR), elegido al pedir el viaje. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_pago", length = 20)
+    private MetodoPago metodoPago;
 
     @Column(name = "fecha_solicitud")
     private LocalDateTime fechaSolicitud;

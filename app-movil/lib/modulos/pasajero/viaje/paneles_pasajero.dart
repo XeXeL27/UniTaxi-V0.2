@@ -7,6 +7,7 @@ import '../../../widgets/boton_principal.dart';
 import '../../../widgets/paneles.dart';
 import 'flujo_pasajero.dart';
 import '../../../comun/modelos_viaje.dart';
+import '../../../comun/qr_pago.dart';
 
 /// Panel mientras el pasajero elige su destino: partida (GPS), destino, ruta, precio y el boton
 /// para solicitar el taxi.
@@ -57,15 +58,14 @@ class PanelEligiendo extends StatelessWidget {
               : const _Indicacion(icono: FontAwesomeIcons.satelliteDish, texto: 'Obteniendo tu ubicación...')
         else
           FilaLugar.partida(
-            etiqueta: mapa.aSigueGps && a.texto == 'Mi ubicación actual' ? 'Mi ubicación actual (A)' : 'Punto de partida (A)',
+            etiqueta: mapa.aSigueGps && a.texto == 'Mi ubicación actual'
+                ? 'Mi ubicación actual (A)'
+                : 'Punto de partida (A)',
             texto: flujo.direccionOrigen ?? a.texto,
           ),
         if (a != null && b == null) ...[
           const SizedBox(height: 10),
-          const _Indicacion(
-            icono: FontAwesomeIcons.handPointer,
-            texto: 'Busca tu destino arriba o tócalo en el mapa.',
-          ),
+          const _Indicacion(icono: FontAwesomeIcons.handPointer, texto: 'Busca tu destino arriba o tócalo en el mapa.'),
         ],
         if (b != null) ...[
           FilaLugar.destino(
@@ -107,16 +107,17 @@ class PanelEligiendo extends StatelessWidget {
                 DatoRuta(icono: FontAwesomeIcons.route, texto: ruta.distanciaTexto),
                 DatoRuta(icono: FontAwesomeIcons.clock, texto: ruta.duracionTexto),
                 if (ruta.aproximada)
-                  const Text(
-                    'Ruta aproximada',
-                    style: TextStyle(color: ColoresApp.rojo, fontSize: 12.5),
-                  ),
+                  const Text('Ruta aproximada', style: TextStyle(color: ColoresApp.rojo, fontSize: 12.5)),
               ],
             ),
           const SizedBox(height: 14),
+          _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
+          const SizedBox(height: 10),
           RecuadroPrecio(
             etiqueta: 'Precio del viaje',
-            detalle: 'Pagas en efectivo al conductor',
+            detalle: flujo.metodoPago == MetodoPago.qr
+                ? 'Pagas con el QR del conductor'
+                : 'Pagas en efectivo al conductor',
             monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
           ),
           const SizedBox(height: 14),
@@ -144,10 +145,8 @@ class PanelBuscando extends StatefulWidget {
 }
 
 class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulso = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1400),
-  )..repeat();
+  late final AnimationController _pulso = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
+    ..repeat();
 
   @override
   void dispose() {
@@ -219,7 +218,11 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
           FilaLugar.partida(texto: solicitud.origenDireccion),
           FilaLugar.destino(texto: solicitud.destinoDireccion),
           const SizedBox(height: 10),
-          RecuadroPrecio(etiqueta: 'Precio del viaje', detalle: 'Pago en efectivo', monto: formatoBs(solicitud.precio)),
+          RecuadroPrecio(
+            etiqueta: 'Precio del viaje',
+            detalle: solicitud.metodoPago == MetodoPago.qr ? 'Pago por QR' : 'Pago en efectivo',
+            monto: formatoBs(solicitud.precio),
+          ),
         ],
         const SizedBox(height: 14),
         widget.cancelando
@@ -235,7 +238,10 @@ class PanelViaje extends StatelessWidget {
   final FlujoPasajero flujo;
   final VoidCallback onCancelar;
 
-  const PanelViaje({super.key, required this.flujo, required this.onCancelar});
+  /// Pide al conductor pagar de otra forma (el conductor acepta o rechaza).
+  final ValueChanged<String> onPedirCambioPago;
+
+  const PanelViaje({super.key, required this.flujo, required this.onCancelar, required this.onPedirCambioPago});
 
   @override
   Widget build(BuildContext context) {
@@ -244,11 +250,7 @@ class PanelViaje extends StatelessWidget {
     final (icono, texto, color) = switch (viaje.situacion) {
       SituacionViaje.confirmado => (FontAwesomeIcons.circleCheck, 'Tu conductor aceptó el viaje', ColoresApp.exito),
       SituacionViaje.enCamino => (FontAwesomeIcons.carSide, 'Tu conductor va en camino', ColoresApp.ruta),
-      SituacionViaje.llego => (
-        FontAwesomeIcons.locationDot,
-        'Tu conductor llegó. Te está esperando',
-        ColoresApp.rojo,
-      ),
+      SituacionViaje.llego => (FontAwesomeIcons.locationDot, 'Tu conductor llegó. Te está esperando', ColoresApp.rojo),
       SituacionViaje.enCurso => (FontAwesomeIcons.route, 'En viaje a tu destino', ColoresApp.azul),
       _ => (FontAwesomeIcons.circleInfo, SituacionViaje.nombre(viaje.situacion), ColoresApp.textoSuave),
     };
@@ -263,7 +265,10 @@ class PanelViaje extends StatelessWidget {
               FaIcon(icono, color: color, size: 16),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(texto, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
+                child: Text(
+                  texto,
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15),
+                ),
               ),
             ],
           ),
@@ -341,16 +346,146 @@ class PanelViaje extends StatelessWidget {
         FilaLugar.partida(texto: viaje.origenDireccion),
         FilaLugar.destino(texto: viaje.destinoDireccion),
         const SizedBox(height: 10),
-        RecuadroPrecio(etiqueta: 'Pagas en efectivo', monto: formatoBs(viaje.precioFinal)),
-        if (SituacionViaje.cancelables.contains(viaje.situacion)) ...[
-          const SizedBox(height: 6),
+        RecuadroPrecio(etiqueta: MetodoPago.frase('Pagas', viaje.metodoPago), monto: formatoBs(viaje.precioFinal)),
+        const SizedBox(height: 6),
+        if (viaje.metodoPagoPedido != null)
+          _Aviso(
+            icono: FontAwesomeIcons.hourglassHalf,
+            texto:
+                'Pediste pagar ${viaje.metodoPagoPedido == MetodoPago.qr ? 'por QR' : 'en efectivo'}. '
+                'Esperando la respuesta del conductor.',
+          )
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => onPedirCambioPago(viaje.pagaConQr ? MetodoPago.efectivo : MetodoPago.qr),
+              icon: FaIcon(viaje.pagaConQr ? FontAwesomeIcons.moneyBill1 : FontAwesomeIcons.qrcode, size: 14),
+              label: Text(viaje.pagaConQr ? 'Pedir pagar en efectivo' : 'Pedir pagar por QR'),
+            ),
+          ),
+        if (SituacionViaje.cancelables.contains(viaje.situacion))
           TextButton(
             onPressed: onCancelar,
             style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
             child: const Text('Cancelar viaje', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
+        if (viaje.pagaConQr) ...[
+          const Divider(height: 26, color: ColoresApp.borde),
+          const Row(
+            children: [
+              FaIcon(FontAwesomeIcons.qrcode, color: ColoresApp.azul, size: 16),
+              SizedBox(width: 10),
+              Text(
+                'Paga con el QR del conductor',
+                style: TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Descarga el QR y págalo desde la app de tu banco.',
+            style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          QrDelConductor(
+            key: ValueKey('qr-${viaje.id}'),
+            idViaje: viaje.id,
+            listar: () => flujo.api.qrConductor(viaje.id),
+            imagen: (idQr) => flujo.api.imagenQr(viaje.id, idQr),
+          ),
         ],
       ],
+    );
+  }
+}
+
+/// Efectivo | QR, antes de solicitar el taxi.
+class _SelectorPago extends StatelessWidget {
+  final String metodo;
+  final ValueChanged<String> onElegir;
+
+  const _SelectorPago({required this.metodo, required this.onElegir});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget opcion(String valor, FaIconData icono, String texto) {
+      final elegido = metodo == valor;
+      return Expanded(
+        child: Material(
+          color: elegido ? ColoresApp.azul : ColoresApp.blanco,
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(12),
+            onTap: () => onElegir(valor),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 11),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: elegido ? ColoresApp.azul : ColoresApp.borde),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  FaIcon(icono, size: 15, color: elegido ? ColoresApp.blanco : ColoresApp.azul),
+                  const SizedBox(width: 8),
+                  Text(
+                    texto,
+                    style: TextStyle(color: elegido ? ColoresApp.blanco : ColoresApp.azul, fontWeight: FontWeight.w700),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          '¿Cómo vas a pagar?',
+          style: TextStyle(fontSize: 12.5, color: ColoresApp.textoSuave, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            opcion(MetodoPago.efectivo, FontAwesomeIcons.moneyBill1, 'Efectivo'),
+            const SizedBox(width: 10),
+            opcion(MetodoPago.qr, FontAwesomeIcons.qrcode, 'QR'),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// Recuadro suave con un icono y un texto (por ejemplo, esperando la respuesta del conductor).
+class _Aviso extends StatelessWidget {
+  final FaIconData icono;
+  final String texto;
+
+  const _Aviso({required this.icono, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    const naranja = Color(0xFFE67E22);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: naranja.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+      child: Row(
+        children: [
+          FaIcon(icono, color: naranja, size: 15),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              texto,
+              style: const TextStyle(color: naranja, fontWeight: FontWeight.w600, fontSize: 13.5),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -370,7 +505,9 @@ class _Indicacion extends StatelessWidget {
         children: [
           FaIcon(icono, color: ColoresApp.azul, size: 16),
           const SizedBox(width: 12),
-          Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14))),
+          Expanded(
+            child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
+          ),
         ],
       ),
     );

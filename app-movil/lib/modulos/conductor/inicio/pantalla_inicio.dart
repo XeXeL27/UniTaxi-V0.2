@@ -9,6 +9,7 @@ import '../../../comun/historial_viajes.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/pantalla_mas.dart';
 import '../../../comun/perfil_api.dart';
+import '../../../comun/qr_pago.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
@@ -53,21 +54,17 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   final _comentarios = GlobalKey<PantallaComentariosState>();
   int _seccion = _seccionInicio;
 
+
   /// Direccion de la ubicacion actual para la cabecera, y donde se calculo.
   String? _direccion;
   LatLng? _puntoDireccion;
-  late final FlujoConductor _flujo = FlujoConductor(
-    api: ConductorApi(context.read<ClienteApi>()),
-    mapa: _mapa,
-  );
+  late final FlujoConductor _flujo = FlujoConductor(api: ConductorApi(context.read<ClienteApi>()), mapa: _mapa);
 
   /// Envia la posicion del conductor por WebSocket para que aparezca en linea.
   late final EmisorUbicacion _emisor = EmisorUbicacion(
     sesion: context.read<Sesion>(),
     posicion: () => _mapa.miUbicacion,
-    disponibilidad: () => _flujo.etapa == EtapaConductor.enViaje
-        ? Disponibilidad.ocupado
-        : Disponibilidad.disponible,
+    disponibilidad: () => _flujo.etapa == EtapaConductor.enViaje ? Disponibilidad.ocupado : Disponibilidad.disponible,
   );
   EtapaConductor? _etapaAnterior;
 
@@ -132,6 +129,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   void _irA(int seccion) {
     if (seccion == _seccion) return;
     setState(() => _seccion = seccion);
+    _flujo.cambiarInicioVisible(seccion == _seccionInicio);
     if (seccion == _seccionHistorial) _historial.currentState?.recargar();
     if (seccion == _seccionComentarios) _comentarios.currentState?.recargar();
   }
@@ -201,6 +199,54 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     if (aviso != null) mostrarMensaje(context, aviso, error: true);
     final terminado = _flujo.tomarFinalizado();
     if (terminado != null) _mostrarCobro(terminado);
+    final pedido = _flujo.tomarPedidoPago();
+    if (pedido != null) _preguntarCambioPago(pedido);
+  }
+
+  /// El pasajero pidio pagar de otra forma: se pregunta al conductor si acepta.
+  Future<void> _preguntarCambioPago(Viaje viaje) async {
+    final pedido = viaje.metodoPagoPedido;
+    if (pedido == null) return;
+    final aceptar = await confirmarAccion(
+      context,
+      titulo: '¿Aceptas el cambio de pago?',
+      mensaje:
+          '${viaje.primerNombrePasajero} pide pagar ${pedido == MetodoPago.qr ? 'por QR' : 'en efectivo'} '
+          'en lugar de ${viaje.pagaConQr ? 'por QR' : 'en efectivo'}.',
+      textoConfirmar: 'Sí, aceptar',
+      textoCancelar: 'Rechazar',
+    );
+    // Si mientras tanto se respondio desde el panel, ya no hay nada que hacer.
+    if (!mounted || _flujo.viaje?.metodoPagoPedido == null) return;
+    await _responderPago(aceptar);
+  }
+
+  Future<void> _responderPago(bool aceptar) async {
+    try {
+      await _flujo.responderCambioPago(aceptar);
+      if (mounted) mostrarMensaje(context, aceptar ? 'Aceptaste el cambio de pago.' : 'Rechazaste el cambio de pago.');
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
+  }
+
+  Future<void> _cambiarPago(String metodoPago) async {
+    final aQr = metodoPago == MetodoPago.qr;
+    final confirmado = await confirmarAccion(
+      context,
+      titulo: aQr ? '¿Cobrar por QR?' : '¿Cobrar en efectivo?',
+      mensaje: aQr
+          ? 'El pasajero verá tus QR de cobro para pagarte.'
+          : 'El pasajero te pagará en efectivo al llegar al destino.',
+      textoConfirmar: 'Sí, cambiar',
+    );
+    if (!confirmado || !mounted) return;
+    try {
+      await _flujo.cambiarMetodoPago(metodoPago);
+      if (mounted) mostrarMensaje(context, aQr ? 'Cobrarás este viaje por QR.' : 'Cobrarás este viaje en efectivo.');
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
   }
 
   Future<void> _mostrarCobro(Viaje viaje) async {
@@ -210,7 +256,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       context,
       titulo: 'Viaje finalizado',
       mensaje:
-          'Cobra ${formatoBs(viaje.precioFinal)} en efectivo a ${viaje.primerNombrePasajero}. '
+          '${MetodoPago.frase('Cobra ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)} a ${viaje.primerNombrePasajero}. '
           'Tu ganancia es ${formatoBs(ganancia)}.',
     );
   }
@@ -231,7 +277,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         context,
         titulo: '¿Finalizar el viaje?',
         mensaje:
-            'Confirma que ${viaje.primerNombrePasajero} llegó a su destino y cobra el viaje en efectivo.',
+            'Confirma que ${viaje.primerNombrePasajero} llegó a su destino y cobra el viaje '
+            '${viaje.pagaConQr ? 'por QR' : 'en efectivo'}.',
         textoConfirmar: 'Sí, finalizar',
       );
       if (!confirmado) return;
@@ -323,6 +370,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   foto: _foto,
                   onDatosPersonales: () => _abrirYRecargar(const PantallaPerfilConductor()),
                   onDocumentos: () => _abrirYRecargar(const PantallaDocumentos()),
+                  onMisQr: () => _abrirYRecargar(const PantallaMisQr()),
                   onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
                   onCerrarSesion: _confirmarCerrarSesion,
                 ),
@@ -337,7 +385,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               listenable: _flujo,
               builder: (context, _) {
                 final enLinea = _flujo.enLinea;
-                final pendientes = enLinea && _seccion != _seccionInicio ? _flujo.solicitudes.length : 0;
+                final pendientes = enLinea && _seccion != _seccionInicio ? _flujo.nuevas : 0;
                 return BarraInferior(
                   indice: _seccion,
                   onCambiar: _irA,
@@ -367,7 +415,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final margen = MediaQuery.paddingOf(context);
     final alto = MediaQuery.sizeOf(context).height;
     final abajo = BarraInferior.espacio(context);
-    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 150, 110, abajo + alto * 0.4);
+    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 150, 56, abajo + alto * 0.4);
     return ListenableBuilder(
       listenable: Listenable.merge([_flujo, _mapa]),
       builder: (context, _) {
@@ -405,32 +453,6 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   enRevision: _flujo.enRevision,
                 ),
               ),
-              // En pantallas bajas el selector chocaria con el panel de solicitudes.
-              if (etapa == EtapaConductor.lista && alto >= 760)
-                Positioned(
-                  right: 14,
-                  top: margen.top + 140,
-                  child: SelectorVehiculo(
-                    contador: enLinea && _flujo.listaCargada ? _flujo.solicitudes.length : null,
-                    tooltipContador: _flujo.solicitudes.length == 1
-                        ? '1 solicitud de viaje'
-                        : '${_flujo.solicitudes.length} solicitudes de viaje',
-                    opciones: [
-                      OpcionVehiculo(
-                        nombre: 'Moto',
-                        activa: true,
-                        icono: Image.asset('assets/mototaxi.png', height: 42, fit: BoxFit.contain),
-                        onTap: () => mostrarMensaje(context, 'Recibes solicitudes de viaje en moto.'),
-                      ),
-                      OpcionVehiculo(
-                        nombre: 'Auto',
-                        proximamente: true,
-                        icono: const FaIcon(FontAwesomeIcons.carSide, color: ColoresApp.rojo, size: 30),
-                        onTap: () => mostrarMensaje(context, 'Muy pronto podrás registrar un auto.'),
-                      ),
-                    ],
-                  ),
-                ),
               Positioned(
                 left: 0,
                 right: 0,
@@ -456,12 +478,17 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                           padding: EdgeInsets.symmetric(vertical: 8),
                           child: Center(child: CircularProgressIndicator()),
                         ),
-                        EtapaConductor.lista => PanelSolicitudes(flujo: _flujo, onRevisarAprobacion: _revisarAprobacion),
+                        EtapaConductor.lista => PanelSolicitudes(
+                          flujo: _flujo,
+                          onRevisarAprobacion: _revisarAprobacion,
+                        ),
                         EtapaConductor.detalle => PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
                         EtapaConductor.enViaje => PanelViajeConductor(
                           flujo: _flujo,
                           onAvanzar: _avanzar,
                           onCancelar: _cancelarViaje,
+                          onCambiarPago: _cambiarPago,
+                          onResponderPago: _responderPago,
                         ),
                       },
                     ),
@@ -503,9 +530,16 @@ class _EstadoEnLinea extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 8),
-          Text(texto, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13)),
+          Text(
+            texto,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 13),
+          ),
         ],
       ),
     );

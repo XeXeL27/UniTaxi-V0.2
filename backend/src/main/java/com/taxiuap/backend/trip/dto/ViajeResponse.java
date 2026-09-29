@@ -3,6 +3,7 @@ package com.taxiuap.backend.trip.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 
@@ -32,5 +33,10 @@ public record ViajeResponse(
         CanceladoPor canceladoPor,
         LocalDateTime fechaInicio,
         LocalDateTime fechaFin,
-        boolean calificadoPorPasajero) {
+        boolean calificadoPorPasajero,
+        MetodoPago metodoPago,
+        /** Cambio de metodo que pidio el pasajero y el conductor todavia no respondio (o null). */
+        MetodoPago metodoPagoPedido,
+        /** true si el conductor tiene al menos un QR de cobro. */
+        boolean conductorTieneQr) {
 }

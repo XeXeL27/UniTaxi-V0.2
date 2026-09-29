@@ -183,6 +183,11 @@ public class OfertaViajeService {
             throw RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud);
         }
         Long idConductor = conductor.getId();
+        // El conductor que cancelo este pedido no lo puede volver a tomar: queda para otro.
+        if (ofertaViajeRepository.existsBySolicitudIdAndConductorIdAndSituacionOferta(
+                idSolicitud, idConductor, SituacionOferta.RECHAZADA)) {
+            throw new ConflictoException("Cancelaste este viaje: lo tomara otro conductor");
+        }
 
         int filasAfectadas = solicitudViajeRepository.aceptarSiDisponible(idSolicitud);
         if (filasAfectadas == 0) {

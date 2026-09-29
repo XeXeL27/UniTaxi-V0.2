@@ -17,4 +17,7 @@ public interface OfertaViajeRepository extends JpaRepository<OfertaViaje, Long> 
     List<OfertaViaje> findBySolicitudIdAndSituacionOferta(Long idSolicitud, SituacionOferta situacionOferta);
 
     boolean existsBySolicitudIdAndConductorId(Long idSolicitud, Long idConductor);
+
+    boolean existsBySolicitudIdAndConductorIdAndSituacionOferta(
+            Long idSolicitud, Long idConductor, SituacionOferta situacionOferta);
 }

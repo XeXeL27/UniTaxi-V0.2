@@ -50,6 +50,7 @@ Future<bool> confirmarAccion(
   String titulo = '¿Está seguro?',
   required String mensaje,
   String textoConfirmar = 'Sí, continuar',
+  String textoCancelar = 'Cancelar',
 }) async {
   final confirmado = await _abrir<bool>(
     context,
@@ -59,6 +60,7 @@ Future<bool> confirmarAccion(
       titulo: titulo,
       mensaje: mensaje,
       textoBoton: textoConfirmar,
+      textoCancelar: textoCancelar,
       conCancelar: true,
     ),
   );
@@ -101,6 +103,7 @@ class _TarjetaAlerta extends StatelessWidget {
   final String mensaje;
   final String textoBoton;
   final bool conCancelar;
+  final String textoCancelar;
 
   const _TarjetaAlerta({
     required this.tipo,
@@ -108,6 +111,7 @@ class _TarjetaAlerta extends StatelessWidget {
     required this.mensaje,
     required this.textoBoton,
     this.conCancelar = false,
+    this.textoCancelar = 'Cancelar',
   });
 
   (Color, Color) get _colores => switch (tipo) {
@@ -170,7 +174,7 @@ class _TarjetaAlerta extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                       ),
-                      child: const Text('Cancelar'),
+                      child: Text(textoCancelar),
                     ),
                   FilledButton(
                     autofocus: true,

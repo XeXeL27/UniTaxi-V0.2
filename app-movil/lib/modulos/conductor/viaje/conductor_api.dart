@@ -78,9 +78,16 @@ class ConductorApi {
 
   Future<Viaje> iniciar(int id) async => _viaje(await cliente.post('/api/conductor/viajes/$id/iniciar', const {}));
 
-  /// Por ahora el cobro es siempre en efectivo.
-  Future<Viaje> finalizar(int id) async =>
-      _viaje(await cliente.post('/api/conductor/viajes/$id/finalizar', const {'metodoPago': 'EFECTIVO'}));
+  /// Se cobra con el metodo vigente del viaje (efectivo o QR).
+  Future<Viaje> finalizar(int id) async => _viaje(await cliente.post('/api/conductor/viajes/$id/finalizar', const {}));
+
+  /// Cambia el metodo de pago sin que el pasajero lo pida.
+  Future<Viaje> cambiarMetodoPago(int id, String metodoPago) async =>
+      _viaje(await cliente.put('/api/conductor/viajes/$id/metodo-pago', {'metodoPago': metodoPago}));
+
+  /// Acepta o rechaza el cambio de pago que pidio el pasajero.
+  Future<Viaje> responderCambioPago(int id, bool aceptar) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/metodo-pago/respuesta', {'aceptar': aceptar}));
 
   Future<Viaje> cancelar(int id) async =>
       _viaje(await cliente.post('/api/conductor/viajes/$id/cancelar', const {'motivo': 'Cancelado por el conductor'}));

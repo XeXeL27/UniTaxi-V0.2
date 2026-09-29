@@ -7,6 +7,7 @@ import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../widgets/paneles.dart';
+import '../../../comun/modelos_viaje.dart';
 import 'flujo_pasajero.dart';
 
 /// Cuadro pequeno al terminar el viaje: estrellas y un comentario corto para el conductor. Es la
@@ -94,7 +95,7 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                           style: const TextStyle(color: ColoresApp.azul, fontSize: 16.5, fontWeight: FontWeight.w700),
                         ),
                         Text(
-                          'Llegaste a tu destino. Pagas ${formatoBs(viaje.precioFinal)} en efectivo.',
+                          'Llegaste a tu destino. ${MetodoPago.frase('Pagas ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)}.',
                           style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
                         ),
                       ],

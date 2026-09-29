@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.dto.DatosConductorRequest;
 import com.taxiuap.backend.identity.entity.Conductor;
+import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.ConflictoException;
@@ -62,6 +63,10 @@ public class RegistroMotoConductorService {
     public Map<TipoDocumento, MultipartFile> validar(DatosConductorRequest datos, Map<String, MultipartFile> archivos) {
         Map<TipoDocumento, MultipartFile> documentos = new EnumMap<>(TipoDocumento.class);
         archivos.forEach((clave, archivo) -> {
+            if (QrPagoConductorService.esParteQr(clave)) {
+                // Los QR de cobro opcionales (QR1..QR3) los valida QrPagoConductorService.
+                return;
+            }
             TipoDocumento tipo;
             try {
                 tipo = TipoDocumento.valueOf(clave.toUpperCase(Locale.ROOT));

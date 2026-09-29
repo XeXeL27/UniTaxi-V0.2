@@ -28,6 +28,9 @@ class PantallaMas extends StatefulWidget {
   /// Solo el conductor: sus documentos PDF.
   final VoidCallback? onDocumentos;
 
+  /// Solo el conductor: sus QR de cobro (los cambia sin permiso de la administracion).
+  final VoidCallback? onMisQr;
+
   /// Solo si la persona tiene la otra cuenta (pasajero o conductor).
   final VoidCallback? onCambiarModo;
   final VoidCallback onCerrarSesion;
@@ -37,6 +40,7 @@ class PantallaMas extends StatefulWidget {
     this.foto,
     required this.onDatosPersonales,
     this.onDocumentos,
+    this.onMisQr,
     this.onCambiarModo,
     required this.onCerrarSesion,
   });
@@ -151,6 +155,13 @@ class _PantallaMasState extends State<PantallaMas> {
               titulo: 'Mis documentos',
               detalle: 'Tus PDF y el estado de su revisión',
               onTap: widget.onDocumentos,
+            ),
+          if (widget.onMisQr != null)
+            TarjetaOpcion(
+              icono: FontAwesomeIcons.qrcode,
+              titulo: 'Mis QR de cobro',
+              detalle: 'El QR de tu banca móvil para cobrar (hasta 3)',
+              onTap: widget.onMisQr,
             ),
           if (widget.onCambiarModo != null)
             TarjetaOpcion(

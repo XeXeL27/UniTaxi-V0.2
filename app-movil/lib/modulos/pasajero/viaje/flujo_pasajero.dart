@@ -35,6 +35,12 @@ class FlujoPasajero extends ChangeNotifier {
   /// Mensaje para mostrar una vez (por ejemplo "El conductor cancelo el viaje").
   String? aviso;
 
+  /// Buena noticia para mostrar una vez (por ejemplo "El conductor acepto el pago por QR").
+  String? novedad;
+
+  /// Como pagara el proximo viaje (se elige antes de solicitar). Despues solo lo cambia el conductor.
+  String metodoPago = MetodoPago.efectivo;
+
   /// El pasajero toco "Añadir lugar": el proximo toque en el mapa guarda ese punto.
   bool guardandoLugar = false;
 
@@ -189,8 +195,24 @@ class FlujoPasajero extends ChangeNotifier {
     final b = mapa.b;
     if (a == null || b == null) return;
     final origen = PuntoRuta(a.posicion, direccionOrigen ?? a.texto);
-    final creada = await api.solicitar(origen, b);
+    final creada = await api.solicitar(origen, b, metodoPago: metodoPago);
     _entrarBuscando(creada);
+  }
+
+  void elegirMetodoPago(String metodo) {
+    if (metodo == metodoPago) return;
+    metodoPago = metodo;
+    _avisar();
+  }
+
+  /// Pide al conductor pagar de otra forma; el cambio vale cuando el conductor lo acepta.
+  Future<void> pedirCambioPago(String metodo) async {
+    final actual = viaje;
+    if (actual == null) return;
+    final nuevo = await api.pedirCambioPago(actual.id, metodo);
+    if (_cerrado || etapa != EtapaPasajero.enViaje) return;
+    viaje = nuevo;
+    _avisar();
   }
 
   // ---------------------------------------------------------------- buscando conductor
@@ -251,18 +273,44 @@ class FlujoPasajero extends ChangeNotifier {
     if (actual == null) return;
     final nuevo = await api.viaje(actual.id);
     if (_cerrado || etapa != EtapaPasajero.enViaje) return;
+    _revisarCambioPago(actual, nuevo);
     viaje = nuevo;
     if (nuevo.situacion == SituacionViaje.completado) {
       _detenerSondeo();
       etapa = EtapaPasajero.calificando;
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
-      aviso = nuevo.canceladoPor == 'CONDUCTOR'
-          ? 'El conductor canceló el viaje. Puedes pedir otro taxi.'
-          : 'El viaje fue cancelado.';
+      if (nuevo.canceladoPor == 'CONDUCTOR') {
+        // El backend vuelve a publicar el pedido para otro conductor: se sigue buscando.
+        final republicada = (await api.misSolicitudes()).where((s) => s.activa).firstOrNull;
+        if (_cerrado || etapa != EtapaPasajero.enViaje) return;
+        if (republicada != null) {
+          aviso = 'El conductor canceló el viaje. Estamos buscando otro conductor.';
+          _entrarBuscando(republicada);
+          return;
+        }
+        aviso = 'El conductor canceló el viaje. Puedes pedir otro taxi.';
+      } else {
+        aviso = 'El viaje fue cancelado.';
+      }
       _entrarEligiendo();
       return;
     }
     _avisar();
+  }
+
+  /// Avisa si el conductor respondio el pedido de cambio de pago o cambio el metodo por su cuenta.
+  void _revisarCambioPago(Viaje antes, Viaje ahora) {
+    final pedido = antes.metodoPagoPedido;
+    final comoPaga = ahora.pagaConQr ? 'por QR' : 'en efectivo';
+    if (pedido != null && ahora.metodoPagoPedido == null) {
+      if (ahora.metodoPago == pedido) {
+        novedad = 'El conductor aceptó: pagas $comoPaga.';
+      } else {
+        aviso = 'El conductor no aceptó el cambio: pagas $comoPaga.';
+      }
+    } else if (ahora.metodoPago != antes.metodoPago) {
+      novedad = 'El conductor cambió el pago: ahora pagas $comoPaga.';
+    }
   }
 
   Future<void> cancelarViaje() async {
@@ -334,6 +382,12 @@ class FlujoPasajero extends ChangeNotifier {
   String? tomarAviso() {
     final texto = aviso;
     aviso = null;
+    return texto;
+  }
+
+  String? tomarNovedad() {
+    final texto = novedad;
+    novedad = null;
     return texto;
   }
 

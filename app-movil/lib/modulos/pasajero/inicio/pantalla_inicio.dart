@@ -65,7 +65,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// una consulta y la siguiente.
   List<ConductorEnLinea> _conductores = const [];
   bool _conductoresCargados = false;
-  late final PosicionesAnimadas _posiciones = PosicionesAnimadas(vsync: this, duracion: const Duration(milliseconds: 2800));
+  late final PosicionesAnimadas _posiciones = PosicionesAnimadas(
+    vsync: this,
+    duracion: const Duration(milliseconds: 2800),
+  );
   Timer? _sondeoConductores;
 
   Uint8List? _foto;
@@ -98,6 +101,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (!mounted) return;
     final aviso = _flujo.tomarAviso();
     if (aviso != null) mostrarMensaje(context, aviso, error: true);
+    final novedad = _flujo.tomarNovedad();
+    if (novedad != null) mostrarMensaje(context, novedad);
     if (_flujo.etapa == EtapaPasajero.calificando && !_calificando) {
       _calificando = true;
       _irA(_seccionInicio);
@@ -255,6 +260,23 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
       if (mounted) setState(() => _enviando = false);
+    }
+  }
+
+  Future<void> _pedirCambioPago(String metodo) async {
+    final aQr = metodo == MetodoPago.qr;
+    final confirmado = await confirmarAccion(
+      context,
+      titulo: aQr ? '¿Pagar por QR?' : '¿Pagar en efectivo?',
+      mensaje: 'Le preguntaremos al conductor si acepta que pagues ${aQr ? 'por QR' : 'en efectivo'}.',
+      textoConfirmar: 'Sí, preguntar',
+    );
+    if (!confirmado || !mounted) return;
+    try {
+      await _flujo.pedirCambioPago(metodo);
+      if (mounted) mostrarMensaje(context, 'Esperando la respuesta del conductor.');
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
   }
 
@@ -504,7 +526,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                       ],
                     ),
                   ),
-                  if (panel != null) PanelInferior(flotante: true, altoMaximo: 0.42, child: panel),
+                  if (panel != null)
+                    PanelInferior(
+                      flotante: true,
+                      // Pagando por QR el panel crece un poco: debajo del viaje van los QR del conductor.
+                      altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
+                          ? 0.5
+                          : 0.42,
+                      child: panel,
+                    ),
                 ],
               ),
             ),
@@ -531,7 +561,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       },
     ),
     EtapaPasajero.buscando => PanelBuscando(flujo: _flujo, cancelando: _enviando, onCancelar: _cancelarSolicitud),
-    EtapaPasajero.enViaje => PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje),
+    EtapaPasajero.enViaje => PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
     EtapaPasajero.calificando => null,
   };
 }

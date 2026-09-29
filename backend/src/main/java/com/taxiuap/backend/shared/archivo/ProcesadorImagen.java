@@ -24,21 +24,15 @@ import com.taxiuap.backend.shared.exception.NegocioException;
 public final class ProcesadorImagen {
 
     public static final int LADO_FOTO = 512;
+    /** Lado mayor de una imagen de QR: suficiente para escanearla sin guardar fotos enormes. */
+    public static final int LADO_MAXIMO_QR = 1200;
     private static final float CALIDAD_JPEG = 0.88f;
 
     private ProcesadorImagen() {
     }
 
     public static byte[] fotoPerfil(byte[] original) {
-        BufferedImage imagen;
-        try {
-            imagen = ImageIO.read(new ByteArrayInputStream(original));
-        } catch (IOException e) {
-            imagen = null;
-        }
-        if (imagen == null) {
-            throw new NegocioException("La imagen no es valida. Use una foto JPG o PNG");
-        }
+        BufferedImage imagen = leer(original);
 
         int lado = Math.min(imagen.getWidth(), imagen.getHeight());
         int x = (imagen.getWidth() - lado) / 2;
@@ -68,5 +62,46 @@ public final class ProcesadorImagen {
             escritor.dispose();
         }
         return salida.toByteArray();
+    }
+
+    /**
+     * Imagen del QR de cobro: se conserva entera (sin recortar), se reduce si pasa de
+     * {@link #LADO_MAXIMO_QR} y se guarda como PNG para que los modulos del QR queden nitidos.
+     */
+    public static byte[] imagenQr(byte[] original) {
+        BufferedImage imagen = leer(original);
+        double escala = Math.min(1.0, (double) LADO_MAXIMO_QR / Math.max(imagen.getWidth(), imagen.getHeight()));
+        int ancho = Math.max(1, (int) Math.round(imagen.getWidth() * escala));
+        int alto = Math.max(1, (int) Math.round(imagen.getHeight() * escala));
+
+        BufferedImage salidaImagen = new BufferedImage(ancho, alto, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = salidaImagen.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, ancho, alto);
+        g.drawImage(imagen, 0, 0, ancho, alto, null);
+        g.dispose();
+
+        ByteArrayOutputStream salida = new ByteArrayOutputStream();
+        try {
+            ImageIO.write(salidaImagen, "png", salida);
+        } catch (IOException e) {
+            throw new IllegalStateException("No se pudo procesar la imagen del QR", e);
+        }
+        return salida.toByteArray();
+    }
+
+    private static BufferedImage leer(byte[] original) {
+        BufferedImage imagen;
+        try {
+            imagen = ImageIO.read(new ByteArrayInputStream(original));
+        } catch (IOException e) {
+            imagen = null;
+        }
+        if (imagen == null) {
+            throw new NegocioException("La imagen no es valida. Use una foto JPG o PNG");
+        }
+        return imagen;
     }
 }

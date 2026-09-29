@@ -31,6 +31,7 @@ import com.taxiuap.backend.sistema.repository.ConfiguracionSistemaRepository;
  * <pre>
  *   personas/&lt;id&gt;_&lt;ci&gt;/general/foto_perfil_pasajero.jpg
  *   personas/&lt;id&gt;_&lt;ci&gt;/conductor/documentos/LICENCIA_20260928_101500.pdf
+ *   personas/&lt;id&gt;_&lt;ci&gt;/conductor/qr/qr_20260929_101500.png
  * </pre>
  */
 @Service
@@ -132,6 +133,11 @@ public class AlmacenamientoArchivos {
         return carpetaPersona(persona) + "/conductor/documentos";
     }
 
+    /** Imagenes de los QR de cobro del conductor. */
+    public String carpetaQrConductor(Persona persona) {
+        return carpetaPersona(persona) + "/conductor/qr";
+    }
+
     // ------------------------------------------------------------------ PDF
 
     /** Valida que el archivo sea un PDF de hasta 5 MB. Se llama antes de guardar nada en la BD. */
@@ -171,6 +177,22 @@ public class AlmacenamientoArchivos {
         // Dos subidas en el mismo segundo: se agrega un contador para no pisar el archivo.
         for (int i = 2; Files.exists(destino); i++) {
             rutaRelativa = carpeta + "/" + nombreBase + "_" + LocalDateTime.now().format(SELLO) + "_" + i + ".pdf";
+            destino = resolver(rutaRelativa);
+        }
+        escribir(destino, contenido);
+        return rutaRelativa;
+    }
+
+    /**
+     * Guarda una imagen ya procesada como carpeta/&lt;nombreBase&gt;_&lt;fecha&gt;.&lt;extension&gt; y
+     * devuelve la ruta relativa. Igual que los PDF, reemplazar una imagen conserva la anterior.
+     */
+    public String guardarConSello(byte[] contenido, String carpeta, String nombreBase, String extension) {
+        String sello = LocalDateTime.now().format(SELLO);
+        String rutaRelativa = carpeta + "/" + nombreBase + "_" + sello + "." + extension;
+        Path destino = resolver(rutaRelativa);
+        for (int i = 2; Files.exists(destino); i++) {
+            rutaRelativa = carpeta + "/" + nombreBase + "_" + sello + "_" + i + "." + extension;
             destino = resolver(rutaRelativa);
         }
         escribir(destino, contenido);

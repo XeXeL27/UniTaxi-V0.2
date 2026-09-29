@@ -6,6 +6,7 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
+import '../../comun/qr_pago.dart';
 import '../../core/api_excepcion.dart';
 import '../../core/config.dart';
 import '../../core/formato.dart';
@@ -56,6 +57,9 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   };
   DateTime? _fechaNacimiento;
   final Map<String, ArchivoPdf> _pdf = {};
+
+  /// QR de cobro opcionales (hasta 3): solo la imagen, sin escribir nada.
+  List<ImagenElegida> _qrs = [];
   bool _ocultar = true;
   bool _enviando = false;
   String? _error;
@@ -180,6 +184,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         _conGoogle ? '/api/auth/registro/conductor/google' : '/api/auth/registro/conductor',
         datos,
         Map.of(_pdf),
+        qrs: [for (final qr in _qrs) ArchivoPdf(qr.nombre, qr.bytes)],
       );
       // Con la sesion iniciada la pantalla principal pasa a ser la del conductor (en revision).
       if (!mounted) return;
@@ -349,6 +354,19 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                       ),
                       const SizedBox(height: 10),
                       for (final documento in _documentos) _filaPdf(documento),
+                    ],
+                  ),
+                  _Seccion(
+                    icono: FontAwesomeIcons.qrcode,
+                    titulo: 'QR de cobro (opcional)',
+                    children: [
+                      const Text(
+                        'La imagen del QR de tu banca móvil, hasta 3. Los pasajeros que paguen por QR lo verán. '
+                        'Puedes agregarlos o cambiarlos después en Más > Mis QR de cobro.',
+                        style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                      ),
+                      const SizedBox(height: 12),
+                      SelectorQrRegistro(imagenes: _qrs, alCambiar: (lista) => setState(() => _qrs = lista)),
                     ],
                   ),
                   if (_error != null) ...[

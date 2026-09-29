@@ -39,6 +39,9 @@ class FlujoConductor extends ChangeNotifier {
   /// Viaje recien finalizado, para mostrar el resumen del cobro una vez.
   Viaje? finalizado;
 
+  /// Viaje en el que el pasajero acaba de pedir cambiar el metodo de pago (se pregunta una vez).
+  Viaje? pedidoPago;
+
   /// Accion en curso (aceptar, cambiar estado): bloquea los botones.
   bool ocupado = false;
 
@@ -50,6 +53,15 @@ class FlujoConductor extends ChangeNotifier {
 
   /// situacion_aprobacion del conductor (PENDIENTE, RECHAZADO, SUSPENDIDO...) mientras [enRevision].
   String? situacionAprobacion;
+
+  /// Panel "Solicitudes de viaje" desplegado. Empieza cerrado para no tapar el mapa.
+  bool listaAbierta = false;
+
+  /// La pantalla de Inicio esta a la vista (no Historial, Opiniones ni Mas).
+  bool inicioVisible = true;
+
+  /// Solicitudes que el conductor ya vio con la lista desplegada.
+  final Set<int> _vistas = {};
 
   Timer? _sondeo;
   bool _consultando = false;
@@ -124,6 +136,9 @@ class FlujoConductor extends ChangeNotifier {
       solicitudes = const [];
     }
     listaCargada = true;
+    // Solo cuentan las disponibles: las que otro tomo o se cancelaron salen del contador.
+    _vistas.retainAll({for (final s in solicitudes) s.id});
+    _marcarVistas();
     final elegida = seleccionada;
     if (etapa == EtapaConductor.detalle && elegida != null && !solicitudes.any((s) => s.id == elegida.id)) {
       aviso = 'Esta solicitud ya no está disponible: el pasajero la canceló u otro conductor la tomó.';
@@ -134,6 +149,28 @@ class FlujoConductor extends ChangeNotifier {
   }
 
   Future<void> refrescarLista() => _consultarLista();
+
+  /// Solicitudes disponibles que el conductor todavia no vio (el numero rojo).
+  int get nuevas => solicitudes.where((s) => !_vistas.contains(s.id)).length;
+
+  /// Despliega o esconde la lista. Al desplegarla las solicitudes quedan vistas.
+  void alternarLista() {
+    listaAbierta = !listaAbierta;
+    _marcarVistas();
+    _avisar();
+  }
+
+  void cambiarInicioVisible(bool visible) {
+    if (inicioVisible == visible) return;
+    inicioVisible = visible;
+    _marcarVistas();
+    _avisar();
+  }
+
+  /// Con la lista a la vista, lo que esta en ella (y lo que llegue mientras) ya no es nuevo.
+  void _marcarVistas() {
+    if (listaAbierta && inicioVisible) _vistas.addAll(solicitudes.map((s) => s.id));
+  }
 
   /// Muestra en el mapa la ruta de la solicitud y el camino desde el conductor hasta el pasajero.
   void verSolicitud(Solicitud solicitud) {
@@ -171,6 +208,8 @@ class FlujoConductor extends ChangeNotifier {
 
   void _entrarViaje(Viaje nuevo) {
     final esOtro = viaje?.id != nuevo.id || etapa != EtapaConductor.enViaje;
+    // Al retomar el viaje (app recien abierta) tambien se pregunta por un pedido de cambio de pago.
+    if (esOtro && nuevo.metodoPagoPedido != null) pedidoPago = nuevo;
     viaje = nuevo;
     etapa = EtapaConductor.enViaje;
     seleccionada = null;
@@ -197,7 +236,35 @@ class FlujoConductor extends ChangeNotifier {
       _entrarLista();
       return;
     }
-    if (nuevo.situacion != actual.situacion) _entrarViaje(nuevo);
+    if (nuevo.metodoPagoPedido != null && nuevo.metodoPagoPedido != actual.metodoPagoPedido) pedidoPago = nuevo;
+    if (nuevo.situacion != actual.situacion) {
+      _entrarViaje(nuevo);
+    } else if (nuevo.metodoPago != actual.metodoPago ||
+        nuevo.metodoPagoPedido != actual.metodoPagoPedido ||
+        nuevo.conductorTieneQr != actual.conductorTieneQr) {
+      viaje = nuevo;
+      _avisar();
+    }
+  }
+
+  /// El conductor cambia el metodo de pago (efectivo o QR) sin que el pasajero lo pida.
+  Future<void> cambiarMetodoPago(String metodoPago) => _accionViaje((id) => api.cambiarMetodoPago(id, metodoPago));
+
+  /// Acepta o rechaza el cambio de metodo de pago que pidio el pasajero.
+  Future<void> responderCambioPago(bool aceptar) => _accionViaje((id) => api.responderCambioPago(id, aceptar));
+
+  Future<void> _accionViaje(Future<Viaje> Function(int idViaje) accion) async {
+    final actual = viaje;
+    if (actual == null || ocupado) return;
+    ocupado = true;
+    _avisar();
+    try {
+      final nuevo = await accion(actual.id);
+      if (etapa == EtapaConductor.enViaje) viaje = nuevo;
+    } finally {
+      ocupado = false;
+      _avisar();
+    }
   }
 
   /// Avanza al siguiente estado del viaje segun el actual.
@@ -286,6 +353,12 @@ class FlujoConductor extends ChangeNotifier {
     final texto = aviso;
     aviso = null;
     return texto;
+  }
+
+  Viaje? tomarPedidoPago() {
+    final v = pedidoPago;
+    pedidoPago = null;
+    return v;
   }
 
   Viaje? tomarFinalizado() {

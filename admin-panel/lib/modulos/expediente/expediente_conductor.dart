@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -51,6 +53,7 @@ class ExpedienteConductor extends StatelessWidget {
         pestanas: const [
           (FontAwesomeIcons.idCard, 'Datos'),
           (FontAwesomeIcons.filePdf, 'Documentos'),
+          (FontAwesomeIcons.qrcode, 'QR de cobro'),
           (FontAwesomeIcons.route, 'Viajes'),
           (FontAwesomeIcons.solidStar, 'Calificaciones'),
           (FontAwesomeIcons.userPen, 'Permisos'),
@@ -58,6 +61,7 @@ class ExpedienteConductor extends StatelessWidget {
         vistas: [
           _Datos(api: api, perfil: perfil, idConductor: id, nombreUsuario: conductor.nombreUsuario),
           _Documentos(api: api, personasApi: personasApi, conductor: conductor, alCambiar: alCambiar),
+          _QrCobro(api: api, conductor: conductor),
           Carga<List<ViajeExpediente>>(
             cargar: () => api.viajesConductor(id),
             builder: (viajes, _) => ListaViajes(viajes: viajes, mostrarPasajero: true),
@@ -106,6 +110,132 @@ class ExpedienteConductor extends StatelessWidget {
           ),
           _Permisos(api: api, personasApi: personasApi, conductor: conductor),
         ],
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------- QR de cobro
+
+/// QR de banca movil que subio el conductor (hasta 3). El administrador los ve, los descarga y los
+/// puede eliminar; el conductor los cambia desde su app sin pedir permiso.
+class _QrCobro extends StatelessWidget {
+  final ExpedienteApi api;
+  final ConductorAdmin conductor;
+
+  const _QrCobro({required this.api, required this.conductor});
+
+  @override
+  Widget build(BuildContext context) {
+    final id = conductor.idConductor;
+    return Carga<List<QrCobro>>(
+      cargar: () => api.qrConductor(id),
+      builder: (qrs, recargar) {
+        if (qrs.isEmpty) return const Vacio('El conductor no subió QR de cobro.');
+        return ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            const Text(
+              'Los pasajeros que eligen pagar por QR ven estas imágenes durante el viaje.',
+              style: TextStyle(color: ColoresApp.textoSuave),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 14,
+              runSpacing: 14,
+              children: [
+                for (final qr in qrs)
+                  _TarjetaQr(
+                    key: ValueKey('${qr.id}-${qr.actualizadoEn}'),
+                    qr: qr,
+                    cargar: () => api.imagenQr(id, qr.id),
+                    nombreDescarga: 'qr_${qr.numero}_${conductor.nombreUsuario}.png',
+                    onEliminar: () => flujoEliminar(
+                      context,
+                      descripcion: 'el QR ${qr.numero} de ${conductor.nombreCompleto}',
+                      eliminar: () => api.eliminarQr(id, qr.id),
+                      mensajeEliminado: 'Se eliminó el QR ${qr.numero}.',
+                      alTerminar: recargar,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _TarjetaQr extends StatefulWidget {
+  final QrCobro qr;
+  final Future<Uint8List> Function() cargar;
+  final String nombreDescarga;
+  final VoidCallback onEliminar;
+
+  const _TarjetaQr({super.key, required this.qr, required this.cargar, required this.nombreDescarga, required this.onEliminar});
+
+  @override
+  State<_TarjetaQr> createState() => _TarjetaQrState();
+}
+
+class _TarjetaQrState extends State<_TarjetaQr> {
+  late final Future<Uint8List> _imagen = widget.cargar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 260,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ColoresApp.superficie,
+        borderRadius: BorderRadius.circular(RadiosApp.control),
+        border: Border.all(color: ColoresApp.borde),
+      ),
+      child: FutureBuilder<Uint8List>(
+        future: _imagen,
+        builder: (context, instantanea) {
+          final bytes = instantanea.data;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      'QR ${widget.qr.numero}',
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Descargar',
+                    onPressed: bytes == null ? null : () => descargarArchivo(bytes, widget.nombreDescarga, 'image/png'),
+                    icon: const FaIcon(FontAwesomeIcons.download, size: 16, color: ColoresApp.azul),
+                  ),
+                  IconButton(
+                    tooltip: 'Eliminar',
+                    onPressed: widget.onEliminar,
+                    icon: const FaIcon(FontAwesomeIcons.trashCan, size: 16, color: ColoresApp.rojo),
+                  ),
+                ],
+              ),
+              if (widget.qr.actualizadoEn != null)
+                Text(
+                  'Subido el ${Formato.fechaHora(widget.qr.actualizadoEn)}',
+                  style: const TextStyle(fontSize: 12.5, color: ColoresApp.textoSuave),
+                ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 230,
+                child: instantanea.hasError
+                    ? const Center(child: Text('No se pudo cargar la imagen', style: TextStyle(color: ColoresApp.rojo)))
+                    : bytes == null
+                    ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
+                    : Image.memory(bytes, fit: BoxFit.contain),
+              ),
+            ],
+          );
+        },
       ),
     );
   }

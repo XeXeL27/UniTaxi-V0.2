@@ -2,6 +2,7 @@ package com.taxiuap.backend.controller.admin;
 
 import java.util.List;
 
+import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -11,7 +12,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.taxiuap.backend.controller.conductor.QrPagoConductorController;
 import com.taxiuap.backend.identity.dto.CambiarSituacionConductorRequest;
+import com.taxiuap.backend.pricing.dto.QrPagoResponse;
+import com.taxiuap.backend.pricing.service.QrPagoConductorService;
+import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.identity.dto.ConductorAdminResponse;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.service.GestionConductorService;
@@ -54,6 +59,8 @@ public class ConductorAdminController {
     private final CalificacionService calificacionService;
     private final PermisoEdicionService permisoEdicionService;
     private final AdministradorRepository administradorRepository;
+    private final QrPagoConductorService qrPagoConductorService;
+    private final AlmacenamientoArchivos almacenamientoArchivos;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ConductorAdminResponse>>> listar(
@@ -120,5 +127,25 @@ public class ConductorAdminController {
             @PathVariable Long id, @Valid @RequestBody CambiarSituacionConductorRequest request) {
         ConductorAdminResponse actualizado = gestionConductorService.cambiarSituacion(id, request);
         return ResponseEntity.ok(ApiResponse.exito("Situacion del conductor actualizada", actualizado));
+    }
+
+    /** QR de cobro que subio el conductor (de 0 a 3). */
+    @GetMapping("/{id}/qr")
+    public ResponseEntity<ApiResponse<List<QrPagoResponse>>> qr(@PathVariable Long id) {
+        gestionConductorService.obtener(id);
+        return ResponseEntity.ok(ApiResponse.exito(qrPagoConductorService.listar(id)));
+    }
+
+    @GetMapping("/{id}/qr/{idQr}/imagen")
+    public ResponseEntity<Resource> imagenQr(@PathVariable Long id, @PathVariable Long idQr) {
+        var qr = qrPagoConductorService.delConductor(id, idQr);
+        return QrPagoConductorController.imagenQr(almacenamientoArchivos.leer(qr.getImagenUrl()), "qr_" + idQr + ".png");
+    }
+
+    /** Borrado logico de un QR del conductor. */
+    @DeleteMapping("/{id}/qr/{idQr}")
+    public ResponseEntity<ApiResponse<List<QrPagoResponse>>> eliminarQr(@PathVariable Long id, @PathVariable Long idQr) {
+        qrPagoConductorService.eliminarDeConductor(id, idQr);
+        return ResponseEntity.ok(ApiResponse.exito("QR eliminado", qrPagoConductorService.listar(id)));
     }
 }

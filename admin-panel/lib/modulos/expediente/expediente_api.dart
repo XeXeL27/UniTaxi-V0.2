@@ -34,6 +34,15 @@ class ExpedienteApi {
 
   Future<void> revocarPermisos(int idConductor) => _api.delete('/api/admin/conductores/$idConductor/permisos');
 
+  /// QR de cobro que subio el conductor (de 0 a 3).
+  Future<List<QrCobro>> qrConductor(int idConductor) =>
+      _api.lista('/api/admin/conductores/$idConductor/qr', QrCobro.desdeJson);
+
+  Future<Uint8List> imagenQr(int idConductor, int idQr) =>
+      _api.bytes('/api/admin/conductores/$idConductor/qr/$idQr/imagen');
+
+  Future<void> eliminarQr(int idConductor, int idQr) => _api.delete('/api/admin/conductores/$idConductor/qr/$idQr');
+
   // ------------------------------------------------------------ documentos
 
   Future<Uint8List> pdf(int idDocumento) => _api.bytes('/api/admin/documentos-conductor/$idDocumento/archivo');

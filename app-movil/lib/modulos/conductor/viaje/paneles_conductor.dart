@@ -15,36 +15,55 @@ String _km(double? metros) {
   return '${(metros / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
 }
 
-/// Lista de solicitudes de viaje disponibles.
+/// Lista de solicitudes de viaje disponibles, desplegable: cerrada solo se ve la barra "Solicitudes
+/// de viaje" con el contador, asi no tapa el mapa; la flecha (o tocar la barra) la abre y la cierra.
 class PanelSolicitudes extends StatelessWidget {
   final FlujoConductor flujo;
 
   /// Vuelve a consultar si la administracion ya aprobo la cuenta (solo en revision).
   final VoidCallback? onRevisarAprobacion;
 
-  const PanelSolicitudes({super.key, required this.flujo, this.onRevisarAprobacion});
+  const PanelSolicitudes({
+    super.key,
+    required this.flujo,
+    this.onRevisarAprobacion,
+  });
 
   @override
   Widget build(BuildContext context) {
     final lista = flujo.solicitudes;
+    final abierto = flujo.listaAbierta;
+    final onAlternar = flujo.alternarLista;
+    final nuevas = flujo.nuevas;
     if (flujo.enRevision) return _EnRevision(situacion: flujo.situacionAprobacion, onRevisar: onRevisarAprobacion);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
-            const Expanded(
-              child: Text(
-                'Solicitudes de viaje',
-                style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700),
+            Expanded(
+              child: Semantics(
+                button: true,
+                label: abierto ? 'Esconder solicitudes' : 'Ver solicitudes',
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onAlternar,
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Text(
+                      'Solicitudes de viaje',
+                      style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ),
               ),
             ),
-            if (lista.isNotEmpty)
+            if (nuevas > 0)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(color: ColoresApp.rojo, borderRadius: BorderRadius.circular(20)),
                 child: Text(
-                  '${lista.length}',
+                  '$nuevas',
                   style: const TextStyle(color: ColoresApp.blanco, fontWeight: FontWeight.w700),
                 ),
               ),
@@ -53,38 +72,52 @@ class PanelSolicitudes extends StatelessWidget {
               tooltip: 'Actualizar',
               icon: const FaIcon(FontAwesomeIcons.arrowsRotate, color: ColoresApp.textoSuave, size: 16),
             ),
-          ],
-        ),
-        const SizedBox(height: 6),
-        if (!flujo.enLinea)
-          const _Mensaje(
-            icono: FontAwesomeIcons.powerOff,
-            texto: 'Estás desconectado. Toca el botón del centro para conectarte y recibir solicitudes.',
-            color: ColoresApp.textoSuave,
-          )
-        else if (!flujo.listaCargada)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 18),
-            child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
-          )
-        else if (flujo.errorLista != null)
-          _Mensaje(icono: FontAwesomeIcons.circleExclamation, texto: flujo.errorLista!, color: ColoresApp.rojo)
-        else if (lista.isEmpty)
-          const _Mensaje(
-            icono: FontAwesomeIcons.hourglassHalf,
-            texto: 'No hay solicitudes por ahora. La lista se actualiza sola: cuando un pasajero pida un taxi aparecerá aquí.',
-            color: ColoresApp.textoSuave,
-          )
-        else
-          for (final solicitud in lista)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _TarjetaSolicitud(
-                solicitud: solicitud,
-                distanciaAMi: flujo.metrosDesdeMi(solicitud.origen),
-                onTap: () => flujo.verSolicitud(solicitud),
+            IconButton(
+              onPressed: onAlternar,
+              tooltip: abierto ? 'Esconder solicitudes' : 'Ver solicitudes',
+              style: IconButton.styleFrom(backgroundColor: ColoresApp.azulSuave),
+              icon: AnimatedRotation(
+                turns: abierto ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: const FaIcon(FontAwesomeIcons.chevronUp, color: ColoresApp.azul, size: 15),
               ),
             ),
+          ],
+        ),
+        if (!abierto)
+          const SizedBox.shrink()
+        else ...[
+          const SizedBox(height: 6),
+          if (!flujo.enLinea)
+            const _Mensaje(
+              icono: FontAwesomeIcons.powerOff,
+              texto: 'Estás desconectado. Toca el botón del centro para conectarte y recibir solicitudes.',
+              color: ColoresApp.textoSuave,
+            )
+          else if (!flujo.listaCargada)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 18),
+              child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+            )
+          else if (flujo.errorLista != null)
+            _Mensaje(icono: FontAwesomeIcons.circleExclamation, texto: flujo.errorLista!, color: ColoresApp.rojo)
+          else if (lista.isEmpty)
+            const _Mensaje(
+              icono: FontAwesomeIcons.hourglassHalf,
+              texto: 'No hay solicitudes por ahora. La lista se actualiza sola: cuando un pasajero pida un taxi aparecerá aquí.',
+              color: ColoresApp.textoSuave,
+            )
+          else
+            for (final solicitud in lista)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: _TarjetaSolicitud(
+                  solicitud: solicitud,
+                  distanciaAMi: flujo.metrosDesdeMi(solicitud.origen),
+                  onTap: () => flujo.verSolicitud(solicitud),
+                ),
+              ),
+        ],
       ],
     );
   }
@@ -99,9 +132,7 @@ class _TarjetaSolicitud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final metrosViaje = solicitud.tieneRuta
-        ? ServiciosMapa.metros(solicitud.origen!, solicitud.destino!)
-        : null;
+    final metrosViaje = solicitud.tieneRuta ? ServiciosMapa.metros(solicitud.origen!, solicitud.destino!) : null;
     return Material(
       color: ColoresApp.blanco,
       shape: RoundedRectangleBorder(
@@ -146,6 +177,7 @@ class _TarjetaSolicitud extends StatelessWidget {
                     DatoRuta(icono: FontAwesomeIcons.locationArrow, texto: 'A ${_km(distanciaAMi)} de ti'),
                   if (metrosViaje != null)
                     DatoRuta(icono: FontAwesomeIcons.route, texto: 'Viaje de ${_km(metrosViaje)} aprox.'),
+                  _DatoPago(solicitud.metodoPago),
                 ],
               ),
               const SizedBox(height: 8),
@@ -225,7 +257,7 @@ class PanelDetalleSolicitud extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         RecuadroPrecio(
-          etiqueta: 'Cobras en efectivo',
+          etiqueta: MetodoPago.frase('Cobras', solicitud.metodoPago),
           detalle: ganancia == null
               ? null
               : 'Tu ganancia: ${formatoBs(ganancia)} (comisión ${comision.toStringAsFixed(0)}%)',
@@ -256,7 +288,20 @@ class PanelViajeConductor extends StatelessWidget {
   final VoidCallback onAvanzar;
   final VoidCallback onCancelar;
 
-  const PanelViajeConductor({super.key, required this.flujo, required this.onAvanzar, required this.onCancelar});
+  /// Cambiar el metodo de pago (efectivo o QR) directamente.
+  final ValueChanged<String> onCambiarPago;
+
+  /// Aceptar (true) o rechazar el cambio de pago que pidio el pasajero.
+  final ValueChanged<bool> onResponderPago;
+
+  const PanelViajeConductor({
+    super.key,
+    required this.flujo,
+    required this.onAvanzar,
+    required this.onCancelar,
+    required this.onCambiarPago,
+    required this.onResponderPago,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -291,7 +336,10 @@ class PanelViajeConductor extends StatelessWidget {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
-          child: Text(texto, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15)),
+          child: Text(
+            texto,
+            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15),
+          ),
         ),
         const SizedBox(height: 12),
         Row(
@@ -319,8 +367,30 @@ class PanelViajeConductor extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 10),
-        RecuadroPrecio(etiqueta: 'Cobra en efectivo', monto: formatoBs(viaje.precioFinal)),
-        const SizedBox(height: 14),
+        if (viaje.metodoPagoPedido != null) ...[
+          _PedidoCambioPago(viaje: viaje, ocupado: flujo.ocupado, onResponder: onResponderPago),
+          const SizedBox(height: 10),
+        ],
+        RecuadroPrecio(etiqueta: MetodoPago.frase('Cobra', viaje.metodoPago), monto: formatoBs(viaje.precioFinal)),
+        if (viaje.pagaConQr && !viaje.conductorTieneQr) ...[
+          const SizedBox(height: 8),
+          const _Mensaje(
+            icono: FontAwesomeIcons.triangleExclamation,
+            texto: 'No tienes QR registrado. Agrégalo en Más > Mis QR de cobro o cambia el cobro a efectivo.',
+            color: ColoresApp.rojo,
+          ),
+        ],
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: flujo.ocupado
+                ? null
+                : () => onCambiarPago(viaje.pagaConQr ? MetodoPago.efectivo : MetodoPago.qr),
+            icon: FaIcon(viaje.pagaConQr ? FontAwesomeIcons.moneyBill1 : FontAwesomeIcons.qrcode, size: 14),
+            label: Text(viaje.pagaConQr ? 'Cobrar en efectivo' : 'Cobrar por QR'),
+          ),
+        ),
+        const SizedBox(height: 4),
         if (boton.isNotEmpty)
           BotonPrincipal(texto: boton, color: colorBoton, cargando: flujo.ocupado, onPressed: onAvanzar),
         if (SituacionViaje.cancelables.contains(viaje.situacion)) ...[
@@ -332,6 +402,68 @@ class PanelViajeConductor extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// Metodo de pago de una solicitud, en la tarjeta de la lista.
+class _DatoPago extends StatelessWidget {
+  final String metodoPago;
+
+  const _DatoPago(this.metodoPago);
+
+  @override
+  Widget build(BuildContext context) => DatoRuta(
+    icono: metodoPago == MetodoPago.qr ? FontAwesomeIcons.qrcode : FontAwesomeIcons.moneyBill1,
+    texto: metodoPago == MetodoPago.qr ? 'Paga por QR' : 'Paga en efectivo',
+  );
+}
+
+/// El pasajero pidio pagar de otra forma: el conductor acepta o rechaza.
+class _PedidoCambioPago extends StatelessWidget {
+  final Viaje viaje;
+  final bool ocupado;
+  final ValueChanged<bool> onResponder;
+
+  const _PedidoCambioPago({required this.viaje, required this.ocupado, required this.onResponder});
+
+  @override
+  Widget build(BuildContext context) {
+    const naranja = Color(0xFFE67E22);
+    final pedido = viaje.metodoPagoPedido ?? MetodoPago.efectivo;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      decoration: BoxDecoration(
+        color: naranja.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: naranja.withValues(alpha: 0.4)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '${viaje.primerNombrePasajero} pide pagar ${pedido == MetodoPago.qr ? 'por QR' : 'en efectivo'}',
+            style: const TextStyle(color: naranja, fontWeight: FontWeight.w700, fontSize: 14.5),
+          ),
+          const SizedBox(height: 4),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              TextButton(
+                onPressed: ocupado ? null : () => onResponder(false),
+                style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
+                child: const Text('Rechazar'),
+              ),
+              const SizedBox(width: 6),
+              FilledButton(
+                onPressed: ocupado ? null : () => onResponder(true),
+                style: FilledButton.styleFrom(backgroundColor: ColoresApp.exito),
+                child: const Text('Aceptar'),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 }
@@ -375,7 +507,10 @@ class _EnRevision extends StatelessWidget {
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(titulo, style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w700)),
+              child: Text(
+                titulo,
+                style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w700),
+              ),
             ),
           ],
         ),
@@ -413,7 +548,9 @@ class _Mensaje extends StatelessWidget {
         children: [
           FaIcon(icono, color: color, size: 18),
           const SizedBox(width: 12),
-          Expanded(child: Text(texto, style: TextStyle(color: color == ColoresApp.textoSuave ? ColoresApp.texto : color))),
+          Expanded(
+            child: Text(texto, style: TextStyle(color: color == ColoresApp.textoSuave ? ColoresApp.texto : color)),
+          ),
         ],
       ),
     );

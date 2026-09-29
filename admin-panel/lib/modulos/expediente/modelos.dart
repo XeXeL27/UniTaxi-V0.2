@@ -241,3 +241,18 @@ class FavoritoExpediente {
     posicion: puntoDesdeWkt(json['ubicacionWkt'] as String?),
   );
 }
+
+/// QR de cobro del conductor (QrPagoResponse). La imagen se pide aparte.
+class QrCobro {
+  final int id;
+  final int numero;
+  final DateTime? actualizadoEn;
+
+  const QrCobro({required this.id, required this.numero, this.actualizadoEn});
+
+  factory QrCobro.desdeJson(Map<String, dynamic> json) => QrCobro(
+    id: (json['idQr'] as num).toInt(),
+    numero: (json['numero'] as num?)?.toInt() ?? 1,
+    actualizadoEn: Formato.leerFecha(json['actualizadoEn']),
+  );
+}

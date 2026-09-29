@@ -12,6 +12,7 @@ import com.taxiuap.backend.institution.entity.Estudiante;
 import com.taxiuap.backend.pricing.entity.Descuento;
 import com.taxiuap.backend.pricing.entity.ReglaDescuentoEstudiantil;
 import com.taxiuap.backend.pricing.entity.Tarifa;
+import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
@@ -111,6 +112,16 @@ public class Viaje extends EntidadAuditable {
     @Enumerated(EnumType.STRING)
     @Column(name = "cancelado_por", length = 20, nullable = true)
     private CanceladoPor canceladoPor;
+
+    /** Metodo de pago vigente. Empieza con el de la solicitud; solo el conductor lo cambia. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_pago", length = 20)
+    private MetodoPago metodoPago;
+
+    /** Cambio de metodo de pago que pidio el pasajero y espera la respuesta del conductor. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metodo_pago_pedido", length = 20)
+    private MetodoPago metodoPagoPedido;
 
     @Column(name = "fecha_inicio")
     private LocalDateTime fechaInicio;

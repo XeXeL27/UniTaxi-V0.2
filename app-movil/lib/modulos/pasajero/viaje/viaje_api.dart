@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/cliente_api.dart';
@@ -45,12 +47,13 @@ class ViajeApi {
   Future<PrecioViaje> precio() async =>
       PrecioViaje.desdeJson(await cliente.get('/api/pasajero/solicitudes/precio') as Map<String, dynamic>);
 
-  Future<Solicitud> solicitar(PuntoRuta origen, PuntoRuta destino) async {
+  Future<Solicitud> solicitar(PuntoRuta origen, PuntoRuta destino, {String metodoPago = MetodoPago.efectivo}) async {
     final datos = await cliente.post('/api/pasajero/solicitudes', {
       'origenWkt': wktDesdePunto(origen.posicion),
       'destinoWkt': wktDesdePunto(destino.posicion),
       'origenDireccion': origen.texto,
       'destinoDireccion': destino.texto,
+      'metodoPago': metodoPago,
     });
     return Solicitud.desdeJson(datos as Map<String, dynamic>);
   }
@@ -77,6 +80,16 @@ class ViajeApi {
     await cliente.post('/api/pasajero/viajes/$id/cancelar', {'motivo': 'Cancelado por el pasajero'})
         as Map<String, dynamic>,
   );
+
+  /// Pide al conductor pagar de otra forma; vale cuando el conductor acepta.
+  Future<Viaje> pedirCambioPago(int idViaje, String metodoPago) async => Viaje.desdeJson(
+    await cliente.post('/api/pasajero/viajes/$idViaje/metodo-pago', {'metodoPago': metodoPago}) as Map<String, dynamic>,
+  );
+
+  /// QR de cobro del conductor del viaje.
+  Future<List<QrPago>> qrConductor(int idViaje) => cliente.lista('/api/pasajero/viajes/$idViaje/qr', QrPago.desdeJson);
+
+  Future<Uint8List?> imagenQr(int idViaje, int idQr) => cliente.bytes('/api/pasajero/viajes/$idViaje/qr/$idQr/imagen');
 
   Future<List<ConductorEnLinea>> conductoresEnLinea() async {
     final datos = await cliente.get('/api/pasajero/conductores-en-linea') as List<dynamic>;

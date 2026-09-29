@@ -2,12 +2,14 @@ package com.taxiuap.backend.trip.dto;
 
 import java.math.BigDecimal;
 
+import com.taxiuap.backend.pricing.enums.MetodoPago;
+
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 
 /**
  * Datos para que un pasajero solicite un viaje. Origen y destino viajan como WKT POINT. Sin
- * categoria de servicio se usa la categoria ESTANDAR (taxi comun).
+ * categoria de servicio se usa la categoria ESTANDAR (taxi comun). Sin metodo de pago, EFECTIVO.
  */
 public record SolicitudViajeRequest(
         Integer idCategoriaServicio,
@@ -15,5 +17,6 @@ public record SolicitudViajeRequest(
         @NotBlank String destinoWkt,
         String origenDireccion,
         String destinoDireccion,
-        @PositiveOrZero BigDecimal precioSugerido) {
+        @PositiveOrZero BigDecimal precioSugerido,
+        MetodoPago metodoPago) {
 }

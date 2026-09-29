@@ -27,6 +27,32 @@ class SituacionViaje {
   };
 }
 
+/// Como paga el pasajero (enum MetodoPago del backend). Por ahora efectivo o el QR del conductor.
+class MetodoPago {
+  static const efectivo = 'EFECTIVO';
+  static const qr = 'QR';
+
+  static String nombre(String metodo) => metodo == qr ? 'QR' : 'Efectivo';
+
+  /// "Pagas en efectivo" / "Pagas por QR" (o "Cobras ..." para el conductor).
+  static String frase(String verbo, String metodo) => metodo == qr ? '$verbo por QR' : '$verbo en efectivo';
+}
+
+/// QR de cobro del conductor (QrPagoResponse). La imagen se pide aparte.
+class QrPago {
+  final int id;
+  final int numero;
+  final DateTime? actualizadoEn;
+
+  const QrPago({required this.id, required this.numero, this.actualizadoEn});
+
+  factory QrPago.desdeJson(Map<String, dynamic> json) => QrPago(
+    id: (json['idQr'] as num).toInt(),
+    numero: (json['numero'] as num?)?.toInt() ?? 1,
+    actualizadoEn: fechaDesdeJson(json['actualizadoEn']),
+  );
+}
+
 /// Precio del viaje que fija la plataforma.
 class PrecioViaje {
   final double? precio;
@@ -56,6 +82,7 @@ class Solicitud {
   final double? precio;
   final String situacion;
   final DateTime? fecha;
+  final String metodoPago;
 
   const Solicitud({
     required this.id,
@@ -67,6 +94,7 @@ class Solicitud {
     required this.precio,
     required this.situacion,
     required this.fecha,
+    this.metodoPago = MetodoPago.efectivo,
   });
 
   factory Solicitud.desdeJson(Map<String, dynamic> json) => Solicitud(
@@ -79,6 +107,7 @@ class Solicitud {
     precio: numeroDesdeJson(json['precioSugerido']),
     situacion: json['situacionSolicitud'] as String? ?? '',
     fecha: fechaDesdeJson(json['fechaSolicitud']),
+    metodoPago: json['metodoPago'] as String? ?? MetodoPago.efectivo,
   );
 
   bool get activa => situacion == 'PENDIENTE' || situacion == 'CON_OFERTAS';
@@ -111,6 +140,11 @@ class Viaje {
   final DateTime? fechaInicio;
   final DateTime? fechaFin;
   final bool calificadoPorPasajero;
+  final String metodoPago;
+
+  /// Cambio de metodo que pidio el pasajero y el conductor todavia no respondio.
+  final String? metodoPagoPedido;
+  final bool conductorTieneQr;
 
   const Viaje({
     required this.id,
@@ -132,6 +166,9 @@ class Viaje {
     required this.fechaInicio,
     required this.fechaFin,
     required this.calificadoPorPasajero,
+    this.metodoPago = MetodoPago.efectivo,
+    this.metodoPagoPedido,
+    this.conductorTieneQr = false,
   });
 
   factory Viaje.desdeJson(Map<String, dynamic> json) => Viaje(
@@ -154,7 +191,12 @@ class Viaje {
     fechaInicio: fechaDesdeJson(json['fechaInicio']),
     fechaFin: fechaDesdeJson(json['fechaFin']),
     calificadoPorPasajero: json['calificadoPorPasajero'] as bool? ?? false,
+    metodoPago: json['metodoPago'] as String? ?? MetodoPago.efectivo,
+    metodoPagoPedido: json['metodoPagoPedido'] as String?,
+    conductorTieneQr: json['conductorTieneQr'] as bool? ?? false,
   );
+
+  bool get pagaConQr => metodoPago == MetodoPago.qr;
 
   bool get tieneRuta => origen != null && destino != null;
 

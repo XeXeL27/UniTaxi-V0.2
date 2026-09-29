@@ -44,8 +44,8 @@ const List<SeccionLegal> terminosCondiciones = [
   (
     titulo: 'Precio y pago',
     texto:
-        'El precio del viaje se muestra antes de pedirlo y se paga en efectivo al conductor al llegar al '
-        'destino.',
+        'El precio del viaje se muestra antes de pedirlo y se paga al conductor al llegar al destino, en '
+        'efectivo o con el QR de su banca móvil. Solo el conductor puede cambiar el método de pago.',
   ),
   (
     titulo: 'Cancelaciones',

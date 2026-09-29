@@ -21,6 +21,7 @@ import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.repository.PersonaRepository;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
+import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.ConflictoException;
 import com.taxiuap.backend.shared.exception.NegocioException;
@@ -50,6 +51,7 @@ public class RegistroGoogleService {
     private final GestionPersonaService gestionPersonaService;
     private final CuentaUsuarioService cuentaUsuarioService;
     private final RegistroMotoConductorService registroMotoConductorService;
+    private final QrPagoConductorService qrPagoConductorService;
     private final FotoPerfilService fotoPerfilService;
     private final AutenticacionService autenticacionService;
 
@@ -99,6 +101,7 @@ public class RegistroGoogleService {
     public TokenResponse registrarConductor(PerfilGoogle perfil, RegistroConductorGoogleRequest datos,
             Map<String, MultipartFile> archivos) {
         Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+        List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
 
         Optional<Persona> existente = personaActiva(perfil);
         Persona persona;
@@ -117,6 +120,7 @@ public class RegistroGoogleService {
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
+        qrPagoConductorService.guardarDelRegistro(conductor, qrs);
         return autenticacionService.tokensDe(usuario);
     }
 

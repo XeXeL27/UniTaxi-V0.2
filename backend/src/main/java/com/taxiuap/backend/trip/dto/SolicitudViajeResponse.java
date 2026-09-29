@@ -3,6 +3,7 @@ package com.taxiuap.backend.trip.dto;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
+import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 
 /** Datos publicos de una solicitud de viaje, para el pasajero dueno o los conductores. */
@@ -19,5 +20,6 @@ public record SolicitudViajeResponse(
         BigDecimal precioSugerido,
         SituacionSolicitud situacionSolicitud,
         LocalDateTime fechaSolicitud,
-        int cantidadOfertas) {
+        int cantidadOfertas,
+        MetodoPago metodoPago) {
 }

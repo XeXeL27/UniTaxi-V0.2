@@ -30,6 +30,7 @@ import com.taxiuap.backend.pricing.repository.ComisionRepository;
 import com.taxiuap.backend.pricing.repository.PagoRepository;
 import com.taxiuap.backend.rating.repository.CalificacionRepository;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
+import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
@@ -37,6 +38,9 @@ import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
+import com.taxiuap.backend.trip.enums.SituacionOferta;
+import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
+import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
@@ -74,8 +78,11 @@ public class ViajeService {
     private final HistorialViajeService historialViajeService;
     private final SimpMessagingTemplate mensajeriaTemplate;
     private final CalificacionRepository calificacionRepository;
+    private final QrPagoConductorService qrPagoConductorService;
+    private final SolicitudViajeRepository solicitudViajeRepository;
+    private final OfertaViajeRepository ofertaViajeRepository;
 
-    @Value("${taxiuap.comision.porcentaje:15}")
+    @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
 
     /**
@@ -110,6 +117,7 @@ public class ViajeService {
         viaje.setMontoDescuento(calculo.montoDescuento());
         viaje.setPrecioFinal(calculo.precioFinal());
         viaje.setSituacionViaje(SituacionViaje.CONFIRMADO);
+        viaje.setMetodoPago(solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO);
 
         // Solo se deja constancia del estudiante y la regla cuando realmente hubo descuento.
         if (calculo.montoDescuento().compareTo(BigDecimal.ZERO) > 0) {
@@ -162,9 +170,63 @@ public class ViajeService {
 
         // Regla de negocio 7: al completar el viaje se crea el pago, la comision y se actualiza
         // la billetera del conductor, todo dentro de esta misma transaccion.
-        procesarPagoYComision(viaje, request.metodoPago());
+        MetodoPago metodoPago = request != null && request.metodoPago() != null
+                ? metodoPagoPermitido(request.metodoPago())
+                : metodoPagoDe(viaje);
+        viaje.setMetodoPago(metodoPago);
+        viaje.setMetodoPagoPedido(null);
+        procesarPagoYComision(viaje, metodoPago);
 
         return registrarYNotificar(viaje);
+    }
+
+    /**
+     * El pasajero pide pagar de otra forma (EFECTIVO o QR). No cambia nada hasta que el conductor
+     * acepte: el pedido queda en metodo_pago_pedido y el conductor lo ve en su consulta periodica.
+     */
+    @Transactional
+    public ViajeResponse pedirCambioMetodoPago(Long idViaje, MetodoPago metodoPago) {
+        Pasajero pasajero = obtenerPasajeroActual();
+        Viaje viaje = obtenerViaje(idViaje);
+        if (!viaje.getPasajero().getId().equals(pasajero.getId())) {
+            throw RecursoNoEncontradoException.de("Viaje", idViaje);
+        }
+        validarViajeActivo(viaje);
+        MetodoPago pedido = metodoPagoPermitido(metodoPago);
+        if (pedido == metodoPagoDe(viaje)) {
+            throw new NegocioException("El viaje ya se paga con " + nombreMetodo(pedido));
+        }
+        validarQrDelConductor(viaje, pedido, "El conductor no tiene QR registrado: paga en efectivo");
+        viaje.setMetodoPagoPedido(pedido);
+        return guardarYNotificar(viaje);
+    }
+
+    /** El conductor acepta o rechaza el cambio de metodo que pidio el pasajero. */
+    @Transactional
+    public ViajeResponse responderCambioMetodoPago(Long idViaje, boolean aceptar) {
+        Viaje viaje = obtenerViajeDelConductor(idViaje);
+        validarViajeActivo(viaje);
+        if (viaje.getMetodoPagoPedido() == null) {
+            throw new NegocioException("El pasajero no pidio cambiar el metodo de pago");
+        }
+        if (aceptar) {
+            validarQrDelConductor(viaje, viaje.getMetodoPagoPedido(), "Primero agregue su QR en Mas > Mis QR de cobro");
+            viaje.setMetodoPago(viaje.getMetodoPagoPedido());
+        }
+        viaje.setMetodoPagoPedido(null);
+        return guardarYNotificar(viaje);
+    }
+
+    /** El conductor cambia el metodo de pago directamente (por ejemplo, tras hablar con el pasajero). */
+    @Transactional
+    public ViajeResponse cambiarMetodoPago(Long idViaje, MetodoPago metodoPago) {
+        Viaje viaje = obtenerViajeDelConductor(idViaje);
+        validarViajeActivo(viaje);
+        MetodoPago nuevo = metodoPagoPermitido(metodoPago);
+        validarQrDelConductor(viaje, nuevo, "Primero agregue su QR en Mas > Mis QR de cobro");
+        viaje.setMetodoPago(nuevo);
+        viaje.setMetodoPagoPedido(null);
+        return guardarYNotificar(viaje);
     }
 
     @Transactional
@@ -184,8 +246,42 @@ public class ViajeService {
         viaje.setCanceladoPor(canceladoPor);
         viaje.getSolicitud().setSituacionSolicitud(SituacionSolicitud.CANCELADA);
         viaje = viajeRepository.save(viaje);
+        if (canceladoPor == CanceladoPor.CONDUCTOR) {
+            republicarSolicitud(viaje);
+        }
 
         return registrarYNotificar(viaje);
+    }
+
+    /**
+     * El conductor cancelo: el pasajero no pierde su pedido. Como cada solicitud tiene a lo sumo un
+     * viaje (id_sol_viaje unico), se publica una solicitud nueva con los mismos datos, PENDIENTE, para
+     * que la tome otro conductor. Al conductor que cancelo se le deja una oferta RECHAZADA en la nueva
+     * solicitud, asi no la vuelve a ver en su lista.
+     */
+    private void republicarSolicitud(Viaje viaje) {
+        SolicitudViaje anterior = viaje.getSolicitud();
+        SolicitudViaje nueva = new SolicitudViaje();
+        nueva.setPasajero(anterior.getPasajero());
+        nueva.setCategoriaServicio(anterior.getCategoriaServicio());
+        nueva.setOrigen(anterior.getOrigen());
+        nueva.setDestino(anterior.getDestino());
+        nueva.setOrigenDireccion(anterior.getOrigenDireccion());
+        nueva.setDestinoDireccion(anterior.getDestinoDireccion());
+        nueva.setPrecioSugerido(anterior.getPrecioSugerido());
+        nueva.setMetodoPago(metodoPagoDe(viaje));
+        nueva.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
+        nueva.setFechaSolicitud(LocalDateTime.now());
+        nueva.setEstadoSolViaje(EstadoRegistro.A);
+        nueva = solicitudViajeRepository.save(nueva);
+
+        OfertaViaje rechazo = new OfertaViaje();
+        rechazo.setSolicitud(nueva);
+        rechazo.setConductor(viaje.getConductor());
+        rechazo.setPrecioOfertado(nueva.getPrecioSugerido());
+        rechazo.setSituacionOferta(SituacionOferta.RECHAZADA);
+        rechazo.setFechaOferta(LocalDateTime.now());
+        ofertaViajeRepository.save(rechazo);
     }
 
     public List<ViajeResponse> listarDelPasajero() {
@@ -298,12 +394,16 @@ public class ViajeService {
                 viaje.getCanceladoPor(),
                 viaje.getFechaInicio(),
                 viaje.getFechaFin(),
-                calificacionRepository.existsByViajeIdAndUsuarioEmisorId(viaje.getId(), usuarioPasajero.getId()));
+                calificacionRepository.existsByViajeIdAndUsuarioEmisorId(viaje.getId(), usuarioPasajero.getId()),
+                metodoPagoDe(viaje),
+                viaje.getMetodoPagoPedido(),
+                qrPagoConductorService.tieneQr(viaje.getConductor().getId()));
     }
 
     /**
-     * Regla de negocio 7: crea el pago (COMPLETADO si es en efectivo, PENDIENTE en otro caso) y
-     * la comision de la plataforma, y actualiza la billetera del conductor segun el metodo de pago.
+     * Regla de negocio 7: crea el pago y la comision de la plataforma, y actualiza la billetera del
+     * conductor segun el metodo de pago. En efectivo y por QR el dinero llega directo al conductor (el
+     * QR es de su propia banca movil): el pago queda COMPLETADO y solo se anota la comision como deuda.
      */
     private void procesarPagoYComision(Viaje viaje, MetodoPago metodoPago) {
         LocalDateTime ahora = LocalDateTime.now();
@@ -312,7 +412,8 @@ public class ViajeService {
         pago.setViaje(viaje);
         pago.setMetodoPago(metodoPago);
         pago.setMonto(viaje.getPrecioFinal().setScale(2, RoundingMode.HALF_UP));
-        pago.setSituacionPago(metodoPago == MetodoPago.EFECTIVO ? SituacionPago.COMPLETADO : SituacionPago.PENDIENTE);
+        boolean directoAlConductor = metodoPago == MetodoPago.EFECTIVO || metodoPago == MetodoPago.QR;
+        pago.setSituacionPago(directoAlConductor ? SituacionPago.COMPLETADO : SituacionPago.PENDIENTE);
         pago.setFechaPago(ahora);
         pagoRepository.save(pago);
 
@@ -329,17 +430,53 @@ public class ViajeService {
         BilleteraConductor billetera = billeteraConductorRepository.findByConductorId(viaje.getConductor().getId())
                 .orElseThrow(() -> RecursoNoEncontradoException.de("BilleteraConductor", viaje.getConductor().getId()));
 
-        if (metodoPago == MetodoPago.EFECTIVO) {
-            // El conductor ya cobro el viaje en mano: le queda pendiente pagar la comision a la plataforma.
+        if (directoAlConductor) {
+            // El conductor ya cobro el viaje: le queda pendiente pagar la comision a la plataforma.
             billetera.setDeudaComision(
                     billetera.getDeudaComision().add(montoComision).setScale(2, RoundingMode.HALF_UP));
         } else {
-            // El pago paso por la plataforma (QR/tarjeta): se le acredita el neto (precio final menos comision).
+            // El pago paso por la plataforma (tarjeta): se le acredita el neto (precio final menos comision).
             BigDecimal neto = viaje.getPrecioFinal().subtract(montoComision);
             billetera.setSaldo(billetera.getSaldo().add(neto).setScale(2, RoundingMode.HALF_UP));
         }
         billetera.setActualizadoEn(ahora);
         billeteraConductorRepository.save(billetera);
+    }
+
+    private static MetodoPago metodoPagoDe(Viaje viaje) {
+        return viaje.getMetodoPago() != null ? viaje.getMetodoPago() : MetodoPago.EFECTIVO;
+    }
+
+    /** Por ahora solo se paga en efectivo o con el QR del conductor. */
+    private static MetodoPago metodoPagoPermitido(MetodoPago metodoPago) {
+        if (metodoPago != MetodoPago.EFECTIVO && metodoPago != MetodoPago.QR) {
+            throw new NegocioException("Metodo de pago no disponible: " + metodoPago);
+        }
+        return metodoPago;
+    }
+
+    private static String nombreMetodo(MetodoPago metodoPago) {
+        return metodoPago == MetodoPago.QR ? "QR" : "efectivo";
+    }
+
+    private void validarQrDelConductor(Viaje viaje, MetodoPago metodoPago, String mensaje) {
+        if (metodoPago == MetodoPago.QR && !qrPagoConductorService.tieneQr(viaje.getConductor().getId())) {
+            throw new NegocioException(mensaje);
+        }
+    }
+
+    private static void validarViajeActivo(Viaje viaje) {
+        if (ESTADOS_FINALES.contains(viaje.getSituacionViaje())) {
+            throw new NegocioException("El viaje ya termino");
+        }
+    }
+
+    /** Guarda un cambio que no es de situacion (sin historial) y avisa a las dos partes. */
+    private ViajeResponse guardarYNotificar(Viaje viaje) {
+        viaje = viajeRepository.save(viaje);
+        ViajeResponse respuesta = aRespuesta(viaje);
+        notificarCambio(viaje, respuesta);
+        return respuesta;
     }
 
     private void validarTransicion(Viaje viaje, SituacionViaje esperado, SituacionViaje nuevo) {

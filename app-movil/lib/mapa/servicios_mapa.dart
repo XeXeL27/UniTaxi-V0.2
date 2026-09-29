@@ -59,9 +59,7 @@ class ServiciosMapa {
         if (json['code'] == 'Ok' && rutas != null && rutas.isNotEmpty) {
           final ruta = rutas.first as Map<String, dynamic>;
           final coordenadas = (ruta['geometry'] as Map<String, dynamic>)['coordinates'] as List<dynamic>;
-          final puntos = [
-            for (final c in coordenadas) LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble()),
-          ];
+          final puntos = [for (final c in coordenadas) LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())];
           if (puntos.length >= 2) {
             return Ruta(
               puntos: puntos,
@@ -113,32 +111,34 @@ class ServiciosMapa {
     }
   }
 
-  /// Lugares que coinciden con [texto], primero los cercanos a [cerca] (o a Cobija). Lista vacia si
-  /// el servicio no responde. Nominatim pide no buscar en cada tecla: la pantalla espera a que el
+  /// Lugares de Cobija que coinciden con [texto], primero los cercanos a [cerca]. Solo devuelve
+  /// resultados dentro de la ciudad (caja fija alrededor de Cobija, no del GPS). Lista vacia si el
+  /// servicio no responde. Nominatim pide no buscar en cada tecla: la pantalla espera a que el
   /// usuario deje de escribir.
   static Future<List<LugarEncontrado>> buscar(String texto, {LatLng? cerca}) async {
     final consulta = texto.trim();
     if (consulta.length < 3) return const [];
-    final centro = cerca ?? Config.centroCobija;
-    // Caja de unos 25 km alrededor del centro: prioriza la ciudad sin excluir lo demas.
-    const radio = 0.22;
     final caja = [
-      centro.longitude - radio,
-      centro.latitude + radio,
-      centro.longitude + radio,
-      centro.latitude - radio,
+      _cajaCobija.oeste,
+      _cajaCobija.norte,
+      _cajaCobija.este,
+      _cajaCobija.sur,
     ].map((v) => v.toStringAsFixed(4)).join(',');
+    // bounded=1: Nominatim solo devuelve lo que cae dentro de la caja (sin ciudades de otros
+    // departamentos); countrycodes=bo deja fuera Brasileia y Epitaciolandia, al otro lado del rio.
     final url = Uri.parse(
-      '$_servidorDirecciones/search?format=jsonv2&limit=8&accept-language=es&countrycodes=bo'
-      '&viewbox=$caja&q=${Uri.encodeQueryComponent(consulta)}',
+      '$_servidorDirecciones/search?format=jsonv2&limit=10&accept-language=es&countrycodes=bo'
+      '&bounded=1&viewbox=$caja&q=${Uri.encodeQueryComponent(consulta)}',
     );
     try {
       final respuesta = await http.get(url, headers: _cabeceras()).timeout(const Duration(seconds: 8));
       if (respuesta.statusCode != 200) return const [];
       final lista = jsonDecode(utf8.decode(respuesta.bodyBytes)) as List<dynamic>;
-      return [
+      final lugares = [
         for (final item in lista.cast<Map<String, dynamic>>())
-          if (double.tryParse('${item['lat']}') != null && double.tryParse('${item['lon']}') != null)
+          if (double.tryParse('${item['lat']}') != null &&
+              double.tryParse('${item['lon']}') != null &&
+              _cajaCobija.contiene(double.parse('${item['lat']}'), double.parse('${item['lon']}')))
             LugarEncontrado(
               nombre: (item['name'] as String?)?.trim().isNotEmpty == true
                   ? item['name'] as String
@@ -147,6 +147,10 @@ class ServiciosMapa {
               posicion: LatLng(double.parse('${item['lat']}'), double.parse('${item['lon']}')),
             ),
       ];
+      final referencia = cerca ?? Config.centroCobija;
+      const distancia = Distance();
+      lugares.sort((a, b) => distancia(referencia, a.posicion).compareTo(distancia(referencia, b.posicion)));
+      return lugares.take(8).toList();
     } catch (_) {
       return const [];
     }
@@ -197,8 +201,7 @@ class LugarEncontrado {
 }
 
 /// Texto de respaldo cuando no se conoce la direccion de un punto.
-String coordenadasTexto(LatLng punto) =>
-    '${punto.latitude.toStringAsFixed(5)}, ${punto.longitude.toStringAsFixed(5)}';
+String coordenadasTexto(LatLng punto) => '${punto.latitude.toStringAsFixed(5)}, ${punto.longitude.toStringAsFixed(5)}';
 
 /// WKT que espera la API: POINT(longitud latitud).
 String wktDesdePunto(LatLng punto) =>
@@ -214,3 +217,17 @@ LatLng? puntoDesdeWkt(String? wkt) {
   if (coincidencia == null) return null;
   return LatLng(double.parse(coincidencia.group(2)!), double.parse(coincidencia.group(1)!));
 }
+
+/// Area de Cobija (mancha urbana y alrededores cercanos, unos 8 km desde el centro).
+class _CajaCobija {
+  final double norte;
+  final double sur;
+  final double este;
+  final double oeste;
+
+  const _CajaCobija({required this.norte, required this.sur, required this.este, required this.oeste});
+
+  bool contiene(double lat, double lon) => lat <= norte && lat >= sur && lon <= este && lon >= oeste;
+}
+
+const _cajaCobija = _CajaCobija(norte: -10.97, sur: -11.11, este: -68.69, oeste: -68.83);
