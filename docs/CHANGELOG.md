@@ -5,6 +5,8 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-09-29 | 🎨 | Tarjeta flotante de distancia/ETA del conductor debajo de la cabecera (solo pasajero) |
+| 2026-09-29 | ✨ | Seguimiento en vivo del conductor: distancia y ETA al pasajero durante recogida y viaje |
 | 2026-09-29 | ✨ | Favoritos como segunda pestaña de Historial en la app del pasajero |
 
 ## Convenciones
@@ -16,6 +18,81 @@
 ---
 
 ## 2026-09-29
+
+### 🎨 Mejora · Tarjeta flotante de distancia/ETA del conductor (solo pasajero)
+
+- **Módulo / área:** `app-movil` (Flutter, pasajero)
+- **Descripción:** La distancia y el tiempo de llegada del conductor ahora se muestran en una
+  tarjeta flotante tipo notificación debajo de la cabecera superior, sobre el mapa. Solo visible
+  para el pasajero durante el viaje (CONFIRMADO → EN_CURSO).
+- **Cambios clave:**
+  - `CabeceraInicio`: se revirtió el parámetro `banner` (no se usa más).
+  - Nueva widget `TarjetaSeguimientoConductor`: Material blanco con elevación, radio 14, icono
+    circular con color del estado del viaje, título en negrita ("Llega en ~2 min" / "Llegas en
+    ~7 min") y subtítulo suave ("A 350 m · 1234-ABC" / "2,4 km hasta destino").
+  - La tarjeta aparece solo cuando hay viaje activo, ruta al conductor calculada, y etapa
+    enViaje. Se oculta al completar/cancelar.
+  - Al tocar la tarjeta, reabre el panel inferior si estaba plegado.
+  - Los números se actualizan en silencio (sin re-animar) vía `ListenableBuilder` sobre el flujo.
+- **Archivos afectados:**
+  - `app-movil/lib/widgets/inicio_mapa.dart` (CabeceraInicio revertido)
+  - `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart` (TarjetaSeguimientoConductor)
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart` (PanelViaje sin banner)
+- **Verificación:** `flutter analyze` sin incidencias.
+
+### ✨ Nuevo · Seguimiento en vivo del conductor asignado (pasajero)
+
+- **Módulo / área:** `backend` (Spring Boot) + `app-movil` (Flutter, pasajero)
+- **Descripción:** Cuando un conductor acepta un viaje, el pasajero ahora ve en tiempo real de
+  dónde viene el conductor, a qué distancia está y cuánto tarda en llegar. El seguimiento se
+  mantiene durante todo el viaje (recogida y trayecto al destino). La posición se recibe por
+  WebSocket STOMP con respaldo REST cada 3 s si el WebSocket falla.
+- **Cambios clave (backend):**
+  - `SeguimientoViajePublisher` (nuevo en `trip/service`): cuando un conductor reporta su
+    posición, si tiene un viaje activo, envía `PosicionConductorMensaje` a la cola por usuario
+    del pasajero (`/user/queue/conductor-ubicacion`). Solo ese pasajero recibe el mensaje.
+  - `UbicacionService.registrar()`: integrado con `SeguimientoViajePublisher` tras publicar al
+    admin.
+  - `UbicacionConductorRepository.distanciaMetrosHasta()`: consulta nativa PostGIS
+    (`ST_Distance` sobre geography) para calcular distancia en metros en línea recta.
+  - `UbicacionConductorViajeResponse` (nuevo DTO): latitud, longitud, rumbo, velocidad,
+    actualizadoEn, distanciaMetros, puntoReferencia (ORIGEN o DESTINO).
+  - `ViajeService.ubicacionConductorSeguimiento()`: valida que el llamante es el pasajero del
+    viaje y que el viaje está activo; devuelve la posición del conductor y la distancia al
+    punto de referencia (origen mientras va a recoger, destino durante el viaje).
+  - `GET /api/pasajero/viajes/{id}/ubicacion-conductor`: endpoint REST de respaldo.
+- **Cambios clave (app):**
+  - `ReceptorUbicacionConductor` (nuevo en `core/`): suscriptor STOMP que recibe la posición
+    del conductor en `/user/queue/conductor-ubicacion`.
+  - `UbicacionConductorViaje` (nuevo modelo): respuesta del endpoint REST de respaldo.
+  - `ViajeApi.ubicacionConductor()`: método para el respaldo REST.
+  - `ControladorMapa`: estado `conductorUbicacion` + `conductorRumbo` + `rutaConductor`;
+    métodos `iniciarSeguimientoConductor`, `cambiarPuntoReferenciaConductor`,
+    `ponerSeguimientoConductor`, `detenerSeguimientoConductor`.
+  - `MapaBase` (vista_mapa): dibuja la ruta punteada gris del conductor al punto de referencia
+    y el marcador del vehículo con rotación según el rumbo.
+  - `FlujoPasajero`: integra `ReceptorUbicacionConductor` al entrar en viaje; si no llega
+    posición por WebSocket en 10 s, pide por REST; actualiza el punto de referencia cuando
+    cambia la situación del viaje (origen → destino al pasar a EN_CURSO).
+  - `PanelViaje`: muestra "Tu conductor está a X m · llega en ~Y min" durante la recogida, y
+    "A tu destino: X, Y min" durante el viaje.
+- **Archivos afectados (backend):**
+  - `backend/src/main/java/com/taxiuap/backend/trip/service/SeguimientoViajePublisher.java` (nuevo)
+  - `backend/src/main/java/com/taxiuap/backend/location/service/UbicacionService.java` (inyección + llamada)
+  - `backend/src/main/java/com/taxiuap/backend/location/repository/UbicacionConductorRepository.java` (native query)
+  - `backend/src/main/java/com/taxiuap/backend/location/dto/UbicacionConductorViajeResponse.java` (nuevo)
+  - `backend/src/main/java/com/taxiuap/backend/trip/service/ViajeService.java` (método + inyección)
+  - `backend/src/main/java/com/taxiuap/backend/controller/pasajero/ViajePasajeroController.java` (endpoint)
+  - `backend/src/test/java/com/taxiuap/backend/location/service/UbicacionServiceTest.java` (mock)
+- **Archivos afectados (app):**
+  - `app-movil/lib/core/receptor_ubicacion.dart` (nuevo)
+  - `app-movil/lib/modulos/pasajero/viaje/viaje_api.dart` (modelo + método)
+  - `app-movil/lib/mapa/controlador_mapa.dart` (estado + métodos)
+  - `app-movil/lib/mapa/vista_mapa.dart` (ruta + marcador del conductor)
+  - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart` (integración STOMP + REST)
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart` (UI distancia/ETA)
+  - `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart` (pasa Sesion a FlujoPasajero)
+- **Verificación:** `./gradlew build` OK (40 tests pass); `flutter analyze` sin incidencias.
 
 ### ✨ Nuevo · Favoritos dentro de Historial (app del pasajero)
 

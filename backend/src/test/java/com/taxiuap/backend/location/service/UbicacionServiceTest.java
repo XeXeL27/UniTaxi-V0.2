@@ -41,6 +41,7 @@ import com.taxiuap.backend.location.repository.DisponibilidadConductorRepository
 import com.taxiuap.backend.location.repository.UbicacionConductorRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.trip.service.SeguimientoViajePublisher;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 
@@ -60,6 +61,8 @@ class UbicacionServiceTest {
     private VehiculoRepository vehiculoRepository;
     @Mock
     private ConductorUbicacionPublisher publisher;
+    @Mock
+    private SeguimientoViajePublisher seguimientoViajePublisher;
 
     @InjectMocks
     private UbicacionService servicio;

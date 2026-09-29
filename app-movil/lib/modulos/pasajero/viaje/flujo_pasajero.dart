@@ -4,6 +4,8 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/receptor_ubicacion.dart';
+import '../../../core/sesion.dart';
 import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../comun/modelos_viaje.dart';
@@ -24,8 +26,12 @@ class FlujoPasajero extends ChangeNotifier {
   /// Solo se ofrece calificar viajes terminados hace menos de este tiempo.
   static const _ventanaCalificacion = Duration(hours: 2);
 
+  /// Si no llega posicion por WebSocket en este tiempo, se pide por REST.
+  static const _ventanaPosicionStale = Duration(seconds: 10);
+
   final ViajeApi api;
   final ControladorMapa mapa;
+  final Sesion? sesion;
 
   EtapaPasajero etapa = EtapaPasajero.cargando;
   PrecioViaje? precio;
@@ -47,12 +53,20 @@ class FlujoPasajero extends ChangeNotifier {
   /// El GPS del pasajero esta a menos de [metrosLlegada] del destino durante el viaje.
   bool llegandoDestino = false;
 
+  /// Posicion del conductor asignado al viaje (recibida por WebSocket o REST).
+  UbicacionRecibida? ubicacionConductor;
+  DateTime? _ultimaPosicionRecibida;
+
+  /// Ruta calculada desde la posicion del conductor al punto de referencia.
+  Ruta? rutaAlConductor;
+
   Timer? _sondeo;
   bool _consultando = false;
   bool _cerrado = false;
   int _consultaDireccion = 0;
+  ReceptorUbicacionConductor? _receptor;
 
-  FlujoPasajero({required this.api, required this.mapa}) {
+  FlujoPasajero({required this.api, required this.mapa, this.sesion}) {
     mapa.alMoverseGps = _alMoverseGps;
   }
 
@@ -100,6 +114,7 @@ class FlujoPasajero extends ChangeNotifier {
 
   void _entrarEligiendo() {
     _detenerSondeo();
+    _detenerSeguimientoConductor();
     etapa = EtapaPasajero.eligiendo;
     solicitud = null;
     viaje = null;
@@ -265,6 +280,45 @@ class FlujoPasajero extends ChangeNotifier {
     mapa.aSigueGps = false;
     if (cambioDeViaje && nuevo.tieneRuta) mapa.ponerRuta(nuevo.puntoA, nuevo.puntoB);
     _iniciarSondeo(_consultarViaje);
+    _iniciarSeguimientoConductor(nuevo);
+    _avisar();
+  }
+
+  void _iniciarSeguimientoConductor(Viaje viaje) {
+    // Punto de referencia: origen mientras va a recoger (CONFIRMADO, EN_CAMINO, LLEGO),
+    // destino durante el viaje (EN_CURSO).
+    final referencia = viaje.situacion == SituacionViaje.enCurso ? viaje.destino : viaje.origen;
+    if (referencia != null) {
+      mapa.iniciarSeguimientoConductor(referencia);
+    }
+    _iniciarReceptor();
+  }
+
+  void _iniciarReceptor() {
+    _receptor?.cerrar();
+    if (sesion == null) return;
+    _receptor = ReceptorUbicacionConductor(
+      sesion: sesion!,
+      alRecibir: _alRecibirPosicionConductor,
+    );
+    _receptor!.iniciar();
+  }
+
+  void _alRecibirPosicionConductor(UbicacionRecibida ubicacion) {
+    if (_cerrado || etapa != EtapaPasajero.enViaje) return;
+    ubicacionConductor = ubicacion;
+    _ultimaPosicionRecibida = DateTime.now();
+    mapa.ponerSeguimientoConductor(ubicacion.posicion, rumbo: ubicacion.rumbo);
+    _recalcularRutaAlConductor(ubicacion.posicion);
+    _avisar();
+  }
+
+  Future<void> _recalcularRutaAlConductor(LatLng desde) async {
+    final viajeActual = viaje;
+    if (viajeActual == null) return;
+    final referencia = viajeActual.situacion == SituacionViaje.enCurso ? viajeActual.destino : viajeActual.origen;
+    if (referencia == null) return;
+    rutaAlConductor = await ServiciosMapa.calcularRuta(desde, referencia);
     _avisar();
   }
 
@@ -275,8 +329,25 @@ class FlujoPasajero extends ChangeNotifier {
     if (_cerrado || etapa != EtapaPasajero.enViaje) return;
     _revisarCambioPago(actual, nuevo);
     viaje = nuevo;
+
+    // Si cambio la situacion, actualizar el punto de referencia del seguimiento.
+    if (nuevo.situacion != actual.situacion) {
+      final referencia = nuevo.situacion == SituacionViaje.enCurso ? nuevo.destino : nuevo.origen;
+      if (referencia != null) {
+        mapa.cambiarPuntoReferenciaConductor(referencia);
+      }
+    }
+
+    // Respaldo REST: si no llego posicion por WebSocket en los ultimos 10 s, pedir por REST.
+    final stale = _ultimaPosicionRecibida == null ||
+        DateTime.now().difference(_ultimaPosicionRecibida!) > _ventanaPosicionStale;
+    if (stale) {
+      await _consultarUbicacionConductor(actual.id);
+    }
+
     if (nuevo.situacion == SituacionViaje.completado) {
       _detenerSondeo();
+      _detenerSeguimientoConductor();
       etapa = EtapaPasajero.calificando;
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
       if (nuevo.canceladoPor == 'CONDUCTOR') {
@@ -285,6 +356,7 @@ class FlujoPasajero extends ChangeNotifier {
         if (_cerrado || etapa != EtapaPasajero.enViaje) return;
         if (republicada != null) {
           aviso = 'El conductor canceló el viaje. Estamos buscando otro conductor.';
+          _detenerSeguimientoConductor();
           _entrarBuscando(republicada);
           return;
         }
@@ -292,10 +364,38 @@ class FlujoPasajero extends ChangeNotifier {
       } else {
         aviso = 'El viaje fue cancelado.';
       }
+      _detenerSeguimientoConductor();
       _entrarEligiendo();
       return;
     }
     _avisar();
+  }
+
+  Future<void> _consultarUbicacionConductor(int idViaje) async {
+    try {
+      final ubicacion = await api.ubicacionConductor(idViaje);
+      if (_cerrado || etapa != EtapaPasajero.enViaje) return;
+      if (ubicacion?.posicion != null) {
+        final recibida = UbicacionRecibida(
+          posicion: ubicacion!.posicion!,
+          rumbo: ubicacion.rumbo,
+          velocidad: ubicacion.velocidad,
+          actualizadoEn: ubicacion.actualizadoEn ?? DateTime.now(),
+        );
+        _alRecibirPosicionConductor(recibida);
+      }
+    } catch (_) {
+      // Un fallo de red puntual no corta el seguimiento; se reintenta en la proxima vuelta.
+    }
+  }
+
+  void _detenerSeguimientoConductor() {
+    _receptor?.cerrar();
+    _receptor = null;
+    ubicacionConductor = null;
+    _ultimaPosicionRecibida = null;
+    rutaAlConductor = null;
+    mapa.detenerSeguimientoConductor();
   }
 
   /// Avisa si el conductor respondio el pedido de cambio de pago o cambio el metodo por su cuenta.
@@ -399,6 +499,7 @@ class FlujoPasajero extends ChangeNotifier {
   void dispose() {
     _cerrado = true;
     _detenerSondeo();
+    _detenerSeguimientoConductor();
     mapa.alMoverseGps = null;
     super.dispose();
   }

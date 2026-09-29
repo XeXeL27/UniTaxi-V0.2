@@ -19,6 +19,9 @@ import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
+import com.taxiuap.backend.location.dto.UbicacionConductorViajeResponse;
+import com.taxiuap.backend.location.entity.UbicacionConductor;
+import com.taxiuap.backend.location.repository.UbicacionConductorRepository;
 import com.taxiuap.backend.pricing.dto.CalculoPrecio;
 import com.taxiuap.backend.pricing.entity.BilleteraConductor;
 import com.taxiuap.backend.pricing.entity.Comision;
@@ -81,6 +84,7 @@ public class ViajeService {
     private final QrPagoConductorService qrPagoConductorService;
     private final SolicitudViajeRepository solicitudViajeRepository;
     private final OfertaViajeRepository ofertaViajeRepository;
+    private final UbicacionConductorRepository ubicacionConductorRepository;
 
     @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
@@ -321,6 +325,53 @@ public class ViajeService {
             throw RecursoNoEncontradoException.de("Viaje", idViaje);
         }
         return aRespuesta(viaje);
+    }
+
+    /**
+     * Posicion del conductor asignado para que el pasajero vea en tiempo real de donde viene,
+     * a que distancia esta y cuanto tarda en llegar. Solo el pasajero del viaje puede consultar.
+     * Devuelve null si el conductor todavia no reporto su posicion.
+     */
+    public UbicacionConductorViajeResponse ubicacionConductorSeguimiento(Long idViaje) {
+        Long idUsuario = UsuarioActual.idUsuario();
+        Viaje viaje = obtenerViaje(idViaje);
+        if (!viaje.getPasajero().getUsuario().getId().equals(idUsuario)) {
+            throw RecursoNoEncontradoException.de("Viaje", idViaje);
+        }
+        if (ESTADOS_FINALES.contains(viaje.getSituacionViaje())) {
+            throw new NegocioException("El viaje ya termino");
+        }
+
+        Long idConductor = viaje.getConductor().getId();
+        UbicacionConductor ubicacion = ubicacionConductorRepository.findByConductorId(idConductor).orElse(null);
+
+        // Punto de referencia: origen mientras va a recoger (CONFIRMADO, EN_CAMINO, LLEGO),
+        // destino durante el viaje (EN_CURSO).
+        org.locationtech.jts.geom.Point referencia = viaje.getSituacionViaje() == SituacionViaje.EN_CURSO
+                ? viaje.getDestino()
+                : viaje.getOrigen();
+        String puntoReferencia = viaje.getSituacionViaje() == SituacionViaje.EN_CURSO ? "DESTINO" : "ORIGEN";
+
+        if (ubicacion == null || ubicacion.getUbicacion() == null) {
+            return new UbicacionConductorViajeResponse(
+                    idViaje, null, null, null, null, null, null, puntoReferencia);
+        }
+
+        Double distanciaMetros = ubicacionConductorRepository.distanciaMetrosHasta(
+                idConductor,
+                referencia.getY(),
+                referencia.getX());
+
+        return new UbicacionConductorViajeResponse(
+                idViaje,
+                java.math.BigDecimal.valueOf(ubicacion.getUbicacion().getY()),
+                java.math.BigDecimal.valueOf(ubicacion.getUbicacion().getX()),
+                ubicacion.getRumbo() == null ? null : ubicacion.getRumbo().doubleValue(),
+                ubicacion.getVelocidad() == null ? null : ubicacion.getVelocidad().doubleValue(),
+                ubicacion.getActualizadoEn() == null ? null
+                        : ubicacion.getActualizadoEn().atZone(java.time.ZoneId.systemDefault()).toInstant(),
+                distanciaMetros,
+                puntoReferencia);
     }
 
     /**
