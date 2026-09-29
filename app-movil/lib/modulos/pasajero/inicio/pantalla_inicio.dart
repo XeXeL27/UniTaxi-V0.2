@@ -28,6 +28,7 @@ import '../../../widgets/paneles.dart';
 import '../../registro/ingreso_google.dart';
 import '../favoritos/favoritos_api.dart';
 import '../favoritos/formulario_lugar.dart';
+import '../favoritos/lugares_frecuentes.dart';
 import '../favoritos/seccion_favoritos.dart';
 import '../perfil/pantalla_perfil.dart';
 import '../viaje/flujo_pasajero.dart';
@@ -36,10 +37,12 @@ import '../viaje/viaje_api.dart';
 import '../viaje/vista_calificacion.dart';
 import 'buscador_destino.dart';
 
-/// Vista principal del pasajero, con la barra inferior Inicio / Historial / Favoritos / Mas.
+/// Vista principal del pasajero, con la barra inferior Inicio / Historial / Mas.
 ///
 /// Inicio: mapa con su ubicacion GPS como partida (al entrar se centra en ella), el buscador de
 /// destino, los mototaxis libres moviendose y el boton del centro para pedir el taxi.
+///
+/// Historial: con dos pestanas, los viajes que pidio y sus lugares (favoritos y frecuentes).
 class PantallaInicioPasajero extends StatefulWidget {
   const PantallaInicioPasajero({super.key});
 
@@ -50,7 +53,7 @@ class PantallaInicioPasajero extends StatefulWidget {
 class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with SingleTickerProviderStateMixin {
   static const _seccionInicio = 0;
   static const _seccionHistorial = 1;
-  static const _seccionMas = 3;
+  static const _seccionMas = 2;
 
   final _mapa = ControladorMapa();
   final _historial = GlobalKey<PantallaHistorialState>();
@@ -188,16 +191,55 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     }
   }
 
-  void _elegirFavorito(Favorito favorito) {
-    final posicion = favorito.posicion;
-    if (posicion == null) return;
+  /// Tocar cualquier lugar de la pestana Favoritos (guardado o deducido) lo pone como destino y
+  /// lleva al mapa para pedir el taxi.
+  void _irADestino(LatLng posicion, String nombre) {
     if (_flujo.etapa != EtapaPasajero.eligiendo) {
       mostrarMensaje(context, 'Ya tienes un viaje en curso.', error: true);
       return;
     }
     _irA(_seccionInicio);
-    _flujo.irAFavorito(posicion, favorito.nombre);
+    _flujo.irAFavorito(posicion, nombre);
   }
+
+  /// Un lugar frecuente pasa a favorito de verdad: se guarda en el backend. El grupo de frecuentes
+  /// deja de mostrarlo solo, porque ahora tambien esta entre los guardados.
+  Future<void> _promoverFavorito(LugarFrecuente lugar) async {
+    try {
+      final favorito = await _favoritosApi.crear(
+        nombre: lugar.nombre,
+        direccion: lugar.nombre,
+        posicion: lugar.posicion,
+      );
+      if (!mounted) return;
+      setState(() => _favoritos = [..._favoritos, favorito]);
+      await mostrarExito(
+        context,
+        titulo: 'Guardado en favoritos',
+        mensaje: '"${lugar.nombre}" ya está en tus lugares favoritos.',
+      );
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
+  }
+
+  /// La segunda pestaña de la sección Historial. Los lugares frecuentes salen de los viajes que la
+  /// propia sección ya tiene cargados, así que no hay ninguna consulta nueva.
+  Widget _pestanaFavoritos(List<Viaje> viajes, EdgeInsets relleno) => SeccionFavoritos(
+    relleno: relleno,
+    favoritos: _favoritos,
+    frecuentes: sinRepetirConFavoritos(lugaresFrecuentes(viajes), [
+      for (final favorito in _favoritos)
+        if (favorito.posicion != null) favorito.posicion!,
+    ]),
+    cargando: _cargandoFavoritos,
+    error: _errorFavoritos,
+    onElegir: _irADestino,
+    onEliminar: _eliminarFavorito,
+    onPromover: _promoverFavorito,
+    onAnadir: _iniciarAnadir,
+    onReintentar: _cargarFavoritos,
+  );
 
   Future<void> _eliminarFavorito(Favorito favorito) async {
     final confirmado = await confirmarAccion(
@@ -406,15 +448,11 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               index: _seccion,
               children: [
                 _vistaInicio(sesion.usuario),
-                PantallaHistorial(key: _historial, cargar: _flujo.api.misViajes, esConductor: false),
-                SeccionFavoritos(
-                  favoritos: _favoritos,
-                  cargando: _cargandoFavoritos,
-                  error: _errorFavoritos,
-                  onElegir: _elegirFavorito,
-                  onEliminar: _eliminarFavorito,
-                  onAnadir: _iniciarAnadir,
-                  onReintentar: _cargarFavoritos,
+                PantallaHistorial(
+                  key: _historial,
+                  cargar: _flujo.api.misViajes,
+                  esConductor: false,
+                  pestanaFavoritos: _pestanaFavoritos,
                 ),
                 PantallaMas(
                   foto: _foto,
@@ -440,7 +478,6 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                 items: const [
                   ItemBarra(FontAwesomeIcons.house, 'Inicio'),
                   ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial'),
-                  ItemBarra(FontAwesomeIcons.solidHeart, 'Favoritos'),
                   ItemBarra(FontAwesomeIcons.ellipsis, 'Más'),
                 ],
                 botonCentral: _seccion == _seccionInicio

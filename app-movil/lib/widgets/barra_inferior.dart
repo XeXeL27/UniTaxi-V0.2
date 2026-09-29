@@ -33,6 +33,8 @@ class BarraInferior extends StatelessWidget {
 
   const BarraInferior({super.key, required this.items, required this.indice, required this.onCambiar, this.botonCentral});
 
+  Widget _opcion(int i) => _Opcion(item: items[i], activo: i == indice, onTap: () => onCambiar(i));
+
   @override
   Widget build(BuildContext context) {
     final abajo = MediaQuery.paddingOf(context).bottom;
@@ -56,13 +58,18 @@ class BarraInferior extends StatelessWidget {
                   border: Border.all(color: ColoresApp.borde.withValues(alpha: 0.7)),
                   boxShadow: const [BoxShadow(color: Color(0x260A2342), blurRadius: 22, offset: Offset(0, 8))],
                 ),
+                // Con boton central cada lado ocupa la misma mitad, asi el hueco queda al centro
+                // aunque la cantidad de items sea impar (pasajero: 1 a la izquierda y 2 a la derecha).
                 child: Row(
-                  children: [
-                    for (var i = 0; i < mitad; i++) Expanded(child: _Opcion(item: items[i], activo: i == indice, onTap: () => onCambiar(i))),
-                    if (botonCentral != null) const SizedBox(width: 92),
-                    for (var i = mitad; i < items.length; i++)
-                      Expanded(child: _Opcion(item: items[i], activo: i == indice, onTap: () => onCambiar(i))),
-                  ],
+                  children: botonCentral == null
+                      ? [for (var i = 0; i < items.length; i++) Expanded(child: _opcion(i))]
+                      : [
+                          Expanded(child: Row(children: [for (var i = 0; i < mitad; i++) Expanded(child: _opcion(i))])),
+                          const SizedBox(width: 92),
+                          Expanded(
+                            child: Row(children: [for (var i = mitad; i < items.length; i++) Expanded(child: _opcion(i))]),
+                          ),
+                        ],
                 ),
               ),
               if (botonCentral != null) Positioned(top: -30, child: botonCentral!),
