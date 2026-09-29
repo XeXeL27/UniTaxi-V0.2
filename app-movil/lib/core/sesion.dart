@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_excepcion.dart';
 import 'config.dart';
+import 'google_movil.dart';
 import 'navegador.dart';
 
 /// Datos del usuario autenticado (UsuarioResponse del backend).
@@ -67,6 +68,11 @@ class UsuarioSesion {
 }
 
 /// PDF elegido para subir con el registro de conductor.
+/// El usuario cerro el selector de cuentas de Google sin elegir ninguna.
+class GoogleCancelado implements Exception {
+  const GoogleCancelado();
+}
+
 class ArchivoPdf {
   final String nombre;
   final Uint8List bytes;
@@ -181,6 +187,26 @@ class Sesion extends ChangeNotifier {
   /// CONDUCTOR (registro). Google devuelve a esta misma pagina con ?google=... (ver [canjearGoogle]).
   static String urlGoogle(String modo) =>
       '${Config.apiUrl}/api/auth/google?modo=$modo&volver=${Uri.encodeQueryComponent(Navegador.direccionActual)}';
+
+  /// Ingreso con Google en el APK (selector nativo). [modo]: INGRESO, PASAJERO o CONDUCTOR.
+  /// Si la sesion queda iniciada devuelve null; si es un conductor nuevo devuelve el codigo para el
+  /// formulario de conductor. Lanza [GoogleCancelado] si el usuario cierra el selector.
+  /// [antesDeEntrar] muestra el aviso del servidor (por ejemplo, conductor todavia en revision) antes
+  /// de que la app cambie de pantalla.
+  Future<String?> ingresarConGoogleMovil(String modo, {Future<void> Function(String aviso)? antesDeEntrar}) async {
+    final config = await _getAuth('/api/auth/google/config') as Map<String, dynamic>;
+    final idToken = await GoogleMovil.idToken(config['clientId'] as String);
+    if (idToken == null) throw const GoogleCancelado();
+    final datos = await _postAuth('/api/auth/google/movil', {'idToken': idToken, 'modo': modo}) as Map<String, dynamic>;
+    final sesion = datos['sesion'] as Map<String, dynamic>?;
+    final aviso = datos['aviso'] as String?;
+    if (aviso != null && antesDeEntrar != null) await antesDeEntrar(aviso);
+    if (sesion != null) {
+      await _guardar(sesion);
+      return null;
+    }
+    return datos['codigoRegistro'] as String?;
+  }
 
   /// Recoge la sesion que dejo lista el backend al volver de Google.
   Future<void> canjearGoogle(String codigo) async {
@@ -300,16 +326,21 @@ class Sesion extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<dynamic> _postAuth(String ruta, Map<String, dynamic> cuerpo) async {
+  Future<dynamic> _postAuth(String ruta, Map<String, dynamic> cuerpo) => _auth(
+    () => http.post(
+      Uri.parse('${Config.apiUrl}$ruta'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode(cuerpo),
+    ),
+  );
+
+  Future<dynamic> _getAuth(String ruta) => _auth(() => http.get(Uri.parse('${Config.apiUrl}$ruta')));
+
+  /// Peticion sin token a /api/auth; desempaqueta ApiResponse.
+  Future<dynamic> _auth(Future<http.Response> Function() enviar) async {
     final http.Response respuesta;
     try {
-      respuesta = await http
-          .post(
-            Uri.parse('${Config.apiUrl}$ruta'),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(cuerpo),
-          )
-          .timeout(const Duration(seconds: 20));
+      respuesta = await enviar().timeout(const Duration(seconds: 20));
     } catch (_) {
       throw ApiExcepcion('No se pudo conectar con el servidor');
     }

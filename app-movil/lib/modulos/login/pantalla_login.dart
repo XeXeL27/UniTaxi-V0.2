@@ -6,11 +6,11 @@ import '../../core/api_excepcion.dart';
 import '../../core/config.dart';
 import '../../core/credenciales.dart';
 import '../../core/huella.dart';
-import '../../core/navegador.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
 import '../../widgets/marco_acceso.dart';
+import '../registro/ingreso_google.dart';
 import '../registro/pantalla_registro.dart';
 
 /// Inicio de sesion con usuario, correo o telefono y contrasena, o con Google. Desde aqui se abre
@@ -101,8 +101,9 @@ class _PantallaLoginState extends State<PantallaLogin> {
     }
   }
 
-  /// Hoja inferior "¿Como quieres ingresar?" para quien tiene cuenta de pasajero y de conductor.
-  Future<String?> _elegirModo(List<String> modos) {
+  /// Hoja inferior "¿Como quieres ingresar?" para quien tiene cuenta de pasajero y de conductor, o
+  /// antes de ingresar con Google ([conGoogle]).
+  Future<String?> _elegirModo(List<String> modos, {bool conGoogle = false}) {
     return showModalBottomSheet<String>(
       context: context,
       constraints: const BoxConstraints(maxWidth: 520),
@@ -121,7 +122,9 @@ class _PantallaLoginState extends State<PantallaLogin> {
               ),
               const SizedBox(height: 4),
               Text(
-                modos.contains(Config.rolAdmin)
+                conGoogle
+                    ? 'Luego eliges tu cuenta de Google. Si eres conductor nuevo te pediremos tu licencia, tu moto y tus documentos.'
+                    : modos.contains(Config.rolAdmin)
                     ? 'Tu usuario tiene más de un tipo de cuenta. Elige con cuál entrar.'
                     : 'Tu cuenta es de pasajero y de conductor. Luego puedes cambiar desde Más.',
                 style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
@@ -140,7 +143,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 _OpcionModo(
                   icono: FontAwesomeIcons.motorcycle,
                   titulo: 'Conductor',
-                  detalle: 'Recibe solicitudes de viaje',
+                  detalle: conGoogle ? 'Llevo pasajeros y recibo solicitudes de viaje' : 'Recibe solicitudes de viaje',
                   color: ColoresApp.azul,
                   onTap: () => Navigator.of(context).pop(Config.rolConductor),
                 ),
@@ -159,6 +162,14 @@ class _PantallaLoginState extends State<PantallaLogin> {
         ),
       ),
     );
+  }
+
+  /// Google: primero se elige si entra como pasajero o como conductor. Pasajero entra directo (si
+  /// no tenia cuenta se registra); conductor nuevo llena su formulario antes de entrar.
+  Future<void> _ingresarConGoogle() async {
+    final modo = await _elegirModo(const [Config.rolPasajero, Config.rolConductor], conGoogle: true);
+    if (modo == null || !mounted) return;
+    await continuarConGoogle(context, modo, alCargar: (cargando) => setState(() => _cargando = cargando));
   }
 
   /// Ingreso con la huella: usa las credenciales que se guardaron al activarla.
@@ -278,7 +289,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 label: const Text('Ingresar con huella', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
-            if (Navegador.puedeUsarGoogle) ...[
+            if (googleDisponible) ...[
               const SizedBox(height: 18),
               const Row(
                 children: [
@@ -291,7 +302,9 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 ],
               ),
               const SizedBox(height: 18),
-              BotonGoogle(onPressed: _cargando ? null : () => Navegador.ir(Sesion.urlGoogle('INGRESO'))),
+              BotonGoogle(
+                onPressed: _cargando ? null : _ingresarConGoogle,
+              ),
             ],
             const SizedBox(height: 18),
             Wrap(

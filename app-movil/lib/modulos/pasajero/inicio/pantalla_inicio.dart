@@ -25,6 +25,7 @@ import '../../../widgets/dialogos.dart';
 import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
+import '../../registro/ingreso_google.dart';
 import '../favoritos/favoritos_api.dart';
 import '../favoritos/formulario_lugar.dart';
 import '../favoritos/seccion_favoritos.dart';
@@ -49,6 +50,7 @@ class PantallaInicioPasajero extends StatefulWidget {
 class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with SingleTickerProviderStateMixin {
   static const _seccionInicio = 0;
   static const _seccionHistorial = 1;
+  static const _seccionMas = 3;
 
   final _mapa = ControladorMapa();
   final _historial = GlobalKey<PantallaHistorialState>();
@@ -56,6 +58,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   late final FlujoPasajero _flujo = FlujoPasajero(api: ViajeApi(context.read<ClienteApi>()), mapa: _mapa);
 
   int _seccion = _seccionInicio;
+
+  /// situacion_aprobacion de su registro de conductor ('' si todavia no se registro, null sin cargar).
+  String? _registroConductor;
   List<Favorito> _favoritos = const [];
   bool _cargandoFavoritos = true;
   String? _errorFavoritos;
@@ -81,6 +86,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _flujo.iniciar();
     _cargarFavoritos();
     _cargarFoto();
+    _cargarRegistroConductor();
     _cargarConductores();
     _sondeoConductores = Timer.periodic(const Duration(seconds: 5), (_) => _cargarConductores());
   }
@@ -114,6 +120,43 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (seccion == _seccion) return;
     setState(() => _seccion = seccion);
     if (seccion == _seccionHistorial) _historial.currentState?.recargar();
+    // En Mas se vuelve a mirar si la administracion ya aprobo su registro de conductor.
+    if (seccion == _seccionMas) _cargarRegistroConductor();
+  }
+
+  Future<void> _cargarRegistroConductor() async {
+    try {
+      final datos = await context.read<ClienteApi>().get('/api/pasajero/registro-conductor') as Map<String, dynamic>;
+      if (mounted) setState(() => _registroConductor = datos['situacion'] as String? ?? '');
+    } catch (_) {
+      // Sin respuesta no se muestra la opcion.
+    }
+  }
+
+  /// Opcion de Mas segun en que va su registro de conductor (null: no se muestra).
+  (String, String)? _opcionRegistroConductor(Sesion sesion) {
+    if (sesion.otroModo != null) return null;
+    return switch (_registroConductor) {
+      '' => ('Registrarme como conductor', 'Lleva pasajeros con tu moto. La administración revisará tus datos'),
+      'PENDIENTE' => ('Registro de conductor en revisión', 'Te avisaremos aquí cuando la administración te apruebe'),
+      'RECHAZADO' => ('Registro de conductor rechazado', 'Comunícate con la administración de TaxiUAP'),
+      'SUSPENDIDO' => ('Cuenta de conductor suspendida', 'Comunícate con la administración de TaxiUAP'),
+      _ => null,
+    };
+  }
+
+  Future<void> _registroConductorTocado() async {
+    if (_registroConductor != '') {
+      mostrarMensaje(
+        context,
+        _registroConductor == 'PENDIENTE'
+            ? 'Tu registro de conductor está en revisión.'
+            : 'Comunícate con la administración de TaxiUAP.',
+      );
+      return;
+    }
+    final enviado = await abrirFormularioConductor(context, desdePasajero: true);
+    if (enviado == true) _cargarRegistroConductor();
   }
 
   Future<void> _cargarFoto() async {
@@ -376,7 +419,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                 PantallaMas(
                   foto: _foto,
                   onDatosPersonales: _abrirPerfil,
-                  onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
+                  // Aprobado recien (la sesion todavia no lo sabia): tambien puede cambiar.
+                  onCambiarModo: sesion.otroModo != null || _registroConductor == 'APROBADO' ? _cambiarModo : null,
+                  registroConductor: _opcionRegistroConductor(sesion),
+                  onRegistroConductor: _registroConductorTocado,
                   onCerrarSesion: _confirmarCerrarSesion,
                 ),
               ],

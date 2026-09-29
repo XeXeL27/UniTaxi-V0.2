@@ -33,6 +33,11 @@ class PantallaMas extends StatefulWidget {
 
   /// Solo si la persona tiene la otra cuenta (pasajero o conductor).
   final VoidCallback? onCambiarModo;
+
+  /// Solo el pasajero sin cuenta de conductor habilitada: registrarse como conductor o ver en que
+  /// va su registro ([registroConductor] es el titulo y el detalle de la opcion).
+  final VoidCallback? onRegistroConductor;
+  final (String, String)? registroConductor;
   final VoidCallback onCerrarSesion;
 
   const PantallaMas({
@@ -42,6 +47,8 @@ class PantallaMas extends StatefulWidget {
     this.onDocumentos,
     this.onMisQr,
     this.onCambiarModo,
+    this.onRegistroConductor,
+    this.registroConductor,
     required this.onCerrarSesion,
   });
 
@@ -162,6 +169,14 @@ class _PantallaMasState extends State<PantallaMas> {
               titulo: 'Mis QR de cobro',
               detalle: 'El QR de tu banca móvil para cobrar (hasta 3)',
               onTap: widget.onMisQr,
+            ),
+          if (widget.registroConductor != null)
+            TarjetaOpcion(
+              icono: FontAwesomeIcons.motorcycle,
+              titulo: widget.registroConductor!.$1,
+              detalle: widget.registroConductor!.$2,
+              color: ColoresApp.azul,
+              onTap: widget.onRegistroConductor,
             ),
           if (widget.onCambiarModo != null)
             TarjetaOpcion(

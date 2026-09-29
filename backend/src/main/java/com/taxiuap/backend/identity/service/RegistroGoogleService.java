@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.identity.dto.PerfilGoogle;
+import com.taxiuap.backend.identity.dto.PerfilGoogleResponse;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.RegistroConductorGoogleRequest;
 import com.taxiuap.backend.identity.dto.TokenResponse;
@@ -86,12 +87,20 @@ public class RegistroGoogleService {
         return autenticacionService.tokensDe(usuario);
     }
 
-    /** Si ya es conductor entra directo; si no, hace falta el formulario (licencia, moto, PDF). */
+    /**
+     * Si ya es conductor entra directo; si no, hace falta el formulario (licencia, moto, PDF). Si su
+     * cuenta de conductor todavia no esta aprobada y tambien es pasajero, entra como pasajero.
+     */
     @Transactional(readOnly = true)
     public Optional<TokenResponse> conductorExistente(PerfilGoogle perfil) {
-        return personaActiva(perfil)
-                .flatMap(persona -> cuentaActiva(persona, RolSistema.CONDUCTOR))
-                .map(autenticacionService::tokensDe);
+        return personaActiva(perfil).flatMap(persona -> cuentaActiva(persona, RolSistema.CONDUCTOR)
+                .map(conductor -> autenticacionService.tokensDe(entradaDe(persona, conductor))));
+    }
+
+    /** Cuenta con que entra quien acaba de ser (o ya era) conductor: pasajero mientras no lo aprueben. */
+    private Usuario entradaDe(Persona persona, Usuario conductor) {
+        if (autenticacionService.conductorHabilitado(conductor)) return conductor;
+        return cuentaActiva(persona, RolSistema.PASAJERO).orElse(conductor);
     }
 
     /**
@@ -121,7 +130,7 @@ public class RegistroGoogleService {
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
-        return autenticacionService.tokensDe(usuario);
+        return autenticacionService.tokensDe(entradaDe(persona, usuario));
     }
 
     // ------------------------------------------------------------------ apoyo
@@ -184,14 +193,31 @@ public class RegistroGoogleService {
     }
 
     /** La persona ya existia (por ejemplo, pasajero de Google sin CI): se completa lo que falte. */
+    /**
+     * Completa a la persona (por ejemplo, un pasajero que entro solo con Google) con lo que pide el
+     * registro de conductor. El formulario llega precargado con lo que ya se sabia, asi que manda lo
+     * que la persona confirmo.
+     */
     private void completarDatos(Persona persona, RegistroConductorGoogleRequest datos) {
         gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(
-                persona.getCi() != null ? persona.getCi() : datos.ci(),
-                persona.getCi() != null ? persona.getComplementoCi() : datos.complementoCi(),
+                datos.ci(),
+                datos.complementoCi(),
                 persona.getNombres(),
                 persona.getApellidos(),
-                persona.getFechaNacimiento() != null ? persona.getFechaNacimiento() : datos.fechaNacimiento(),
+                datos.fechaNacimiento(),
                 persona.getCorreo(),
-                persona.getTelefono() != null ? persona.getTelefono() : datos.telefono()));
+                datos.telefono()));
+    }
+
+    /** Nombre y correo de Google mas lo que ya se sabia de la persona, para el formulario de conductor. */
+    @Transactional(readOnly = true)
+    public PerfilGoogleResponse perfilParaRegistro(PerfilGoogle perfil) {
+        Optional<Persona> persona = personaRepository.findByCorreo(perfil.correo())
+                .filter(p -> p.getEstadoPersona() == EstadoRegistro.A);
+        return new PerfilGoogleResponse(perfil.correo(), perfil.nombres(), perfil.apellidos(),
+                persona.map(Persona::getCi).orElse(null),
+                persona.map(Persona::getComplementoCi).orElse(null),
+                persona.map(Persona::getTelefono).orElse(null),
+                persona.map(Persona::getFechaNacimiento).orElse(null));
     }
 }

@@ -9,11 +9,11 @@ import jakarta.validation.constraints.Past;
 import jakarta.validation.constraints.Size;
 
 /**
- * Registro de conductor despues de elegir la cuenta de Google. Nombre y correo vienen de Google
- * (por [codigo]); aqui va lo que Google no sabe. Los PDF viajan como partes del multipart.
+ * Pasajero que se registra como conductor desde Mas. Nombre y correo ya los tiene; aqui completa lo
+ * que el pasajero no dio (CI, telefono, fecha de nacimiento) y lo del conductor. Los PDF y los QR van
+ * como partes del multipart.
  */
-public record RegistroConductorGoogleRequest(
-        @NotBlank String codigo,
+public record RegistroConductorPasajeroRequest(
         @NotBlank @Size(max = 30) String ci,
         @Size(max = 10) String complementoCi,
         @NotNull @Past LocalDate fechaNacimiento,

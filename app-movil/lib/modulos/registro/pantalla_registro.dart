@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-import '../../core/navegador.dart';
-import '../../core/sesion.dart';
 import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
 import '../../widgets/marco_acceso.dart';
 import 'formulario_conductor.dart';
+import 'ingreso_google.dart';
 
 enum _TipoRegistro { pasajero, conductor }
 
@@ -23,9 +22,15 @@ class PantallaRegistro extends StatefulWidget {
 class _PantallaRegistroState extends State<PantallaRegistro> {
   _TipoRegistro _tipo = _TipoRegistro.pasajero;
 
+  /// Esperando el selector de Google o la respuesta del servidor.
+  bool _cargando = false;
+
+  void _google(String modo) =>
+      continuarConGoogle(context, modo, alCargar: (cargando) => setState(() => _cargando = cargando));
+
   @override
   Widget build(BuildContext context) {
-    final google = Navegador.puedeUsarGoogle;
+    final google = googleDisponible;
     return MarcoAcceso(
       onVolver: () => Navigator.of(context).pop(),
       child: Column(
@@ -99,7 +104,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         if (google)
           BotonGoogle(
             texto: 'Registrarme con Google',
-            onPressed: () => Navegador.ir(Sesion.urlGoogle('PASAJERO')),
+            onPressed: _cargando ? null : () => _google('PASAJERO'),
           )
         else
           const _Nota(
@@ -122,7 +127,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         ),
         const SizedBox(height: 16),
         if (google) ...[
-          BotonGoogle(onPressed: () => Navegador.ir(Sesion.urlGoogle('CONDUCTOR'))),
+          BotonGoogle(onPressed: _cargando ? null : () => _google('CONDUCTOR')),
           const SizedBox(height: 14),
           const Row(
             children: [
