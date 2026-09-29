@@ -13,5 +13,7 @@ public record UsuarioAdminResponse(
         String correo,
         String telefono,
         String rol,
-        LocalDateTime fechaRegistro) {
+        LocalDateTime fechaRegistro,
+        /** A (activa) o S (suspendida). */
+        String estado) {
 }

@@ -14,5 +14,7 @@ public record PasajeroAdminResponse(
         String telefono,
         BigDecimal calificacionPromedio,
         Integer totalCalificaciones,
-        LocalDateTime fechaRegistro) {
+        LocalDateTime fechaRegistro,
+        /** Estado de su cuenta: A (activa) o S (suspendida). */
+        String estadoUsuario) {
 }

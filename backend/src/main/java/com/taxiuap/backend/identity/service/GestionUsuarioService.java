@@ -24,6 +24,10 @@ import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.ConflictoException;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.trip.enums.SituacionSolicitud;
+import com.taxiuap.backend.trip.enums.SituacionViaje;
+import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
+import com.taxiuap.backend.trip.repository.ViajeRepository;
 import com.taxiuap.backend.vehicle.enums.TipoDocumento;
 import com.taxiuap.backend.vehicle.service.RegistroMotoConductorService;
 
@@ -45,9 +49,11 @@ public class GestionUsuarioService {
     private final GestionPersonaService gestionPersonaService;
     private final CuentaUsuarioService cuentaUsuarioService;
     private final RegistroMotoConductorService registroMotoConductorService;
+    private final ViajeRepository viajeRepository;
+    private final SolicitudViajeRepository solicitudViajeRepository;
 
     public List<UsuarioAdminResponse> listar() {
-        return usuarioRepository.findByEstadoUsuarioOrderByIdAsc(EstadoRegistro.A).stream()
+        return usuarioRepository.findByEstadoUsuarioInOrderByIdAsc(List.of(EstadoRegistro.A, EstadoRegistro.S)).stream()
                 .map(this::aRespuesta)
                 .toList();
     }
@@ -113,14 +119,57 @@ public class GestionUsuarioService {
         if (idUsuario.equals(idUsuarioActual)) {
             throw new NegocioException("No puede eliminar su propio usuario");
         }
-        Usuario usuario = usuarioRepository.findById(idUsuario)
-                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
-                .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", idUsuario));
+        Usuario usuario = buscarNoEliminado(idUsuario);
+        validarSinViajeEnCurso(usuario, "eliminar");
 
         usuario.setEstadoUsuario(EstadoRegistro.X);
         pasajeroRepository.findByUsuarioId(idUsuario).ifPresent(p -> p.setEstadoPasajero(EstadoRegistro.X));
         conductorRepository.findByUsuarioId(idUsuario).ifPresent(c -> c.setEstadoConductor(EstadoRegistro.X));
         administradorRepository.findByUsuarioId(idUsuario).ifPresent(a -> a.setEstadoAdmin(EstadoRegistro.X));
+    }
+
+    /**
+     * Suspende (S) o vuelve a habilitar (A) una cuenta. La suspendida no puede ingresar y su sesion
+     * abierta se corta en su siguiente peticion (JwtAuthFilter). No toca las otras cuentas de la
+     * persona: suspender al pasajero no suspende su cuenta de conductor.
+     */
+    @Transactional
+    public UsuarioAdminResponse cambiarEstado(Long idUsuario, EstadoRegistro estado, Long idUsuarioActual) {
+        if (estado != EstadoRegistro.A && estado != EstadoRegistro.S) {
+            throw new NegocioException("El estado debe ser A (activa) o S (suspendida)");
+        }
+        if (idUsuario.equals(idUsuarioActual)) {
+            throw new NegocioException("No puede suspender su propio usuario");
+        }
+        Usuario usuario = buscarNoEliminado(idUsuario);
+        if (estado == EstadoRegistro.S) {
+            validarSinViajeEnCurso(usuario, "suspender");
+        }
+        usuario.setEstadoUsuario(estado);
+        return aRespuesta(usuario);
+    }
+
+    private Usuario buscarNoEliminado(Long idUsuario) {
+        return usuarioRepository.findById(idUsuario)
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", idUsuario));
+    }
+
+    /** Con un pedido o un viaje en curso no se corta la cuenta: primero debe terminar o cancelarse. */
+    private void validarSinViajeEnCurso(Usuario usuario, String accion) {
+        List<SituacionViaje> finales = List.of(SituacionViaje.COMPLETADO, SituacionViaje.CANCELADO);
+        boolean ocupado = pasajeroRepository.findByUsuarioId(usuario.getId())
+                .map(p -> solicitudViajeRepository.existsByPasajeroIdAndSituacionSolicitudIn(p.getId(),
+                                List.of(SituacionSolicitud.PENDIENTE, SituacionSolicitud.CON_OFERTAS))
+                        || viajeRepository.findFirstByPasajeroIdAndSituacionViajeNotIn(p.getId(), finales).isPresent())
+                .orElse(false)
+                || conductorRepository.findByUsuarioId(usuario.getId())
+                        .map(c -> viajeRepository.findFirstByConductorIdAndSituacionViajeNotIn(c.getId(), finales).isPresent())
+                        .orElse(false);
+        if (ocupado) {
+            throw new NegocioException("No se puede " + accion + " la cuenta: tiene un viaje o una solicitud en curso. "
+                    + "Espere a que termine o se cancele");
+        }
     }
 
     private record Credenciales(String nombreUsuario, String passwordHash) {
@@ -162,6 +211,7 @@ public class GestionUsuarioService {
                 persona.getCorreo(),
                 persona.getTelefono(),
                 usuario.getRol().getCodigo(),
-                usuario.getFechaRegistro());
+                usuario.getFechaRegistro(),
+                usuario.getEstadoUsuario().name());
     }
 }

@@ -88,6 +88,7 @@ public class GestionConductorService {
                 conductor.getCalificacionPromedio(),
                 conductor.getTotalCalificaciones(),
                 conductor.getFechaAprobacion(),
-                cantidadDocumentos);
+                cantidadDocumentos,
+                usuario.getId());
     }
 }

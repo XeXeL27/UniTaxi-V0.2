@@ -3,6 +3,8 @@ package com.taxiuap.backend.identity.service;
 import java.time.LocalDateTime;
 import java.util.Locale;
 
+import java.util.List;
+
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -61,9 +63,10 @@ public class CuentaUsuarioService {
     }
 
     @Transactional(readOnly = true)
+    /** Cuenta activa o suspendida: una suspendida sigue siendo su cuenta (no se crea otra). */
     public boolean tieneCuenta(Long idPersona, RolSistema rol) {
-        return usuarioRepository.existsByPersonaIdAndRolCodigoAndEstadoUsuario(
-                idPersona, rol.getCodigo(), EstadoRegistro.A);
+        return usuarioRepository.existsByPersonaIdAndRolCodigoAndEstadoUsuarioIn(
+                idPersona, rol.getCodigo(), List.of(EstadoRegistro.A, EstadoRegistro.S));
     }
 
     public String codificar(String password) {

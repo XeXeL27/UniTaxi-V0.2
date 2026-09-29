@@ -66,6 +66,7 @@ class _TaxiUapState extends State<TaxiUap> {
   @override
   Widget build(BuildContext context) {
     final rol = context.select<Sesion, String?>((s) => s.autenticado ? s.usuario?.rol : null);
+    final motivoCierre = context.select<Sesion, String?>((s) => s.motivoCierre);
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
     if (rol != null) {
       _error = null;
@@ -83,7 +84,7 @@ class _TaxiUapState extends State<TaxiUap> {
           codigoGoogle: _codigoRegistro,
           onCancelar: () => setState(() => _codigoRegistro = null),
         ),
-        _ => PantallaLogin(errorInicial: _error),
+        _ => PantallaLogin(key: ValueKey(motivoCierre), errorInicial: _error ?? motivoCierre),
       },
     );
   }

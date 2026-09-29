@@ -77,6 +77,30 @@ class PinMapa extends StatelessWidget {
   }
 }
 
+/// Circulo de color sin letra para la partida (azul) y el destino (rojo) en la vista del pasajero.
+/// El centro del circulo es el punto.
+class CirculoMapa extends StatelessWidget {
+  static const double lado = 26;
+
+  final Color color;
+
+  const CirculoMapa({super.key, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: lado,
+      height: lado,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: ColoresApp.blanco, width: 4),
+        boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 8, offset: const Offset(0, 2))],
+      ),
+    );
+  }
+}
+
 /// Punto azul de la ubicacion actual del telefono.
 class PuntoUbicacion extends StatelessWidget {
   const PuntoUbicacion({super.key});

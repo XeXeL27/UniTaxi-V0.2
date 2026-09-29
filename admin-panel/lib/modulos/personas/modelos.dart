@@ -92,6 +92,9 @@ class UsuarioAdmin {
   final String rol;
   final DateTime? fechaRegistro;
 
+  /// A (activa) o S (suspendida).
+  final String estado;
+
   UsuarioAdmin({
     required this.idUsuario,
     required this.idPersona,
@@ -103,7 +106,13 @@ class UsuarioAdmin {
     this.telefono,
     required this.rol,
     this.fechaRegistro,
+    this.estado = 'A',
   });
+
+  bool get suspendida => estado == 'S';
+
+  /// Texto de la columna Situacion (con su insignia de color).
+  String get situacion => suspendida ? 'SUSPENDIDO' : 'ACTIVO';
 
   factory UsuarioAdmin.desdeJson(Map<String, dynamic> json) => UsuarioAdmin(
     idUsuario: Formato.leerEntero(json['idUsuario'])!,
@@ -116,12 +125,14 @@ class UsuarioAdmin {
     telefono: json['telefono'] as String?,
     rol: json['rol'] as String? ?? '',
     fechaRegistro: Formato.leerFecha(json['fechaRegistro']),
+    estado: json['estado'] as String? ?? 'A',
   );
 }
 
 /// PasajeroAdminResponse del backend.
 class PasajeroAdmin {
   final int idPasajero;
+  final int idUsuario;
   final String nombreUsuario;
   final String nombres;
   final String apellidos;
@@ -131,8 +142,12 @@ class PasajeroAdmin {
   final int? totalCalificaciones;
   final DateTime? fechaRegistro;
 
+  /// Estado de su cuenta: A (activa) o S (suspendida).
+  final String estadoUsuario;
+
   PasajeroAdmin({
     required this.idPasajero,
+    required this.idUsuario,
     required this.nombreUsuario,
     required this.nombres,
     required this.apellidos,
@@ -141,10 +156,18 @@ class PasajeroAdmin {
     this.calificacionPromedio,
     this.totalCalificaciones,
     this.fechaRegistro,
+    this.estadoUsuario = 'A',
   });
+
+  bool get suspendida => estadoUsuario == 'S';
+
+  String get situacion => suspendida ? 'SUSPENDIDO' : 'ACTIVO';
+
+  String get nombreCompleto => '$nombres $apellidos';
 
   factory PasajeroAdmin.desdeJson(Map<String, dynamic> json) => PasajeroAdmin(
     idPasajero: Formato.leerEntero(json['idPasajero'])!,
+    idUsuario: Formato.leerEntero(json['idUsuario'])!,
     nombreUsuario: json['nombreUsuario'] as String? ?? '',
     nombres: json['nombres'] as String? ?? '',
     apellidos: json['apellidos'] as String? ?? '',
@@ -153,6 +176,7 @@ class PasajeroAdmin {
     calificacionPromedio: Formato.leerDecimal(json['calificacionPromedio']),
     totalCalificaciones: Formato.leerEntero(json['totalCalificaciones']),
     fechaRegistro: Formato.leerFecha(json['fechaRegistro']),
+    estadoUsuario: json['estadoUsuario'] as String? ?? 'A',
   );
 }
 
@@ -174,6 +198,9 @@ class ConductorAdmin {
   final DateTime? fechaAprobacion;
   final int cantidadDocumentos;
 
+  /// Cuenta del conductor (para eliminarla).
+  final int? idUsuario;
+
   ConductorAdmin({
     required this.idConductor,
     required this.idPersona,
@@ -190,6 +217,7 @@ class ConductorAdmin {
     this.calificacionPromedio,
     this.fechaAprobacion,
     required this.cantidadDocumentos,
+    this.idUsuario,
   });
 
   String get nombreCompleto => '$nombres $apellidos';
@@ -210,6 +238,7 @@ class ConductorAdmin {
     calificacionPromedio: Formato.leerDecimal(json['calificacionPromedio']),
     fechaAprobacion: Formato.leerFecha(json['fechaAprobacion']),
     cantidadDocumentos: Formato.leerEntero(json['cantidadDocumentos']) ?? 0,
+    idUsuario: Formato.leerEntero(json['idUsuario']),
   );
 }
 

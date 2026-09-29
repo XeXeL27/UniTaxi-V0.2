@@ -99,8 +99,11 @@ class ClienteApi {
         respuesta = await _enviarPeticion(crear());
       }
       if (respuesta.statusCode == 401) {
-        await sesion.cerrar();
-        throw ApiExcepcion('La sesion expiro, vuelva a iniciar sesion', codigo: 401);
+        // Si la administracion suspendio o elimino la cuenta, el backend dice por que.
+        final mensaje = _decodificar(respuesta)['mensaje'] as String?;
+        final motivo = mensaje != null && mensaje.startsWith('Tu cuenta') ? mensaje : null;
+        await sesion.cerrar(motivo: motivo);
+        throw ApiExcepcion(motivo ?? 'La sesion expiro, vuelva a iniciar sesion', codigo: 401);
       }
     }
     return respuesta;

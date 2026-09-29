@@ -155,7 +155,13 @@ public class RegistroGoogleService {
                 .toList();
     }
 
+    /** Cuenta activa de ese rol. Si esta suspendida no se entra ni se crea otra: se avisa. */
     private Optional<Usuario> cuentaActiva(Persona persona, RolSistema rol) {
+        boolean suspendida = usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .anyMatch(u -> u.getEstadoUsuario() == EstadoRegistro.S && rol.getCodigo().equals(u.getRol().getCodigo()));
+        if (suspendida) {
+            throw new NegocioException(AutenticacionService.MENSAJE_CUENTA_SUSPENDIDA);
+        }
         return cuentasActivas(persona).stream().filter(u -> rol.getCodigo().equals(u.getRol().getCodigo())).findFirst();
     }
 

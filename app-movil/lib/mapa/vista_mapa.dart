@@ -23,12 +23,16 @@ class MapaBase extends StatelessWidget {
   /// Capa de marcadores que se repinta sola (los mototaxistas que se deslizan), debajo de A y B.
   final Widget? capaAnimada;
 
+  /// Partida y destino como circulos sin letra (azul y rojo) en vez de pines con A y B.
+  final bool puntosSinLetra;
+
   const MapaBase({
     super.key,
     required this.controlador,
     this.onTap,
     this.marcadoresExtra = const [],
     this.capaAnimada,
+    this.puntosSinLetra = false,
   });
 
   @override
@@ -91,22 +95,8 @@ class MapaBase extends StatelessWidget {
             MarkerLayer(
               markers: [
                 ...marcadoresExtra,
-                if (a != null)
-                  Marker(
-                    point: a.posicion,
-                    width: PinMapa.ancho,
-                    height: PinMapa.alto,
-                    alignment: Alignment.topCenter,
-                    child: const PinMapa(color: ColoresApp.azul, letra: 'A'),
-                  ),
-                if (b != null)
-                  Marker(
-                    point: b.posicion,
-                    width: PinMapa.ancho,
-                    height: PinMapa.alto,
-                    alignment: Alignment.topCenter,
-                    child: const PinMapa(color: ColoresApp.rojo, letra: 'B'),
-                  ),
+                if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
+                if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
                 // El GPS va encima de los pines: es lo que se mueve en vivo.
                 if (gps != null) Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
               ],
@@ -116,6 +106,21 @@ class MapaBase extends StatelessWidget {
       },
     );
   }
+
+  Marker _punto(LatLng posicion, Color color, String letra) => puntosSinLetra
+      ? Marker(
+          point: posicion,
+          width: CirculoMapa.lado,
+          height: CirculoMapa.lado,
+          child: CirculoMapa(color: color),
+        )
+      : Marker(
+          point: posicion,
+          width: PinMapa.ancho,
+          height: PinMapa.alto,
+          alignment: Alignment.topCenter,
+          child: PinMapa(color: color, letra: letra),
+        );
 
   Polyline _tramoAPie(LatLng desde, LatLng hasta) => Polyline(
     points: [desde, hasta],

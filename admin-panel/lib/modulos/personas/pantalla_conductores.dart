@@ -17,6 +17,7 @@ import '../../widgets/visor_pdf.dart';
 import '../expediente/expediente_api.dart';
 import '../expediente/expediente_conductor.dart';
 import '../expediente/vista_expediente.dart';
+import 'acciones_cuenta.dart';
 import 'formulario_habilitar_usuario.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
@@ -111,6 +112,15 @@ class PantallaConductores extends StatelessWidget {
           ),
           icon: const FaIcon(FontAwesomeIcons.userCheck, size: 16, color: Color(0xFF198754)),
         ),
+        // La suspension del conductor es su situacion (arriba); eliminar da de baja su cuenta.
+        if (conductor.idUsuario != null)
+          botonEliminarCuenta(
+            context,
+            api: api,
+            idUsuario: conductor.idUsuario!,
+            cuenta: 'la cuenta de conductor de ${conductor.nombreCompleto}',
+            recargar: recargar,
+          ),
       ],
     );
   }

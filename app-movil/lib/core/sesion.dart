@@ -101,6 +101,10 @@ class Sesion extends ChangeNotifier {
   UsuarioSesion? _usuario;
   List<String> _roles = const [];
 
+  /// Por que se cerro la sesion sin que la persona lo pidiera (cuenta suspendida o eliminada); el
+  /// login lo muestra. Se borra al volver a iniciar sesion.
+  String? motivoCierre;
+
   String? get tokenAcceso => _tokenAcceso;
   UsuarioSesion? get usuario => _usuario;
   bool get autenticado => _tokenAcceso != null && _usuario != null;
@@ -291,7 +295,8 @@ class Sesion extends ChangeNotifier {
     }
   }
 
-  Future<void> cerrar() async {
+  Future<void> cerrar({String? motivo}) async {
+    motivoCierre = motivo;
     _tokenAcceso = null;
     _tokenRefresco = null;
     _usuario = null;
@@ -310,6 +315,7 @@ class Sesion extends ChangeNotifier {
 
   /// Guarda un TokenResponse del backend.
   Future<void> _guardar(Map<String, dynamic> datos) async {
+    motivoCierre = null;
     _tokenAcceso = datos['tokenAcceso'] as String;
     _tokenRefresco = datos['tokenRefresco'] as String;
     _usuario = UsuarioSesion.desdeJson(datos['usuario'] as Map<String, dynamic>);

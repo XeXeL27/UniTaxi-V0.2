@@ -515,6 +515,23 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               child: MapaBase(
                 controlador: _mapa,
                 onTap: eligiendo ? _tocarMapa : null,
+                puntosSinLetra: true,
+                // Con la partida ya marcada, sus lugares guardados aparecen para elegirlos de un toque.
+                marcadoresExtra: [
+                  if (eligiendo && _mapa.a != null && !_flujo.guardandoLugar)
+                    for (final favorito in _favoritos)
+                      if (favorito.posicion != null && favorito.posicion != _mapa.b?.posicion)
+                        Marker(
+                          point: favorito.posicion!,
+                          width: _MarcadorFavorito.ancho,
+                          height: _MarcadorFavorito.alto,
+                          alignment: Alignment.topCenter,
+                          child: _MarcadorFavorito(
+                            nombre: favorito.nombre,
+                            onTap: () => _flujo.irAFavorito(favorito.posicion!, favorito.nombre),
+                          ),
+                        ),
+                ],
                 capaAnimada: ListenableBuilder(
                   listenable: _posiciones,
                   builder: (context, _) => MarkerLayer(
@@ -583,12 +600,6 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                             : 'Viajas en mototaxi. Hay ${_conductores.length} libres cerca de ti.',
                       ),
                     ),
-                    OpcionVehiculo(
-                      nombre: 'Auto',
-                      proximamente: true,
-                      icono: const FaIcon(FontAwesomeIcons.carSide, color: ColoresApp.rojo, size: 30),
-                      onTap: () => mostrarMensaje(context, 'Muy pronto podrás pedir un auto.'),
-                    ),
                   ],
                 ),
               ),
@@ -647,6 +658,58 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     EtapaPasajero.enViaje => PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
     EtapaPasajero.calificando => null,
   };
+}
+
+/// Lugar guardado del pasajero en el mapa: estrella y nombre. Tocarlo lo pone como destino. La
+/// punta de abajo del icono es el punto.
+class _MarcadorFavorito extends StatelessWidget {
+  static const double ancho = 170;
+  static const double alto = 58;
+
+  final String nombre;
+  final VoidCallback onTap;
+
+  const _MarcadorFavorito({required this.nombre, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            constraints: const BoxConstraints(maxWidth: ancho),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: ColoresApp.blanco,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: const [BoxShadow(color: Color(0x330A2342), blurRadius: 6, offset: Offset(0, 2))],
+            ),
+            child: Text(
+              nombre,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: ColoresApp.azul, fontSize: 11.5, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5A623),
+              shape: BoxShape.circle,
+              border: Border.all(color: ColoresApp.blanco, width: 3),
+              boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
+            ),
+            child: const FaIcon(FontAwesomeIcons.solidStar, color: ColoresApp.blanco, size: 12),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Silueta del mototaxista en el mapa. Tamano fijo en pixeles: no cambia con el zoom.

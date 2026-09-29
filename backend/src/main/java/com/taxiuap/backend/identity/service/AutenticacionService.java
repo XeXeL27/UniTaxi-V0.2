@@ -47,6 +47,8 @@ import static com.taxiuap.backend.identity.service.CuentaUsuarioService.normaliz
 public class AutenticacionService {
 
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales invalidas";
+    public static final String MENSAJE_CUENTA_SUSPENDIDA =
+            "Tu cuenta esta suspendida. Comunicate con la administracion de TaxiUAP";
 
     private final PersonaRepository personaRepository;
     private final UsuarioRepository usuarioRepository;
@@ -106,13 +108,13 @@ public class AutenticacionService {
      * mas de una cuenta (la misma persona como pasajero y conductor) hace falta indicar el rol.
      */
     public TokenResponse login(LoginRequest datos) {
-        List<Usuario> candidatos = buscarCandidatos(datos.usuario().trim()).stream()
-                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+        List<Usuario> candidatos = sinSuspendidas(buscarCandidatos(datos.usuario().trim()).stream()
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
                 .filter(u -> u.getPersona().getEstadoPersona() == EstadoRegistro.A)
                 .filter(u -> datos.rol() == null || datos.rol().isBlank()
                         || u.getRol().getCodigo().equalsIgnoreCase(datos.rol().trim()))
                 .filter(u -> passwordEncoder.matches(datos.password(), u.getPasswordHash()))
-                .toList();
+                .toList());
 
         if (candidatos.isEmpty()) {
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS);
@@ -128,11 +130,11 @@ public class AutenticacionService {
      * usa para saber si la persona entra como pasajero, como conductor o si hay que preguntarle.
      */
     public List<String> cuentas(String identificador, String password) {
-        List<Usuario> usuarios = buscarCandidatos(identificador.trim()).stream()
-                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+        List<Usuario> usuarios = sinSuspendidas(buscarCandidatos(identificador.trim()).stream()
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
                 .filter(u -> u.getPersona().getEstadoPersona() == EstadoRegistro.A)
                 .filter(u -> passwordEncoder.matches(password, u.getPasswordHash()))
-                .toList();
+                .toList());
         if (usuarios.isEmpty()) {
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS);
         }
@@ -144,6 +146,18 @@ public class AutenticacionService {
                 .map(u -> u.getRol().getCodigo())
                 .distinct()
                 .toList();
+    }
+
+    /**
+     * Deja solo las cuentas activas. Si la contrasena era correcta pero todas las cuentas estan
+     * suspendidas, se avisa eso en vez de "credenciales invalidas".
+     */
+    private static List<Usuario> sinSuspendidas(List<Usuario> cuentas) {
+        List<Usuario> activas = cuentas.stream().filter(u -> u.getEstadoUsuario() == EstadoRegistro.A).toList();
+        if (activas.isEmpty() && !cuentas.isEmpty()) {
+            throw new NegocioException(MENSAJE_CUENTA_SUSPENDIDA);
+        }
+        return activas;
     }
 
     /** true si no es cuenta de conductor, o si lo es y el administrador ya la aprobo. */
@@ -221,6 +235,9 @@ public class AutenticacionService {
             Usuario usuario = usuarioRepository.findById(jwtUser.idUsuario())
                     .orElseThrow(() -> new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS));
 
+            if (usuario.getEstadoUsuario() == EstadoRegistro.S) {
+                throw new NegocioException(MENSAJE_CUENTA_SUSPENDIDA);
+            }
             if (usuario.getEstadoUsuario() != EstadoRegistro.A
                     || usuario.getPersona().getEstadoPersona() != EstadoRegistro.A) {
                 throw new NegocioException("La cuenta no esta activa");

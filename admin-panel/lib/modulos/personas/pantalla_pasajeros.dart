@@ -8,10 +8,12 @@ import '../../widgets/tabla/columna_tabla.dart';
 import '../expediente/expediente_api.dart';
 import '../expediente/expediente_pasajero.dart';
 import '../expediente/vista_expediente.dart';
+import 'acciones_cuenta.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
 
-/// Pasajeros (solo consulta; se habilitan desde Personas o Usuarios).
+/// Pasajeros: consulta, suspender o habilitar y eliminar su cuenta (se registran desde Personas o
+/// Usuarios, o desde la app).
 class PantallaPasajeros extends StatelessWidget {
   const PantallaPasajeros({super.key});
 
@@ -33,7 +35,30 @@ class PantallaPasajeros extends StatelessWidget {
         ColumnaTabla(titulo: 'Teléfono', valor: (p) => p.telefono, ancho: 100, proporcion: 1.4),
         ColumnaTabla(titulo: 'Calificación', tipo: TipoColumna.numero, valor: (p) => p.calificacionPromedio, ancho: 90),
         ColumnaTabla(titulo: 'N.º calif.', tipo: TipoColumna.numero, valor: (p) => p.totalCalificaciones, ancho: 90),
+        ColumnaTabla(
+          titulo: 'Situación',
+          tipo: TipoColumna.estado,
+          opciones: const ['ACTIVO', 'SUSPENDIDO'],
+          valor: (p) => p.situacion,
+        ),
         ColumnaTabla(titulo: 'Registrado', tipo: TipoColumna.fechaHora, valor: (p) => p.fechaRegistro),
+      ],
+      accionesFila: (pasajero, recargar) => [
+        botonSuspenderCuenta(
+          context,
+          api: api,
+          idUsuario: pasajero.idUsuario,
+          suspendida: pasajero.suspendida,
+          cuenta: 'la cuenta de pasajero de ${pasajero.nombreCompleto}',
+          recargar: recargar,
+        ),
+        botonEliminarCuenta(
+          context,
+          api: api,
+          idUsuario: pasajero.idUsuario,
+          cuenta: 'la cuenta de pasajero de ${pasajero.nombreCompleto}',
+          recargar: recargar,
+        ),
       ],
     );
   }
