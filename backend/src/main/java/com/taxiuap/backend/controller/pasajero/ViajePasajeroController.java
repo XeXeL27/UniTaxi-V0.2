@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.controller.conductor.QrPagoConductorController;
+import com.taxiuap.backend.location.dto.UbicacionConductorViajeResponse;
 import com.taxiuap.backend.pricing.dto.QrPagoResponse;
 import com.taxiuap.backend.pricing.entity.QrPagoConductor;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
@@ -67,6 +68,12 @@ public class ViajePasajeroController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<ViajeResponse>> obtener(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.exito(viajeService.obtener(id)));
+    }
+
+    /** Posicion del conductor asignado, para que el pasajero vea de donde viene y cuanto tarda. */
+    @GetMapping("/{id}/ubicacion-conductor")
+    public ResponseEntity<ApiResponse<UbicacionConductorViajeResponse>> ubicacionConductor(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito(viajeService.ubicacionConductorSeguimiento(id)));
     }
 
     @PostMapping("/{id}/cancelar")

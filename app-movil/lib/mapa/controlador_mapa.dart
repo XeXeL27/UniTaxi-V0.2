@@ -29,7 +29,8 @@ enum CapaMapa {
 
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
 /// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo gris desde su
-/// posicion hasta el punto A (acercamiento).
+/// posicion hasta el punto A (acercamiento). En la app del pasajero, el tramo gris desde la
+/// posicion del conductor hasta el punto de referencia (origen o destino segun la etapa del viaje).
 class ControladorMapa extends ChangeNotifier {
   static const double zoomCalle = 17;
 
@@ -54,6 +55,16 @@ class ControladorMapa extends ChangeNotifier {
 
   /// Si es true, el punto A se mueve con el GPS (pasajero eligiendo su viaje).
   bool aSigueGps = false;
+
+  /// Posicion del conductor asignado al viaje del pasajero (solo en la app del pasajero).
+  LatLng? conductorUbicacion;
+  double? conductorRumbo;
+
+  /// Tramo desde la posicion del conductor hasta el punto de referencia (origen o destino).
+  Ruta? rutaConductor;
+  bool mostrarRutaConductor = false;
+  LatLng? _puntoReferenciaConductor;
+  int _consultaRutaConductor = 0;
 
   CapaMapa capa = CapaMapa.calles;
 
@@ -190,6 +201,64 @@ class ControladorMapa extends ChangeNotifier {
     calculandoRuta = false;
     _consultaRuta++;
     _consultaAcercamiento++;
+    detenerSeguimientoConductor();
+    _avisar();
+  }
+
+  /// Inicia el seguimiento del conductor asignado al viaje del pasajero.
+  /// [referencia] es el punto hacia el que se dibuja la ruta (origen mientras va a recoger,
+  /// destino durante el viaje).
+  void iniciarSeguimientoConductor(LatLng referencia) {
+    _puntoReferenciaConductor = referencia;
+    mostrarRutaConductor = true;
+    rutaConductor = null;
+    _consultaRutaConductor++;
+    _avisar();
+  }
+
+  /// Cambia el punto de referencia del seguimiento del conductor (ej: de origen a destino).
+  void cambiarPuntoReferenciaConductor(LatLng referencia) {
+    if (_puntoReferenciaConductor == referencia) return;
+    _puntoReferenciaConductor = referencia;
+    if (mostrarRutaConductor && conductorUbicacion != null) {
+      _trazarRutaConductor();
+    }
+    _avisar();
+  }
+
+  /// Actualiza la posicion del conductor asignado al viaje del pasajero.
+  void ponerSeguimientoConductor(LatLng? posicion, {double? rumbo}) {
+    if (posicion == null) return;
+    final anterior = conductorUbicacion;
+    conductorUbicacion = posicion;
+    conductorRumbo = rumbo;
+    if (mostrarRutaConductor && _puntoReferenciaConductor != null) {
+      // Solo recalcula si el conductor se movio mas de _metrosParaRecalcular.
+      if (anterior == null || ServiciosMapa.metros(anterior, posicion) > _metrosParaRecalcular) {
+        _trazarRutaConductor();
+      }
+    }
+    _avisar();
+  }
+
+  /// Detiene el seguimiento del conductor (cuando termina o cancela el viaje).
+  void detenerSeguimientoConductor() {
+    conductorUbicacion = null;
+    conductorRumbo = null;
+    rutaConductor = null;
+    mostrarRutaConductor = false;
+    _puntoReferenciaConductor = null;
+    _consultaRutaConductor++;
+  }
+
+  Future<void> _trazarRutaConductor() async {
+    final desde = conductorUbicacion;
+    final hasta = _puntoReferenciaConductor;
+    if (desde == null || hasta == null) return;
+    final consulta = ++_consultaRutaConductor;
+    final resultado = await ServiciosMapa.calcularRuta(desde, hasta);
+    if (_cerrado || consulta != _consultaRutaConductor || !mostrarRutaConductor) return;
+    rutaConductor = resultado;
     _avisar();
   }
 
@@ -239,6 +308,7 @@ class ControladorMapa extends ChangeNotifier {
       if (a != null) a!.posicion,
       if (b != null) b!.posicion,
       if (mostrarAcercamiento && miUbicacion != null) miUbicacion!,
+      if (mostrarRutaConductor && conductorUbicacion != null) conductorUbicacion!,
     ];
     if (puntos.length < 2 || !_mapaListo) return;
     try {

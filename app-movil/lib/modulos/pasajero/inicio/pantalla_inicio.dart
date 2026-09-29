@@ -60,7 +60,11 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   final _mapa = ControladorMapa();
   final _historial = GlobalKey<PantallaHistorialState>();
   late final FavoritosApi _favoritosApi = FavoritosApi(context.read<ClienteApi>());
-  late final FlujoPasajero _flujo = FlujoPasajero(api: ViajeApi(context.read<ClienteApi>()), mapa: _mapa);
+  late final FlujoPasajero _flujo = FlujoPasajero(
+    api: ViajeApi(context.read<ClienteApi>()),
+    mapa: _mapa,
+    sesion: context.read<Sesion>(),
+  );
 
   int _seccion = _seccionInicio;
 
@@ -653,6 +657,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                     onBoton: () => mostrarAyuda(context, esConductor: false),
                     solape: eligiendo ? 34 : 0,
                   ),
+                  const SizedBox(height: 8),
+                  TarjetaSeguimientoConductor(flujo: _flujo, onTocar: () => setState(() => _panelAbierto = true)),
                   if (eligiendo)
                     Transform.translate(
                       offset: const Offset(0, -34),
@@ -873,6 +879,101 @@ class _MarcadorMototaxi extends StatelessWidget {
       height: alto,
       fit: BoxFit.contain,
       filterQuality: FilterQuality.medium,
+    );
+  }
+}
+
+/// Tarjeta flotante con distancia y ETA del conductor asignado. Aparece debajo de la cabecera
+/// durante el viaje (CONFIRMADO -> EN_CURSO) como una notificacion emergente sobre el mapa.
+class TarjetaSeguimientoConductor extends StatelessWidget {
+  final FlujoPasajero flujo;
+  final VoidCallback onTocar;
+
+  const TarjetaSeguimientoConductor({super.key, required this.flujo, required this.onTocar});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: flujo,
+      builder: (context, _) {
+        final viaje = flujo.viaje;
+        final ruta = flujo.rutaAlConductor;
+        if (viaje == null || ruta == null) return const SizedBox.shrink();
+        if (flujo.etapa != EtapaPasajero.enViaje) return const SizedBox.shrink();
+
+        final situacion = viaje.situacion;
+        final esRecogida = situacion == SituacionViaje.confirmado ||
+            situacion == SituacionViaje.enCamino ||
+            situacion == SituacionViaje.llego;
+        final esEnCurso = situacion == SituacionViaje.enCurso;
+        if (!esRecogida && !esEnCurso) return const SizedBox.shrink();
+
+        final (icono, _, color) = estadoViajePasajero(situacion);
+        final titulo = esRecogida
+            ? 'Llega en ~${ruta.duracionTexto}'
+            : 'Llegas en ~${ruta.duracionTexto}';
+        final subtitulo = esRecogida
+            ? 'A ${ruta.distanciaTexto} · ${viaje.placa ?? viaje.vehiculo}'
+            : '${ruta.distanciaTexto} hasta ${viaje.destinoDireccion}';
+
+        return ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Material(
+              color: ColoresApp.blanco,
+              elevation: 5,
+              shadowColor: const Color(0x330A2342),
+              borderRadius: BorderRadius.circular(14),
+              child: InkWell(
+                onTap: onTocar,
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Center(child: FaIcon(icono, color: color, size: 15)),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              titulo,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                color: ColoresApp.azul,
+                                fontSize: 15,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitulo,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

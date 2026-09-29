@@ -38,6 +38,45 @@ class ConductorEnLinea {
   }
 }
 
+/// Posicion del conductor asignado a un viaje, para que el pasajero vea de donde viene.
+class UbicacionConductorViaje {
+  final int idViaje;
+  final LatLng? posicion;
+  final double? rumbo;
+  final double? velocidad;
+  final DateTime? actualizadoEn;
+  final double? distanciaMetros;
+  final String puntoReferencia;
+
+  const UbicacionConductorViaje({
+    required this.idViaje,
+    this.posicion,
+    this.rumbo,
+    this.velocidad,
+    this.actualizadoEn,
+    this.distanciaMetros,
+    required this.puntoReferencia,
+  });
+
+  static UbicacionConductorViaje? desdeJson(Map<String, dynamic> json) {
+    final idViaje = (json['idViaje'] as num).toInt();
+    final latitud = numeroDesdeJson(json['latitud']);
+    final longitud = numeroDesdeJson(json['longitud']);
+    final posicion = (latitud != null && longitud != null) ? LatLng(latitud, longitud) : null;
+    final actualizadoEnStr = json['actualizadoEn'] as String?;
+    final actualizadoEn = actualizadoEnStr != null ? DateTime.tryParse(actualizadoEnStr) : null;
+    return UbicacionConductorViaje(
+      idViaje: idViaje,
+      posicion: posicion,
+      rumbo: (json['rumbo'] as num?)?.toDouble(),
+      velocidad: (json['velocidad'] as num?)?.toDouble(),
+      actualizadoEn: actualizadoEn,
+      distanciaMetros: (json['distanciaMetros'] as num?)?.toDouble(),
+      puntoReferencia: json['puntoReferencia'] as String? ?? 'ORIGEN',
+    );
+  }
+}
+
 /// Endpoints del flujo de viaje del pasajero.
 class ViajeApi {
   final ClienteApi cliente;
@@ -73,6 +112,12 @@ class ViajeApi {
 
   Future<Viaje> viaje(int id) async =>
       Viaje.desdeJson(await cliente.get('/api/pasajero/viajes/$id') as Map<String, dynamic>);
+
+  /// Posicion del conductor asignado, para que el pasajero vea de donde viene y cuanto tarda.
+  Future<UbicacionConductorViaje?> ubicacionConductor(int idViaje) async {
+    final datos = await cliente.get('/api/pasajero/viajes/$idViaje/ubicacion-conductor');
+    return datos == null ? null : UbicacionConductorViaje.desdeJson(datos as Map<String, dynamic>);
+  }
 
   Future<List<Viaje>> misViajes() => cliente.lista('/api/pasajero/viajes', Viaje.desdeJson);
 

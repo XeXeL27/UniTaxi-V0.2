@@ -45,9 +45,12 @@ class MapaBase extends StatelessWidget {
         final c = controlador;
         final ruta = c.ruta;
         final acercamiento = c.mostrarAcercamiento ? c.acercamiento : null;
+        final rutaConductor = c.mostrarRutaConductor ? c.rutaConductor : null;
         final a = c.a;
         final b = c.b;
         final gps = c.miUbicacion;
+        final conductorPos = c.conductorUbicacion;
+        final conductorRumbo = c.conductorRumbo;
         return FlutterMap(
           mapController: c.mapa,
           options: MapOptions(
@@ -74,6 +77,13 @@ class MapaBase extends StatelessWidget {
                 if (acercamiento != null)
                   Polyline(
                     points: acercamiento.puntos,
+                    strokeWidth: 5,
+                    color: ColoresApp.textoSuave,
+                    pattern: StrokePattern.dashed(segments: const [10, 8]),
+                  ),
+                if (rutaConductor != null)
+                  Polyline(
+                    points: rutaConductor.puntos,
                     strokeWidth: 5,
                     color: ColoresApp.textoSuave,
                     pattern: StrokePattern.dashed(segments: const [10, 8]),
@@ -105,6 +115,23 @@ class MapaBase extends StatelessWidget {
                 if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
                 // El GPS va encima de los pines: es lo que se mueve en vivo.
                 if (gps != null) Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
+                // Marcador del conductor asignado al viaje del pasajero.
+                if (conductorPos != null)
+                  Marker(
+                    point: conductorPos,
+                    width: 32,
+                    height: 32,
+                    child: Transform.rotate(
+                      angle: (conductorRumbo ?? 0) * 3.14159 / 180,
+                      child: Image.asset(
+                        'assets/mototaxi.png',
+                        width: 32,
+                        height: 32,
+                        fit: BoxFit.contain,
+                        filterQuality: FilterQuality.medium,
+                      ),
+                    ),
+                  ),
               ],
             ),
           ],

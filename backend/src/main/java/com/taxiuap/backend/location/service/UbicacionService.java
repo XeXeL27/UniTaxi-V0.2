@@ -33,6 +33,7 @@ import com.taxiuap.backend.location.repository.DisponibilidadConductorRepository
 import com.taxiuap.backend.location.repository.UbicacionConductorRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.trip.service.SeguimientoViajePublisher;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 
@@ -58,6 +59,7 @@ public class UbicacionService {
     private final ConductorRepository conductorRepository;
     private final VehiculoRepository vehiculoRepository;
     private final ConductorUbicacionPublisher publisher;
+    private final SeguimientoViajePublisher seguimientoViajePublisher;
 
     @Value("${taxiuap.conductores.segundos-en-linea:120}")
     private long segundosEnLinea;
@@ -118,6 +120,7 @@ public class UbicacionService {
                 disponibilidad,
                 aInstante(ahora));
         publisher.publicarPosicion(mensaje);
+        seguimientoViajePublisher.publicarAlPasajero(mensaje);
         return mensaje;
     }
 
