@@ -8,6 +8,7 @@ import '../mapa/controlador_mapa.dart';
 import '../mapa/vista_mapa.dart';
 import '../widgets/pagina_seccion.dart';
 import '../widgets/paneles.dart';
+import '../widgets/selector_pestanas.dart';
 import 'modelos_viaje.dart';
 
 /// Barra superior azul de las pantallas secundarias.
@@ -23,13 +24,19 @@ Color colorSituacion(String situacion) => switch (situacion) {
   _ => ColoresApp.ruta,
 };
 
-/// Seccion Historial de la barra inferior: los viajes del conductor (los que acepto) o del pasajero
+/// Seccion Viajes de la barra inferior: los viajes del conductor (los que acepto) o del pasajero
 /// (los que pidio), del mas reciente al mas antiguo. Tocar uno abre su ruta en el mapa.
+///
+/// Del pasajero tiene ademas una segunda pestana, Favoritos, con sus lugares guardados y los que se
+/// deducen de estos mismos viajes. El constructor de esa pestana recibe los viajes ya cargados, de
+/// donde salen los lugares frecuentes, asi no hace falta una segunda consulta. Sin [pestanaFavoritos]
+/// la seccion se queda en una sola lista, que es como la ve el conductor.
 class PantallaHistorial extends StatefulWidget {
   final Future<List<Viaje>> Function() cargar;
   final bool esConductor;
+  final Widget Function(List<Viaje> viajes, EdgeInsets relleno)? pestanaFavoritos;
 
-  const PantallaHistorial({super.key, required this.cargar, required this.esConductor});
+  const PantallaHistorial({super.key, required this.cargar, required this.esConductor, this.pestanaFavoritos});
 
   @override
   State<PantallaHistorial> createState() => PantallaHistorialState();
@@ -39,14 +46,21 @@ class PantallaHistorialState extends State<PantallaHistorial> {
   List<Viaje>? _viajes;
   String? _error;
 
+  /// 0 = Historial, 1 = Favoritos. Se muestra el historial al entrar a la seccion.
+  int _pestana = 0;
+
   @override
   void initState() {
     super.initState();
     _cargar();
   }
 
-  /// Vuelve a consultar (al entrar a la seccion, por si termino un viaje mientras tanto).
-  Future<void> recargar() => _cargar();
+  /// Vuelve a consultar y regresa al historial, que es la pestana que se muestra al entrar a la
+  /// seccion.
+  Future<void> recargar() {
+    if (_pestana != 0) setState(() => _pestana = 0);
+    return _cargar();
+  }
 
   Future<void> _cargar() async {
     setState(() => _error = null);
@@ -72,57 +86,88 @@ class PantallaHistorialState extends State<PantallaHistorial> {
   @override
   Widget build(BuildContext context) {
     final viajes = _viajes;
-    final completados = viajes?.where((v) => v.situacion == SituacionViaje.completado).toList() ?? const [];
-    final total = completados.fold<double>(0, (suma, v) => suma + (v.precioFinal ?? 0));
+    final conPestanas = widget.pestanaFavoritos != null;
     return PaginaSeccion(
       titulo: 'Historial',
-      subtitulo: widget.esConductor ? 'Los viajes que aceptaste' : 'Los viajes que pediste',
-      constructor: (context, relleno) => _error != null
-          ? _ErrorCarga(mensaje: _error!, onReintentar: _cargar)
-          : viajes == null
-          ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
-          : RefreshIndicator(
-              onRefresh: _cargar,
-              child: ListView(
-                padding: relleno,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _Resumen(titulo: 'Viajes completados', valor: '${completados.length}'),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _Resumen(titulo: widget.esConductor ? 'Cobrado' : 'Pagado', valor: formatoBs(total)),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  if (viajes.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 40),
-                      child: Text(
-                        widget.esConductor ? 'Todavía no aceptaste viajes.' : 'Todavía no pediste viajes.',
-                        textAlign: TextAlign.center,
-                        style: const TextStyle(color: ColoresApp.textoSuave),
-                      ),
-                    ),
-                  for (final viaje in viajes)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: _TarjetaViaje(
-                        viaje: viaje,
-                        esConductor: widget.esConductor,
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute<void>(
-                            builder: (_) => PantallaDetalleViaje(viaje: viaje, esConductor: widget.esConductor),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+      subtitulo: conPestanas
+          ? 'Tus viajes y tus lugares'
+          : widget.esConductor
+          ? 'Los viajes que aceptaste'
+          : 'Los viajes que pediste',
+      constructor: (context, relleno) => Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (conPestanas) ...[
+            SelectorPestanas(
+              titulos: const ['Historial', 'Favoritos'],
+              indice: _pestana,
+              onCambiar: (i) => setState(() => _pestana = i),
+            ),
+            const SizedBox(height: 6),
+          ],
+          Expanded(
+            child: _pestana == 0 || !conPestanas
+                ? _listaHistorial(relleno)
+                // Sin viajes cargados (error o primera carga) los frecuentes salen vacios: el grupo
+                // se oculta solo y los favoritos de abajo no se ven afectados.
+                : widget.pestanaFavoritos!(viajes ?? const [], relleno),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _listaHistorial(EdgeInsets relleno) {
+    final viajes = _viajes;
+    final completados = viajes?.where((v) => v.situacion == SituacionViaje.completado).toList() ?? const [];
+    final total = completados.fold<double>(0, (suma, v) => suma + (v.precioFinal ?? 0));
+    if (_error != null) {
+      return _ErrorCarga(mensaje: _error!, onReintentar: _cargar);
+    }
+    if (viajes == null) {
+      return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
+    }
+    return RefreshIndicator(
+      onRefresh: _cargar,
+      child: ListView(
+        padding: relleno,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: _Resumen(titulo: 'Viajes completados', valor: '${completados.length}'),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _Resumen(titulo: widget.esConductor ? 'Cobrado' : 'Pagado', valor: formatoBs(total)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (viajes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 40),
+              child: Text(
+                widget.esConductor ? 'Todavía no aceptaste viajes.' : 'Todavía no pediste viajes.',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: ColoresApp.textoSuave),
               ),
             ),
+          for (final viaje in viajes)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _TarjetaViaje(
+                viaje: viaje,
+                esConductor: widget.esConductor,
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => PantallaDetalleViaje(viaje: viaje, esConductor: widget.esConductor),
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -147,7 +192,10 @@ class _Resumen extends StatelessWidget {
         children: [
           Text(titulo, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
           const SizedBox(height: 4),
-          Text(valor, style: const TextStyle(color: ColoresApp.azul, fontSize: 22, fontWeight: FontWeight.w800)),
+          Text(
+            valor,
+            style: const TextStyle(color: ColoresApp.azul, fontSize: 22, fontWeight: FontWeight.w800),
+          ),
         ],
       ),
     );
@@ -339,7 +387,9 @@ class _Linea extends StatelessWidget {
             width: 120,
             child: Text(etiqueta, style: const TextStyle(color: ColoresApp.textoSuave)),
           ),
-          Expanded(child: Text(valor, style: const TextStyle(color: ColoresApp.texto))),
+          Expanded(
+            child: Text(valor, style: const TextStyle(color: ColoresApp.texto)),
+          ),
         ],
       ),
     );
@@ -360,7 +410,11 @@ class _ErrorCarga extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(mensaje, textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.rojo)),
+            Text(
+              mensaje,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: ColoresApp.rojo),
+            ),
             const SizedBox(height: 12),
             TextButton(onPressed: onReintentar, child: const Text('Reintentar')),
           ],
