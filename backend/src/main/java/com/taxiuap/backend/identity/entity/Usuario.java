@@ -53,6 +53,13 @@ public class Usuario extends EntidadAuditable {
     @Column(name = "password_hash", length = 100, nullable = false)
     private String passwordHash;
 
+    /**
+     * true si la contrasena la genero el sistema y todavia no se entrego a la persona (conductor que
+     * se registro con Google): al aprobarlo se le crea una nueva y se le envia por correo.
+     */
+    @Column(name = "contrasena_generada")
+    private Boolean contrasenaGenerada = false;
+
     @Column(name = "foto_url", length = 500)
     private String fotoUrl;
 

@@ -10,7 +10,8 @@ import 'package:flutter/material.dart';
 /// - verde (check): la accion se realizo (registro, edicion).
 /// - naranja (signo de pregunta): pide confirmacion antes de editar o eliminar.
 /// - rojo (X): se elimino un registro, o la accion fallo.
-enum TipoDialogo { exito, confirmacion, eliminado, error }
+/// - naranja (signo de exclamacion): aviso informativo, sin nada que confirmar.
+enum TipoDialogo { exito, confirmacion, eliminado, error, aviso }
 
 const _verde = Color(0xFF198754);
 const _verdeOscuro = Color(0xFF157347);
@@ -42,6 +43,15 @@ Future<void> mostrarErrorDialogo(
   required String mensaje,
 }) {
   return _mostrar(context, TipoDialogo.error, titulo, mensaje);
+}
+
+/// Modal naranja con signo de exclamacion: avisa algo sin pedir confirmacion.
+Future<void> mostrarAviso(BuildContext context, {required String titulo, required String mensaje, String textoBoton = 'Entendido'}) {
+  return _abrir<void>(
+    context,
+    barreraCierra: true,
+    tarjeta: _TarjetaAlerta(tipo: TipoDialogo.aviso, titulo: titulo, mensaje: mensaje, textoBoton: textoBoton),
+  );
 }
 
 /// Modal naranja con Cancelar / confirmar. Devuelve true si el usuario confirma.
@@ -116,7 +126,7 @@ class _TarjetaAlerta extends StatelessWidget {
 
   (Color, Color) get _colores => switch (tipo) {
     TipoDialogo.exito => (_verde, _verdeOscuro),
-    TipoDialogo.confirmacion => (_naranja, _naranjaOscuro),
+    TipoDialogo.confirmacion || TipoDialogo.aviso => (_naranja, _naranjaOscuro),
     TipoDialogo.eliminado || TipoDialogo.error => (_rojo, _rojoOscuro),
   };
 
@@ -299,7 +309,7 @@ class _PintorIcono extends CustomPainter {
       canvas.drawPath(_parcial(trazo, progresoSimbolo), pincelSimbolo);
     }
 
-    if (tipo == TipoDialogo.confirmacion && opacidadPunto > 0) {
+    if ((tipo == TipoDialogo.confirmacion || tipo == TipoDialogo.aviso) && opacidadPunto > 0) {
       canvas.drawCircle(const Offset(26, 38), 2.5, Paint()..color = color.withValues(alpha: opacidadPunto));
     }
   }
@@ -323,6 +333,12 @@ class _PintorIcono extends CustomPainter {
           Path()
             ..moveTo(36, 16)
             ..lineTo(16, 36),
+        ];
+      case TipoDialogo.aviso:
+        return [
+          Path()
+            ..moveTo(26, 13)
+            ..lineTo(26, 30),
         ];
       case TipoDialogo.confirmacion:
         // M19,20 A7,7 0 1,1 26,27 C26,30 26,31 26,31

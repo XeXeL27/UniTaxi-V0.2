@@ -283,6 +283,53 @@ class Sesion extends ChangeNotifier {
     await _guardar(json['datos'] as Map<String, dynamic>);
   }
 
+  /// "Olvide mi contrasena": el backend envia un codigo de 6 digitos al correo (si esta registrado).
+  Future<void> pedirCodigoContrasena(String correo) =>
+      _postAuth('/api/auth/contrasena/olvido', {'correo': correo.trim()});
+
+  /// Pone la contrasena nueva con el codigo recibido por correo (pasajero y conductor a la vez).
+  Future<void> restablecerContrasena({
+    required String correo,
+    required String codigo,
+    required String nueva,
+    required String confirmacion,
+  }) => _postAuth('/api/auth/contrasena/restablecer', {
+    'correo': correo.trim(),
+    'codigo': codigo.trim(),
+    'nueva': nueva,
+    'confirmacion': confirmacion,
+  });
+
+  /// Guarda el correo de quien entro sin tenerlo y lo deja en la sesion.
+  Future<void> guardarCorreo(String correo) async {
+    final http.Response respuesta;
+    try {
+      respuesta = await http
+          .post(
+            Uri.parse('${Config.apiUrl}/api/cuenta/correo'),
+            headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $_tokenAcceso'},
+            body: jsonEncode({'correo': correo.trim()}),
+          )
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      throw ApiExcepcion('No se pudo conectar con el servidor');
+    }
+    final json = _decodificar(respuesta);
+    if (respuesta.statusCode >= 400 || json['ok'] != true) {
+      throw ApiExcepcion(json['mensaje'] as String? ?? 'Error ${respuesta.statusCode}', codigo: respuesta.statusCode);
+    }
+    final actual = _usuario;
+    if (actual == null) return;
+    _usuario = UsuarioSesion.desdeJson({...actual.aJson(), 'correo': json['datos'] as String? ?? correo.trim()});
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_claveUsuario, jsonEncode(_usuario!.aJson()));
+    } catch (_) {
+      // Queda en memoria.
+    }
+    notifyListeners();
+  }
+
   /// Renueva el token de acceso con el de refresco. Devuelve false si no se pudo.
   Future<bool> refrescar() async {
     final refresco = _tokenRefresco;

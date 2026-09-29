@@ -17,12 +17,16 @@ class PanelEligiendo extends StatelessWidget {
   final VoidCallback onSolicitar;
   final VoidCallback onGuardarDestino;
 
+  /// Mototaxistas libres en linea (null mientras no se consulto).
+  final int? libres;
+
   const PanelEligiendo({
     super.key,
     required this.flujo,
     required this.enviando,
     required this.onSolicitar,
     required this.onGuardarDestino,
+    this.libres,
   });
 
   @override
@@ -110,7 +114,9 @@ class PanelEligiendo extends StatelessWidget {
                   const Text('Ruta aproximada', style: TextStyle(color: ColoresApp.rojo, fontSize: 12.5)),
               ],
             ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 12),
+          DisponibilidadTaxis(libres: libres),
+          const SizedBox(height: 12),
           _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
           const SizedBox(height: 10),
           RecuadroPrecio(
@@ -138,7 +144,16 @@ class PanelBuscando extends StatefulWidget {
   final bool cancelando;
   final VoidCallback onCancelar;
 
-  const PanelBuscando({super.key, required this.flujo, required this.cancelando, required this.onCancelar});
+  /// Mototaxistas libres en linea (null mientras no se consulto).
+  final int? libres;
+
+  const PanelBuscando({
+    super.key,
+    required this.flujo,
+    required this.cancelando,
+    required this.onCancelar,
+    this.libres,
+  });
 
   @override
   State<PanelBuscando> createState() => _PanelBuscandoState();
@@ -214,6 +229,14 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
           child: LinearProgressIndicator(minHeight: 4, color: ColoresApp.rojo, backgroundColor: ColoresApp.rojoSuave),
         ),
         const SizedBox(height: 12),
+        if (widget.libres == 0) ...[
+          const _Aviso(
+            icono: FontAwesomeIcons.hourglassHalf,
+            texto: 'Ahora no hay taxistas libres. Puede demorar un poco encontrar uno que acepte tu viaje: '
+                'tu solicitud sigue activa y te avisaremos aquí.',
+          ),
+          const SizedBox(height: 12),
+        ],
         if (solicitud != null) ...[
           FilaLugar.partida(texto: solicitud.origenDireccion),
           FilaLugar.destino(texto: solicitud.destinoDireccion),
@@ -233,6 +256,15 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
   }
 }
 
+/// Icono, texto y color del estado del viaje tal como lo ve el pasajero.
+(FaIconData, String, Color) estadoViajePasajero(String situacion) => switch (situacion) {
+  SituacionViaje.confirmado => (FontAwesomeIcons.circleCheck, 'Tu conductor aceptó el viaje', ColoresApp.exito),
+  SituacionViaje.enCamino => (FontAwesomeIcons.carSide, 'Tu conductor va en camino', ColoresApp.ruta),
+  SituacionViaje.llego => (FontAwesomeIcons.locationDot, 'Tu conductor llegó. Te está esperando', ColoresApp.rojo),
+  SituacionViaje.enCurso => (FontAwesomeIcons.route, 'En viaje a tu destino', ColoresApp.azul),
+  _ => (FontAwesomeIcons.circleInfo, SituacionViaje.nombre(situacion), ColoresApp.textoSuave),
+};
+
 /// Panel del viaje asignado: estado, datos del conductor y del vehiculo, lugares y precio.
 class PanelViaje extends StatelessWidget {
   final FlujoPasajero flujo;
@@ -247,13 +279,7 @@ class PanelViaje extends StatelessWidget {
   Widget build(BuildContext context) {
     final viaje = flujo.viaje;
     if (viaje == null) return const SizedBox.shrink();
-    final (icono, texto, color) = switch (viaje.situacion) {
-      SituacionViaje.confirmado => (FontAwesomeIcons.circleCheck, 'Tu conductor aceptó el viaje', ColoresApp.exito),
-      SituacionViaje.enCamino => (FontAwesomeIcons.carSide, 'Tu conductor va en camino', ColoresApp.ruta),
-      SituacionViaje.llego => (FontAwesomeIcons.locationDot, 'Tu conductor llegó. Te está esperando', ColoresApp.rojo),
-      SituacionViaje.enCurso => (FontAwesomeIcons.route, 'En viaje a tu destino', ColoresApp.azul),
-      _ => (FontAwesomeIcons.circleInfo, SituacionViaje.nombre(viaje.situacion), ColoresApp.textoSuave),
-    };
+    final (icono, texto, color) = estadoViajePasajero(viaje.situacion);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -510,6 +536,128 @@ class _Indicacion extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Cuantos mototaxistas libres hay en linea: verde si hay, naranja si no (se puede pedir igual).
+class DisponibilidadTaxis extends StatelessWidget {
+  final int? libres;
+
+  const DisponibilidadTaxis({super.key, required this.libres});
+
+  @override
+  Widget build(BuildContext context) {
+    final n = libres;
+    if (n == null) return const SizedBox.shrink();
+    if (n == 0) {
+      return const _Aviso(
+        icono: FontAwesomeIcons.triangleExclamation,
+        texto: 'No hay taxistas libres en este momento. Puedes pedir igual, pero puede demorar un poco.',
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: BoxDecoration(
+        color: ColoresApp.exito.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          const FaIcon(FontAwesomeIcons.motorcycle, color: ColoresApp.exito, size: 15),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              n == 1 ? '1 taxista libre cerca de ti' : '$n taxistas libres cerca de ti',
+              style: const TextStyle(color: ColoresApp.exito, fontWeight: FontWeight.w600, fontSize: 13.5),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Panel que se puede bajar para ver el mapa completo con la ruta (igual que la lista de
+/// solicitudes del conductor). Cerrado queda solo una barra con el resumen; tocarla, la flecha o
+/// deslizar hacia arriba lo vuelve a abrir con el detalle.
+class PanelPlegable extends StatelessWidget {
+  final bool abierto;
+  final VoidCallback onAlternar;
+  final FaIconData icono;
+  final Color color;
+
+  /// Lo que se ve con el panel cerrado (por ejemplo "Buscando conductor...").
+  final String resumen;
+
+  /// Texto de la barra con el panel abierto.
+  final String tituloAbierto;
+  final Widget child;
+
+  const PanelPlegable({
+    super.key,
+    required this.abierto,
+    required this.onAlternar,
+    required this.icono,
+    required this.color,
+    required this.resumen,
+    required this.tituloAbierto,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final barra = Semantics(
+      button: true,
+      label: abierto ? 'Esconder detalle y ver el mapa' : 'Ver detalle',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onAlternar,
+        onVerticalDragEnd: (d) {
+          final v = d.primaryVelocity ?? 0;
+          if ((abierto && v > 150) || (!abierto && v < -150)) onAlternar();
+        },
+        child: Row(
+          children: [
+            if (!abierto) ...[
+              FaIcon(icono, color: color, size: 16),
+              const SizedBox(width: 10),
+            ],
+            Expanded(
+              child: Text(
+                abierto ? tituloAbierto : resumen,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: abierto
+                    ? const TextStyle(color: ColoresApp.textoSuave, fontSize: 13, fontWeight: FontWeight.w600)
+                    : TextStyle(color: color, fontSize: 15.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+            if (!abierto)
+              const Padding(
+                padding: EdgeInsets.only(right: 6),
+                child: Text('Ver detalle', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+              ),
+            IconButton(
+              onPressed: onAlternar,
+              tooltip: abierto ? 'Ver el mapa completo' : 'Ver detalle',
+              style: IconButton.styleFrom(backgroundColor: ColoresApp.azulSuave),
+              icon: AnimatedRotation(
+                turns: abierto ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: const FaIcon(FontAwesomeIcons.chevronUp, color: ColoresApp.azul, size: 15),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        barra,
+        if (abierto) ...[const SizedBox(height: 8), child],
+      ],
     );
   }
 }

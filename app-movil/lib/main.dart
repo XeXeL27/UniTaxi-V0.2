@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'comun/completar_correo.dart';
 import 'core/api_excepcion.dart';
 import 'core/cliente_api.dart';
 import 'core/config.dart';
@@ -11,6 +12,7 @@ import 'modulos/conductor/inicio/pantalla_inicio.dart';
 import 'modulos/login/pantalla_login.dart';
 import 'modulos/pasajero/inicio/pantalla_inicio.dart';
 import 'modulos/registro/formulario_conductor.dart';
+import 'widgets/requiere_gps.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -67,6 +69,7 @@ class _TaxiUapState extends State<TaxiUap> {
   Widget build(BuildContext context) {
     final rol = context.select<Sesion, String?>((s) => s.autenticado ? s.usuario?.rol : null);
     final motivoCierre = context.select<Sesion, String?>((s) => s.motivoCierre);
+    final sinCorreo = context.select<Sesion, bool>((s) => (s.usuario?.correo ?? '').trim().isEmpty);
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
     if (rol != null) {
       _error = null;
@@ -77,9 +80,18 @@ class _TaxiUapState extends State<TaxiUap> {
       debugShowCheckedModeBanner: false,
       theme: temaApp(),
       // La clave por rol reconstruye la pantalla al cambiar de modo.
+      // Pasajero y conductor necesitan un correo (credenciales, restablecer la contrasena) y el GPS
+      // encendido.
       home: switch (rol) {
-        Config.rolConductor => const PantallaInicioConductor(key: ValueKey(Config.rolConductor)),
-        Config.rolPasajero => const PantallaInicioPasajero(key: ValueKey(Config.rolPasajero)),
+        _ when rol != null && sinCorreo => const PantallaCompletarCorreo(),
+        Config.rolConductor => const RequiereGps(
+          key: ValueKey(Config.rolConductor),
+          child: PantallaInicioConductor(),
+        ),
+        Config.rolPasajero => const RequiereGps(
+          key: ValueKey(Config.rolPasajero),
+          child: PantallaInicioPasajero(),
+        ),
         _ when _codigoRegistro != null => PantallaFormularioConductor(
           codigoGoogle: _codigoRegistro,
           onCancelar: () => setState(() => _codigoRegistro = null),

@@ -12,6 +12,7 @@ import '../../widgets/boton_principal.dart';
 import '../../widgets/marco_acceso.dart';
 import '../registro/ingreso_google.dart';
 import '../registro/pantalla_registro.dart';
+import 'restablecer_contrasena.dart';
 
 /// Inicio de sesion con usuario, correo o telefono y contrasena, o con Google. Desde aqui se abre
 /// el registro de pasajero o conductor.
@@ -181,6 +182,17 @@ class _PantallaLoginState extends State<PantallaLogin> {
     await _ingresar();
   }
 
+  /// Codigo por correo y contrasena nueva; al terminar deja el correo escrito para ingresar.
+  Future<void> _olvideContrasena() async {
+    final correo = await abrirRestablecerContrasena(context, correoInicial: _usuario.text.trim());
+    if (correo != null && mounted) {
+      setState(() {
+        _usuario.text = correo;
+        _password.clear();
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) => MarcoAcceso(child: _formulario());
 
@@ -273,7 +285,17 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 style: TextStyle(color: ColoresApp.texto, fontSize: 14.5),
               ),
             ),
-            const SizedBox(height: 12),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: _cargando ? null : _olvideContrasena,
+                child: const Text(
+                  '¿Olvidaste tu contraseña?',
+                  style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w600),
+                ),
+              ),
+            ),
+            const SizedBox(height: 4),
             BotonPrincipal(texto: 'Iniciar sesión', cargando: _cargando, onPressed: _ingresar),
             if (_huellaActiva) ...[
               const SizedBox(height: 12),

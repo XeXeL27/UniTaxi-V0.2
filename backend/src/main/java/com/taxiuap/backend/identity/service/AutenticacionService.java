@@ -220,7 +220,10 @@ public class AutenticacionService {
                         .filter(this::esCuentaDeApp)
                         .toList()
                 : List.of(actual);
-        cuentas.forEach(u -> u.setPasswordHash(hash));
+        cuentas.forEach(u -> {
+            u.setPasswordHash(hash);
+            u.setContrasenaGenerada(false);
+        });
         usuarioRepository.saveAll(cuentas);
     }
 

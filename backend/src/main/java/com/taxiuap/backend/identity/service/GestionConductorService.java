@@ -30,6 +30,7 @@ public class GestionConductorService {
     private final ConductorRepository conductorRepository;
     private final VehiculoRepository vehiculoRepository;
     private final DocumentoConductorRepository documentoConductorRepository;
+    private final CredencialesCorreoService credencialesCorreoService;
 
     public List<ConductorAdminResponse> listar(SituacionAprobacion situacion) {
         return conductorRepository.findByEstadoConductorOrderByIdAsc(EstadoRegistro.A).stream()
@@ -45,10 +46,13 @@ public class GestionConductorService {
     @Transactional
     public ConductorAdminResponse cambiarSituacion(Long id, CambiarSituacionConductorRequest request) {
         Conductor conductor = buscarPorId(id);
+        boolean yaAprobado = conductor.getSituacionAprobacion() == SituacionAprobacion.APROBADO;
         conductor.setSituacionAprobacion(request.situacion());
 
         if (request.situacion() == SituacionAprobacion.APROBADO) {
             conductor.setFechaAprobacion(LocalDateTime.now());
+            // Recien al aprobarlo recibe el correo con sus credenciales.
+            if (!yaAprobado) credencialesCorreoService.conductorAprobado(conductor.getUsuario());
         } else {
             conductor.setFechaAprobacion(null);
         }

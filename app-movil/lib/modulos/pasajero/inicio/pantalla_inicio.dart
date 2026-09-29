@@ -82,6 +82,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   Uint8List? _foto;
   bool _calificando = false;
 
+  /// Panel de la solicitud o del viaje: se puede bajar para ver la ruta en el mapa completo. Se
+  /// vuelve a abrir solo cuando cambia la etapa (buscando -> viaje asignado).
+  bool _panelAbierto = true;
+  EtapaPasajero? _etapaPanel;
+
+  /// Mototaxistas libres en linea; null mientras no hay una primera respuesta.
+  int? get _libres => _conductoresCargados ? _conductores.length : null;
+
   @override
   void initState() {
     super.initState();
@@ -108,6 +116,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// terminar el viaje se abre el cuadro para calificar.
   void _alCambiarFlujo() {
     if (!mounted) return;
+    if (_flujo.etapa != _etapaPanel) {
+      _etapaPanel = _flujo.etapa;
+      _panelAbierto = true;
+    }
     final aviso = _flujo.tomarAviso();
     if (aviso != null) mostrarMensaje(context, aviso, error: true);
     final novedad = _flujo.tomarNovedad();
@@ -341,6 +353,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     setState(() => _enviando = true);
     try {
       await _flujo.solicitar();
+      if (mounted && _libres == 0) {
+        await mostrarAviso(
+          context,
+          titulo: 'No hay taxistas libres',
+          mensaje: 'Tu solicitud ya fue enviada. En este momento no hay taxistas libres, así que puede '
+              'demorar un poco encontrar uno que acepte tu viaje.',
+        );
+      }
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
@@ -397,6 +417,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
+  }
+
+  /// Baja o sube el panel. Al bajarlo la ruta se encuadra en el mapa, que queda casi completo.
+  void _alternarPanel() {
+    setState(() => _panelAbierto = !_panelAbierto);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _mapa.encuadrar();
+    });
   }
 
   /// Pasa al modo conductor (misma persona, otra cuenta) sin cerrar sesion.
@@ -502,7 +530,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final alto = MediaQuery.sizeOf(context).height;
     final abajo = BarraInferior.espacio(context);
     // Lo que tapan la cabecera con el buscador y el panel con la barra, para encuadrar la ruta.
-    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 200, 110, abajo + alto * 0.36);
+    final plegado = !_panelAbierto && (_flujo.etapa == EtapaPasajero.buscando || _flujo.etapa == EtapaPasajero.enViaje);
+    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 200, 110, abajo + (plegado ? 150 : alto * 0.36));
     return ListenableBuilder(
       listenable: Listenable.merge([_flujo, _mapa]),
       builder: (context, _) {
@@ -653,11 +682,33 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         final b = _mapa.b;
         if (b != null) _guardarLugar(b.posicion, b.texto);
       },
+      libres: _libres,
     ),
-    EtapaPasajero.buscando => PanelBuscando(flujo: _flujo, cancelando: _enviando, onCancelar: _cancelarSolicitud),
-    EtapaPasajero.enViaje => PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
+    EtapaPasajero.buscando => PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: FontAwesomeIcons.taxi,
+      color: ColoresApp.rojo,
+      resumen: _libres == 0 ? 'Buscando conductor (sin taxistas libres)' : 'Buscando conductor...',
+      tituloAbierto: 'Detalle de tu solicitud',
+      child: PanelBuscando(flujo: _flujo, cancelando: _enviando, onCancelar: _cancelarSolicitud, libres: _libres),
+    ),
+    EtapaPasajero.enViaje => _panelViaje(),
     EtapaPasajero.calificando => null,
   };
+
+  Widget _panelViaje() {
+    final (icono, texto, color) = estadoViajePasajero(_flujo.viaje?.situacion ?? '');
+    return PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: icono,
+      color: color,
+      resumen: texto,
+      tituloAbierto: 'Detalle del viaje',
+      child: PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
+    );
+  }
 }
 
 /// Lugar guardado del pasajero en el mapa: estrella y nombre. Tocarlo lo pone como destino. La

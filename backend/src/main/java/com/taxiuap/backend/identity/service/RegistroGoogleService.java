@@ -1,7 +1,5 @@
 package com.taxiuap.backend.identity.service;
 
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -34,17 +32,16 @@ import lombok.RequiredArgsConstructor;
 /**
  * Ingreso y registro con Google. La persona se reconoce por su correo.
  *
- * Una cuenta creada con Google recibe una contrasena aleatoria que nadie conoce, asi que entra
- * siempre con Google. Si la persona ya tenia otra cuenta de la app, la nueva
- * reutiliza su nombre de usuario y su contrasena (regla 12: pasajero y conductor comparten
- * credenciales).
+ * Una cuenta creada con Google recibe una contrasena legible generada por el sistema: el pasajero
+ * la recibe por correo al registrarse y el conductor recien cuando el admin lo aprueba
+ * (CredencialesCorreoService). Si la persona ya tenia otra cuenta de la app, la nueva reutiliza su
+ * nombre de usuario y su contrasena (regla 12: pasajero y conductor comparten credenciales).
  */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class RegistroGoogleService {
 
-    private static final SecureRandom AZAR = new SecureRandom();
     private static final List<RolSistema> ROLES_APP = List.of(RolSistema.PASAJERO, RolSistema.CONDUCTOR);
 
     private final PersonaRepository personaRepository;
@@ -55,6 +52,7 @@ public class RegistroGoogleService {
     private final QrPagoConductorService qrPagoConductorService;
     private final FotoPerfilService fotoPerfilService;
     private final AutenticacionService autenticacionService;
+    private final CredencialesCorreoService credencialesCorreoService;
 
     /**
      * Boton "Continuar con Google" del login: entra con la cuenta que ya tenga (pasajero antes que
@@ -81,10 +79,28 @@ public class RegistroGoogleService {
         Optional<Usuario> cuenta = cuentaActiva(persona, RolSistema.PASAJERO);
         if (cuenta.isPresent()) return autenticacionService.tokensDe(cuenta.get());
 
-        Usuario usuario = crearCuenta(persona, RolSistema.PASAJERO);
+        CuentaNueva nueva = crearCuenta(persona, RolSistema.PASAJERO);
+        Usuario usuario = nueva.usuario();
         cuentaUsuarioService.crearPasajero(usuario);
         if (foto != null) fotoPerfilService.guardarImagen(usuario, foto);
+        enviarBienvenida(persona, nueva);
         return autenticacionService.tokensDe(usuario);
+    }
+
+    /**
+     * Correo con las credenciales del pasajero. Si reutilizo las de un conductor de Google que
+     * nadie conoce (todavia sin aprobar), se generan unas nuevas para las dos cuentas.
+     */
+    private void enviarBienvenida(Persona persona, CuentaNueva nueva) {
+        Usuario usuario = nueva.usuario();
+        String contrasena = nueva.contrasena();
+        if (contrasena == null && Boolean.TRUE.equals(usuario.getContrasenaGenerada())) {
+            contrasena = CredencialesCorreoService.contrasenaLegible();
+        }
+        if (contrasena != null) {
+            credencialesCorreoService.aplicarEnCuentasDeApp(persona, contrasena, false);
+        }
+        credencialesCorreoService.bienvenidaPasajero(usuario, contrasena, "la misma de tu cuenta de conductor");
     }
 
     /**
@@ -125,7 +141,10 @@ public class RegistroGoogleService {
                     perfil.nombres(), perfil.apellidos(), datos.fechaNacimiento(), perfil.correo(), datos.telefono()));
         }
 
-        Usuario usuario = crearCuenta(persona, RolSistema.CONDUCTOR);
+        CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);
+        Usuario usuario = nueva.usuario();
+        // La contrasena nueva no se entrega ahora: llega por correo cuando el admin lo aprueba.
+        if (nueva.contrasena() != null) usuario.setContrasenaGenerada(true);
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
@@ -165,22 +184,25 @@ public class RegistroGoogleService {
         return cuentasActivas(persona).stream().filter(u -> rol.getCodigo().equals(u.getRol().getCodigo())).findFirst();
     }
 
+    /** Cuenta recien creada; contrasena solo si el sistema la acaba de generar (si no, null). */
+    private record CuentaNueva(Usuario usuario, String contrasena) {
+    }
+
     /** Reutiliza las credenciales de la otra cuenta de la app; si no hay, genera unas nuevas. */
-    private Usuario crearCuenta(Persona persona, RolSistema rol) {
+    private CuentaNueva crearCuenta(Persona persona, RolSistema rol) {
         Optional<Usuario> otra = cuentasActivas(persona).stream()
                 .filter(u -> ROLES_APP.stream().anyMatch(r -> r.getCodigo().equals(u.getRol().getCodigo())))
                 .findFirst();
-        String nombreUsuario = otra.map(Usuario::getNombreUsuario).orElseGet(() -> nombreUsuarioLibre(persona.getCorreo()));
-        String hash = otra.map(Usuario::getPasswordHash)
-                .orElseGet(() -> cuentaUsuarioService.codificar(contrasenaAleatoria()));
-        return cuentaUsuarioService.crearUsuario(persona, rol, nombreUsuario, hash);
-    }
-
-    /** 48 caracteres al azar (288 bits): nadie la conoce y entra en el limite de 72 bytes de BCrypt. */
-    private static String contrasenaAleatoria() {
-        byte[] bytes = new byte[36];
-        AZAR.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        if (otra.isPresent()) {
+            Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol, otra.get().getNombreUsuario(),
+                    otra.get().getPasswordHash());
+            usuario.setContrasenaGenerada(otra.get().getContrasenaGenerada());
+            return new CuentaNueva(usuario, null);
+        }
+        String contrasena = CredencialesCorreoService.contrasenaLegible();
+        Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol, nombreUsuarioLibre(persona.getCorreo()),
+                cuentaUsuarioService.codificar(contrasena));
+        return new CuentaNueva(usuario, contrasena);
     }
 
     /**
