@@ -58,8 +58,8 @@ class BarraInferior extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: ColoresApp.blanco,
                   borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: ColoresApp.borde.withValues(alpha: 0.7)),
-                  boxShadow: const [BoxShadow(color: Color(0x260A2342), blurRadius: 22, offset: Offset(0, 8))],
+                  border: Border.all(color: ColoresApp.borde.withValues(alpha: 0.6)),
+                  boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 18, offset: Offset(0, 6))],
                 ),
                 // Con boton central cada lado ocupa la misma mitad, asi el hueco queda al centro
                 // aunque la cantidad de items sea impar (pasajero: 1 a la izquierda y 2 a la derecha).
@@ -84,6 +84,9 @@ class BarraInferior extends StatelessWidget {
   }
 }
 
+/// Gris de los iconos y textos de la barra que no estan activos.
+const _inactivo = Color(0xFF8A8A8A);
+
 class _Opcion extends StatelessWidget {
   final ItemBarra item;
   final bool activo;
@@ -105,26 +108,19 @@ class _Opcion extends StatelessWidget {
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
           margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(
-            color: activo ? ColoresApp.azulSuave : Colors.transparent,
-            borderRadius: BorderRadius.circular(18),
-          ),
+          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  AnimatedContainer(
-                    duration: const Duration(milliseconds: 220),
+                  // Estilo Uber: solo el icono, negro el activo y gris los demas.
+                  SizedBox(
                     width: 34,
-                    height: 30,
-                    decoration: BoxDecoration(
-                      color: activo ? ColoresApp.azul : ColoresApp.fondo,
-                      borderRadius: BorderRadius.circular(15),
-                    ),
+                    height: 28,
                     child: Center(
-                      child: FaIcon(item.icono, size: 15, color: activo ? ColoresApp.blanco : ColoresApp.textoSuave),
+                      child: FaIcon(item.icono, size: 19, color: activo ? ColoresApp.tinta : _inactivo),
                     ),
                   ),
                   if (insignia > 0)
@@ -156,7 +152,7 @@ class _Opcion extends StatelessWidget {
                 style: TextStyle(
                   fontSize: 12,
                   fontWeight: activo ? FontWeight.w700 : FontWeight.w500,
-                  color: activo ? ColoresApp.azul : ColoresApp.textoSuave,
+                  color: activo ? ColoresApp.tinta : _inactivo,
                 ),
               ),
             ],

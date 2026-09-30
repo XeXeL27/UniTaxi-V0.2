@@ -190,14 +190,14 @@ class BotonUbicacion extends StatelessWidget {
       color: ColoresApp.blanco,
       shape: const CircleBorder(),
       elevation: 4,
-      shadowColor: const Color(0x55000000),
+      shadowColor: const Color(0x40000000),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: () => _ubicar(context),
         child: const SizedBox(
           width: 50,
           height: 50,
-          child: Center(child: FaIcon(FontAwesomeIcons.locationCrosshairs, color: ColoresApp.azul, size: 20)),
+          child: Center(child: FaIcon(FontAwesomeIcons.locationCrosshairs, color: ColoresApp.tinta, size: 19)),
         ),
       ),
     );
@@ -224,7 +224,7 @@ class BotonBrujula extends StatelessWidget {
             color: ColoresApp.blanco,
             shape: const CircleBorder(),
             elevation: 4,
-            shadowColor: const Color(0x55000000),
+            shadowColor: const Color(0x40000000),
             child: InkWell(
               customBorder: const CircleBorder(),
               onTap: girado ? controlador.orientarAlNorte : null,
@@ -342,14 +342,14 @@ class BotonCapas extends StatelessWidget {
       color: ColoresApp.blanco,
       shape: const CircleBorder(),
       elevation: 4,
-      shadowColor: const Color(0x55000000),
+      shadowColor: const Color(0x40000000),
       child: InkWell(
         customBorder: const CircleBorder(),
         onTap: () => _elegir(context),
         child: const SizedBox(
           width: 50,
           height: 50,
-          child: Center(child: FaIcon(FontAwesomeIcons.layerGroup, color: ColoresApp.azul, size: 19)),
+          child: Center(child: FaIcon(FontAwesomeIcons.layerGroup, color: ColoresApp.tinta, size: 18)),
         ),
       ),
     );

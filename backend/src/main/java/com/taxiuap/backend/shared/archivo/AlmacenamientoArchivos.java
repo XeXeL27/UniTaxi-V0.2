@@ -128,6 +128,11 @@ public class AlmacenamientoArchivos {
         return carpetaPersona(persona) + "/general";
     }
 
+    /** Fotos del carnet de identidad (anverso y reverso). */
+    public String carpetaCarnet(Persona persona) {
+        return carpetaGeneral(persona) + "/carnet";
+    }
+
     /** Documentos PDF del conductor, separados de lo general. */
     public String carpetaDocumentosConductor(Persona persona) {
         return carpetaPersona(persona) + "/conductor/documentos";

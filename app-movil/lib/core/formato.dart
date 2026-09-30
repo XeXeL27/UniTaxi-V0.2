@@ -8,6 +8,14 @@ String formatoBs(num? monto) {
   return '$texto Bs';
 }
 
+/// "HUGO ARMANDO" o "hugo armando" -> "Hugo Armando" (saludo de la cabecera).
+String enTitulo(String texto) => texto
+    .trim()
+    .split(RegExp(r'\s+'))
+    .where((p) => p.isNotEmpty)
+    .map((p) => p[0].toUpperCase() + p.substring(1).toLowerCase())
+    .join(' ');
+
 /// Fecha dd/mm/aaaa; guion si no hay.
 String formatoFecha(DateTime? fecha) {
   if (fecha == null) return '-';

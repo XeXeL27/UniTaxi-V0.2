@@ -23,6 +23,9 @@ class UsuarioSesion {
   /// Primera vez que entra con esta cuenta: se muestra la guia de inicio (lib/widgets/guia_inicio.dart).
   final bool mostrarGuia;
 
+  /// Entro con Google y no tiene CI: antes de usar la app registra su carnet con fotos.
+  final bool requiereCarnet;
+
   UsuarioSesion({
     required this.idUsuario,
     required this.nombreUsuario,
@@ -32,6 +35,7 @@ class UsuarioSesion {
     this.telefono,
     required this.rol,
     this.mostrarGuia = false,
+    this.requiereCarnet = false,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -59,6 +63,7 @@ class UsuarioSesion {
     telefono: json['telefono'] as String?,
     rol: json['rol'] as String? ?? '',
     mostrarGuia: json['mostrarGuia'] as bool? ?? false,
+    requiereCarnet: json['requiereCarnet'] as bool? ?? false,
   );
 
   Map<String, dynamic> aJson() => {
@@ -70,6 +75,7 @@ class UsuarioSesion {
     'telefono': telefono,
     'rol': rol,
     'mostrarGuia': mostrarGuia,
+    'requiereCarnet': requiereCarnet,
   };
 }
 
@@ -233,13 +239,14 @@ class Sesion extends ChangeNotifier {
   }
 
   /// Registro de conductor (con el formulario o con Google): [ruta] multipart con la parte "datos"
-  /// en JSON, un PDF por tipo de documento y los QR de cobro opcionales (partes QR1..QR3). Al
-  /// terminar la sesion queda iniciada.
+  /// en JSON, un PDF por tipo de documento, los QR de cobro opcionales (partes QR1..QR3) y, con
+  /// Google, las fotos del carnet. Al terminar la sesion queda iniciada.
   Future<void> registrarConductor(
     String ruta,
     Map<String, dynamic> datos,
     Map<String, ArchivoPdf> documentos, {
     List<ArchivoPdf> qrs = const [],
+    ({Uint8List anverso, Uint8List reverso})? carnet,
   }) async {
     final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
     peticion.files.add(
@@ -260,6 +267,15 @@ class Sesion extends ChangeNotifier {
           contentType: png ? MediaType('image', 'png') : MediaType('image', 'jpeg'),
         ),
       );
+    }
+    // Fotos del carnet del registro con Google (partes CARNET_ANVERSO y CARNET_REVERSO).
+    if (carnet != null) {
+      peticion.files.addAll([
+        http.MultipartFile.fromBytes('CARNET_ANVERSO', carnet.anverso,
+            filename: 'carnet_anverso.jpg', contentType: MediaType('image', 'jpeg')),
+        http.MultipartFile.fromBytes('CARNET_REVERSO', carnet.reverso,
+            filename: 'carnet_reverso.jpg', contentType: MediaType('image', 'jpeg')),
+      ]);
     }
     final http.Response respuesta;
     try {

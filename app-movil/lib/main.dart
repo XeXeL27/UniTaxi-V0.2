@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import 'comun/completar_correo.dart';
+import 'comun/verificar_carnet.dart';
 import 'core/api_excepcion.dart';
 import 'core/cliente_api.dart';
 import 'core/config.dart';
@@ -73,6 +74,7 @@ class _TaxiUapState extends State<TaxiUap> {
     final rol = context.select<Sesion, String?>((s) => s.autenticado ? s.usuario?.rol : null);
     final motivoCierre = context.select<Sesion, String?>((s) => s.motivoCierre);
     final sinCorreo = context.select<Sesion, bool>((s) => (s.usuario?.correo ?? '').trim().isEmpty);
+    final sinCarnet = context.select<Sesion, bool>((s) => s.usuario?.requiereCarnet ?? false);
     // Administrador que entro desde el login del APK: el panel se abre dentro de la app.
     final panelAdmin = context.select<Sesion, Map<String, dynamic>?>((s) => s.panelAdmin);
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
@@ -97,6 +99,8 @@ class _TaxiUapState extends State<TaxiUap> {
           onSalir: context.read<Sesion>().salirDelPanel,
         ),
         _ when rol != null && sinCorreo => const PantallaCompletarCorreo(),
+        // Entro con Google sin CI: primero la foto de su carnet.
+        _ when rol != null && sinCarnet => const PantallaVerificarCarnet(),
         Config.rolConductor => const RequiereGps(
           key: ValueKey(Config.rolConductor),
           child: PantallaInicioConductor(),

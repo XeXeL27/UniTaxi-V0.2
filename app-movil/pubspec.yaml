@@ -53,6 +53,8 @@ dependencies:
   google_sign_in: ^7.2.0
   flutter_local_notifications: ^22.3.1
   webview_flutter: ^4.14.1
+  google_mlkit_text_recognition: ^0.17.1
+  image: ^4.10.1
 
 dev_dependencies:
   flutter_test:
@@ -79,6 +81,20 @@ flutter:
   # Silueta del mototaxista (sin fondo) para mostrar a los conductores en linea en el mapa.
   assets:
     - assets/mototaxi.png
+
+  # Tipografia de la app (estilo Uber), incluida en el APK: no depende de internet.
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fuentes/Inter-Regular.ttf
+        - asset: assets/fuentes/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fuentes/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fuentes/Inter-Bold.ttf
+          weight: 700
+        - asset: assets/fuentes/Inter-ExtraBold.ttf
+          weight: 800
 
   # To add assets to your application, add an assets section, like this:
   # assets:

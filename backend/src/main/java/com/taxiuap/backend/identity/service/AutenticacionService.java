@@ -282,15 +282,7 @@ public class AutenticacionService {
         String tokenRefresco = jwtService.generarRefresco(usuario.getId(), sujeto, rolCodigo);
 
         Persona persona = usuario.getPersona();
-        UsuarioResponse usuarioResponse = new UsuarioResponse(
-                usuario.getId(),
-                usuario.getNombreUsuario(),
-                persona.getNombres(),
-                persona.getApellidos(),
-                persona.getCorreo(),
-                persona.getTelefono(),
-                rolCodigo,
-                Boolean.FALSE.equals(usuario.getGuiaVista()));
+        UsuarioResponse usuarioResponse = UsuarioResponse.de(usuario);
 
         // La cuenta de conductor sin aprobar no se ofrece como "cambiar a modo conductor".
         List<String> rolesDisponibles = usuarioRepository.findByPersonaId(persona.getId()).stream()

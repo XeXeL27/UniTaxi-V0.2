@@ -1,6 +1,5 @@
-import 'dart:typed_data';
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/tema.dart';
@@ -9,43 +8,35 @@ import '../core/tema.dart';
 /// el buscador no se estiran de lado a lado.
 const double anchoControlesMapa = 560;
 
-/// Foto de perfil en el cuadro rojo de la cabecera; sin foto, el icono del modo (moto para el
-/// conductor, silueta para el pasajero).
+/// Alto de la pildora "¿A donde vas?" y cuanto se alarga la cabecera para que quepa dentro de ella.
+const double altoBarraDestino = 56;
+const double solapeDestino = altoBarraDestino + 14;
+
+/// Foto de perfil redonda de la cabecera; sin foto, el icono del modo (moto para el conductor,
+/// silueta para el pasajero) en negro sobre gris.
 class AvatarCabecera extends StatelessWidget {
   final Uint8List? foto;
   final FaIconData iconoSinFoto;
   final double tamano;
 
-  const AvatarCabecera({super.key, this.foto, required this.iconoSinFoto, this.tamano = 58});
+  const AvatarCabecera({super.key, this.foto, required this.iconoSinFoto, this.tamano = 48});
 
   @override
   Widget build(BuildContext context) {
-    final radio = BorderRadius.circular(tamano * 0.3);
     return Container(
       width: tamano,
       height: tamano,
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [ColoresApp.rojo, ColoresApp.rojoOscuro],
-        ),
-        borderRadius: radio,
-        border: Border.all(color: ColoresApp.blanco.withValues(alpha: 0.25), width: 1.5),
-      ),
+      decoration: const BoxDecoration(color: ColoresApp.gris, shape: BoxShape.circle),
       child: foto == null
-          ? Center(child: FaIcon(iconoSinFoto, color: ColoresApp.blanco, size: tamano * 0.42))
-          : ClipRRect(
-              borderRadius: BorderRadius.circular(tamano * 0.3 - 1.5),
-              child: Image.memory(foto!, fit: BoxFit.cover, gaplessPlayback: true),
-            ),
+          ? Center(child: FaIcon(iconoSinFoto, color: ColoresApp.tinta, size: tamano * 0.4))
+          : ClipOval(child: Image.memory(foto!, fit: BoxFit.cover, gaplessPlayback: true)),
     );
   }
 }
 
-/// Cabecera de la pantalla de inicio: fondo azul marino, tarjeta con la foto de perfil (o el icono
-/// del modo), "Bienvenido", "Hola, NOMBRE", la ubicacion actual y un boton redondo a la derecha
-/// (ayuda).
+/// Cabecera de la pantalla de inicio (estilo Uber): fondo blanco, foto redonda, "Bienvenido",
+/// "Hola, Nombre" en negrita negra, la ubicacion actual en gris y un boton redondo gris a la
+/// derecha (ayuda).
 class CabeceraInicio extends StatelessWidget {
   final String saludo;
   final String nombre;
@@ -54,7 +45,7 @@ class CabeceraInicio extends StatelessWidget {
   final String tooltipBoton;
   final VoidCallback onBoton;
 
-  /// Espacio extra al pie del fondo azul, para que el buscador se monte encima.
+  /// Espacio extra al pie de la cabecera, para que el buscador quede dentro de ella.
   final double solape;
 
   /// Si no es null, en lugar de la foto va una flecha para volver (conductor viendo una ruta).
@@ -81,58 +72,58 @@ class CabeceraInicio extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final arriba = MediaQuery.paddingOf(context).top;
-    return Container(
-      padding: EdgeInsets.fromLTRB(14, arriba + 12, 14, 14 + solape),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [Color(0xFF16386B), ColoresApp.azul],
+    // Fondo blanco arriba: la hora y la bateria del telefono en negro.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: BarraSistema.sobreClaro,
+      child: Container(
+        padding: EdgeInsets.fromLTRB(16, arriba + 10, 16, 14 + solape),
+        decoration: const BoxDecoration(
+          color: ColoresApp.blanco,
+          borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
+          boxShadow: [BoxShadow(color: Color(0x1F000000), blurRadius: 16, offset: Offset(0, 4))],
         ),
-        borderRadius: BorderRadius.vertical(bottom: Radius.circular(26)),
-        boxShadow: [BoxShadow(color: Color(0x330A2342), blurRadius: 14, offset: Offset(0, 4))],
-      ),
-      child: Center(
-        heightFactor: 1,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
-          child: Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: ColoresApp.blanco.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(22),
-              border: Border.all(color: ColoresApp.blanco.withValues(alpha: 0.14)),
-            ),
+        child: Center(
+          heightFactor: 1,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
             child: Row(
               children: [
                 if (onAtras != null)
-                  _BotonRedondo(icono: FontAwesomeIcons.arrowLeft, tooltip: 'Volver', onTap: onAtras!)
+                  BotonGris(icono: FontAwesomeIcons.arrowLeft, tooltip: 'Volver', onTap: onAtras!)
                 else
                   AvatarCabecera(foto: foto, iconoSinFoto: iconoSinFoto),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(saludo, style: TextStyle(color: ColoresApp.blanco.withValues(alpha: 0.72), fontSize: 13)),
-                      const SizedBox(height: 2),
+                      Text(
+                        saludo,
+                        style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 13, fontWeight: FontWeight.w500),
+                      ),
                       Text(
                         nombre,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: ColoresApp.blanco, fontSize: 20, fontWeight: FontWeight.w700),
+                        style: const TextStyle(
+                          color: ColoresApp.tinta,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          letterSpacing: -0.5,
+                          height: 1.2,
+                        ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Row(
                         children: [
-                          FaIcon(FontAwesomeIcons.locationDot, size: 12, color: ColoresApp.blanco.withValues(alpha: 0.8)),
-                          const SizedBox(width: 6),
+                          const FaIcon(FontAwesomeIcons.locationDot, size: 11, color: ColoresApp.grisTexto),
+                          const SizedBox(width: 5),
                           Expanded(
                             child: Text(
                               ubicacion,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(color: ColoresApp.blanco.withValues(alpha: 0.85), fontSize: 13),
+                              style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 13),
                             ),
                           ),
                         ],
@@ -141,7 +132,7 @@ class CabeceraInicio extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                _BotonRedondo(icono: iconoBoton, tooltip: tooltipBoton, onTap: onBoton),
+                BotonGris(icono: iconoBoton, tooltip: tooltipBoton, onTap: onBoton),
               ],
             ),
           ),
@@ -151,31 +142,29 @@ class CabeceraInicio extends StatelessWidget {
   }
 }
 
-class _BotonRedondo extends StatelessWidget {
+/// Boton redondo gris claro con el icono en negro (ayuda, volver).
+class BotonGris extends StatelessWidget {
   final FaIconData icono;
   final String tooltip;
   final VoidCallback onTap;
+  final double tamano;
 
-  const _BotonRedondo({required this.icono, required this.tooltip, required this.onTap});
+  const BotonGris({super.key, required this.icono, required this.tooltip, required this.onTap, this.tamano = 44});
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: ColoresApp.blanco.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(18),
+        color: ColoresApp.gris,
+        shape: const CircleBorder(),
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
-          child: Container(
-            width: 54,
-            height: 54,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: ColoresApp.blanco.withValues(alpha: 0.2)),
-            ),
-            child: Center(child: FaIcon(icono, color: ColoresApp.blanco, size: 20)),
+          customBorder: const CircleBorder(),
+          child: SizedBox(
+            width: tamano,
+            height: tamano,
+            child: Center(child: FaIcon(icono, color: ColoresApp.tinta, size: 17)),
           ),
         ),
       ),
@@ -183,8 +172,8 @@ class _BotonRedondo extends StatelessWidget {
   }
 }
 
-/// Barra "Destino / ¿A donde quieres ir?" que abre el buscador. Con destino elegido muestra su
-/// nombre y una X para quitarlo.
+/// Pildora gris "¿A donde vas?" que abre el buscador (estilo Uber). Con destino elegido muestra
+/// su nombre en negrita y una X para quitarlo.
 class BarraDestino extends StatelessWidget {
   final String? destino;
   final VoidCallback onBuscar;
@@ -196,83 +185,45 @@ class BarraDestino extends StatelessWidget {
   Widget build(BuildContext context) {
     final conDestino = destino != null;
     return Material(
-      color: ColoresApp.blanco,
-      elevation: 6,
-      shadowColor: const Color(0x440A2342),
-      borderRadius: BorderRadius.circular(22),
+      color: ColoresApp.gris,
+      borderRadius: BorderRadius.circular(altoBarraDestino / 2),
       child: InkWell(
         onTap: onBuscar,
-        borderRadius: BorderRadius.circular(22),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
+        borderRadius: BorderRadius.circular(altoBarraDestino / 2),
+        child: SizedBox(
+          height: altoBarraDestino,
           child: Row(
             children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [ColoresApp.rojo, ColoresApp.rojoOscuro]),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: const Center(child: FaIcon(FontAwesomeIcons.mapLocationDot, color: ColoresApp.blanco, size: 21)),
+              const SizedBox(width: 20),
+              FaIcon(
+                conDestino ? FontAwesomeIcons.solidSquare : FontAwesomeIcons.magnifyingGlass,
+                color: ColoresApp.tinta,
+                size: conDestino ? 12 : 18,
               ),
               const SizedBox(width: 14),
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Destino',
-                      style: TextStyle(color: ColoresApp.rojo, fontSize: 13, fontWeight: FontWeight.w700),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      destino ?? '¿A dónde quieres ir?',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: conDestino ? ColoresApp.texto : ColoresApp.textoSuave,
-                        fontSize: 16,
-                        fontWeight: conDestino ? FontWeight.w600 : FontWeight.w400,
-                      ),
-                    ),
-                  ],
+                child: Text(
+                  destino ?? '¿A dónde vas?',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: ColoresApp.tinta,
+                    fontSize: conDestino ? 16 : 18,
+                    fontWeight: conDestino ? FontWeight.w600 : FontWeight.w700,
+                    letterSpacing: -0.3,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
               if (conDestino && onQuitar != null)
-                _BotonCuadro(icono: FontAwesomeIcons.xmark, tooltip: 'Quitar destino', onTap: onQuitar!)
+                IconButton(
+                  tooltip: 'Quitar destino',
+                  onPressed: onQuitar,
+                  icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.tinta, size: 18),
+                )
               else
-                _BotonCuadro(icono: FontAwesomeIcons.magnifyingGlass, tooltip: 'Buscar destino', onTap: onBuscar),
+                const SizedBox(width: 16),
+              const SizedBox(width: 4),
             ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _BotonCuadro extends StatelessWidget {
-  final FaIconData icono;
-  final String tooltip;
-  final VoidCallback onTap;
-
-  const _BotonCuadro({required this.icono, required this.tooltip, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Tooltip(
-      message: tooltip,
-      child: Material(
-        color: ColoresApp.azulSuave,
-        borderRadius: BorderRadius.circular(16),
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(16),
-          child: SizedBox(
-            width: 52,
-            height: 52,
-            child: Center(child: FaIcon(icono, color: ColoresApp.azul, size: 18)),
           ),
         ),
       ),
@@ -313,18 +264,18 @@ class SelectorVehiculo extends StatelessWidget {
       clipBehavior: Clip.none,
       children: [
         Container(
-          width: 88,
-          padding: const EdgeInsets.all(6),
+          width: 84,
+          padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
             color: ColoresApp.blanco,
-            borderRadius: BorderRadius.circular(22),
-            boxShadow: const [BoxShadow(color: Color(0x330A2342), blurRadius: 14, offset: Offset(0, 5))],
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [BoxShadow(color: Color(0x26000000), blurRadius: 14, offset: Offset(0, 4))],
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               for (var i = 0; i < opciones.length; i++) ...[
-                if (i > 0) const SizedBox(height: 6),
+                if (i > 0) const SizedBox(height: 5),
                 _Vehiculo(opcion: opciones[i]),
               ],
             ],
@@ -332,24 +283,24 @@ class SelectorVehiculo extends StatelessWidget {
         ),
         if (contador != null)
           Positioned(
-            top: -10,
-            right: -8,
+            top: -9,
+            right: -7,
             child: Tooltip(
               message: tooltipContador,
               child: Container(
-                constraints: const BoxConstraints(minWidth: 30),
-                height: 30,
+                constraints: const BoxConstraints(minWidth: 28),
+                height: 28,
                 padding: const EdgeInsets.symmetric(horizontal: 6),
                 decoration: BoxDecoration(
-                  color: ColoresApp.azul,
+                  color: ColoresApp.tinta,
                   shape: contador! > 9 ? BoxShape.rectangle : BoxShape.circle,
-                  borderRadius: contador! > 9 ? BorderRadius.circular(15) : null,
+                  borderRadius: contador! > 9 ? BorderRadius.circular(14) : null,
                   border: Border.all(color: ColoresApp.blanco, width: 2.5),
                 ),
                 child: Center(
                   child: Text(
                     contador! > 99 ? '99+' : '$contador',
-                    style: const TextStyle(color: ColoresApp.blanco, fontSize: 13, fontWeight: FontWeight.w800),
+                    style: const TextStyle(color: ColoresApp.blanco, fontSize: 12.5, fontWeight: FontWeight.w700),
                   ),
                 ),
               ),
@@ -368,32 +319,32 @@ class _Vehiculo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activa = opcion.activa;
+    final forma = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(14),
+      side: BorderSide(color: activa ? ColoresApp.tinta : Colors.transparent, width: 2),
+    );
     return Opacity(
-      opacity: opcion.proximamente ? 0.55 : 1,
+      opacity: opcion.proximamente ? 0.5 : 1,
       child: Material(
-        color: activa ? ColoresApp.azul : Colors.transparent,
-        borderRadius: BorderRadius.circular(16),
+        color: activa ? ColoresApp.gris : Colors.transparent,
+        shape: forma,
         child: InkWell(
           onTap: opcion.onTap,
-          borderRadius: BorderRadius.circular(16),
+          customBorder: forma,
           child: SizedBox(
             width: double.infinity,
-            height: 96,
+            height: 90,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 SizedBox(height: 44, child: Center(child: opcion.icono)),
-                const SizedBox(height: 6),
+                const SizedBox(height: 4),
                 Text(
                   opcion.nombre,
-                  style: TextStyle(
-                    color: activa ? ColoresApp.blanco : ColoresApp.azul,
-                    fontWeight: FontWeight.w700,
-                    fontSize: 14,
-                  ),
+                  style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700, fontSize: 14),
                 ),
                 if (opcion.proximamente)
-                  const Text('Pronto', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 10.5)),
+                  const Text('Pronto', style: TextStyle(color: ColoresApp.grisTexto, fontSize: 10.5)),
               ],
             ),
           ),

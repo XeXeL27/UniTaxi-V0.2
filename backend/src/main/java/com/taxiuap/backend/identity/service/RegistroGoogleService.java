@@ -53,6 +53,7 @@ public class RegistroGoogleService {
     private final FotoPerfilService fotoPerfilService;
     private final AutenticacionService autenticacionService;
     private final CredencialesCorreoService credencialesCorreoService;
+    private final CarnetService carnetService;
 
     /**
      * Boton "Continuar con Google" del login: entra con la cuenta que ya tenga (pasajero antes que
@@ -107,7 +108,6 @@ public class RegistroGoogleService {
      * Si ya es conductor entra directo; si no, hace falta el formulario (licencia, moto, PDF). Si su
      * cuenta de conductor todavia no esta aprobada y tambien es pasajero, entra como pasajero.
      */
-    @Transactional(readOnly = true)
     public Optional<TokenResponse> conductorExistente(PerfilGoogle perfil) {
         return personaActiva(perfil).flatMap(persona -> cuentaActiva(persona, RolSistema.CONDUCTOR)
                 .map(conductor -> autenticacionService.tokensDe(entradaDe(persona, conductor))));
@@ -127,6 +127,7 @@ public class RegistroGoogleService {
             Map<String, MultipartFile> archivos) {
         Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
+        CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(archivos);
 
         Optional<Persona> existente = personaActiva(perfil);
         Persona persona;
@@ -139,7 +140,9 @@ public class RegistroGoogleService {
         } else {
             persona = gestionPersonaService.registrarEntidad(new PersonaRequest(datos.ci(), datos.complementoCi(),
                     perfil.nombres(), perfil.apellidos(), datos.fechaNacimiento(), perfil.correo(), datos.telefono()));
+            persona.setIngresoGoogle(true);
         }
+        carnetService.guardar(persona, carnet);
 
         CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);
         Usuario usuario = nueva.usuario();
@@ -154,18 +157,25 @@ public class RegistroGoogleService {
 
     // ------------------------------------------------------------------ apoyo
 
+    /**
+     * Persona con el correo de Google. Queda marcada como que entro con Google: si no tiene CI, la
+     * app le pide la foto de su carnet.
+     */
     private Optional<Persona> personaActiva(PerfilGoogle perfil) {
         Optional<Persona> persona = personaRepository.findByCorreo(perfil.correo());
         if (persona.isPresent() && persona.get().getEstadoPersona() != EstadoRegistro.A) {
             throw new NegocioException("La cuenta de " + perfil.correo() + " no esta activa");
         }
+        persona.ifPresent(p -> p.setIngresoGoogle(true));
         return persona;
     }
 
     private Persona nuevaPersona(PerfilGoogle perfil) {
-        // Google no da CI ni telefono: quedan null (se completan al registrarse como conductor).
-        return gestionPersonaService.registrarEntidad(new PersonaRequest(null, null, perfil.nombres(),
+        // Google no da CI ni telefono: el CI sale de la foto del carnet que la app pide al entrar.
+        Persona persona = gestionPersonaService.registrarEntidad(new PersonaRequest(null, null, perfil.nombres(),
                 perfil.apellidos(), null, perfil.correo(), null));
+        persona.setIngresoGoogle(true);
+        return persona;
     }
 
     private List<Usuario> cuentasActivas(Persona persona) {

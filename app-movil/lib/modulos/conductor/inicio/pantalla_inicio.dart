@@ -599,7 +599,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   saludo: etapa == EtapaConductor.detalle ? 'Solicitud de viaje' : 'Bienvenido',
                   nombre: etapa == EtapaConductor.detalle
                       ? 'Ruta del viaje'
-                      : 'Hola, ${usuario?.nombres.split(' ').take(2).join(' ').toUpperCase() ?? 'CONDUCTOR'}',
+                      : 'Hola, ${usuario == null ? 'conductor' : enTitulo(usuario.nombres.split(' ').take(2).join(' '))}',
                   ubicacion: _ubicacionCabecera(),
                   onAtras: etapa == EtapaConductor.detalle ? _flujo.volverALista : null,
                   onBoton: () => mostrarAyuda(context, esConductor: true),

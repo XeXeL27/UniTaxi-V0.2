@@ -26,6 +26,7 @@ public final class ProcesadorImagen {
     public static final int LADO_FOTO = 512;
     /** Lado mayor de una imagen de QR: suficiente para escanearla sin guardar fotos enormes. */
     public static final int LADO_MAXIMO_QR = 1200;
+    public static final int LADO_MAXIMO_CARNET = 1600;
     private static final float CALIDAD_JPEG = 0.88f;
 
     private ProcesadorImagen() {
@@ -88,6 +89,34 @@ public final class ProcesadorImagen {
             ImageIO.write(salidaImagen, "png", salida);
         } catch (IOException e) {
             throw new IllegalStateException("No se pudo procesar la imagen del QR", e);
+        }
+        return salida.toByteArray();
+    }
+
+    /**
+     * Foto del carnet de identidad: entera (sin recortar), reducida si pasa de
+     * {@link #LADO_MAXIMO_CARNET} y guardada como JPEG.
+     */
+    public static byte[] imagenCarnet(byte[] original) {
+        BufferedImage imagen = leer(original);
+        double escala = Math.min(1.0, (double) LADO_MAXIMO_CARNET / Math.max(imagen.getWidth(), imagen.getHeight()));
+        int ancho = Math.max(1, (int) Math.round(imagen.getWidth() * escala));
+        int alto = Math.max(1, (int) Math.round(imagen.getHeight() * escala));
+
+        BufferedImage salidaImagen = new BufferedImage(ancho, alto, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = salidaImagen.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.setColor(Color.WHITE);
+        g.fillRect(0, 0, ancho, alto);
+        g.drawImage(imagen, 0, 0, ancho, alto, null);
+        g.dispose();
+
+        ByteArrayOutputStream salida = new ByteArrayOutputStream();
+        try {
+            ImageIO.write(salidaImagen, "jpg", salida);
+        } catch (IOException e) {
+            throw new IllegalStateException("No se pudo procesar la foto del carnet", e);
         }
         return salida.toByteArray();
     }

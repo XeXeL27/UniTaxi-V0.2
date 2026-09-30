@@ -10,8 +10,12 @@ class CuentaApi {
   Future<void> cambiarContrasena({required String actual, required String nueva, required String confirmacion}) =>
       cliente.post('/api/cuenta/contrasena', {'actual': actual, 'nueva': nueva, 'confirmacion': confirmacion});
 
-  /// Cambia los datos de Mi perfil confirmando con la contrasena; devuelve el usuario actualizado
-  /// (UsuarioResponse) para la sesion.
-  Future<Map<String, dynamic>> actualizarDatos(Map<String, dynamic> datos) async =>
-      await cliente.put('/api/cuenta/datos', datos) as Map<String, dynamic>;
+  /// Pide el cambio de correo / telefono (y licencia en blanco): el backend envia un codigo al
+  /// correo actual y devuelve ese correo oculto a medias ("ju*****@gmail.com").
+  Future<String> pedirCodigoDatos(Map<String, dynamic> datos) async =>
+      await cliente.post('/api/cuenta/datos/codigo', datos) as String;
+
+  /// Aplica el cambio pendiente con el codigo; devuelve el usuario actualizado (UsuarioResponse).
+  Future<Map<String, dynamic>> confirmarDatos(String codigo) async =>
+      await cliente.put('/api/cuenta/datos', {'codigo': codigo}) as Map<String, dynamic>;
 }

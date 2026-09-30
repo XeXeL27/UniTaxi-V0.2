@@ -8,6 +8,7 @@ import 'package:http_parser/http_parser.dart';
 import 'package:provider/provider.dart';
 
 import '../../comun/qr_pago.dart';
+import '../../comun/selector_carnet.dart';
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
 import '../../core/config.dart';
@@ -84,6 +85,22 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   String? _errorGoogle;
 
   bool get _conGoogle => widget.codigoGoogle != null;
+
+  /// Registro con Google: fotos del carnet (anverso y reverso), obligatorias. Lo que se lee de ellas
+  /// llena el CI, el complemento y la fecha de nacimiento.
+  SeleccionCarnet _carnet = const SeleccionCarnet();
+
+  void _alCambiarCarnet(SeleccionCarnet seleccion) {
+    final datos = seleccion.datos;
+    setState(() {
+      _carnet = seleccion;
+      if (datos != null) {
+        if (datos.ci != null) _c['ci']!.text = datos.ci!;
+        _c['complementoCi']!.text = datos.complemento ?? '';
+        if (datos.fechaNacimiento != null) _fechaNacimiento = datos.fechaNacimiento;
+      }
+    });
+  }
 
   /// Nombre y correo ya se conocen (Google o cuenta de pasajero): no se piden ni se editan.
   bool get _datosConocidos => _conGoogle || widget.desdePasajero;
@@ -182,6 +199,10 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
 
   Future<void> _enviar() async {
     FocusScope.of(context).unfocus();
+    if (_conGoogle && !_carnet.completa) {
+      setState(() => _error = 'Agrega la foto del anverso y del reverso de tu carnet.');
+      return;
+    }
     final valido = _clave.currentState?.validate() ?? false;
     if (!valido || _fechaNacimiento == null) {
       setState(() => _error = !valido ? 'Revisa los campos marcados en rojo.' : 'Elige tu fecha de nacimiento.');
@@ -240,6 +261,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         datos,
         Map.of(_pdf),
         qrs: [for (final qr in _qrs) ArchivoPdf(qr.nombre, qr.bytes)],
+        carnet: _conGoogle ? (anverso: _carnet.anverso!, reverso: _carnet.reverso!) : null,
       );
       // Con la sesion iniciada la pantalla principal pasa a ser la del conductor (en revision), o la
       // del pasajero si la persona ya lo era: entra como conductor cuando la aprueben.
@@ -363,6 +385,20 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
                 children: [
                   if (_datosConocidos) _tarjetaGoogle(),
+                  if (_conGoogle)
+                    _Seccion(
+                      icono: FontAwesomeIcons.idCard,
+                      titulo: 'Foto de tu carnet',
+                      children: [
+                        const Text(
+                          'Primero toma o carga una foto de cada lado de tu carnet de identidad. Con ellas '
+                          'llenamos tu número de carnet y tu fecha de nacimiento.',
+                          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
+                        ),
+                        const SizedBox(height: 12),
+                        SelectorCarnet(onCambio: _alCambiarCarnet),
+                      ],
+                    ),
                   _Seccion(
                     icono: FontAwesomeIcons.solidUser,
                     titulo: 'Datos personales',

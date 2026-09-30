@@ -218,10 +218,10 @@ class _Cuadro extends StatelessWidget {
             children: [
               Text(
                 paso.titulo,
-                style: const TextStyle(color: ColoresApp.azul, fontSize: 17, fontWeight: FontWeight.w700),
+                style: const TextStyle(color: ColoresApp.tinta, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3),
               ),
               const SizedBox(height: 6),
-              Text(paso.texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14, height: 1.35)),
+              Text(paso.texto, style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 14, height: 1.35)),
               const SizedBox(height: 12),
               Row(
                 children: [
@@ -237,7 +237,7 @@ class _Cuadro extends StatelessWidget {
                   FilledButton(
                     onPressed: onSiguiente,
                     style: FilledButton.styleFrom(
-                      backgroundColor: ColoresApp.rojo,
+                      backgroundColor: ColoresApp.tinta,
                       foregroundColor: ColoresApp.blanco,
                       padding: const EdgeInsets.symmetric(horizontal: 18),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),

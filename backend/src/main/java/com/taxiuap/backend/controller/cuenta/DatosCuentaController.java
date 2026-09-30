@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.dto.ActualizarDatosCuentaRequest;
+import com.taxiuap.backend.identity.dto.ConfirmarDatosCuentaRequest;
 import com.taxiuap.backend.identity.dto.UsuarioResponse;
 import com.taxiuap.backend.identity.service.DatosCuentaService;
 import com.taxiuap.backend.shared.response.ApiResponse;
@@ -16,7 +17,10 @@ import com.taxiuap.backend.shared.response.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
-/** Mi perfil de la app: cambio de datos personales confirmado con la contrasena. */
+/**
+ * Mi perfil de la app: cambio de correo y telefono (y licencia en blanco del conductor) en dos
+ * pasos, con un codigo enviado al correo actual.
+ */
 @RestController
 @RequestMapping("/api/cuenta")
 @RequiredArgsConstructor
@@ -24,9 +28,15 @@ public class DatosCuentaController {
 
     private final DatosCuentaService datosCuentaService;
 
+    @PostMapping("/datos/codigo")
+    public ResponseEntity<ApiResponse<String>> pedirCodigo(@Valid @RequestBody ActualizarDatosCuentaRequest request) {
+        String correo = datosCuentaService.solicitarCambio(UsuarioActual.idUsuario(), request);
+        return ResponseEntity.ok(ApiResponse.exito("Codigo enviado a " + correo, correo));
+    }
+
     @PutMapping("/datos")
-    public ResponseEntity<ApiResponse<UsuarioResponse>> actualizar(@Valid @RequestBody ActualizarDatosCuentaRequest request) {
-        UsuarioResponse usuario = datosCuentaService.actualizar(UsuarioActual.idUsuario(), request);
+    public ResponseEntity<ApiResponse<UsuarioResponse>> confirmar(@Valid @RequestBody ConfirmarDatosCuentaRequest request) {
+        UsuarioResponse usuario = datosCuentaService.confirmarCambio(UsuarioActual.idUsuario(), request);
         return ResponseEntity.ok(ApiResponse.exito("Datos actualizados", usuario));
     }
 

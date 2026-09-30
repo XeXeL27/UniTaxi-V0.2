@@ -655,6 +655,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         key: _guiaPedir,
                         icono: FontAwesomeIcons.solidPaperPlane,
                         tooltip: 'Pedir taxi',
+                        color: ColoresApp.tinta,
                         activo: _flujo.puedeSolicitar,
                         cargando: _enviando,
                         onTap: _botonCentral,
@@ -728,17 +729,17 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               child: Column(
                 children: [
                   CabeceraInicio(
-                    nombre: 'Hola, ${usuario?.nombres.split(' ').take(2).join(' ').toUpperCase() ?? 'PASAJERO'}',
+                    nombre: 'Hola, ${usuario == null ? 'pasajero' : enTitulo(usuario.nombres.split(' ').take(2).join(' '))}',
                     ubicacion: _ubicacionCabecera(),
                     onBoton: () => mostrarAyuda(context, esConductor: false),
-                    solape: eligiendo ? 34 : 0,
+                    solape: eligiendo ? solapeDestino : 0,
                     foto: _foto,
                   ),
                   const SizedBox(height: 8),
                   TarjetaSeguimientoConductor(flujo: _flujo, onTocar: () => setState(() => _panelAbierto = true)),
                   if (eligiendo)
                     Transform.translate(
-                      offset: const Offset(0, -34),
+                      offset: const Offset(0, -(solapeDestino + 8)),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: ConstrainedBox(

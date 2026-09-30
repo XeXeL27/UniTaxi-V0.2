@@ -131,6 +131,25 @@ public class CredencialesCorreoService {
         correoService.enviar(persona.getCorreo(), "Código para restablecer tu contraseña", cuerpo);
     }
 
+    /** Codigo para confirmar el cambio de correo o telefono desde Mi perfil (va al correo actual). */
+    public void codigoCambioDatos(Persona persona, String codigo, long minutos) {
+        String cuerpo = saludo(persona)
+                + "Pediste cambiar tus datos de contacto en Unitaxi. Tu código de confirmación es:\n\n"
+                + "    " + codigo + "\n\n"
+                + "Vence en " + minutos + " minutos. Si no lo pediste, no compartas este código y cambia tu contraseña."
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Código para cambiar tus datos", cuerpo);
+    }
+
+    /** Aviso al correo anterior de que la cuenta ya usa otro correo. */
+    public void avisoCorreoCambiado(Persona persona, String correoAnterior) {
+        String cuerpo = saludo(persona)
+                + "El correo de tu cuenta de Unitaxi se cambió a " + persona.getCorreo() + ".\n\n"
+                + "Si no fuiste tú, comunícate con la administración."
+                + FIRMA;
+        correoService.enviar(correoAnterior, "Tu correo de Unitaxi cambió", cuerpo);
+    }
+
     /** En el celular con la app instalada la abre; si no, abre la web (/app o /admin). */
     private String enlace(String rol) {
         String base = urlPublica.endsWith("/") ? urlPublica.substring(0, urlPublica.length() - 1) : urlPublica;

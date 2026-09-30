@@ -10,13 +10,13 @@ import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
 import '../widgets/dialogos.dart';
-import 'confirmar_identidad.dart';
 import 'cuenta_api.dart';
 import 'perfil_api.dart';
 
-/// Datos de Mi perfil (pasajero y conductor). Se ven en una tarjeta y con "Editar" los mismos
-/// campos pasan a ser editables; para guardar se confirma con la contrasena (o la huella / PIN si
-/// esta activada). Los datos de la persona los comparten sus cuentas de pasajero y conductor.
+/// Datos de Mi perfil (pasajero y conductor). Se ven en una tarjeta; con "Editar" solo se cambian
+/// el correo y el telefono (y la licencia del conductor si esta en blanco). Al guardar llega un
+/// codigo al correo actual y recien al escribirlo se aplican los cambios. El resto de los datos lo
+/// cambia la administracion.
 class DatosPerfil extends StatefulWidget {
   final Perfil perfil;
   final bool esConductor;
@@ -32,20 +32,15 @@ class DatosPerfil extends StatefulWidget {
 
 class _DatosPerfilState extends State<DatosPerfil> {
   final _clave = GlobalKey<FormState>();
-  late final _nombres = TextEditingController();
-  late final _apellidos = TextEditingController();
-  late final _ci = TextEditingController();
-  late final _complemento = TextEditingController();
   late final _correo = TextEditingController();
   late final _telefono = TextEditingController();
   late final _licencia = TextEditingController();
   late final _categoria = TextEditingController();
-  DateTime? _nacimiento;
   bool _editando = false;
   bool _guardando = false;
 
   List<TextEditingController> get _controladores =>
-      [_nombres, _apellidos, _ci, _complemento, _correo, _telefono, _licencia, _categoria];
+      [_correo, _telefono, _licencia, _categoria];
 
   @override
   void dispose() {
@@ -57,59 +52,52 @@ class _DatosPerfilState extends State<DatosPerfil> {
 
   void _editar() {
     final p = widget.perfil;
-    _nombres.text = p.nombres;
-    _apellidos.text = p.apellidos;
-    _ci.text = p.ci ?? '';
-    _complemento.text = p.complementoCi ?? '';
     _correo.text = p.correo ?? '';
     _telefono.text = p.telefono ?? '';
     _licencia.text = p.numeroLicencia ?? '';
     _categoria.text = p.categoriaLicencia ?? '';
-    _nacimiento = p.fechaNacimiento;
     setState(() => _editando = true);
   }
+
+  /// La licencia (numero o categoria) solo se puede poner desde la app mientras este en blanco.
+  bool get _licenciaEditable => widget.esConductor && (widget.perfil.numeroLicencia ?? '').trim().isEmpty;
+  bool get _categoriaEditable => widget.esConductor && (widget.perfil.categoriaLicencia ?? '').trim().isEmpty;
 
   Future<void> _guardar() async {
     FocusScope.of(context).unfocus();
     if (!(_clave.currentState?.validate() ?? false)) return;
-    final contrasena = await confirmarIdentidad(
-      context,
-      motivo: 'Para guardar los cambios de tus datos escribe tu contraseña.',
-    );
-    if (contrasena == null || !mounted) return;
     setState(() => _guardando = true);
+    final api = CuentaApi(context.read<ClienteApi>());
     final sesion = context.read<Sesion>();
     final anterior = widget.perfil;
-    final n = _nacimiento;
+    final String destino;
     try {
-      final usuario = await CuentaApi(context.read<ClienteApi>()).actualizarDatos({
-        'password': contrasena,
-        'nombres': _nombres.text.trim(),
-        'apellidos': _apellidos.text.trim(),
-        'ci': _ci.text.trim(),
-        'complementoCi': _complemento.text.trim(),
-        'fechaNacimiento': n == null
-            ? null
-            : '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
+      destino = await api.pedirCodigoDatos({
         'correo': _correo.text.trim(),
         'telefono': _telefono.text.trim(),
-        if (widget.esConductor) 'numeroLicencia': _licencia.text.trim(),
-        if (widget.esConductor) 'categoriaLicencia': _categoria.text.trim(),
+        if (_licenciaEditable) 'numeroLicencia': _licencia.text.trim(),
+        if (_categoriaEditable) 'categoriaLicencia': _categoria.text.trim(),
       });
-      await sesion.reemplazarUsuario(usuario);
-      await _actualizarRecordadas(anterior, usuario);
-      if (!mounted) return;
-      setState(() {
-        _editando = false;
-        _guardando = false;
-      });
-      widget.alGuardar();
-      await mostrarExito(context, titulo: '¡Datos actualizados!', mensaje: 'Tus datos se guardaron correctamente.');
     } on ApiExcepcion catch (e) {
       if (!mounted) return;
       setState(() => _guardando = false);
       await mostrarErrorDialogo(context, mensaje: e.mensaje);
+      return;
     }
+    if (!mounted) return;
+    setState(() => _guardando = false);
+    final usuario = await showDialog<Map<String, dynamic>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _DialogoCodigo(destino: destino, api: api),
+    );
+    if (usuario == null || !mounted) return;
+    await sesion.reemplazarUsuario(usuario);
+    await _actualizarRecordadas(anterior, usuario);
+    if (!mounted) return;
+    setState(() => _editando = false);
+    widget.alGuardar();
+    await mostrarExito(context, titulo: '¡Datos actualizados!', mensaje: 'Tus datos se guardaron correctamente.');
   }
 
   /// Si el login recordaba el correo o el telefono que se acaba de cambiar, pasa al nuevo.
@@ -174,7 +162,8 @@ class _DatosPerfilState extends State<DatosPerfil> {
         ),
         const SizedBox(height: 14),
         const Text(
-          'Toca "Editar" para actualizar tus datos. Te pediremos tu contraseña para confirmar.',
+          'Con "Editar" puedes cambiar tu correo y tu teléfono. Te enviaremos un código a tu correo actual '
+          'para confirmar. Para cambiar otros datos comunícate con la administración.',
           textAlign: TextAlign.center,
           style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
         ),
@@ -183,49 +172,19 @@ class _DatosPerfilState extends State<DatosPerfil> {
   }
 
   Widget _formulario() {
-    String? requerido(String? v) => v == null || v.trim().isEmpty ? 'Campo obligatorio' : null;
     return Form(
       key: _clave,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           _Tarjeta(
-            titulo: 'Editar mis datos',
+            titulo: 'Editar correo y teléfono',
             children: [
               Padding(
                 padding: const EdgeInsets.fromLTRB(14, 6, 14, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    _campo(_nombres, 'Nombres *', FontAwesomeIcons.solidUser, validar: requerido, mayusculaInicial: true),
-                    _campo(_apellidos, 'Apellidos *', FontAwesomeIcons.solidUser, validar: requerido, mayusculaInicial: true),
-                    _campo(_ci, 'Carnet de identidad', FontAwesomeIcons.idCard),
-                    _campo(_complemento, 'Complemento del carnet', FontAwesomeIcons.idCard),
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: () async {
-                          final elegida = await showDatePicker(
-                            context: context,
-                            initialDate: _nacimiento ?? DateTime(2000),
-                            firstDate: DateTime(1940),
-                            lastDate: DateTime.now(),
-                          );
-                          if (elegida != null) setState(() => _nacimiento = elegida);
-                        },
-                        child: InputDecorator(
-                          decoration: const InputDecoration(
-                            labelText: 'Fecha de nacimiento',
-                            prefixIcon: _IconoCampo(FontAwesomeIcons.cakeCandles),
-                          ),
-                          child: Text(
-                            _nacimiento == null ? 'Elegir fecha' : formatoFecha(_nacimiento),
-                            style: TextStyle(color: _nacimiento == null ? ColoresApp.textoSuave : ColoresApp.texto),
-                          ),
-                        ),
-                      ),
-                    ),
                     _campo(
                       _correo,
                       'Correo *',
@@ -239,17 +198,15 @@ class _DatosPerfilState extends State<DatosPerfil> {
                       },
                     ),
                     _campo(_telefono, 'Teléfono', FontAwesomeIcons.phone, teclado: TextInputType.phone),
-                    if (widget.esConductor) ...[
-                      _campo(_licencia, 'Número de licencia *', FontAwesomeIcons.idBadge, validar: requerido),
-                      _campo(_categoria, 'Categoría de licencia', FontAwesomeIcons.layerGroup),
-                    ],
+                    if (_licenciaEditable) _campo(_licencia, 'Número de licencia', FontAwesomeIcons.idBadge),
+                    if (_categoriaEditable) _campo(_categoria, 'Categoría de licencia', FontAwesomeIcons.layerGroup),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          BotonPrincipal(texto: 'Guardar cambios', color: ColoresApp.azul, cargando: _guardando, onPressed: _guardar),
+          BotonPrincipal(texto: 'Enviar código y guardar', color: ColoresApp.azul, cargando: _guardando, onPressed: _guardar),
           const SizedBox(height: 6),
           TextButton(
             onPressed: _guardando ? null : () => setState(() => _editando = false),
@@ -328,5 +285,93 @@ class _IconoCampo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(width: 44, child: Center(child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave)));
+  }
+}
+
+/// Pide el codigo enviado al correo actual y confirma el cambio. Devuelve el usuario actualizado o
+/// null si se cancela. Un codigo incorrecto se avisa aqui mismo y se puede volver a escribir.
+class _DialogoCodigo extends StatefulWidget {
+  final String destino;
+  final CuentaApi api;
+
+  const _DialogoCodigo({required this.destino, required this.api});
+
+  @override
+  State<_DialogoCodigo> createState() => _DialogoCodigoState();
+}
+
+class _DialogoCodigoState extends State<_DialogoCodigo> {
+  final _codigo = TextEditingController();
+  String? _error;
+  bool _enviando = false;
+
+  @override
+  void dispose() {
+    _codigo.dispose();
+    super.dispose();
+  }
+
+  Future<void> _confirmar() async {
+    final codigo = _codigo.text.trim();
+    if (codigo.length != 6) {
+      setState(() => _error = 'Escribe los 6 dígitos del código.');
+      return;
+    }
+    setState(() {
+      _enviando = true;
+      _error = null;
+    });
+    try {
+      final usuario = await widget.api.confirmarDatos(codigo);
+      if (mounted) Navigator.of(context).pop(usuario);
+    } on ApiExcepcion catch (e) {
+      if (mounted) {
+        setState(() {
+          _enviando = false;
+          _error = e.mensaje;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Confirma el cambio', style: TextStyle(fontWeight: FontWeight.w800)),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Enviamos un código de 6 dígitos a ${widget.destino}. Escríbelo para guardar tus datos.',
+            style: const TextStyle(color: ColoresApp.textoSuave),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: _codigo,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 22, letterSpacing: 8, fontWeight: FontWeight.w700),
+            decoration: InputDecoration(counterText: '', hintText: '000000', errorText: _error, errorMaxLines: 3),
+            onSubmitted: (_) => _confirmar(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: _enviando ? null : () => Navigator.of(context).pop(),
+          child: const Text('Cancelar', style: TextStyle(color: ColoresApp.textoSuave)),
+        ),
+        FilledButton(
+          onPressed: _enviando ? null : _confirmar,
+          style: FilledButton.styleFrom(backgroundColor: ColoresApp.azul),
+          child: _enviando
+              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.blanco))
+              : const Text('Confirmar'),
+        ),
+      ],
+    );
   }
 }

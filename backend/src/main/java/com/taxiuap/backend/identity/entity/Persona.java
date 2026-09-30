@@ -55,6 +55,20 @@ public class Persona extends EntidadAuditable {
     @Column(name = "telefono", length = 20, unique = true)
     private String telefono;
 
+    /**
+     * true si alguna vez entro o se registro con Google. Sin CI, la app le pide la foto de su carnet
+     * (anverso y reverso) antes de usarla.
+     */
+    @Column(name = "ingreso_google")
+    private Boolean ingresoGoogle;
+
+    /** Fotos del carnet (rutas relativas dentro de la carpeta de archivos, ver AlmacenamientoArchivos). */
+    @Column(name = "carnet_anverso_url", length = 500)
+    private String carnetAnversoUrl;
+
+    @Column(name = "carnet_reverso_url", length = 500)
+    private String carnetReversoUrl;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_persona", length = 20, nullable = false)
     private EstadoRegistro estadoPersona = EstadoRegistro.A;

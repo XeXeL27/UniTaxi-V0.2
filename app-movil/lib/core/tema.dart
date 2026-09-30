@@ -23,6 +23,11 @@ class ColoresApp {
   static const Color rutaSecundaria = Color(0xFFF57C00);
   static const Color rutaSecundariaBorde = Color(0xFFB26500);
   static const Color exito = Color(0xFF198754);
+
+  /// Estilo Uber de la pantalla principal: texto e iconos en negro, pildoras y botones gris claro.
+  static const Color tinta = Color(0xFF000000);
+  static const Color gris = Color(0xFFEEEEEE);
+  static const Color grisTexto = Color(0xFF5E5E5E);
 }
 
 ThemeData temaApp() {
@@ -35,6 +40,8 @@ ThemeData temaApp() {
   );
   return ThemeData(
     useMaterial3: true,
+    // Tipografia incluida en assets/fuentes (sin internet), parecida a la de Uber.
+    fontFamily: 'Inter',
     colorScheme: esquema,
     scaffoldBackgroundColor: ColoresApp.fondo,
     textSelectionTheme: const TextSelectionThemeData(cursorColor: ColoresApp.azul),
