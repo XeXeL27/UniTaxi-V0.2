@@ -28,8 +28,8 @@ enum CapaMapa {
 }
 
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
-/// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo gris desde su
-/// posicion hasta el punto A (acercamiento). En la app del pasajero, el tramo gris desde la
+/// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo naranja desde su
+/// posicion hasta el punto A (acercamiento). En la app del pasajero, el tramo naranja desde la
 /// posicion del conductor hasta el punto de referencia (origen o destino segun la etapa del viaje).
 class ControladorMapa extends ChangeNotifier {
   static const double zoomCalle = 17;
@@ -171,7 +171,7 @@ class ControladorMapa extends ChangeNotifier {
     if (conAcercamiento) _trazarAcercamiento();
   }
 
-  /// Muestra u oculta el tramo gris desde el GPS hasta A.
+  /// Muestra u oculta el tramo naranja desde el GPS hasta A.
   void cambiarAcercamiento(bool mostrar) {
     if (mostrarAcercamiento == mostrar) return;
     mostrarAcercamiento = mostrar;

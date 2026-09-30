@@ -17,6 +17,11 @@ class ColoresApp {
   /// Color de la ruta trazada en el mapa.
   static const Color ruta = Color(0xFF1A73E8);
   static const Color rutaBorde = Color(0xFF0D47A1);
+
+  /// Color de los tramos del conductor hacia el punto de referencia (acercamiento), para que
+  /// resalten sobre las calles y no se confundan con el gris del mapa.
+  static const Color rutaSecundaria = Color(0xFFF57C00);
+  static const Color rutaSecundariaBorde = Color(0xFFB26500);
   static const Color exito = Color(0xFF198754);
 }
 
