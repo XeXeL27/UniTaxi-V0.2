@@ -17,14 +17,31 @@ class PuntoRuta {
 }
 
 /// Estilo de los tiles del mapa (boton de capas).
+///
+/// [zoomNativo] es el ultimo nivel con imagen real de cada proveedor, y por eso el mapa nunca
+/// deja pasar de ahi: pedir un nivel de mas no da mas detalle, da la tesela gris de "Map data not
+/// yet available". El satelital de Esri no tiene ortofoto de Cobija ni del resto de Pando mas
+/// alla del nivel 17, aunque su servicio anuncie niveles hasta el 23.
 enum CapaMapa {
-  calles('Calles', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
-  satelite('Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
+  calles(
+    'Calles',
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+    19,
+  ),
+  satelite(
+    'Satélite',
+    'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    17,
+  );
 
   final String nombre;
   final String url;
 
-  const CapaMapa(this.nombre, this.url);
+  /// Ultimo nivel de zoom con teselas reales. El mapa y la capa lo usan como tope, de modo que
+  /// flutter_map escala la ultima tesela real en vez de pedir una que el proveedor no tiene.
+  final int zoomNativo;
+
+  const CapaMapa(this.nombre, this.url, this.zoomNativo);
 }
 
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
@@ -90,7 +107,21 @@ class ControladorMapa extends ChangeNotifier {
   void cambiarCapa(CapaMapa nueva) {
     if (capa == nueva) return;
     capa = nueva;
+    _recortarZoomAlTope();
     _avisar();
+  }
+
+  /// Al cambiar de capa, si la camara quedo por encima del ultimo nivel con teselas reales de la
+  /// capa nueva se baja hasta ese nivel. Solo afecta al satelital (tope 17): en calles el tope
+  /// sigue siendo 19 y nunca se recorta nada.
+  void _recortarZoomAlTope() {
+    if (!_mapaListo) return;
+    try {
+      final camara = mapa.camera;
+      if (camara.zoom > capa.zoomNativo) mapa.move(camara.center, capa.zoomNativo.toDouble());
+    } catch (_) {
+      // El mapa todavia no tiene tamano.
+    }
   }
 
   /// Margenes que tapan el mapa (cabecera arriba, panel abajo): se respetan al encuadrar.

@@ -58,7 +58,7 @@ class MapaBase extends StatelessWidget {
             initialCenter: c.centroInicial,
             initialZoom: 15,
             minZoom: 5,
-            maxZoom: 19,
+            maxZoom: c.capa.zoomNativo.toDouble(),
             backgroundColor: const Color(0xFFE8E6E1),
             // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
             interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
@@ -71,7 +71,7 @@ class MapaBase extends StatelessWidget {
               key: ValueKey(c.capa),
               urlTemplate: c.capa.url,
               userAgentPackageName: Config.agenteMapas,
-              maxNativeZoom: c.capa == CapaMapa.satelite ? 18 : 19,
+              maxNativeZoom: c.capa.zoomNativo,
             ),
             PolylineLayer(
               polylines: [

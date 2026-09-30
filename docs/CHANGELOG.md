@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-09-30 | 🐛 | El satelital ya no se llena de gris: tope de zoom 17 en Cobija |
 | 2026-09-30 | ✨ | Radar de anillos en el mapa del pasajero mientras se busca conductor |
 | 2026-09-30 | 🐛 | Panel inferior vuelve a su altura original, con los botones del mapa encima |
 | 2026-09-30 | ✨ | Modal de confirmación con el detalle al pedir viaje (servicio, distancia, pago y precio) |
@@ -24,6 +25,37 @@
 ---
 
 ## 2026-09-30
+
+### 🐛 Arreglo · El mapa satelital deja de mostrar "Map data not yet available" al acercar (pasajero y conductor)
+
+- **Módulo / área:** `app-movil` (Flutter, mapa compartido por las dos apps)
+- **Descripción:** Al pasar a la vista satelital y acercar más de cierto nivel, el mapa se llenaba
+  del recuadro gris con el mensaje "Map data not yet available". No era un fallo de red ni de
+  `flutter_map`: la capa satelital usa Esri World Imagery, que en Cobija (y en todo Pando) no
+  tiene ortofoto por encima del nivel 17, aunque el servicio anuncie niveles hasta el 23. La app
+  permitía llegar a 19 y el `maxNativeZoom` del satelital estaba en 18, así que desde 18 en
+  adelante Esri respondía su tesela de relleno.
+- **Evidencia:** Sondeo directo a los servidores (tamaño de la tesela, mismo punto de Cobija):
+  z=16 y z=17 dan ~20 KB (imagen real); z=18, 19 y 20 dan siempre 2521 bytes exactos (el aviso).
+  En La Paz, Santa Cruz y Cochabamba la imagen real sí llega a z=19, por eso el bug solo aparece
+  donde opera la app.
+- **Cambios clave:**
+  - `lib/mapa/controlador_mapa.dart`: `CapaMapa` gana el campo `zoomNativo` (calles 19, satelital
+    17), que documenta el último nivel con teselas reales de cada proveedor. El tope solo se aplica
+    al satelital: calles conserva 19, que es donde nunca hubo problema.
+  - `cambiarCapa` ahora llama a `_recortarZoomAlTope`: si la cámara venía de calles por encima de
+    17, al pasar a satelital baja sola hasta el tope en vez de esperar al siguiente gesto.
+  - `lib/mapa/vista_mapa.dart`: `MapOptions.maxZoom` y `TileLayer.maxNativeZoom` pasan a leer
+    `c.capa.zoomNativo`, en lugar del `maxZoom: 19` fijo y del ternario `satelite ? 18 : 19` que
+    causaba el bug. Con `maxNativeZoom: 17` `flutter_map` escala la última tesela real y no pide
+    una que el servidor no tiene.
+- **Archivos afectados:** `app-movil/lib/mapa/controlador_mapa.dart`,
+  `app-movil/lib/mapa/vista_mapa.dart`, `app-movil/test/capa_mapa_test.dart`, `docs/CHANGELOG.md`
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` 26/26 (4 pruebas nuevas en
+  `capa_mapa_test.dart`: topes por capa, que ningún tope supere 19 y que `zoomCalle` (17) no quede
+  por encima del tope de la capa más restrictiva, para que seguir al conductor no vuelva a pedir
+  teselas inexistentes). Queda pendiente la comprobación manual en el dispositivo: satelital sobre
+  Cobija acercando hasta el máximo, y confirmar que calles sigue llegando a 19.
 
 ### ✨ Nuevo · Radar de búsqueda en el mapa mientras se busca conductor (pasajero)
 
