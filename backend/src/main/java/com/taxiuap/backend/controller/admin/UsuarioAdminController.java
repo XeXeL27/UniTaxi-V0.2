@@ -19,6 +19,7 @@ import com.taxiuap.backend.shared.response.ApiResponse;
 import org.springframework.core.io.Resource;
 import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
+import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.identity.service.FotoPerfilService;
 
 import com.taxiuap.backend.identity.dto.CambiarEstadoUsuarioRequest;
@@ -34,6 +35,7 @@ public class UsuarioAdminController {
 
     private final GestionUsuarioService gestionUsuarioService;
     private final FotoPerfilService fotoPerfilService;
+    private final CarnetService carnetService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UsuarioAdminResponse>>> listar() {
@@ -62,5 +64,14 @@ public class UsuarioAdminController {
                 .contentType(MediaType.IMAGE_JPEG)
                 .cacheControl(CacheControl.noCache())
                 .body(fotoPerfilService.leer(id));
+    }
+
+    /** Foto del carnet de la persona de la cuenta: lado "anverso" o "reverso" (404 si no la tiene). */
+    @GetMapping("/{id}/carnet/{lado}")
+    public ResponseEntity<Resource> carnet(@PathVariable Long id, @PathVariable String lado) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.noCache())
+                .body(carnetService.leer(id, lado));
     }
 }

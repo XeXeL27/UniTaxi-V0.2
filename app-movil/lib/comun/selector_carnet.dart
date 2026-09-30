@@ -24,8 +24,9 @@ class SeleccionCarnet {
 enum _Lado { anverso, reverso }
 
 /// Dos recuadros (anverso y reverso) para tomar con la camara o cargar de la galeria la foto del
-/// carnet. En el APK cada foto se lee en el telefono y solo se acepta si es un carnet boliviano del
-/// lado que corresponde; con las dos se sacan el CI, el complemento y la fecha de nacimiento.
+/// carnet. En el APK cada foto se lee en el telefono en cualquier posicion (derecha, de cabeza o de
+/// costado) y solo se acepta si es un carnet boliviano del lado que corresponde; con las dos se
+/// sacan el CI, el complemento y la fecha de nacimiento.
 class SelectorCarnet extends StatefulWidget {
   final ValueChanged<SeleccionCarnet> onCambio;
 
@@ -86,15 +87,21 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
       _errores.remove(lado);
     });
     String? texto;
+    String? fallo;
     try {
       texto = await OcrCarnet.leer(bytes, lado == _Lado.anverso ? pareceAnverso : pareceReverso);
-    } catch (_) {
-      texto = null;
+    } catch (e) {
+      // Un error del lector no es lo mismo que una foto que no es un carnet: se dice aparte.
+      fallo = 'No se pudo leer la foto en este teléfono. Intenta de nuevo o con otra foto.';
     }
     if (!mounted) return;
     setState(() {
       _leyendo = null;
-      if (texto == null) {
+      if (fallo != null) {
+        _fotos.remove(lado);
+        _textos.remove(lado);
+        _errores[lado] = fallo;
+      } else if (texto == null) {
         _fotos.remove(lado);
         _textos.remove(lado);
         _errores[lado] = lado == _Lado.anverso

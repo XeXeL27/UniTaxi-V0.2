@@ -3,10 +3,12 @@ package com.taxiuap.backend.identity.service;
 import java.io.IOException;
 import java.util.Map;
 
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.identity.dto.CarnetRequest;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.UsuarioResponse;
@@ -17,6 +19,7 @@ import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.archivo.ProcesadorImagen;
 import com.taxiuap.backend.shared.exception.CredencialesInvalidasException;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 
 import lombok.RequiredArgsConstructor;
 
@@ -36,6 +39,12 @@ public class CarnetService {
     private final UsuarioRepository usuarioRepository;
     private final GestionPersonaService gestionPersonaService;
     private final AlmacenamientoArchivos almacenamientoArchivos;
+    private final CredencialesCorreoService credencialesCorreoService;
+
+    /** Partes del multipart del registro de conductor que son fotos del carnet (no PDF). */
+    public static boolean esParteCarnet(String parte) {
+        return PARTE_ANVERSO.equals(parte) || PARTE_REVERSO.equals(parte);
+    }
 
     /** Fotos del carnet ya procesadas (JPEG), listas para guardar. */
     public record FotosCarnet(byte[] anverso, byte[] reverso) {
@@ -57,7 +66,24 @@ public class CarnetService {
                 persona.getCorreo(),
                 persona.getTelefono()));
         guardar(persona, fotos);
+        entregarCredenciales(usuario);
         return UsuarioResponse.de(usuario);
+    }
+
+    /**
+     * Pasajero que entro con Google: sus credenciales llegan recien ahora, con el carnet guardado. El
+     * correo sale despues de confirmar la transaccion (CorreoService), asi que si algo fallo no se envia.
+     */
+    private void entregarCredenciales(Usuario usuario) {
+        Persona persona = usuario.getPersona();
+        boolean pendiente = credencialesCorreoService.cuentasDeApp(persona).stream()
+                .anyMatch(u -> Boolean.TRUE.equals(u.getContrasenaGenerada()));
+        if (!pendiente || !RolSistema.PASAJERO.getCodigo().equals(usuario.getRol().getCodigo())) {
+            return;
+        }
+        String contrasena = CredencialesCorreoService.contrasenaLegible();
+        credencialesCorreoService.aplicarEnCuentasDeApp(persona, contrasena, false);
+        credencialesCorreoService.bienvenidaPasajero(usuario, contrasena, null);
     }
 
     /** Fotos del carnet que llegan en un multipart (registro de conductor con Google): obligatorias. */
@@ -74,6 +100,26 @@ public class CarnetService {
         String carpeta = almacenamientoArchivos.carpetaCarnet(persona);
         persona.setCarnetAnversoUrl(almacenamientoArchivos.guardarConSello(fotos.anverso(), carpeta, "carnet_anverso", "jpg"));
         persona.setCarnetReversoUrl(almacenamientoArchivos.guardarConSello(fotos.reverso(), carpeta, "carnet_reverso", "jpg"));
+    }
+
+    /**
+     * Foto del carnet de la persona de una cuenta ("anverso" o "reverso"), solo para el panel admin.
+     * 404 si no la tiene.
+     */
+    @Transactional(readOnly = true)
+    public Resource leer(Long idUsuario, String lado) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", idUsuario));
+        Persona persona = usuario.getPersona();
+        String ruta = switch (lado) {
+            case "anverso" -> persona.getCarnetAnversoUrl();
+            case "reverso" -> persona.getCarnetReversoUrl();
+            default -> throw new NegocioException("Lado del carnet no valido: " + lado);
+        };
+        if (ruta == null || !almacenamientoArchivos.existe(ruta)) {
+            throw new RecursoNoEncontradoException("La persona no registro la foto del " + lado + " de su carnet");
+        }
+        return almacenamientoArchivos.leer(ruta);
     }
 
     private static byte[] procesar(MultipartFile foto, String lado) {

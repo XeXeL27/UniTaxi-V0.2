@@ -7,6 +7,7 @@ import '../../core/tema.dart';
 import '../../widgets/foto_usuario.dart';
 import '../personas/modelos.dart';
 import 'expediente_api.dart';
+import 'modal_carnet.dart';
 import 'modelos.dart';
 import 'vista_expediente.dart';
 
@@ -41,6 +42,7 @@ class ExpedientePasajero extends StatelessWidget {
               SeccionExpediente(
                 titulo: 'Datos personales',
                 icono: FontAwesomeIcons.user,
+                accion: BotonVerCarnet(api: api, idUsuario: perfil.idUsuario, nombre: perfil.nombreCompleto),
                 child: DatosEnGrilla([
                   ('Nombres', perfil.nombres),
                   ('Apellidos', perfil.apellidos),

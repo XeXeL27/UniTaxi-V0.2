@@ -84,7 +84,13 @@ public class RegistroGoogleService {
         Usuario usuario = nueva.usuario();
         cuentaUsuarioService.crearPasajero(usuario);
         if (foto != null) fotoPerfilService.guardarImagen(usuario, foto);
-        enviarBienvenida(persona, nueva);
+        if (sinCarnet(persona)) {
+            // Las credenciales llegan recien cuando registra su carnet (CarnetService): hasta entonces
+            // la contrasena generada queda sin entregar.
+            if (nueva.contrasena() != null) usuario.setContrasenaGenerada(true);
+        } else {
+            enviarBienvenida(persona, nueva);
+        }
         return autenticacionService.tokensDe(usuario);
     }
 
@@ -146,13 +152,32 @@ public class RegistroGoogleService {
 
         CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);
         Usuario usuario = nueva.usuario();
-        // La contrasena nueva no se entrega ahora: llega por correo cuando el admin lo aprueba.
-        if (nueva.contrasena() != null) usuario.setContrasenaGenerada(true);
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
+        entregarCredencialesConductor(persona, usuario, nueva);
         return autenticacionService.tokensDe(entradaDe(persona, usuario));
+    }
+
+    /**
+     * Con el registro (y el carnet) guardado le llegan sus credenciales y el aviso de que su cuenta de
+     * conductor esta en revision. Si reutilizo las de una cuenta de pasajero que nunca las recibio, se
+     * generan unas nuevas para las dos cuentas.
+     */
+    private void entregarCredencialesConductor(Persona persona, Usuario usuario, CuentaNueva nueva) {
+        String contrasena = nueva.contrasena();
+        if (contrasena == null && Boolean.TRUE.equals(usuario.getContrasenaGenerada())) {
+            contrasena = CredencialesCorreoService.contrasenaLegible();
+        }
+        if (contrasena != null) {
+            credencialesCorreoService.aplicarEnCuentasDeApp(persona, contrasena, false);
+        }
+        credencialesCorreoService.conductorEnRevision(usuario, contrasena);
+    }
+
+    private static boolean sinCarnet(Persona persona) {
+        return persona.getCi() == null || persona.getCi().isBlank();
     }
 
     // ------------------------------------------------------------------ apoyo

@@ -98,6 +98,28 @@ public class CredencialesCorreoService {
     }
 
     /**
+     * Registro de conductor recibido (con Google, ya con su carnet): llegan sus credenciales y el
+     * aviso de que todavia se revisan sus datos. Puede entrar a la app, pero no recibe viajes hasta
+     * que lo aprueben. contrasena null: ya la conoce (es la de su cuenta de pasajero).
+     */
+    public void conductorEnRevision(Usuario usuario, String contrasena) {
+        Persona persona = usuario.getPersona();
+        if (persona.getCorreo() == null || persona.getCorreo().isBlank()) return;
+        String cuerpo = saludo(persona)
+                + "Recibimos tu registro de conductor en Unitaxi. Todavía estamos revisando tus datos y documentos "
+                + "para habilitarte como conductor.\n\n"
+                + "Mientras tanto puedes ingresar a la app y ver tu cuenta, pero no podrás recibir viajes hasta que "
+                + "te aprobemos. Te avisaremos por correo.\n\n"
+                + "Usuario: " + usuario.getNombreUsuario() + "\n"
+                + "Contraseña: " + (contrasena != null ? contrasena : "la misma de tu cuenta de pasajero") + "\n\n"
+                + "También puedes ingresar con Google. "
+                + (contrasena != null ? CAMBIAR : "")
+                + enlace("CONDUCTOR")
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Recibimos tu registro de conductor", cuerpo);
+    }
+
+    /**
      * Aviso de conductor aprobado. Si el sistema habia generado su contrasena (nadie la conoce) se
      * crea una nueva y se envia; si la eligio la persona, solo se le recuerda el usuario.
      */

@@ -679,7 +679,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         final etapa = _flujo.etapa;
         // Lo que tapan la cabecera con el buscador y el panel con la barra, para encuadrar la ruta.
         final compacto = etapa == EtapaPasajero.buscando || (_panelEsPlegable && !_panelAbierto);
-        _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 200, 110, abajo + (compacto ? 170 : alto * 0.36));
+        _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 160, 110, abajo + (compacto ? 170 : alto * 0.36));
         final eligiendo = etapa == EtapaPasajero.eligiendo;
         final panel = _panel(etapa);
         return Stack(
@@ -732,24 +732,22 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                     nombre: 'Hola, ${usuario == null ? 'pasajero' : enTitulo(usuario.nombres.split(' ').take(2).join(' '))}',
                     ubicacion: _ubicacionCabecera(),
                     onBoton: () => mostrarAyuda(context, esConductor: false),
-                    solape: eligiendo ? solapeDestino : 0,
                     foto: _foto,
+                    onPerfil: () => _irA(_seccionMas),
                   ),
                   const SizedBox(height: 8),
                   TarjetaSeguimientoConductor(flujo: _flujo, onTocar: () => setState(() => _panelAbierto = true)),
                   if (eligiendo)
-                    Transform.translate(
-                      offset: const Offset(0, -(solapeDestino + 8)),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
-                          child: BarraDestino(
-                            key: _guiaDestino,
-                            destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
-                            onBuscar: _abrirBuscador,
-                            onQuitar: _flujo.quitarDestino,
-                          ),
+                    // Justo debajo de la cabecera de bienvenida, separado solo un poco.
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
+                        child: BarraDestino(
+                          key: _guiaDestino,
+                          destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
+                          onBuscar: _abrirBuscador,
+                          onQuitar: _flujo.quitarDestino,
                         ),
                       ),
                     ),
@@ -760,7 +758,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
             if (eligiendo && panel == null)
               Positioned(
                 right: 14,
-                top: margen.top + 222,
+                top: margen.top + 170,
                 child: SelectorVehiculo(
                   key: _guiaMoto,
                   contador: _conductoresCargados ? _conductores.length : null,

@@ -31,8 +31,16 @@ String _normalizar(String texto) {
   return buffer.toString().toUpperCase();
 }
 
+/// Senales de que es un carnet boliviano. Tolerante con lo que el OCR lee mal ("BOLIVEA", "IDENTIAD").
 bool _esDeBolivia(String t) =>
-    t.contains('BOLIVIA') || t.contains('IDENTIFICACION PERSONAL') || t.contains('SEGIP') || t.contains('I<BOL');
+    t.contains('BOLIV') ||
+    t.contains('PLURINACIONAL') ||
+    t.contains('IDENTIFICACION PERSONAL') ||
+    t.contains('SEGIP') ||
+    t.contains('I<BOL') ||
+    t.contains('CEDULA DE IDENTIDAD');
+
+bool _diceCedula(String t) => t.contains('CEDULA') || t.contains('IDENTIDAD') || t.contains('IDENTIFICACION');
 
 bool _tieneMarcasReverso(String t) =>
     t.contains('I<BOL') ||
@@ -45,10 +53,28 @@ bool _tieneMarcasReverso(String t) =>
 /// Numero despues de "N°", "Nº", "No" o "N." y, si va pegado con guion, su complemento.
 final _numero = RegExp(r'\bN\s*(?:°|º|O|0|\.)\s*[:.]?\s*(\d{5,10})(?:\s*-\s*([0-9A-Z]{1,3}))?(?![0-9A-Z])');
 
-/// Anverso: es un carnet boliviano, dice "CEDULA DE IDENTIDAD", trae el numero y no es el reverso.
+/// Numeros sueltos de 6 a 9 digitos que pueden ser el CI: no empiezan con 0 (series como "0200690") ni
+/// van pegados a un guion o a letras ("3094343-LA", "QGDPYPIQ-16251008"), y no son parte de una fecha.
+List<String> _candidatos(String t) => [
+  for (final m in RegExp(r'(?<![0-9A-Z/.-])([1-9]\d{5,8})(?![0-9A-Z/.-])').allMatches(t)) m[1]!,
+];
+
+/// Numero del anverso: el que sigue a "N°" / "No"; si el OCR los separo, un numero suelto (el que
+/// tambien aparece en [otroLado], si hay).
+({String ci, String? complemento})? _numeroAnverso(String t, [String otroLado = '']) {
+  final conEtiqueta = _numero.firstMatch(t);
+  if (conEtiqueta != null) return (ci: conEtiqueta[1]!, complemento: conEtiqueta[2]);
+  final candidatos = _candidatos(t);
+  if (candidatos.isEmpty) return null;
+  final enAmbos = candidatos.where((c) => otroLado.contains(c));
+  return (ci: enAmbos.isNotEmpty ? enAmbos.first : candidatos.first, complemento: null);
+}
+
+/// Anverso: es un carnet boliviano, dice cedula / identidad, trae el numero y no es el reverso. Se
+/// acepta en cualquier posicion en que el texto se pueda leer.
 bool pareceAnverso(String texto) {
   final t = _normalizar(texto);
-  return _esDeBolivia(t) && t.contains('CEDULA') && _numero.hasMatch(t) && !_tieneMarcasReverso(t);
+  return _esDeBolivia(t) && _diceCedula(t) && _numeroAnverso(t) != null && !_tieneMarcasReverso(t);
 }
 
 /// Reverso: es un carnet boliviano con los datos de nacimiento, domicilio o la zona MRZ.
@@ -101,13 +127,15 @@ DatosCarnet extraerDatosCarnet(String anverso, String reverso) {
   final r = _normalizar(reverso);
   String? ci;
   String? complemento;
-  final numero = _numero.firstMatch(a);
+  // Numero de la MRZ del reverso del carnet nuevo ("I<BOL1234567<1"): el mas confiable.
+  final mrz = RegExp(r'I<BOL(\d{5,10})<').firstMatch(r.replaceAll(' ', ''));
+  final numero = _numeroAnverso(a, r);
   if (numero != null) {
-    ci = numero[1];
-    complemento = numero[2];
+    ci = numero.ci;
+    complemento = numero.complemento;
+    // Sin "N°" en el anverso pero con MRZ: manda la MRZ.
+    if (mrz != null && _numero.firstMatch(a) == null) ci = mrz[1];
   } else {
-    // Sin "N°" legible en el anverso: el numero de la MRZ del reverso ("I<BOL12382492<1").
-    final mrz = RegExp(r'I<BOL(\d{5,10})<').firstMatch(r.replaceAll(' ', ''));
     ci = mrz?[1];
   }
   return DatosCarnet(

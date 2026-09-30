@@ -51,6 +51,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   static const _seccionInicio = 0;
   static const _seccionHistorial = 1;
   static const _seccionComentarios = 2;
+  static const _seccionMas = 3;
 
   final _mapa = ControladorMapa();
   final _historial = GlobalKey<PantallaHistorialState>();
@@ -605,6 +606,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   onBoton: () => mostrarAyuda(context, esConductor: true),
                   foto: _foto,
                   iconoSinFoto: FontAwesomeIcons.motorcycle,
+                  onPerfil: () => _irA(_seccionMas),
                 ),
               ),
               Positioned(

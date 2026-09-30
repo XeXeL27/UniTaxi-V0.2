@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.dto.DatosConductorRequest;
 import com.taxiuap.backend.identity.entity.Conductor;
+import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
@@ -79,8 +80,9 @@ public class RegistroMotoConductorService {
             DatosConductorRequest datos, Map<String, MultipartFile> archivos, boolean exigirObligatorios) {
         Map<TipoDocumento, MultipartFile> documentos = new EnumMap<>(TipoDocumento.class);
         archivos.forEach((clave, archivo) -> {
-            if (QrPagoConductorService.esParteQr(clave)) {
-                // Los QR de cobro opcionales (QR1..QR3) los valida QrPagoConductorService.
+            if (QrPagoConductorService.esParteQr(clave) || CarnetService.esParteCarnet(clave)) {
+                // Los QR de cobro opcionales (QR1..QR3) los valida QrPagoConductorService y las fotos
+                // del carnet del registro con Google, CarnetService.
                 return;
             }
             TipoDocumento tipo;

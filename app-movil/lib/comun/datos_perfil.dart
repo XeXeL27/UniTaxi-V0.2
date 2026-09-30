@@ -129,7 +129,8 @@ class _DatosPerfilState extends State<DatosPerfil> {
         (FontAwesomeIcons.idBadge, 'Licencia', p.numeroLicencia ?? ''),
         (FontAwesomeIcons.layerGroup, 'Categoría de licencia', p.categoriaLicencia ?? ''),
       ],
-      (
+      // La calificacion solo se muestra al conductor.
+      if (widget.esConductor) (
         FontAwesomeIcons.solidStar,
         'Tu calificación',
         p.calificacionPromedio == null ? '' : '${p.calificacionPromedio!.toStringAsFixed(1).replaceAll('.', ',')} de 5',

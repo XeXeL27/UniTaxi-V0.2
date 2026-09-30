@@ -43,6 +43,9 @@ class ExpedienteApi {
 
   Future<void> eliminarQr(int idConductor, int idQr) => _api.delete('/api/admin/conductores/$idConductor/qr/$idQr');
 
+  /// Foto del carnet de la persona de una cuenta: [lado] "anverso" o "reverso" (404 si no la tiene).
+  Future<Uint8List> carnet(int idUsuario, String lado) => _api.bytes('/api/admin/usuarios/$idUsuario/carnet/$lado');
+
   // ------------------------------------------------------------ documentos
 
   Future<Uint8List> pdf(int idDocumento) => _api.bytes('/api/admin/documentos-conductor/$idDocumento/archivo');

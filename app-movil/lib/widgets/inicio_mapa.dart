@@ -8,9 +8,8 @@ import '../core/tema.dart';
 /// el buscador no se estiran de lado a lado.
 const double anchoControlesMapa = 560;
 
-/// Alto de la pildora "¿A donde vas?" y cuanto se alarga la cabecera para que quepa dentro de ella.
+/// Alto de la pildora "¿A donde vas?".
 const double altoBarraDestino = 56;
-const double solapeDestino = altoBarraDestino + 14;
 
 /// Foto de perfil redonda de la cabecera; sin foto, el icono del modo (moto para el conductor,
 /// silueta para el pasajero) en negro sobre gris.
@@ -55,6 +54,9 @@ class CabeceraInicio extends StatelessWidget {
   final Uint8List? foto;
   final FaIconData iconoSinFoto;
 
+  /// Tocar la foto o el saludo (por ejemplo, ir a Mas).
+  final VoidCallback? onPerfil;
+
   const CabeceraInicio({
     super.key,
     this.saludo = 'Bienvenido',
@@ -67,6 +69,7 @@ class CabeceraInicio extends StatelessWidget {
     this.onAtras,
     this.foto,
     this.iconoSinFoto = FontAwesomeIcons.solidUser,
+    this.onPerfil,
   });
 
   @override
@@ -88,13 +91,23 @@ class CabeceraInicio extends StatelessWidget {
             constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
             child: Row(
               children: [
-                if (onAtras != null)
-                  BotonGris(icono: FontAwesomeIcons.arrowLeft, tooltip: 'Volver', onTap: onAtras!)
-                else
-                  AvatarCabecera(foto: foto, iconoSinFoto: iconoSinFoto),
-                const SizedBox(width: 12),
+                if (onAtras != null) ...[
+                  BotonGris(icono: FontAwesomeIcons.arrowLeft, tooltip: 'Volver', onTap: onAtras!),
+                  const SizedBox(width: 12),
+                ],
+                // La foto y el saludo juntos: tocarlos lleva a Mas.
                 Expanded(
-                  child: Column(
+                  child: InkWell(
+                    onTap: onPerfil,
+                    borderRadius: BorderRadius.circular(16),
+                    child: Row(
+                      children: [
+                        if (onAtras == null) ...[
+                          AvatarCabecera(foto: foto, iconoSinFoto: iconoSinFoto),
+                          const SizedBox(width: 12),
+                        ],
+                        Expanded(
+                          child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
@@ -129,6 +142,10 @@ class CabeceraInicio extends StatelessWidget {
                         ],
                       ),
                     ],
+                  ),
+                ),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -172,8 +189,8 @@ class BotonGris extends StatelessWidget {
   }
 }
 
-/// Pildora gris "¿A donde vas?" que abre el buscador (estilo Uber). Con destino elegido muestra
-/// su nombre en negrita y una X para quitarlo.
+/// Pildora "¿A donde vas?" que abre el buscador (estilo Uber), justo debajo de la cabecera. Con
+/// destino elegido muestra su nombre en negrita y una X para quitarlo.
 class BarraDestino extends StatelessWidget {
   final String? destino;
   final VoidCallback onBuscar;
@@ -185,7 +202,9 @@ class BarraDestino extends StatelessWidget {
   Widget build(BuildContext context) {
     final conDestino = destino != null;
     return Material(
-      color: ColoresApp.gris,
+      color: ColoresApp.blanco,
+      elevation: 5,
+      shadowColor: const Color(0x55000000),
       borderRadius: BorderRadius.circular(altoBarraDestino / 2),
       child: InkWell(
         onTap: onBuscar,
