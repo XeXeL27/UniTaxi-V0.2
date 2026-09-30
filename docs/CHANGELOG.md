@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-09-30 | ✨ | Radar de anillos en el mapa del pasajero mientras se busca conductor |
 | 2026-09-30 | 🐛 | Panel inferior vuelve a su altura original, con los botones del mapa encima |
 | 2026-09-30 | ✨ | Modal de confirmación con el detalle al pedir viaje (servicio, distancia, pago y precio) |
 | 2026-09-30 | 🐛 | Botones de capas y ubicación fijos sobre el mapa en pasajero y conductor |
@@ -23,7 +24,44 @@
 
 ## 2026-09-30
 
+### ✨ Nuevo · Radar de búsqueda en el mapa mientras se busca conductor (pasajero)
+
+- **Módulo / área:** `app-movil` (Flutter, pasajero)
+- **Descripción:** Mientras se espera un conductor, toda la señal estaba en un panelito abajo y el
+  mapa se veía quieto. Ahora el mapa muestra la búsqueda: tres anillos azules salen del punto de
+  partida, crecen y se desvanecen, uno detrás de otro, mientras la solicitud está abierta.
+- **Cambios clave:**
+  - `lib/mapa/vista_mapa.dart`: función pura `anillosRadar(avance)`, que devuelve los tres anillos
+    (radio en metros y opacidad) de una fase del ciclo, y el widget `RadarBusqueda` que la pinta en
+    un `CircleLayer` con un `AnimationController` de 2,4 s en bucle. Los anillos van escalonados un
+    tercio de ciclo y la opacidad sube al salir, baja mientras crece y llega a cero justo cuando el
+    anillo desaparece, para que el ciclo no se note. Radio de 20 m a 400 m.
+  - `MapaBase.capaAnimada` pasa a ser `capasAnimadas` (lista), para que el radar conviva con la
+    capa de mototaxistas que se deslizan. Se sigue insertando en el mismo punto del `Stack`, así que
+    el orden de dibujo no cambia y el radar queda debajo de los pines A y B.
+  - `lib/modulos/pasajero/inicio/pantalla_inicio.dart`: el radar solo entra al árbol en la etapa
+    `buscando`, así que el `AnimationController` no corre en ninguna otra. La app del conductor no
+    se toca.
+  - `lib/modulos/pasajero/viaje/paneles_pasajero.dart`: se desactiva (comentado, no borrado) el
+    `LinearProgressIndicator` del panel. La solicitud no tiene porcentaje, así que la barra no
+    representaba ningún avance real y quedaba una segunda señal de "estamos buscando" junto con el
+    radar.
+  - **El radio es ilustrativo:** el backend no filtra por distancia, avisa a los conductores
+    conectados, así que el radar dice "buscamos por acá" y no un alcance real. La información
+    verdadera de cuántos mototaxistas hay cerca sigue viniendo de los marcadores del mapa, que se
+    refrescan cada 5 s.
+- **Archivos afectados:**
+  - `app-movil/lib/mapa/vista_mapa.dart` (`anillosRadar`, `AnilloRadar`, `RadarBusqueda`, `capasAnimadas`)
+  - `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/test/radar_busqueda_test.dart` (nuevo)
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` 22/22, cinco de ellos nuevos
+  sobre `anillosRadar` (tres anillos siempre, ciclo continuo con tolerancia de punto flotante, radio
+  entre 20 y 400 m y creciente, opacidad con tope de 0,45 que termina en cero, y anillos escalonados).
+
 ### ✨ Nuevo · Modal de confirmación al pedir viaje (pasajero)
+
+
 
 - **Módulo / área:** `app-movil` (Flutter, pasajero)
 - **Descripción:** Pedir el taxi mandaba la solicitud al backend en el acto, sin preguntar nada:

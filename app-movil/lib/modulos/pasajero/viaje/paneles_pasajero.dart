@@ -322,11 +322,19 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
           ],
         ),
         const SizedBox(height: 10),
-        const ClipRRect(
-          borderRadius: BorderRadius.all(Radius.circular(4)),
-          child: LinearProgressIndicator(minHeight: 3, color: ColoresApp.rojo, backgroundColor: ColoresApp.rojoSuave),
-        ),
-        const SizedBox(height: 6),
+        // La barra de progreso indeterminado quedo desactivada: la solicitud no tiene porcentaje,
+        // asi que la barra no representa ningun avance real y suma una segunda señal de "estamos
+        // buscando" junto con el radar del mapa. Se deja el codigo para poder recuperarla:
+        //
+        // const ClipRRect(
+        //   borderRadius: BorderRadius.all(Radius.circular(4)),
+        //   child: LinearProgressIndicator(
+        //     minHeight: 3,
+        //     color: ColoresApp.rojo,
+        //     backgroundColor: ColoresApp.rojoSuave,
+        //   ),
+        // ),
+        // const SizedBox(height: 6),
         Row(
           children: [
             Expanded(

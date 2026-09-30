@@ -22,8 +22,9 @@ class MapaBase extends StatelessWidget {
   /// Marcadores de la pantalla (por ejemplo los mototaxistas en linea), debajo de A, B y el GPS.
   final List<Marker> marcadoresExtra;
 
-  /// Capa de marcadores que se repinta sola (los mototaxistas que se deslizan), debajo de A y B.
-  final Widget? capaAnimada;
+  /// Capas que se repintan solas (los mototaxistas que se deslizan, el radar de busqueda), debajo
+  /// de A, B y el GPS.
+  final List<Widget> capasAnimadas;
 
   /// Partida y destino como circulos sin letra (azul y rojo) en vez de pines con A y B.
   final bool puntosSinLetra;
@@ -33,7 +34,7 @@ class MapaBase extends StatelessWidget {
     required this.controlador,
     this.onTap,
     this.marcadoresExtra = const [],
-    this.capaAnimada,
+    this.capasAnimadas = const [],
     this.puntosSinLetra = false,
   });
 
@@ -109,7 +110,7 @@ class MapaBase extends StatelessWidget {
                 ],
               ],
             ),
-            ?capaAnimada,
+            ...capasAnimadas,
             // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
             MarkerLayer(
               rotate: true,
@@ -421,6 +422,93 @@ class FilaBotonesMapa extends StatelessWidget {
           BotonBrujula(controlador: controlador),
           const SizedBox(width: 10),
           BotonUbicacion(controlador: controlador),
+        ],
+      ),
+    );
+  }
+}
+
+/// Un anillo del radar de busqueda: donde llega y con qué fuerza se ve.
+class AnilloRadar {
+  /// Distancia al punto de partida, en metros.
+  final double radio;
+
+  /// Fuerza con la que se ve, de 0 a 1.
+  final double opacidad;
+
+  const AnilloRadar(this.radio, this.opacidad);
+}
+
+/// Anillos del radar en una fase del ciclo, listos para pintar en el mapa.
+///
+/// [avance] es la fase: 0 es el arranque de la vuelta y 1 vuelve al mismo punto. Cada anillo va
+/// desfasado un tercio del ciclo, asi que siempre hay uno saliendo, otro a media expansion y otro
+/// desvanecerse. El radio va de [radioInicial] a [radioFinal] metros y la opacidad sube al
+/// arrancar, baja mientras crece y llega a cero justo cuando el anillo desaparece, para que el
+/// ciclo no se note.
+List<AnilloRadar> anillosRadar(double avance) {
+  const cantidad = 3;
+  const radioInicial = 20.0;
+  const radioFinal = 400.0;
+  const opacidadMaxima = 0.45;
+  const entrada = 0.1;
+  final anillos = <AnilloRadar>[];
+  for (var i = 0; i < cantidad; i++) {
+    final fase = (avance + i / cantidad) % 1;
+    final aparecer = fase < entrada ? fase / entrada : 1.0;
+    anillos.add(
+      AnilloRadar(
+        radioInicial + (radioFinal - radioInicial) * fase,
+        opacidadMaxima * aparecer * (1 - fase),
+      ),
+    );
+  }
+  return anillos;
+}
+
+/// Radar de busqueda: anillos que salen del punto de partida mientras la solicitud esta abierta y
+/// no hay conductor aun. Se dibuja debajo de los pines, asi que no tapa nada.
+///
+/// El radio es ilustrativo: el backend no filtra por distancia, avisa a los conductores conectados,
+/// asi que el radar dice "estamos buscando por aqui" y no un alcance real. La informacion de
+/// cuantos mototaxistas hay cerca viene de los marcadores del mapa.
+class RadarBusqueda extends StatefulWidget {
+  /// Cuanto tarda en completarse una vuelta de los anillos.
+  static const Duration duracionCiclo = Duration(milliseconds: 2400);
+
+  final LatLng punto;
+
+  const RadarBusqueda({super.key, required this.punto});
+
+  @override
+  State<RadarBusqueda> createState() => _RadarBusquedaState();
+}
+
+class _RadarBusquedaState extends State<RadarBusqueda> with SingleTickerProviderStateMixin {
+  late final AnimationController _ciclo = AnimationController(vsync: this, duration: RadarBusqueda.duracionCiclo)
+    ..repeat();
+
+  @override
+  void dispose() {
+    _ciclo.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ciclo,
+      builder: (context, _) => CircleLayer(
+        circles: [
+          for (final anillo in anillosRadar(_ciclo.value))
+            CircleMarker(
+              point: widget.punto,
+              radius: anillo.radio,
+              useRadiusInMeter: true,
+              color: ColoresApp.ruta.withValues(alpha: anillo.opacidad),
+              borderColor: ColoresApp.rutaBorde.withValues(alpha: anillo.opacidad * 0.6),
+              borderStrokeWidth: 1.5,
+            ),
         ],
       ),
     );

@@ -635,21 +635,27 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                           ),
                         ),
                 ],
-                capaAnimada: ListenableBuilder(
-                  listenable: _posiciones,
-                  builder: (context, _) => MarkerLayer(
-                    rotate: true,
-                    markers: [
-                      for (final conductor in _conductores)
-                        Marker(
-                          point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
-                          width: _MarcadorMototaxi.ancho,
-                          height: _MarcadorMototaxi.alto,
-                          child: const _MarcadorMototaxi(),
-                        ),
-                    ],
+                capasAnimadas: [
+                  ListenableBuilder(
+                    listenable: _posiciones,
+                    builder: (context, _) => MarkerLayer(
+                      rotate: true,
+                      markers: [
+                        for (final conductor in _conductores)
+                          Marker(
+                            point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
+                            width: _MarcadorMototaxi.ancho,
+                            height: _MarcadorMototaxi.alto,
+                            child: const _MarcadorMototaxi(),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
+                  // Radar de busqueda desde el punto de partida: solo mientras la solicitud esta
+                  // abierta. Va debajo de los pines, asi que no tapa nada.
+                  if (_flujo.etapa == EtapaPasajero.buscando && _mapa.a != null)
+                    RadarBusqueda(punto: _mapa.a!.posicion),
+                ],
               ),
             ),
             Positioned(
