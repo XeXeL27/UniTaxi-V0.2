@@ -60,6 +60,13 @@ public class Usuario extends EntidadAuditable {
     @Column(name = "contrasena_generada")
     private Boolean contrasenaGenerada = false;
 
+    /**
+     * false mientras la persona no vio la guia de inicio de la app. Las cuentas creadas antes de la
+     * guia quedan en null y no la ven.
+     */
+    @Column(name = "guia_vista")
+    private Boolean guiaVista;
+
     @Column(name = "foto_url", length = 500)
     private String fotoUrl;
 

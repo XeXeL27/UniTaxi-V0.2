@@ -96,6 +96,7 @@ public class CuentaUsuarioService {
         usuario.setNombreUsuario(nombreUsuario);
         usuario.setPasswordHash(passwordHash);
         usuario.setFechaRegistro(LocalDateTime.now());
+        usuario.setGuiaVista(false);
         return usuarioRepository.save(usuario);
     }
 

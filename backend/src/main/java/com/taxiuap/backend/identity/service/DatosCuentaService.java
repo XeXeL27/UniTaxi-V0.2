@@ -32,6 +32,13 @@ public class DatosCuentaService {
     private final GestionPersonaService gestionPersonaService;
     private final PasswordEncoder passwordEncoder;
 
+    /** La persona termino o salto la guia de inicio de la app: no se vuelve a mostrar. */
+    public void marcarGuiaVista(Long idUsuario) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
+        usuario.setGuiaVista(true);
+    }
+
     public UsuarioResponse actualizar(Long idUsuario, ActualizarDatosCuentaRequest datos) {
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
@@ -69,6 +76,7 @@ public class DatosCuentaService {
                 persona.getApellidos(),
                 persona.getCorreo(),
                 persona.getTelefono(),
-                usuario.getRol().getCodigo());
+                usuario.getRol().getCodigo(),
+                Boolean.FALSE.equals(usuario.getGuiaVista()));
     }
 }

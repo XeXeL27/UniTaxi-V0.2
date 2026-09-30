@@ -8,5 +8,7 @@ public record UsuarioResponse(
         String apellidos,
         String correo,
         String telefono,
-        String rol) {
+        String rol,
+        /** true la primera vez que entra a la app: muestra la guia de inicio. */
+        boolean mostrarGuia) {
 }

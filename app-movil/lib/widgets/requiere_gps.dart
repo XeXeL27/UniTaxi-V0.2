@@ -18,6 +18,10 @@ enum _EstadoGps { verificando, listo, apagado, sinPermiso, bloqueado }
 class RequiereGps extends StatefulWidget {
   final Widget child;
 
+  /// true mientras el GPS esta encendido y con permiso (la pantalla de activarlo no tapa nada).
+  /// La guia de inicio espera a que lo este.
+  static final listo = ValueNotifier<bool>(false);
+
   const RequiereGps({super.key, required this.child});
 
   @override
@@ -49,6 +53,7 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _servicio?.cancel();
     _reintento?.cancel();
+    RequiereGps.listo.value = false;
     super.dispose();
   }
 
@@ -85,6 +90,7 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
     }
     if (!mounted) return;
     setState(() => _estado = nuevo);
+    RequiereGps.listo.value = nuevo == _EstadoGps.listo;
     _reintento?.cancel();
     if (nuevo != _EstadoGps.listo) {
       _reintento = Timer(const Duration(seconds: 3), _verificar);

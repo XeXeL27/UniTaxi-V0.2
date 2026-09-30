@@ -24,9 +24,11 @@ import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
 import '../../../widgets/barra_inferior.dart';
 import '../../../widgets/dialogos.dart';
+import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
+import '../../../widgets/requiere_gps.dart';
 import '../../registro/ingreso_google.dart';
 import '../favoritos/favoritos_api.dart';
 import '../favoritos/formulario_lugar.dart';
@@ -98,6 +100,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   bool _panelAbierto = true;
   EtapaPasajero? _etapaPanel;
 
+  /// Botones que explica la guia de inicio (primera vez que entra).
+  final _guiaDestino = GlobalKey();
+  final _guiaMoto = GlobalKey();
+  final _guiaPedir = GlobalKey();
+  final _guiaHistorial = GlobalKey();
+  final _guiaMas = GlobalKey();
+  bool _guiaIniciada = false;
+
   /// Mototaxistas libres en linea; null mientras no hay una primera respuesta.
   int? get _libres => _conductoresCargados ? _conductores.length : null;
 
@@ -105,6 +115,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   void initState() {
     super.initState();
     _flujo.addListener(_alCambiarFlujo);
+    _mapa.addListener(_revisarGuia);
+    RequiereGps.listo.addListener(_revisarGuia);
     _flujo.iniciar();
     _cargarFavoritos();
     _cargarOcultos();
@@ -117,6 +129,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   @override
   void dispose() {
     _sondeoConductores?.cancel();
+    RequiereGps.listo.removeListener(_revisarGuia);
+    _mapa.removeListener(_revisarGuia);
     _posiciones.dispose();
     _flujo.removeListener(_alCambiarFlujo);
     _flujo.dispose();
@@ -146,6 +160,60 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         if (mounted && _flujo.etapa == EtapaPasajero.calificando) _flujo.omitirCalificacion();
       });
     }
+    _revisarGuia();
+  }
+
+  /// La guia se muestra con el mapa listo para elegir destino: GPS con permiso, partida marcada,
+  /// sin destino ni viaje y sin otra pantalla encima.
+  bool get _listoParaGuia =>
+      context.read<Sesion>().usuario?.mostrarGuia == true &&
+      RequiereGps.listo.value &&
+      _seccion == _seccionInicio &&
+      _flujo.etapa == EtapaPasajero.eligiendo &&
+      _mapa.a != null &&
+      _mapa.b == null &&
+      !_flujo.guardandoLugar &&
+      (ModalRoute.of(context)?.isCurrent ?? true);
+
+  Future<void> _revisarGuia() async {
+    if (_guiaIniciada || !mounted || !_listoParaGuia) return;
+    _guiaIniciada = true;
+    // Deja que el mapa y los botones terminen de acomodarse.
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    if (!_listoParaGuia) {
+      _guiaIniciada = false;
+      return;
+    }
+    await mostrarGuiaInicio(context, [
+      PasoGuia(
+        clave: _guiaDestino,
+        titulo: '¿A dónde vas?',
+        texto: 'Toca aquí para buscar tu destino, o toca directamente el punto del mapa al que quieres ir.',
+      ),
+      PasoGuia(
+        clave: _guiaMoto,
+        titulo: 'Mototaxis cerca',
+        texto: 'Aquí ves cuántos mototaxistas libres hay cerca de ti. También aparecen en el mapa.',
+      ),
+      PasoGuia(
+        clave: _guiaPedir,
+        circulo: true,
+        titulo: 'Pide tu taxi',
+        texto: 'Con el destino elegido, verás el precio y elegirás pagar en efectivo o con QR. '
+            'Luego toca este botón para pedir el taxi.',
+      ),
+      PasoGuia(
+        clave: _guiaHistorial,
+        titulo: 'Historial',
+        texto: 'Tus viajes anteriores y tus lugares favoritos para pedir más rápido.',
+      ),
+      PasoGuia(
+        clave: _guiaMas,
+        titulo: 'Más opciones',
+        texto: 'Tu perfil, cambiar la contraseña, ingreso con huella y cerrar sesión.',
+      ),
+    ]);
   }
 
   void _irA(int seccion) {
@@ -570,13 +638,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               builder: (context, _) => BarraInferior(
                 indice: _seccion,
                 onCambiar: _irA,
-                items: const [
-                  ItemBarra(FontAwesomeIcons.house, 'Inicio'),
-                  ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial'),
-                  ItemBarra(FontAwesomeIcons.ellipsis, 'Más'),
+                items: [
+                  const ItemBarra(FontAwesomeIcons.house, 'Inicio'),
+                  ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial', clave: _guiaHistorial),
+                  ItemBarra(FontAwesomeIcons.ellipsis, 'Más', clave: _guiaMas),
                 ],
                 botonCentral: _seccion == _seccionInicio
                     ? BotonCentral(
+                        key: _guiaPedir,
                         icono: FontAwesomeIcons.solidPaperPlane,
                         tooltip: 'Pedir taxi',
                         activo: _flujo.puedeSolicitar,
@@ -668,6 +737,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         child: ConstrainedBox(
                           constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
                           child: BarraDestino(
+                            key: _guiaDestino,
                             destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
                             onBuscar: _abrirBuscador,
                             onQuitar: _flujo.quitarDestino,
@@ -684,6 +754,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                 right: 14,
                 top: margen.top + 222,
                 child: SelectorVehiculo(
+                  key: _guiaMoto,
                   contador: _conductoresCargados ? _conductores.length : null,
                   tooltipContador: _conductores.length == 1
                       ? '1 mototaxista libre cerca'

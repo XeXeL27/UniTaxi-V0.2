@@ -20,6 +20,9 @@ class UsuarioSesion {
   final String? telefono;
   final String rol;
 
+  /// Primera vez que entra con esta cuenta: se muestra la guia de inicio (lib/widgets/guia_inicio.dart).
+  final bool mostrarGuia;
+
   UsuarioSesion({
     required this.idUsuario,
     required this.nombreUsuario,
@@ -28,6 +31,7 @@ class UsuarioSesion {
     this.correo,
     this.telefono,
     required this.rol,
+    this.mostrarGuia = false,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -54,6 +58,7 @@ class UsuarioSesion {
     correo: json['correo'] as String?,
     telefono: json['telefono'] as String?,
     rol: json['rol'] as String? ?? '',
+    mostrarGuia: json['mostrarGuia'] as bool? ?? false,
   );
 
   Map<String, dynamic> aJson() => {
@@ -64,6 +69,7 @@ class UsuarioSesion {
     'correo': correo,
     'telefono': telefono,
     'rol': rol,
+    'mostrarGuia': mostrarGuia,
   };
 }
 
@@ -342,6 +348,13 @@ class Sesion extends ChangeNotifier {
       // Queda en memoria.
     }
     notifyListeners();
+  }
+
+  /// La guia de inicio ya se vio (o se salto): no se vuelve a mostrar en este telefono.
+  Future<void> guiaVista() async {
+    final actual = _usuario;
+    if (actual == null || !actual.mostrarGuia) return;
+    await reemplazarUsuario({...actual.aJson(), 'mostrarGuia': false});
   }
 
   /// Renueva el token de acceso con el de refresco. Devuelve false si no se pudo.

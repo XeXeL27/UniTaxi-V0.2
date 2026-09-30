@@ -23,9 +23,11 @@ import '../../../mapa/vista_mapa.dart';
 import '../../../widgets/barra_inferior.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
+import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
+import '../../../widgets/requiere_gps.dart';
 import '../comentarios/pantalla_comentarios.dart';
 import '../perfil/pantalla_documentos.dart';
 import '../perfil/pantalla_perfil.dart';
@@ -71,11 +73,20 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   /// Foto de perfil para la cabecera del menu lateral.
   Uint8List? _foto;
 
+  /// Botones que explica la guia de inicio (primera vez que entra, ya habilitado).
+  final _guiaConectar = GlobalKey();
+  final _guiaSolicitudes = GlobalKey();
+  final _guiaHistorial = GlobalKey();
+  final _guiaOpiniones = GlobalKey();
+  final _guiaMas = GlobalKey();
+  bool _guiaIniciada = false;
+
   @override
   void initState() {
     super.initState();
     _flujo.addListener(_alCambiarFlujo);
     _mapa.addListener(_revisarDireccion);
+    RequiereGps.listo.addListener(_revisarGuia);
     _arrancar();
     _cargarFoto();
   }
@@ -210,6 +221,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   @override
   void dispose() {
     _emisor.dispose();
+    RequiereGps.listo.removeListener(_revisarGuia);
     _mapa.removeListener(_revisarDireccion);
     _flujo.removeListener(_alCambiarFlujo);
     _flujo.dispose();
@@ -230,6 +242,58 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     if (terminado != null) _mostrarCobro(terminado);
     final pedido = _flujo.tomarPedidoPago();
     if (pedido != null) _preguntarCambioPago(pedido);
+    _revisarGuia();
+  }
+
+  /// La guia espera a que la cuenta este habilitada (aprobada y con sus documentos), con el GPS
+  /// listo, en Inicio con la lista de solicitudes y sin otra pantalla encima.
+  bool get _listoParaGuia =>
+      context.read<Sesion>().usuario?.mostrarGuia == true &&
+      RequiereGps.listo.value &&
+      _seccion == _seccionInicio &&
+      _flujo.etapa == EtapaConductor.lista &&
+      !_flujo.enRevision &&
+      (ModalRoute.of(context)?.isCurrent ?? true);
+
+  Future<void> _revisarGuia() async {
+    if (_guiaIniciada || !mounted || !_listoParaGuia) return;
+    _guiaIniciada = true;
+    await Future<void>.delayed(const Duration(milliseconds: 900));
+    if (!mounted) return;
+    if (!_listoParaGuia) {
+      _guiaIniciada = false;
+      return;
+    }
+    await mostrarGuiaInicio(context, [
+      PasoGuia(
+        clave: _guiaConectar,
+        circulo: true,
+        titulo: 'En línea o desconectado',
+        texto: 'Con este botón te conectas: apareces en el mapa de los pasajeros y recibes solicitudes. '
+            'Tócalo para desconectarte cuando dejes de trabajar.',
+      ),
+      PasoGuia(
+        clave: _guiaSolicitudes,
+        titulo: 'Solicitudes de viaje',
+        texto: 'Aquí llegan los pedidos. Despliega la lista, toca uno para ver la ruta y tu ganancia, y '
+            'acéptalo si te conviene.',
+      ),
+      PasoGuia(
+        clave: _guiaHistorial,
+        titulo: 'Historial',
+        texto: 'Tus viajes completados de este mes y del anterior.',
+      ),
+      PasoGuia(
+        clave: _guiaOpiniones,
+        titulo: 'Opiniones',
+        texto: 'Tu calificación promedio y lo que dicen los pasajeros de ti.',
+      ),
+      PasoGuia(
+        clave: _guiaMas,
+        titulo: 'Más opciones',
+        texto: 'Tu perfil, tus documentos, tus QR de cobro, contraseña, huella y cerrar sesión.',
+      ),
+    ]);
   }
 
   /// El pasajero pidio pagar de otra forma: se pregunta al conductor si acepta.
@@ -423,13 +487,14 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   onCambiar: _irA,
                   items: [
                     ItemBarra(FontAwesomeIcons.house, 'Inicio', insignia: pendientes),
-                    const ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial'),
-                    const ItemBarra(FontAwesomeIcons.solidComments, 'Opiniones'),
-                    const ItemBarra(FontAwesomeIcons.ellipsis, 'Más'),
+                    ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial', clave: _guiaHistorial),
+                    ItemBarra(FontAwesomeIcons.solidComments, 'Opiniones', clave: _guiaOpiniones),
+                    ItemBarra(FontAwesomeIcons.ellipsis, 'Más', clave: _guiaMas),
                   ],
                   botonCentral: conViaje
                       ? null
                       : BotonCentral(
+                          key: _guiaConectar,
                           icono: FontAwesomeIcons.powerOff,
                           tooltip: enLinea ? 'Desconectarme' : 'Conectarme',
                           activo: enLinea && !_flujo.enRevision,
@@ -582,6 +647,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                           child: Center(child: CircularProgressIndicator()),
                         ),
                         EtapaConductor.lista => PanelSolicitudes(
+                          key: _guiaSolicitudes,
                           flujo: _flujo,
                           onRevisarAprobacion: _revisarAprobacion,
                           onSubirDocumentos: _abrirDocumentos,

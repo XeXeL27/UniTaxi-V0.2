@@ -11,7 +11,10 @@ class ItemBarra {
   /// Numero en rojo sobre el icono (por ejemplo solicitudes nuevas); null o 0 no se muestra.
   final int? insignia;
 
-  const ItemBarra(this.icono, this.texto, {this.insignia});
+  /// Clave del boton, para ubicarlo en pantalla (guia de inicio).
+  final Key? clave;
+
+  const ItemBarra(this.icono, this.texto, {this.insignia, this.clave});
 }
 
 /// Barra inferior flotante (blanca, esquinas redondeadas) con las secciones de la app.
@@ -33,7 +36,7 @@ class BarraInferior extends StatelessWidget {
 
   const BarraInferior({super.key, required this.items, required this.indice, required this.onCambiar, this.botonCentral});
 
-  Widget _opcion(int i) => _Opcion(item: items[i], activo: i == indice, onTap: () => onCambiar(i));
+  Widget _opcion(int i) => _Opcion(key: items[i].clave, item: items[i], activo: i == indice, onTap: () => onCambiar(i));
 
   @override
   Widget build(BuildContext context) {
@@ -86,7 +89,7 @@ class _Opcion extends StatelessWidget {
   final bool activo;
   final VoidCallback onTap;
 
-  const _Opcion({required this.item, required this.activo, required this.onTap});
+  const _Opcion({super.key, required this.item, required this.activo, required this.onTap});
 
   @override
   Widget build(BuildContext context) {

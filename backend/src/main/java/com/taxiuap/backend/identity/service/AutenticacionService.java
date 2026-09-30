@@ -289,7 +289,8 @@ public class AutenticacionService {
                 persona.getApellidos(),
                 persona.getCorreo(),
                 persona.getTelefono(),
-                rolCodigo);
+                rolCodigo,
+                Boolean.FALSE.equals(usuario.getGuiaVista()));
 
         // La cuenta de conductor sin aprobar no se ofrece como "cambiar a modo conductor".
         List<String> rolesDisponibles = usuarioRepository.findByPersonaId(persona.getId()).stream()
