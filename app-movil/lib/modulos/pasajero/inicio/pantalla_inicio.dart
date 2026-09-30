@@ -414,7 +414,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     mostrarMensaje(context, mensaje);
   }
 
+  /// Los dos botones de pedir el taxi (el del panel y el central) pasan por aqui: primero se
+  /// muestra el modal con el detalle y solo si el pasajero confirma se envia la solicitud.
   Future<void> _solicitar() async {
+    final confirmado = await confirmarViaje(
+      context,
+      contenido: DetalleSolicitudViaje(flujo: _flujo),
+    );
+    if (!confirmado || !mounted) return;
     setState(() => _enviando = true);
     try {
       await _flujo.solicitar();
@@ -703,37 +710,31 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                   ],
                 ),
               ),
+            if (panel != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: abajo + 34,
+                child: PanelInferior(
+                  flotante: true,
+                  // Los botones del mapa quedan por encima del panel (van despues en el Stack) y el
+                  // panel deja libre su alto, para que no se muevan al cambiar el panel de alto.
+                  reservaInferior: FilaBotonesMapa.alto,
+                  // Pagando por QR el panel crece un poco: debajo del viaje van los QR del conductor.
+                  altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
+                      ? 0.5
+                      : 0.42,
+                  child: panel,
+                ),
+              ),
+            // Los botones van despues del panel en el Stack para quedar por encima: anclados al
+            // borde inferior (34 px por encima del boton central, que sobresale ~30 px de la
+            // barra) no se mueven cuando el panel de abajo cambia de alto.
             Positioned(
               left: 0,
               right: 0,
-              // El boton central sobresale ~30 px de la barra: el panel queda por encima de el.
               bottom: abajo + 34,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Row(
-                      children: [
-                        BotonCapas(controlador: _mapa),
-                        const Spacer(),
-                        BotonBrujula(controlador: _mapa),
-                        const SizedBox(width: 10),
-                        BotonUbicacion(controlador: _mapa),
-                      ],
-                    ),
-                  ),
-                  if (panel != null)
-                    PanelInferior(
-                      flotante: true,
-                      // Pagando por QR el panel crece un poco: debajo del viaje van los QR del conductor.
-                      altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
-                          ? 0.5
-                          : 0.42,
-                      child: panel,
-                    ),
-                ],
-              ),
+              child: FilaBotonesMapa(controlador: _mapa),
             ),
           ],
         );

@@ -13,9 +13,19 @@ class PanelInferior extends StatelessWidget {
   /// Alto maximo como fraccion de la pantalla; el contenido se desplaza si no entra.
   final double altoMaximo;
   final bool flotante;
+
+  /// Espacio que se deja vacio abajo (px) para los botones del mapa, que se dibujan por encima del
+  /// panel. Con cero el contenido puede llegar hasta el borde inferior.
+  final double reservaInferior;
   static const double anchoMaximo = 560;
 
-  const PanelInferior({super.key, required this.child, this.altoMaximo = 0.62, this.flotante = false});
+  const PanelInferior({
+    super.key,
+    required this.child,
+    this.altoMaximo = 0.62,
+    this.flotante = false,
+    this.reservaInferior = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +47,12 @@ class PanelInferior extends StatelessWidget {
         ),
         clipBehavior: flotante ? Clip.antiAlias : Clip.none,
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(20, 18, 20, flotante ? 18 : 18 + medidas.padding.bottom),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            18,
+            20,
+            18 + reservaInferior + (flotante ? 0 : medidas.padding.bottom),
+          ),
           child: AnimatedSize(
             duration: const Duration(milliseconds: 200),
             alignment: Alignment.topCenter,

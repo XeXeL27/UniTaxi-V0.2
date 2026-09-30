@@ -138,6 +138,96 @@ class PanelEligiendo extends StatelessWidget {
   }
 }
 
+/// Detalle que se muestra en el modal de confirmacion al pedir el taxi: servicio, distancia, forma
+/// de pago y el precio ya calculado. No trae tiempo estimado ni los puntos del recorrido.
+class DetalleSolicitudViaje extends StatelessWidget {
+  final FlujoPasajero flujo;
+
+  const DetalleSolicitudViaje({super.key, required this.flujo});
+
+  @override
+  Widget build(BuildContext context) {
+    final ruta = flujo.mapa.ruta;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _FilaDato(
+          etiqueta: 'Servicio',
+          valor: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/mototaxi.png', height: 24, fit: BoxFit.contain),
+              const SizedBox(width: 8),
+              const Text(
+                'Moto',
+                style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+              ),
+            ],
+          ),
+        ),
+        _FilaDato(
+          etiqueta: 'Distancia',
+          valor: DatoRuta(
+            icono: FontAwesomeIcons.route,
+            texto: ruta?.distanciaTexto ?? 'A calcular',
+          ),
+        ),
+        _FilaDato(
+          etiqueta: 'Pago',
+          valor: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaIcon(
+                flujo.metodoPago == MetodoPago.qr ? FontAwesomeIcons.qrcode : FontAwesomeIcons.moneyBillWave,
+                color: ColoresApp.ruta,
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                MetodoPago.nombre(flujo.metodoPago),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+        RecuadroPrecio(
+          etiqueta: 'Precio del viaje',
+          monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
+        ),
+      ],
+    );
+  }
+}
+
+/// Fila con la etiqueta a la izquierda y el dato a la derecha, para el detalle de una solicitud.
+class _FilaDato extends StatelessWidget {
+  final String etiqueta;
+  final Widget valor;
+
+  const _FilaDato({required this.etiqueta, required this.valor});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 7),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              etiqueta,
+              style: const TextStyle(fontSize: 13.5, color: ColoresApp.textoSuave),
+            ),
+          ),
+          const SizedBox(width: 10),
+          valor,
+        ],
+      ),
+    );
+  }
+}
+
 /// Panel pequeno mientras la solicitud espera que un conductor la acepte: el mensaje, el destino y
 /// el precio en una linea y el boton para cancelar. El mapa con la ruta queda a la vista.
 class PanelBuscando extends StatefulWidget {

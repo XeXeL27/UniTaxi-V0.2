@@ -11,7 +11,7 @@ import '../widgets/notificaciones.dart';
 import 'controlador_mapa.dart';
 import 'pin_mapa.dart';
 
-/// Mapa a pantalla completa: tiles de OpenStreetMap, ruta azul entre A y B, tramo gris de
+/// Mapa a pantalla completa: tiles de OpenStreetMap, ruta azul entre A y B, tramo naranja de
 /// acercamiento, punto azul del GPS y los pines A y B.
 class MapaBase extends StatelessWidget {
   final ControladorMapa controlador;
@@ -78,14 +78,18 @@ class MapaBase extends StatelessWidget {
                   Polyline(
                     points: acercamiento.puntos,
                     strokeWidth: 5,
-                    color: ColoresApp.textoSuave,
+                    color: ColoresApp.rutaSecundaria,
+                    borderStrokeWidth: 1.5,
+                    borderColor: ColoresApp.rutaSecundariaBorde,
                     pattern: StrokePattern.dashed(segments: const [10, 8]),
                   ),
                 if (rutaConductor != null)
                   Polyline(
                     points: rutaConductor.puntos,
                     strokeWidth: 5,
-                    color: ColoresApp.textoSuave,
+                    color: ColoresApp.rutaSecundaria,
+                    borderStrokeWidth: 1.5,
+                    borderColor: ColoresApp.rutaSecundariaBorde,
                     pattern: StrokePattern.dashed(segments: const [10, 8]),
                   ),
                 if (ruta != null) ...[
@@ -388,6 +392,36 @@ class _OpcionCapa extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Fila de botones redondos sobre el mapa: capas a la izquierda, brujula y ubicacion a la derecha.
+///
+/// Va anclada al borde inferior de la pantalla, en su propio Positioned y por encima del panel, para
+/// que no se mueva cuando el panel de abajo cambia de alto; el panel deja libre [alto] con
+/// PanelInferior.reservaInferior.
+class FilaBotonesMapa extends StatelessWidget {
+  final ControladorMapa controlador;
+
+  /// Alto de la fila: boton de 50 + separacion de 12.
+  static const double alto = 62;
+
+  const FilaBotonesMapa({super.key, required this.controlador});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: [
+          BotonCapas(controlador: controlador),
+          const Spacer(),
+          BotonBrujula(controlador: controlador),
+          const SizedBox(width: 10),
+          BotonUbicacion(controlador: controlador),
+        ],
       ),
     );
   }

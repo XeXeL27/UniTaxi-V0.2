@@ -555,43 +555,38 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               Positioned(
                 left: 0,
                 right: 0,
-                // Con el boton de conectarse visible (sobresale ~30 px) el panel sube para no quedar tapado.
-                bottom: abajo + (etapa == EtapaConductor.detalle || etapa == EtapaConductor.enViaje ? 10 : 34),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Row(
-                        children: [
-                          BotonCapas(controlador: _mapa),
-                          const Spacer(),
-                          BotonBrujula(controlador: _mapa),
-                          const SizedBox(width: 10),
-                          BotonUbicacion(controlador: _mapa),
-                        ],
-                      ),
+                bottom: abajo + 34,
+                child: PanelInferior(
+                  flotante: true,
+                  // Los botones del mapa quedan por encima del panel (van despues en el Stack) y el
+                  // panel deja libre su alto, para que no se muevan al cambiar el panel de alto.
+                  reservaInferior: FilaBotonesMapa.alto,
+                  // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
+                  altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
+                  child: switch (etapa) {
+                    EtapaConductor.cargando => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
-                    PanelInferior(
-                      flotante: true,
-                      // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
-                      altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
-                      child: switch (etapa) {
-                        EtapaConductor.cargando => const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                        EtapaConductor.lista => PanelSolicitudes(
-                          flujo: _flujo,
-                          onRevisarAprobacion: _revisarAprobacion,
-                          onSubirDocumentos: _abrirDocumentos,
-                        ),
-                        EtapaConductor.detalle => _panelDetalle(),
-                        EtapaConductor.enViaje => _panelViaje(),
-                      },
+                    EtapaConductor.lista => PanelSolicitudes(
+                      flujo: _flujo,
+                      onRevisarAprobacion: _revisarAprobacion,
+                      onSubirDocumentos: _abrirDocumentos,
                     ),
-                  ],
+                    EtapaConductor.detalle => _panelDetalle(),
+                    EtapaConductor.enViaje => _panelViaje(),
+                  },
                 ),
+              ),
+              // Los botones van despues del panel en el Stack para quedar por encima: anclados al
+              // borde inferior no se mueven cuando el panel de abajo cambia de alto. El 34 px
+              // tambien los deja por encima del boton de conectarse, que sobresale ~30 px de la
+              // barra.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: abajo + 34,
+                child: FilaBotonesMapa(controlador: _mapa),
               ),
             ],
           ),
