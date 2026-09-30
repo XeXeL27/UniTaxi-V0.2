@@ -15,6 +15,7 @@ import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
 import '../../../core/emisor_ubicacion.dart';
 import '../../../core/formato.dart';
+import '../../../core/chat.dart';
 import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -61,7 +62,11 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   /// Direccion de la ubicacion actual para la cabecera, y donde se calculo.
   String? _direccion;
   LatLng? _puntoDireccion;
-  late final FlujoConductor _flujo = FlujoConductor(api: ConductorApi(context.read<ClienteApi>()), mapa: _mapa);
+  late final FlujoConductor _flujo = FlujoConductor(
+    api: ConductorApi(context.read<ClienteApi>()),
+    mapa: _mapa,
+    chat: context.read<ChatEstado>(),
+  );
 
   /// Envia la posicion del conductor por WebSocket para que aparezca en linea.
   late final EmisorUbicacion _emisor = EmisorUbicacion(
@@ -596,17 +601,24 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                 top: 0,
                 left: 0,
                 right: 0,
-                child: CabeceraInicio(
-                  saludo: etapa == EtapaConductor.detalle ? 'Solicitud de viaje' : 'Bienvenido',
-                  nombre: etapa == EtapaConductor.detalle
-                      ? 'Ruta del viaje'
-                      : 'Hola, ${usuario == null ? 'conductor' : enTitulo(usuario.nombres.split(' ').take(2).join(' '))}',
-                  ubicacion: _ubicacionCabecera(),
-                  onAtras: etapa == EtapaConductor.detalle ? _flujo.volverALista : null,
-                  onBoton: () => mostrarAyuda(context, esConductor: true),
-                  foto: _foto,
-                  iconoSinFoto: FontAwesomeIcons.motorcycle,
-                  onPerfil: () => _irA(_seccionMas),
+                child: Column(
+                  children: [
+                    CabeceraInicio(
+                      saludo: etapa == EtapaConductor.detalle ? 'Solicitud de viaje' : 'Bienvenido',
+                      nombre: etapa == EtapaConductor.detalle
+                          ? 'Ruta del viaje'
+                          : 'Hola, ${usuario == null ? 'conductor' : enTitulo(usuario.nombres.split(' ').take(2).join(' '))}',
+                      ubicacion: _ubicacionCabecera(),
+                      onAtras: etapa == EtapaConductor.detalle ? _flujo.volverALista : null,
+                      onBoton: () => mostrarAyuda(context, esConductor: true),
+                      foto: _foto,
+                      iconoSinFoto: FontAwesomeIcons.motorcycle,
+                      onPerfil: () => _irA(_seccionMas),
+                    ),
+                    // La brujula en la esquina superior: cae debajo de la cabecera y solo aparece
+                    // con el mapa girado.
+                    BrujulaArriba(controlador: _mapa),
+                  ],
                 ),
               ),
               Positioned(
@@ -619,42 +631,38 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   faltanDocumentos: _flujo.documentosFaltantes.isNotEmpty,
                 ),
               ),
+              // Botones del mapa y panel en la misma Column: los botones quedan justo encima de la
+              // tarjeta (nunca montados sobre ella) y se mueven con el panel si cambia de alto.
+              // Anclados 34 px por encima del boton central, que sobresale ~30 px de la barra.
               Positioned(
                 left: 0,
                 right: 0,
                 bottom: abajo + 34,
-                child: PanelInferior(
-                  flotante: true,
-                  // Los botones del mapa quedan por encima del panel (van despues en el Stack) y el
-                  // panel deja libre su alto, para que no se muevan al cambiar el panel de alto.
-                  reservaInferior: FilaBotonesMapa.alto,
-                  // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
-                  altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
-                  child: switch (etapa) {
-                    EtapaConductor.cargando => const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Center(child: CircularProgressIndicator()),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    FilaBotonesMapa(controlador: _mapa),
+                    PanelInferior(
+                      flotante: true,
+                      // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
+                      altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
+                      child: switch (etapa) {
+                        EtapaConductor.cargando => const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: Center(child: CircularProgressIndicator()),
+                        ),
+                        EtapaConductor.lista => PanelSolicitudes(
+                          key: _guiaSolicitudes,
+                          flujo: _flujo,
+                          onRevisarAprobacion: _revisarAprobacion,
+                          onSubirDocumentos: _abrirDocumentos,
+                        ),
+                        EtapaConductor.detalle => _panelDetalle(),
+                        EtapaConductor.enViaje => _panelViaje(),
+                      },
                     ),
-                    EtapaConductor.lista => PanelSolicitudes(
-                      key: _guiaSolicitudes,
-                      flujo: _flujo,
-                      onRevisarAprobacion: _revisarAprobacion,
-                      onSubirDocumentos: _abrirDocumentos,
-                    ),
-                    EtapaConductor.detalle => _panelDetalle(),
-                    EtapaConductor.enViaje => _panelViaje(),
-                  },
+                  ],
                 ),
-              ),
-              // Los botones van despues del panel en el Stack para quedar por encima: anclados al
-              // borde inferior no se mueven cuando el panel de abajo cambia de alto. El 34 px
-              // tambien los deja por encima del boton de conectarse, que sobresale ~30 px de la
-              // barra.
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: abajo + 34,
-                child: FilaBotonesMapa(controlador: _mapa),
               ),
             ],
           ),

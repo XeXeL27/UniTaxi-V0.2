@@ -8,6 +8,7 @@ import '../../../widgets/boton_principal.dart';
 import '../../../widgets/paneles.dart';
 import 'flujo_conductor.dart';
 import '../../../comun/modelos_viaje.dart';
+import '../../../comun/vista_chat.dart';
 
 String _km(double? metros) {
   if (metros == null) return '-';
@@ -361,6 +362,7 @@ class PanelViajeConductor extends StatelessWidget {
                 style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
               ),
             ),
+            BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
           ],
         ),
         const SizedBox(height: 8),

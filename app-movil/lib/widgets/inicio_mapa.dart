@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/tema.dart';
+import 'notificaciones.dart';
 
 /// Ancho maximo de la columna de controles sobre el mapa en pantallas anchas (PC): la cabecera y
 /// el buscador no se estiran de lado a lado.
@@ -373,7 +375,7 @@ class _Vehiculo extends StatelessWidget {
   }
 }
 
-/// Hoja de ayuda del boton de la cabecera.
+/// Hoja de soporte: asistencia, ayuda rapida y canales de atencion.
 Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
   final pasos = esConductor
       ? const [
@@ -386,53 +388,259 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
           (FontAwesomeIcons.paperPlane, 'Revisa el precio y pide tu mototaxi con el botón del centro.'),
           (FontAwesomeIcons.solidStar, 'Al llegar, califica a tu conductor.'),
         ];
+
+  final pregunta = esConductor ? '¿Necesitas ayuda con la app?' : '¿Necesitas asistencia?';
+  const afirmacion = 'Estamos disponibles para ayudarte en lo que necesites.';
+
   return showModalBottomSheet<void>(
     context: context,
     backgroundColor: ColoresApp.blanco,
     constraints: const BoxConstraints(maxWidth: 520),
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(22))),
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            const Text('¿Cómo funciona?', style: TextStyle(color: ColoresApp.azul, fontSize: 20, fontWeight: FontWeight.w700)),
-            const SizedBox(height: 14),
-            for (final (icono, texto) in pasos)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
-                      decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
-                      child: Center(child: FaIcon(icono, color: ColoresApp.azul, size: 16)),
+    isScrollControlled: true,
+    builder: (context) {
+      final altoMax = MediaQuery.sizeOf(context).height * 0.85;
+      return SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: altoMax),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Hero: pregunta y afirmacion
+                Center(
+                  child: Container(
+                    width: 56,
+                    height: 56,
+                    decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
+                    child: const Center(child: FaIcon(FontAwesomeIcons.headset, color: ColoresApp.azul, size: 22)),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                Text(
+                  pregunta,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: ColoresApp.azul, fontSize: 20, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  afirmacion,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14),
+                ),
+                const SizedBox(height: 22),
+
+                // Seccion AYUDA RAPIDA
+                const Text(
+                  'AYUDA RÁPIDA',
+                  style: TextStyle(color: ColoresApp.azul, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 10),
+                _TipAyudaRapida(
+                  icono: FontAwesomeIcons.locationCrosshairs,
+                  texto: 'Activa tu ubicación para que el conductor te encuentre.',
+                ),
+                const SizedBox(height: 8),
+                _TipAyudaRapida(
+                  icono: FontAwesomeIcons.bell,
+                  texto: 'Mantén activadas las notificaciones de la app.',
+                ),
+                const SizedBox(height: 16),
+
+                // Pasos del rol
+                for (final (icono, texto) in pasos)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
+                          child: Center(child: FaIcon(icono, color: ColoresApp.azul, size: 16)),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14.5))),
+                      ],
                     ),
-                    const SizedBox(width: 14),
-                    Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14.5))),
+                  ),
+                const SizedBox(height: 14),
+                const Divider(color: ColoresApp.borde),
+                const SizedBox(height: 14),
+
+                // Seccion CANALES DE ATENCION
+                const Text(
+                  'CANALES DE ATENCIÓN',
+                  style: TextStyle(color: ColoresApp.azul, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'Selecciona la manera de comunicarte con nosotros:',
+                  style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
+                ),
+                const SizedBox(height: 12),
+                _CanalAtencion(
+                  icono: FontAwesomeIcons.envelope,
+                  color: ColoresApp.azul,
+                  titulo: 'Correo electrónico',
+                  valor: 'unitaxi@uap.edu.bo',
+                  onTap: () => _abrirEnlace(context, Uri.parse('mailto:unitaxi@uap.edu.bo'), 'unitaxi@uap.edu.bo'),
+                ),
+                const SizedBox(height: 10),
+                _CanalAtencion(
+                  icono: FontAwesomeIcons.locationDot,
+                  color: ColoresApp.rojo,
+                  titulo: 'Dirección',
+                  valor: 'X6JW+Q5P, C. Bruno Racua, Cobija',
+                  onTap: () => _abrirEnlace(
+                    context,
+                    Uri.parse('https://maps.app.goo.gl/FTmrpKDkZqsoKCcb9'),
+                    'la dirección',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _CanalAtencion(
+                  icono: FontAwesomeIcons.clock,
+                  color: ColoresApp.exito,
+                  titulo: 'Horario de atención',
+                  valor: 'Lunes a viernes: 8:00 - 12:00 y 14:00 - 16:00',
+                  onTap: null,
+                ),
+                const SizedBox(height: 18),
+                const Divider(color: ColoresApp.borde),
+                const SizedBox(height: 12),
+
+                // Emergencia
+                const Row(
+                  children: [
+                    FaIcon(FontAwesomeIcons.triangleExclamation, color: ColoresApp.rojo, size: 16),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'En una emergencia llama a la Policía al 110.',
+                        style: TextStyle(color: ColoresApp.rojoOscuro, fontWeight: FontWeight.w600),
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            const Divider(color: ColoresApp.borde),
-            const SizedBox(height: 6),
-            const Row(
-              children: [
-                FaIcon(FontAwesomeIcons.triangleExclamation, color: ColoresApp.rojo, size: 16),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text(
-                    'En una emergencia llama a la Policía al 110.',
-                    style: TextStyle(color: ColoresApp.rojoOscuro, fontWeight: FontWeight.w600),
-                  ),
+                const SizedBox(height: 12),
+
+                // Cierre
+                const Text(
+                  '¿Tienes preguntas? Estamos encantados de ayudarte.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
                 ),
               ],
             ),
-          ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
+class _TipAyudaRapida extends StatelessWidget {
+  final FaIconData icono;
+  final String texto;
+
+  const _TipAyudaRapida({required this.icono, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Container(
+          width: 32,
+          height: 32,
+          decoration: BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
+          child: Center(child: FaIcon(icono, color: ColoresApp.azul, size: 14)),
+        ),
+        const SizedBox(width: 12),
+        Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14))),
+      ],
+    );
+  }
+}
+
+class _CanalAtencion extends StatelessWidget {
+  final FaIconData icono;
+  final Color color;
+  final String titulo;
+  final String valor;
+  final VoidCallback? onTap;
+
+  const _CanalAtencion({
+    required this.icono,
+    required this.color,
+    required this.titulo,
+    required this.valor,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.08),
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(color: color.withValues(alpha: 0.18), shape: BoxShape.circle),
+                child: Center(child: FaIcon(icono, color: color, size: 15)),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      titulo,
+                      style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      valor,
+                      style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              if (onTap != null)
+                FaIcon(FontAwesomeIcons.chevronRight, color: color.withValues(alpha: 0.5), size: 12),
+            ],
+          ),
         ),
       ),
-    ),
-  );
+    );
+  }
+}
+
+/// Abre un enlace externo; si falla, copia el texto al portapapeles como respaldo.
+Future<void> _abrirEnlace(BuildContext context, Uri uri, String textoPortapapeles) async {
+  try {
+    final pudo = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!pudo && context.mounted) {
+      await Clipboard.setData(ClipboardData(text: textoPortapapeles));
+      if (context.mounted) {
+        mostrarMensaje(context, 'No se pudo abrir. Copiado al portapapeles.');
+      }
+    }
+  } catch (_) {
+    if (context.mounted) {
+      await Clipboard.setData(ClipboardData(text: textoPortapapeles));
+      if (context.mounted) {
+        mostrarMensaje(context, 'No se pudo abrir. Copiado al portapapeles.');
+      }
+    }
+  }
 }

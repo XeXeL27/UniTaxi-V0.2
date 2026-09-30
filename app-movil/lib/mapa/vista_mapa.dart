@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../core/config.dart';
 import '../core/tema.dart';
 import '../widgets/notificaciones.dart';
+import '../widgets/paneles.dart';
 import 'controlador_mapa.dart';
 import 'pin_mapa.dart';
 
@@ -22,8 +23,9 @@ class MapaBase extends StatelessWidget {
   /// Marcadores de la pantalla (por ejemplo los mototaxistas en linea), debajo de A, B y el GPS.
   final List<Marker> marcadoresExtra;
 
-  /// Capa de marcadores que se repinta sola (los mototaxistas que se deslizan), debajo de A y B.
-  final Widget? capaAnimada;
+  /// Capas que se repintan solas (los mototaxistas que se deslizan, el radar de busqueda), debajo
+  /// de A, B y el GPS.
+  final List<Widget> capasAnimadas;
 
   /// Partida y destino como circulos sin letra (azul y rojo) en vez de pines con A y B.
   final bool puntosSinLetra;
@@ -33,7 +35,7 @@ class MapaBase extends StatelessWidget {
     required this.controlador,
     this.onTap,
     this.marcadoresExtra = const [],
-    this.capaAnimada,
+    this.capasAnimadas = const [],
     this.puntosSinLetra = false,
   });
 
@@ -57,7 +59,7 @@ class MapaBase extends StatelessWidget {
             initialCenter: c.centroInicial,
             initialZoom: 15,
             minZoom: 5,
-            maxZoom: 19,
+            maxZoom: c.capa.zoomNativo.toDouble(),
             backgroundColor: const Color(0xFFE8E6E1),
             // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
             interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
@@ -70,7 +72,7 @@ class MapaBase extends StatelessWidget {
               key: ValueKey(c.capa),
               urlTemplate: c.capa.url,
               userAgentPackageName: Config.agenteMapas,
-              maxNativeZoom: c.capa == CapaMapa.satelite ? 18 : 19,
+              maxNativeZoom: c.capa.zoomNativo,
             ),
             PolylineLayer(
               polylines: [
@@ -109,7 +111,7 @@ class MapaBase extends StatelessWidget {
                 ],
               ],
             ),
-            ?capaAnimada,
+            ...capasAnimadas,
             // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
             MarkerLayer(
               rotate: true,
@@ -239,6 +241,35 @@ class BotonBrujula extends StatelessWidget {
                 ),
               ),
             ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Brujula en la esquina superior del mapa: aparece solo con el mapa girado y, al tocarla, vuelve
+/// a poner el norte arriba.
+///
+/// Va en el flujo de arriba de la pantalla (la columna de la cabecera y las tarjetas), no en un
+/// Positioned: asi el contenido de arriba la empuja hacia abajo y nunca se monta sobre nada.
+class BrujulaArriba extends StatelessWidget {
+  final ControladorMapa controlador;
+
+  const BrujulaArriba({super.key, required this.controlador});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: controlador.rotacion,
+      builder: (context, grados, _) {
+        final girado = grados > 0.5 && grados < 359.5;
+        if (!girado) return const SizedBox.shrink();
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 16, top: 8),
+            child: BotonBrujula(controlador: controlador),
           ),
         );
       },
@@ -397,30 +428,126 @@ class _OpcionCapa extends StatelessWidget {
   }
 }
 
-/// Fila de botones redondos sobre el mapa: capas a la izquierda, brujula y ubicacion a la derecha.
+/// Fila de botones redondos sobre el mapa (capas y ubicacion), alineada a la derecha.
 ///
-/// Va anclada al borde inferior de la pantalla, en su propio Positioned y por encima del panel, para
-/// que no se mueva cuando el panel de abajo cambia de alto; el panel deja libre [alto] con
-/// PanelInferior.reservaInferior.
+/// Vive en la misma Column que el panel inferior (pantalla_inicio): queda justo encima de la
+/// tarjeta, nunca montada sobre ella, y se mueve con el panel cuando cambia de alto. La brujula
+/// no va aqui: esta en [BrujulaArriba], en la esquina superior del mapa.
 class FilaBotonesMapa extends StatelessWidget {
   final ControladorMapa controlador;
-
-  /// Alto de la fila: boton de 50 + separacion de 12.
-  static const double alto = 62;
 
   const FilaBotonesMapa({super.key, required this.controlador});
 
   @override
   Widget build(BuildContext context) {
+    // Mismo ancho y margen que el panel, para que los botones queden sobre su borde derecho.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Row(
-        children: [
-          BotonCapas(controlador: controlador),
-          const Spacer(),
-          BotonBrujula(controlador: controlador),
-          const SizedBox(width: 10),
-          BotonUbicacion(controlador: controlador),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: PanelInferior.anchoMaximo),
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(
+              // El padding de abajo es la separacion con la tarjeta del panel.
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  BotonCapas(controlador: controlador),
+                  const SizedBox(width: 10),
+                  BotonUbicacion(controlador: controlador),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Un anillo del radar de busqueda: donde llega y con qué fuerza se ve.
+class AnilloRadar {
+  /// Distancia al punto de partida, en metros.
+  final double radio;
+
+  /// Fuerza con la que se ve, de 0 a 1.
+  final double opacidad;
+
+  const AnilloRadar(this.radio, this.opacidad);
+}
+
+/// Anillos del radar en una fase del ciclo, listos para pintar en el mapa.
+///
+/// [avance] es la fase: 0 es el arranque de la vuelta y 1 vuelve al mismo punto. Cada anillo va
+/// desfasado un tercio del ciclo, asi que siempre hay uno saliendo, otro a media expansion y otro
+/// desvanecerse. El radio va de [radioInicial] a [radioFinal] metros y la opacidad sube al
+/// arrancar, baja mientras crece y llega a cero justo cuando el anillo desaparece, para que el
+/// ciclo no se note.
+List<AnilloRadar> anillosRadar(double avance) {
+  const cantidad = 3;
+  const radioInicial = 20.0;
+  const radioFinal = 400.0;
+  const opacidadMaxima = 0.45;
+  const entrada = 0.1;
+  final anillos = <AnilloRadar>[];
+  for (var i = 0; i < cantidad; i++) {
+    final fase = (avance + i / cantidad) % 1;
+    final aparecer = fase < entrada ? fase / entrada : 1.0;
+    anillos.add(
+      AnilloRadar(
+        radioInicial + (radioFinal - radioInicial) * fase,
+        opacidadMaxima * aparecer * (1 - fase),
+      ),
+    );
+  }
+  return anillos;
+}
+
+/// Radar de busqueda: anillos que salen del punto de partida mientras la solicitud esta abierta y
+/// no hay conductor aun. Se dibuja debajo de los pines, asi que no tapa nada.
+///
+/// El radio es ilustrativo: el backend no filtra por distancia, avisa a los conductores conectados,
+/// asi que el radar dice "estamos buscando por aqui" y no un alcance real. La informacion de
+/// cuantos mototaxistas hay cerca viene de los marcadores del mapa.
+class RadarBusqueda extends StatefulWidget {
+  /// Cuanto tarda en completarse una vuelta de los anillos.
+  static const Duration duracionCiclo = Duration(milliseconds: 2400);
+
+  final LatLng punto;
+
+  const RadarBusqueda({super.key, required this.punto});
+
+  @override
+  State<RadarBusqueda> createState() => _RadarBusquedaState();
+}
+
+class _RadarBusquedaState extends State<RadarBusqueda> with SingleTickerProviderStateMixin {
+  late final AnimationController _ciclo = AnimationController(vsync: this, duration: RadarBusqueda.duracionCiclo)
+    ..repeat();
+
+  @override
+  void dispose() {
+    _ciclo.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ciclo,
+      builder: (context, _) => CircleLayer(
+        circles: [
+          for (final anillo in anillosRadar(_ciclo.value))
+            CircleMarker(
+              point: widget.punto,
+              radius: anillo.radio,
+              useRadiusInMeter: true,
+              color: ColoresApp.ruta.withValues(alpha: anillo.opacidad),
+              borderColor: ColoresApp.rutaBorde.withValues(alpha: anillo.opacidad * 0.6),
+              borderStrokeWidth: 1.5,
+            ),
         ],
       ),
     );

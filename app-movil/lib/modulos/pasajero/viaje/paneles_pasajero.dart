@@ -8,6 +8,7 @@ import '../../../widgets/paneles.dart';
 import 'flujo_pasajero.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/qr_pago.dart';
+import '../../../comun/vista_chat.dart';
 
 /// Panel mientras el pasajero elige su destino: partida (GPS), destino, ruta, precio y el boton
 /// para solicitar el taxi.
@@ -322,11 +323,19 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
           ],
         ),
         const SizedBox(height: 10),
-        const ClipRRect(
-          borderRadius: BorderRadius.all(Radius.circular(4)),
-          child: LinearProgressIndicator(minHeight: 3, color: ColoresApp.rojo, backgroundColor: ColoresApp.rojoSuave),
-        ),
-        const SizedBox(height: 6),
+        // La barra de progreso indeterminado quedo desactivada: la solicitud no tiene porcentaje,
+        // asi que la barra no representa ningun avance real y suma una segunda señal de "estamos
+        // buscando" junto con el radar del mapa. Se deja el codigo para poder recuperarla:
+        //
+        // const ClipRRect(
+        //   borderRadius: BorderRadius.all(Radius.circular(4)),
+        //   child: LinearProgressIndicator(
+        //     minHeight: 3,
+        //     color: ColoresApp.rojo,
+        //     backgroundColor: ColoresApp.rojoSuave,
+        //   ),
+        // ),
+        // const SizedBox(height: 6),
         Row(
           children: [
             Expanded(
@@ -467,6 +476,7 @@ class PanelViaje extends StatelessWidget {
                   style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w800, letterSpacing: 1),
                 ),
               ),
+            BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombreConductor),
           ],
         ),
         const Divider(height: 26, color: ColoresApp.borde),

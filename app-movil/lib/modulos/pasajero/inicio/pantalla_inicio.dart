@@ -16,6 +16,7 @@ import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
 import '../../../core/formato.dart';
+import '../../../core/chat.dart';
 import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -66,6 +67,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     api: ViajeApi(context.read<ClienteApi>()),
     mapa: _mapa,
     sesion: context.read<Sesion>(),
+    chat: context.read<ChatEstado>(),
   );
 
   int _seccion = _seccionInicio;
@@ -705,21 +707,27 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                           ),
                         ),
                 ],
-                capaAnimada: ListenableBuilder(
-                  listenable: _posiciones,
-                  builder: (context, _) => MarkerLayer(
-                    rotate: true,
-                    markers: [
-                      for (final conductor in _conductores)
-                        Marker(
-                          point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
-                          width: _MarcadorMototaxi.ancho,
-                          height: _MarcadorMototaxi.alto,
-                          child: const _MarcadorMototaxi(),
-                        ),
-                    ],
+                capasAnimadas: [
+                  ListenableBuilder(
+                    listenable: _posiciones,
+                    builder: (context, _) => MarkerLayer(
+                      rotate: true,
+                      markers: [
+                        for (final conductor in _conductores)
+                          Marker(
+                            point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
+                            width: _MarcadorMototaxi.ancho,
+                            height: _MarcadorMototaxi.alto,
+                            child: const _MarcadorMototaxi(),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
+                  // Radar de busqueda desde el punto de partida: solo mientras la solicitud esta
+                  // abierta. Va debajo de los pines, asi que no tapa nada.
+                  if (_flujo.etapa == EtapaPasajero.buscando && _mapa.a != null)
+                    RadarBusqueda(punto: _mapa.a!.posicion),
+                ],
               ),
             ),
             Positioned(
@@ -736,7 +744,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                     onPerfil: () => _irA(_seccionMas),
                   ),
                   const SizedBox(height: 8),
-                  TarjetaSeguimientoConductor(flujo: _flujo, onTocar: () => setState(() => _panelAbierto = true)),
+                  TarjetaSeguimientoConductor(flujo: _flujo),
                   if (eligiendo)
                     // Justo debajo de la cabecera de bienvenida, separado solo un poco.
                     Padding(
@@ -751,10 +759,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         ),
                       ),
                     ),
+                  // La brujula va la ultima: cae debajo de lo que haya arriba y no se monta sobre
+                  // nada. Se esconde mientras el selector de la derecha este visible, porque ahi
+                  // no queda lugar libre en esa esquina.
+                  if (!(eligiendo && panel == null)) BrujulaArriba(controlador: _mapa),
                 ],
               ),
             ),
-            // Con el panel abierto (ruta, busqueda) el selector se esconde para no tapar los botones.
+            // Con el panel abierto (ruta, busqueda) el selector se esconde para no montarse sobre
+            // el panel ni sobre los botones del mapa.
             if (eligiendo && panel == null)
               Positioned(
                 right: 14,
@@ -780,31 +793,30 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                   ],
                 ),
               ),
-            if (panel != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: abajo + 34,
-                child: PanelInferior(
-                  flotante: true,
-                  // Los botones del mapa quedan por encima del panel (van despues en el Stack) y el
-                  // panel deja libre su alto, para que no se muevan al cambiar el panel de alto.
-                  reservaInferior: FilaBotonesMapa.alto,
-                  // Pagando por QR el panel crece un poco: debajo del viaje van los QR del conductor.
-                  altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
-                      ? 0.5
-                      : 0.42,
-                  child: panel,
-                ),
-              ),
-            // Los botones van despues del panel en el Stack para quedar por encima: anclados al
-            // borde inferior (34 px por encima del boton central, que sobresale ~30 px de la
-            // barra) no se mueven cuando el panel de abajo cambia de alto.
+            // Botones del mapa y panel en la misma Column: los botones quedan justo encima de la
+            // tarjeta (nunca montados sobre ella) y se mueven con el panel si cambia de alto.
+            // Anclados 34 px por encima del boton central, que sobresale ~30 px de la barra.
             Positioned(
               left: 0,
               right: 0,
               bottom: abajo + 34,
-              child: FilaBotonesMapa(controlador: _mapa),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilaBotonesMapa(controlador: _mapa),
+                  if (panel != null)
+                    PanelInferior(
+                      flotante: true,
+                      // Pagando por QR el panel crece un poco: debajo del viaje van los QR del
+                      // conductor. El tope es 0.44 y no mas para que el botonero de arriba no
+                      // llegue a la tarjeta del conductor en pantallas chicas.
+                      altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
+                          ? 0.44
+                          : 0.42,
+                      child: panel,
+                    ),
+                ],
+              ),
             ),
           ],
         );
@@ -959,9 +971,8 @@ class _MarcadorMototaxi extends StatelessWidget {
 /// durante el viaje (CONFIRMADO -> EN_CURSO) como una notificacion emergente sobre el mapa.
 class TarjetaSeguimientoConductor extends StatelessWidget {
   final FlujoPasajero flujo;
-  final VoidCallback onTocar;
 
-  const TarjetaSeguimientoConductor({super.key, required this.flujo, required this.onTocar});
+  const TarjetaSeguimientoConductor({super.key, required this.flujo});
 
   @override
   Widget build(BuildContext context) {
@@ -980,7 +991,13 @@ class TarjetaSeguimientoConductor extends StatelessWidget {
         final esEnCurso = situacion == SituacionViaje.enCurso;
         if (!esRecogida && !esEnCurso) return const SizedBox.shrink();
 
-        final (icono, _, color) = estadoViajePasajero(situacion);
+        final (icono, _, color) = switch (situacion) {
+          SituacionViaje.confirmado => (FontAwesomeIcons.circleCheck, 'Tu conductor aceptó el viaje', ColoresApp.exito),
+          SituacionViaje.enCamino => (FontAwesomeIcons.carSide, 'Tu conductor va en camino', ColoresApp.ruta),
+          SituacionViaje.llego => (FontAwesomeIcons.locationDot, 'Tu conductor llegó', ColoresApp.rojo),
+          SituacionViaje.enCurso => (FontAwesomeIcons.route, 'En viaje a tu destino', ColoresApp.azul),
+          _ => (FontAwesomeIcons.circleInfo, SituacionViaje.nombre(situacion), ColoresApp.textoSuave),
+        };
         final titulo = esRecogida
             ? 'Llega en ~${ruta.duracionTexto}'
             : 'Llegas en ~${ruta.duracionTexto}';
@@ -997,49 +1014,45 @@ class TarjetaSeguimientoConductor extends StatelessWidget {
               elevation: 5,
               shadowColor: const Color(0x330A2342),
               borderRadius: BorderRadius.circular(14),
-              child: InkWell(
-                onTap: onTocar,
-                borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 34,
-                        height: 34,
-                        decoration: BoxDecoration(
-                          color: color.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Center(child: FaIcon(icono, color: color, size: 15)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              titulo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: ColoresApp.azul,
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                              ),
+                      child: Center(child: FaIcon(icono, color: color, size: 15)),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            titulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: ColoresApp.azul,
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              subtitulo,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitulo,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                          ),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
