@@ -8,6 +8,7 @@ import 'package:latlong2/latlong.dart';
 import '../core/config.dart';
 import '../core/tema.dart';
 import '../widgets/notificaciones.dart';
+import '../widgets/paneles.dart';
 import 'controlador_mapa.dart';
 import 'pin_mapa.dart';
 
@@ -247,6 +248,35 @@ class BotonBrujula extends StatelessWidget {
   }
 }
 
+/// Brujula en la esquina superior del mapa: aparece solo con el mapa girado y, al tocarla, vuelve
+/// a poner el norte arriba.
+///
+/// Va en el flujo de arriba de la pantalla (la columna de la cabecera y las tarjetas), no en un
+/// Positioned: asi el contenido de arriba la empuja hacia abajo y nunca se monta sobre nada.
+class BrujulaArriba extends StatelessWidget {
+  final ControladorMapa controlador;
+
+  const BrujulaArriba({super.key, required this.controlador});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: controlador.rotacion,
+      builder: (context, grados, _) {
+        final girado = grados > 0.5 && grados < 359.5;
+        if (!girado) return const SizedBox.shrink();
+        return Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 16, top: 8),
+            child: BotonBrujula(controlador: controlador),
+          ),
+        );
+      },
+    );
+  }
+}
+
 /// Aguja de brujula: mitad roja (norte) y mitad gris.
 class _Aguja extends StatelessWidget {
   const _Aguja();
@@ -398,31 +428,40 @@ class _OpcionCapa extends StatelessWidget {
   }
 }
 
-/// Fila de botones redondos sobre el mapa: capas a la izquierda, brujula y ubicacion a la derecha.
+/// Fila de botones redondos sobre el mapa (capas y ubicacion), alineada a la derecha.
 ///
-/// Va anclada al borde inferior de la pantalla, en su propio Positioned y por encima del panel, para
-/// que no se mueva cuando el panel de abajo cambia de alto; el panel deja libre [alto] con
-/// PanelInferior.reservaInferior.
+/// Vive en la misma Column que el panel inferior (pantalla_inicio): queda justo encima de la
+/// tarjeta, nunca montada sobre ella, y se mueve con el panel cuando cambia de alto. La brujula
+/// no va aqui: esta en [BrujulaArriba], en la esquina superior del mapa.
 class FilaBotonesMapa extends StatelessWidget {
   final ControladorMapa controlador;
-
-  /// Alto de la fila: boton de 50 + separacion de 12.
-  static const double alto = 62;
 
   const FilaBotonesMapa({super.key, required this.controlador});
 
   @override
   Widget build(BuildContext context) {
+    // Mismo ancho y margen que el panel, para que los botones queden sobre su borde derecho.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-      child: Row(
-        children: [
-          BotonCapas(controlador: controlador),
-          const Spacer(),
-          BotonBrujula(controlador: controlador),
-          const SizedBox(width: 10),
-          BotonUbicacion(controlador: controlador),
-        ],
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: PanelInferior.anchoMaximo),
+          child: SizedBox(
+            width: double.infinity,
+            child: Padding(
+              // El padding de abajo es la separacion con la tarjeta del panel.
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  BotonCapas(controlador: controlador),
+                  const SizedBox(width: 10),
+                  BotonUbicacion(controlador: controlador),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

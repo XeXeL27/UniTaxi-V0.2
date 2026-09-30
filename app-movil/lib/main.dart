@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import 'comun/completar_correo.dart';
 import 'core/api_excepcion.dart';
+import 'core/chat.dart';
 import 'core/cliente_api.dart';
 import 'core/config.dart';
 import 'core/navegador.dart';
@@ -21,12 +22,14 @@ Future<void> main() async {
   SystemChrome.setSystemUIOverlayStyle(BarraSistema.sobreAzul);
   final sesion = Sesion();
   await sesion.cargar();
+  final api = ClienteApi(sesion);
   final vuelta = await _vueltaDeGoogle(sesion);
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: sesion),
-        Provider.value(value: ClienteApi(sesion)),
+        Provider.value(value: api),
+        ChangeNotifierProvider(create: (_) => ChatEstado(sesion: sesion, api: api)),
       ],
       child: TaxiUap(vuelta: vuelta),
     ),

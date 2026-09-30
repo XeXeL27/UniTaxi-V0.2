@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/api_excepcion.dart';
+import '../../../core/chat.dart';
 import '../../../core/notificador.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -23,6 +24,9 @@ class FlujoConductor extends ChangeNotifier {
 
   final ConductorApi api;
   final ControladorMapa mapa;
+
+  /// Se usa para cerrar el chat cuando el viaje termina.
+  final ChatEstado? chat;
 
   EtapaConductor etapa = EtapaConductor.cargando;
   PrecioViaje? precio;
@@ -79,7 +83,7 @@ class FlujoConductor extends ChangeNotifier {
   bool _finalizandoSolo = false;
   bool _cerrado = false;
 
-  FlujoConductor({required this.api, required this.mapa}) {
+  FlujoConductor({required this.api, required this.mapa, this.chat}) {
     mapa.alMoverseGps = _alMoverseGps;
   }
 
@@ -257,6 +261,7 @@ class FlujoConductor extends ChangeNotifier {
     final nuevo = await api.viaje(actual.id);
     if (_cerrado || etapa != EtapaConductor.enViaje) return;
     if (nuevo.situacion == SituacionViaje.cancelado) {
+      chat?.cerrar();
       aviso = nuevo.canceladoPor == 'PASAJERO' ? 'El pasajero canceló el viaje.' : 'El viaje fue cancelado.';
       _entrarLista();
       return;
@@ -322,6 +327,7 @@ class FlujoConductor extends ChangeNotifier {
 
   void _aplicar(Viaje nuevo) {
     if (nuevo.situacion == SituacionViaje.completado) {
+      chat?.cerrar();
       finalizado = nuevo;
       _entrarLista();
     } else {

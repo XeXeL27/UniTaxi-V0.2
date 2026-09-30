@@ -26,7 +26,7 @@ import lombok.extern.slf4j.Slf4j;
  * Corre despues de AdminInitializer (@Order), porque necesita los roles que este siembra.
  */
 @Component
-@Profile("xexel")
+@Profile("appu")
 @Order(2)
 @RequiredArgsConstructor
 @Slf4j

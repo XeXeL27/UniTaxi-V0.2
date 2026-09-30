@@ -394,15 +394,32 @@ public class ViajeService {
                 .toList();
     }
 
-    public ViajeResponse obtener(Long idViaje) {
-        Long idUsuario = UsuarioActual.idUsuario();
+    /**
+     * Viaje validado para el usuario autenticado: solo el pasajero o el conductor del viaje lo
+     * obtiene, y si no es parte se responde como no encontrado para no revelar que existe.
+     */
+    public Viaje obtenerViajeDelUsuario(Long idViaje) {
+        return obtenerViajeParaUsuario(idViaje, UsuarioActual.idUsuario());
+    }
+
+    /**
+     * Mismo control de participacion, pero con el id de usuario pasado por parametros.
+     *
+     * Lo usan los caminos que corren sin SecurityContext, como el handler de WebSocket del chat,
+     * donde el usuario viene del frame CONNECT y no del hilo de la peticion HTTP.
+     */
+    public Viaje obtenerViajeParaUsuario(Long idViaje, Long idUsuario) {
         Viaje viaje = obtenerViaje(idViaje);
         boolean esParte = viaje.getPasajero().getUsuario().getId().equals(idUsuario)
                 || viaje.getConductor().getUsuario().getId().equals(idUsuario);
         if (!esParte) {
             throw RecursoNoEncontradoException.de("Viaje", idViaje);
         }
-        return aRespuesta(viaje);
+        return viaje;
+    }
+
+    public ViajeResponse obtener(Long idViaje) {
+        return aRespuesta(obtenerViajeDelUsuario(idViaje));
     }
 
     /**

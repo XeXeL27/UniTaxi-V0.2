@@ -16,6 +16,7 @@ import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
 import '../../../core/formato.dart';
+import '../../../core/chat.dart';
 import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -64,6 +65,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     api: ViajeApi(context.read<ClienteApi>()),
     mapa: _mapa,
     sesion: context.read<Sesion>(),
+    chat: context.read<ChatEstado>(),
   );
 
   int _seccion = _seccionInicio;
@@ -688,10 +690,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         ),
                       ),
                     ),
+                  // La brujula va la ultima: cae debajo de lo que haya arriba y no se monta sobre
+                  // nada. Se esconde mientras el selector de la derecha este visible, porque ahi
+                  // no queda lugar libre en esa esquina.
+                  if (!(eligiendo && panel == null)) BrujulaArriba(controlador: _mapa),
                 ],
               ),
             ),
-            // Con el panel abierto (ruta, busqueda) el selector se esconde para no tapar los botones.
+            // Con el panel abierto (ruta, busqueda) el selector se esconde para no montarse sobre
+            // el panel ni sobre los botones del mapa.
             if (eligiendo && panel == null)
               Positioned(
                 right: 14,
@@ -716,31 +723,30 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                   ],
                 ),
               ),
-            if (panel != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: abajo + 34,
-                child: PanelInferior(
-                  flotante: true,
-                  // Los botones del mapa quedan por encima del panel (van despues en el Stack) y el
-                  // panel deja libre su alto, para que no se muevan al cambiar el panel de alto.
-                  reservaInferior: FilaBotonesMapa.alto,
-                  // Pagando por QR el panel crece un poco: debajo del viaje van los QR del conductor.
-                  altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
-                      ? 0.5
-                      : 0.42,
-                  child: panel,
-                ),
-              ),
-            // Los botones van despues del panel en el Stack para quedar por encima: anclados al
-            // borde inferior (34 px por encima del boton central, que sobresale ~30 px de la
-            // barra) no se mueven cuando el panel de abajo cambia de alto.
+            // Botones del mapa y panel en la misma Column: los botones quedan justo encima de la
+            // tarjeta (nunca montados sobre ella) y se mueven con el panel si cambia de alto.
+            // Anclados 34 px por encima del boton central, que sobresale ~30 px de la barra.
             Positioned(
               left: 0,
               right: 0,
               bottom: abajo + 34,
-              child: FilaBotonesMapa(controlador: _mapa),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  FilaBotonesMapa(controlador: _mapa),
+                  if (panel != null)
+                    PanelInferior(
+                      flotante: true,
+                      // Pagando por QR el panel crece un poco: debajo del viaje van los QR del
+                      // conductor. El tope es 0.44 y no mas para que el botonero de arriba no
+                      // llegue a la tarjeta del conductor en pantallas chicas.
+                      altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
+                          ? 0.44
+                          : 0.42,
+                      child: panel,
+                    ),
+                ],
+              ),
             ),
           ],
         );

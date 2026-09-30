@@ -24,6 +24,16 @@ class Notificador {
     visibility: NotificationVisibility.public,
   );
 
+  static const _canalChat = AndroidNotificationDetails(
+    'chat_viaje',
+    'Chat del viaje',
+    channelDescription: 'Mensajes del pasajero o el conductor durante el viaje',
+    importance: Importance.max,
+    priority: Priority.high,
+    category: AndroidNotificationCategory.message,
+    visibility: NotificationVisibility.public,
+  );
+
   /// Prepara el plugin y pide permiso para mostrar notificaciones (Android 13+ y navegador).
   static Future<void> iniciar() => _iniciando ??= _iniciar();
 
@@ -70,6 +80,23 @@ class Notificador {
       );
     } catch (e) {
       debugPrint('No se pudo mostrar la notificacion: $e');
+    }
+  }
+
+  /// Avisa un mensaje de chat con el nombre de quien lo escribio. Solo se llama cuando el chat no
+  /// esta abierto en pantalla: si esta abierto, el mensaje se ve directo en la conversacion.
+  static Future<void> mensajeChat(String nombreEmisor, String contenido) async {
+    await iniciar();
+    if (!_listo) return;
+    try {
+      await _plugin.show(
+        id: 7002,
+        title: nombreEmisor,
+        body: contenido,
+        notificationDetails: const NotificationDetails(android: _canalChat, web: WebNotificationDetails()),
+      );
+    } catch (e) {
+      debugPrint('No se pudo mostrar la notificacion de chat: $e');
     }
   }
 }

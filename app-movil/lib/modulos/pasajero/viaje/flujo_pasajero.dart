@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/chat.dart';
 import '../../../core/receptor_ubicacion.dart';
 import '../../../core/sesion.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -32,6 +33,9 @@ class FlujoPasajero extends ChangeNotifier {
   final ViajeApi api;
   final ControladorMapa mapa;
   final Sesion? sesion;
+
+  /// Se usa para cerrar el chat cuando el viaje termina.
+  final ChatEstado? chat;
 
   EtapaPasajero etapa = EtapaPasajero.cargando;
   PrecioViaje? precio;
@@ -66,7 +70,7 @@ class FlujoPasajero extends ChangeNotifier {
   int _consultaDireccion = 0;
   ReceptorUbicacionConductor? _receptor;
 
-  FlujoPasajero({required this.api, required this.mapa, this.sesion}) {
+  FlujoPasajero({required this.api, required this.mapa, this.sesion, this.chat}) {
     mapa.alMoverseGps = _alMoverseGps;
   }
 
@@ -351,11 +355,13 @@ class FlujoPasajero extends ChangeNotifier {
     }
 
     if (nuevo.situacion == SituacionViaje.completado) {
+      chat?.cerrar();
       _detenerSondeo();
       _detenerSeguimientoConductor();
       etapa = EtapaPasajero.calificando;
       unawaited(_marcarOfrecida(nuevo.id));
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
+      chat?.cerrar();
       if (nuevo.canceladoPor == 'CONDUCTOR') {
         // El backend vuelve a publicar el pedido para otro conductor: se sigue buscando.
         final republicada = (await api.misSolicitudes()).where((s) => s.activa).firstOrNull;
