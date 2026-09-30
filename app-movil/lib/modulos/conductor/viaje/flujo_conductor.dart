@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/api_excepcion.dart';
+import '../../../core/notificador.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/controlador_mapa.dart';
 import 'conductor_api.dart';
@@ -48,11 +49,16 @@ class FlujoConductor extends ChangeNotifier {
   /// Conectado para recibir solicitudes (boton del centro). Desconectado no se consulta la lista.
   bool enLinea = true;
 
-  /// La administracion todavia no aprobo al conductor (regla 1): no se consulta la lista.
+  /// La administracion todavia no aprobo al conductor (regla 1) o le faltan documentos
+  /// obligatorios: no se consulta la lista ni se envia el GPS.
   bool enRevision = false;
 
   /// situacion_aprobacion del conductor (PENDIENTE, RECHAZADO, SUSPENDIDO...) mientras [enRevision].
   String? situacionAprobacion;
+
+  /// Documentos obligatorios que no envio (CI, LICENCIA); mientras haya alguno la app queda
+  /// bloqueada salvo Mas, donde los sube.
+  List<String> documentosFaltantes = const [];
 
   /// Panel "Solicitudes de viaje" desplegado. Empieza cerrado para no tapar el mapa.
   bool listaAbierta = false;
@@ -62,6 +68,11 @@ class FlujoConductor extends ChangeNotifier {
 
   /// Solicitudes que el conductor ya vio con la lista desplegada.
   final Set<int> _vistas = {};
+
+  /// Solicitudes que ya estaban en la consulta anterior: las que no esten aqui son nuevas y se
+  /// avisan con una notificacion del telefono. null hasta la primera consulta al conectarse (lo que
+  /// ya habia se ve en la lista, no se notifica).
+  Set<int>? _conocidas;
 
   Timer? _sondeo;
   bool _consultando = false;
@@ -98,19 +109,22 @@ class FlujoConductor extends ChangeNotifier {
     final gps = mapa.miUbicacion;
     if (gps != null) mapa.centrarEn(gps, zoom: 15);
     if (enLinea && !enRevision) {
+      unawaited(Notificador.iniciar());
       _iniciarSondeo(_consultarLista, _intervaloLista, inmediato: true);
     } else {
       _detenerSondeo();
+      _conocidas = null;
       solicitudes = const [];
     }
     _avisar();
   }
 
-  /// La administracion aprobo la cuenta: empieza a recibir solicitudes.
+  /// La administracion aprobo la cuenta y tiene sus documentos: empieza a recibir solicitudes.
   void aprobado() {
     if (!enRevision) return;
     enRevision = false;
     situacionAprobacion = null;
+    documentosFaltantes = const [];
     if (etapa == EtapaConductor.lista) _entrarLista();
     _avisar();
   }
@@ -136,6 +150,7 @@ class FlujoConductor extends ChangeNotifier {
       solicitudes = const [];
     }
     listaCargada = true;
+    _notificarNuevas();
     // Solo cuentan las disponibles: las que otro tomo o se cancelaron salen del contador.
     _vistas.retainAll({for (final s in solicitudes) s.id});
     _marcarVistas();
@@ -146,6 +161,15 @@ class FlujoConductor extends ChangeNotifier {
       return;
     }
     _avisar();
+  }
+
+  void _notificarNuevas() {
+    final conocidas = _conocidas;
+    final ids = {for (final s in solicitudes) s.id};
+    _conocidas = ids;
+    if (conocidas == null || etapa == EtapaConductor.enViaje) return;
+    final nuevas = solicitudes.where((s) => !conocidas.contains(s.id)).toList();
+    if (nuevas.isNotEmpty) unawaited(Notificador.solicitudesNuevas(nuevas));
   }
 
   Future<void> refrescarLista() => _consultarLista();
@@ -211,6 +235,7 @@ class FlujoConductor extends ChangeNotifier {
     // Al retomar el viaje (app recien abierta) tambien se pregunta por un pedido de cambio de pago.
     if (esOtro && nuevo.metodoPagoPedido != null) pedidoPago = nuevo;
     viaje = nuevo;
+    _conocidas = null;
     etapa = EtapaConductor.enViaje;
     seleccionada = null;
     _finalizandoSolo = false;

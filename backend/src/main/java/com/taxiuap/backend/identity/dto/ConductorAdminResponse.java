@@ -22,5 +22,7 @@ public record ConductorAdminResponse(
         BigDecimal calificacionPromedio,
         Integer totalCalificaciones,
         LocalDateTime fechaAprobacion,
-        long cantidadDocumentos) {
+        long cantidadDocumentos,
+        /** Cuenta del conductor (para eliminarla desde el panel). */
+        Long idUsuario) {
 }

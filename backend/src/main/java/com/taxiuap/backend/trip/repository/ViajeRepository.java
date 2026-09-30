@@ -1,13 +1,17 @@
 package com.taxiuap.backend.trip.repository;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 
@@ -37,5 +41,39 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
     long contarConDescuentoEnRango(
             @Param("idEstudiante") Long idEstudiante,
             @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta);
+
+    // ------------------------------------------------ historial de la app (viajes completados)
+
+    @Query("""
+            select v from Viaje v where v.pasajero.id = :id and v.situacionViaje = :situacion
+            and v.estadoViaje = :estado and v.fechaFin >= :desde and v.fechaFin < :hasta
+            order by v.fechaFin desc, v.id desc""")
+    Page<Viaje> historialDePasajero(@Param("id") Long idPasajero, @Param("situacion") SituacionViaje situacion,
+            @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta, Pageable pagina);
+
+    @Query("""
+            select v from Viaje v where v.conductor.id = :id and v.situacionViaje = :situacion
+            and v.estadoViaje = :estado and v.fechaFin >= :desde and v.fechaFin < :hasta
+            order by v.fechaFin desc, v.id desc""")
+    Page<Viaje> historialDeConductor(@Param("id") Long idConductor, @Param("situacion") SituacionViaje situacion,
+            @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta, Pageable pagina);
+
+    @Query("""
+            select coalesce(sum(v.precioFinal), 0) from Viaje v where v.pasajero.id = :id
+            and v.situacionViaje = :situacion and v.estadoViaje = :estado
+            and v.fechaFin >= :desde and v.fechaFin < :hasta""")
+    BigDecimal montoHistorialDePasajero(@Param("id") Long idPasajero, @Param("situacion") SituacionViaje situacion,
+            @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta);
+
+    @Query("""
+            select coalesce(sum(v.precioFinal), 0) from Viaje v where v.conductor.id = :id
+            and v.situacionViaje = :situacion and v.estadoViaje = :estado
+            and v.fechaFin >= :desde and v.fechaFin < :hasta""")
+    BigDecimal montoHistorialDeConductor(@Param("id") Long idConductor, @Param("situacion") SituacionViaje situacion,
+            @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 }

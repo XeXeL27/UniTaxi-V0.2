@@ -1,7 +1,5 @@
 package com.taxiuap.backend.identity.service;
 
-import java.security.SecureRandom;
-import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -13,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.identity.dto.PerfilGoogle;
+import com.taxiuap.backend.identity.dto.PerfilGoogleResponse;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.RegistroConductorGoogleRequest;
 import com.taxiuap.backend.identity.dto.TokenResponse;
@@ -33,17 +32,16 @@ import lombok.RequiredArgsConstructor;
 /**
  * Ingreso y registro con Google. La persona se reconoce por su correo.
  *
- * Una cuenta creada con Google recibe una contrasena aleatoria que nadie conoce, asi que entra
- * siempre con Google. Si la persona ya tenia otra cuenta de la app, la nueva
- * reutiliza su nombre de usuario y su contrasena (regla 12: pasajero y conductor comparten
- * credenciales).
+ * Una cuenta creada con Google recibe una contrasena legible generada por el sistema: el pasajero
+ * la recibe por correo al registrarse y el conductor recien cuando el admin lo aprueba
+ * (CredencialesCorreoService). Si la persona ya tenia otra cuenta de la app, la nueva reutiliza su
+ * nombre de usuario y su contrasena (regla 12: pasajero y conductor comparten credenciales).
  */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class RegistroGoogleService {
 
-    private static final SecureRandom AZAR = new SecureRandom();
     private static final List<RolSistema> ROLES_APP = List.of(RolSistema.PASAJERO, RolSistema.CONDUCTOR);
 
     private final PersonaRepository personaRepository;
@@ -54,6 +52,7 @@ public class RegistroGoogleService {
     private final QrPagoConductorService qrPagoConductorService;
     private final FotoPerfilService fotoPerfilService;
     private final AutenticacionService autenticacionService;
+    private final CredencialesCorreoService credencialesCorreoService;
 
     /**
      * Boton "Continuar con Google" del login: entra con la cuenta que ya tenga (pasajero antes que
@@ -80,18 +79,44 @@ public class RegistroGoogleService {
         Optional<Usuario> cuenta = cuentaActiva(persona, RolSistema.PASAJERO);
         if (cuenta.isPresent()) return autenticacionService.tokensDe(cuenta.get());
 
-        Usuario usuario = crearCuenta(persona, RolSistema.PASAJERO);
+        CuentaNueva nueva = crearCuenta(persona, RolSistema.PASAJERO);
+        Usuario usuario = nueva.usuario();
         cuentaUsuarioService.crearPasajero(usuario);
         if (foto != null) fotoPerfilService.guardarImagen(usuario, foto);
+        enviarBienvenida(persona, nueva);
         return autenticacionService.tokensDe(usuario);
     }
 
-    /** Si ya es conductor entra directo; si no, hace falta el formulario (licencia, moto, PDF). */
+    /**
+     * Correo con las credenciales del pasajero. Si reutilizo las de un conductor de Google que
+     * nadie conoce (todavia sin aprobar), se generan unas nuevas para las dos cuentas.
+     */
+    private void enviarBienvenida(Persona persona, CuentaNueva nueva) {
+        Usuario usuario = nueva.usuario();
+        String contrasena = nueva.contrasena();
+        if (contrasena == null && Boolean.TRUE.equals(usuario.getContrasenaGenerada())) {
+            contrasena = CredencialesCorreoService.contrasenaLegible();
+        }
+        if (contrasena != null) {
+            credencialesCorreoService.aplicarEnCuentasDeApp(persona, contrasena, false);
+        }
+        credencialesCorreoService.bienvenidaPasajero(usuario, contrasena, "la misma de tu cuenta de conductor");
+    }
+
+    /**
+     * Si ya es conductor entra directo; si no, hace falta el formulario (licencia, moto, PDF). Si su
+     * cuenta de conductor todavia no esta aprobada y tambien es pasajero, entra como pasajero.
+     */
     @Transactional(readOnly = true)
     public Optional<TokenResponse> conductorExistente(PerfilGoogle perfil) {
-        return personaActiva(perfil)
-                .flatMap(persona -> cuentaActiva(persona, RolSistema.CONDUCTOR))
-                .map(autenticacionService::tokensDe);
+        return personaActiva(perfil).flatMap(persona -> cuentaActiva(persona, RolSistema.CONDUCTOR)
+                .map(conductor -> autenticacionService.tokensDe(entradaDe(persona, conductor))));
+    }
+
+    /** Cuenta con que entra quien acaba de ser (o ya era) conductor: pasajero mientras no lo aprueben. */
+    private Usuario entradaDe(Persona persona, Usuario conductor) {
+        if (autenticacionService.conductorHabilitado(conductor)) return conductor;
+        return cuentaActiva(persona, RolSistema.PASAJERO).orElse(conductor);
     }
 
     /**
@@ -100,7 +125,7 @@ public class RegistroGoogleService {
      */
     public TokenResponse registrarConductor(PerfilGoogle perfil, RegistroConductorGoogleRequest datos,
             Map<String, MultipartFile> archivos) {
-        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
 
         Optional<Persona> existente = personaActiva(perfil);
@@ -116,12 +141,15 @@ public class RegistroGoogleService {
                     perfil.nombres(), perfil.apellidos(), datos.fechaNacimiento(), perfil.correo(), datos.telefono()));
         }
 
-        Usuario usuario = crearCuenta(persona, RolSistema.CONDUCTOR);
+        CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);
+        Usuario usuario = nueva.usuario();
+        // La contrasena nueva no se entrega ahora: llega por correo cuando el admin lo aprueba.
+        if (nueva.contrasena() != null) usuario.setContrasenaGenerada(true);
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
-        return autenticacionService.tokensDe(usuario);
+        return autenticacionService.tokensDe(entradaDe(persona, usuario));
     }
 
     // ------------------------------------------------------------------ apoyo
@@ -146,26 +174,35 @@ public class RegistroGoogleService {
                 .toList();
     }
 
+    /** Cuenta activa de ese rol. Si esta suspendida no se entra ni se crea otra: se avisa. */
     private Optional<Usuario> cuentaActiva(Persona persona, RolSistema rol) {
+        boolean suspendida = usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .anyMatch(u -> u.getEstadoUsuario() == EstadoRegistro.S && rol.getCodigo().equals(u.getRol().getCodigo()));
+        if (suspendida) {
+            throw new NegocioException(AutenticacionService.MENSAJE_CUENTA_SUSPENDIDA);
+        }
         return cuentasActivas(persona).stream().filter(u -> rol.getCodigo().equals(u.getRol().getCodigo())).findFirst();
     }
 
+    /** Cuenta recien creada; contrasena solo si el sistema la acaba de generar (si no, null). */
+    private record CuentaNueva(Usuario usuario, String contrasena) {
+    }
+
     /** Reutiliza las credenciales de la otra cuenta de la app; si no hay, genera unas nuevas. */
-    private Usuario crearCuenta(Persona persona, RolSistema rol) {
+    private CuentaNueva crearCuenta(Persona persona, RolSistema rol) {
         Optional<Usuario> otra = cuentasActivas(persona).stream()
                 .filter(u -> ROLES_APP.stream().anyMatch(r -> r.getCodigo().equals(u.getRol().getCodigo())))
                 .findFirst();
-        String nombreUsuario = otra.map(Usuario::getNombreUsuario).orElseGet(() -> nombreUsuarioLibre(persona.getCorreo()));
-        String hash = otra.map(Usuario::getPasswordHash)
-                .orElseGet(() -> cuentaUsuarioService.codificar(contrasenaAleatoria()));
-        return cuentaUsuarioService.crearUsuario(persona, rol, nombreUsuario, hash);
-    }
-
-    /** 48 caracteres al azar (288 bits): nadie la conoce y entra en el limite de 72 bytes de BCrypt. */
-    private static String contrasenaAleatoria() {
-        byte[] bytes = new byte[36];
-        AZAR.nextBytes(bytes);
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+        if (otra.isPresent()) {
+            Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol, otra.get().getNombreUsuario(),
+                    otra.get().getPasswordHash());
+            usuario.setContrasenaGenerada(otra.get().getContrasenaGenerada());
+            return new CuentaNueva(usuario, null);
+        }
+        String contrasena = CredencialesCorreoService.contrasenaLegible();
+        Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol, nombreUsuarioLibre(persona.getCorreo()),
+                cuentaUsuarioService.codificar(contrasena));
+        return new CuentaNueva(usuario, contrasena);
     }
 
     /**
@@ -184,14 +221,31 @@ public class RegistroGoogleService {
     }
 
     /** La persona ya existia (por ejemplo, pasajero de Google sin CI): se completa lo que falte. */
+    /**
+     * Completa a la persona (por ejemplo, un pasajero que entro solo con Google) con lo que pide el
+     * registro de conductor. El formulario llega precargado con lo que ya se sabia, asi que manda lo
+     * que la persona confirmo.
+     */
     private void completarDatos(Persona persona, RegistroConductorGoogleRequest datos) {
         gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(
-                persona.getCi() != null ? persona.getCi() : datos.ci(),
-                persona.getCi() != null ? persona.getComplementoCi() : datos.complementoCi(),
+                datos.ci(),
+                datos.complementoCi(),
                 persona.getNombres(),
                 persona.getApellidos(),
-                persona.getFechaNacimiento() != null ? persona.getFechaNacimiento() : datos.fechaNacimiento(),
+                datos.fechaNacimiento(),
                 persona.getCorreo(),
-                persona.getTelefono() != null ? persona.getTelefono() : datos.telefono()));
+                datos.telefono()));
+    }
+
+    /** Nombre y correo de Google mas lo que ya se sabia de la persona, para el formulario de conductor. */
+    @Transactional(readOnly = true)
+    public PerfilGoogleResponse perfilParaRegistro(PerfilGoogle perfil) {
+        Optional<Persona> persona = personaRepository.findByCorreo(perfil.correo())
+                .filter(p -> p.getEstadoPersona() == EstadoRegistro.A);
+        return new PerfilGoogleResponse(perfil.correo(), perfil.nombres(), perfil.apellidos(),
+                persona.map(Persona::getCi).orElse(null),
+                persona.map(Persona::getComplementoCi).orElse(null),
+                persona.map(Persona::getTelefono).orElse(null),
+                persona.map(Persona::getFechaNacimiento).orElse(null));
     }
 }

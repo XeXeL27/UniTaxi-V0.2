@@ -13,9 +13,19 @@ class PanelInferior extends StatelessWidget {
   /// Alto maximo como fraccion de la pantalla; el contenido se desplaza si no entra.
   final double altoMaximo;
   final bool flotante;
+
+  /// Espacio que se deja vacio abajo (px) para los botones del mapa, que se dibujan por encima del
+  /// panel. Con cero el contenido puede llegar hasta el borde inferior.
+  final double reservaInferior;
   static const double anchoMaximo = 560;
 
-  const PanelInferior({super.key, required this.child, this.altoMaximo = 0.62, this.flotante = false});
+  const PanelInferior({
+    super.key,
+    required this.child,
+    this.altoMaximo = 0.62,
+    this.flotante = false,
+    this.reservaInferior = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -30,12 +40,19 @@ class PanelInferior extends StatelessWidget {
         decoration: BoxDecoration(
           color: ColoresApp.blanco,
           borderRadius: flotante ? BorderRadius.circular(22) : const BorderRadius.vertical(top: Radius.circular(20)),
-          border: flotante ? Border.all(color: ColoresApp.borde) : const Border(top: BorderSide(color: ColoresApp.borde)),
+          border: flotante
+              ? Border.all(color: ColoresApp.borde)
+              : const Border(top: BorderSide(color: ColoresApp.borde)),
           boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 16, offset: Offset(0, -4))],
         ),
         clipBehavior: flotante ? Clip.antiAlias : Clip.none,
         child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(20, 18, 20, flotante ? 18 : 18 + medidas.padding.bottom),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            18,
+            20,
+            18 + reservaInferior + (flotante ? 0 : medidas.padding.bottom),
+          ),
           child: AnimatedSize(
             duration: const Duration(milliseconds: 200),
             alignment: Alignment.topCenter,
@@ -144,8 +161,7 @@ class RecuadroPrecio extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(etiqueta, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
-                if (detalle != null)
-                  Text(detalle!, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12)),
+                if (detalle != null) Text(detalle!, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12)),
               ],
             ),
           ),
@@ -173,7 +189,10 @@ class DatoRuta extends StatelessWidget {
       children: [
         FaIcon(icono, color: ColoresApp.ruta, size: 14),
         const SizedBox(width: 6),
-        Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14, fontWeight: FontWeight.w600)),
+        Text(
+          texto,
+          style: const TextStyle(color: ColoresApp.texto, fontSize: 14, fontWeight: FontWeight.w600),
+        ),
       ],
     );
   }
@@ -228,6 +247,88 @@ class AvatarIniciales extends StatelessWidget {
         iniciales,
         style: TextStyle(color: ColoresApp.blanco, fontSize: radio * 0.7, fontWeight: FontWeight.w700),
       ),
+    );
+  }
+}
+
+/// Panel que se puede bajar para ver el mapa completo con la ruta (solicitud y viaje del pasajero,
+/// detalle de solicitud y viaje del conductor). Cerrado queda solo una barra con el resumen;
+/// tocarla, la flecha o deslizar hacia arriba lo vuelve a abrir con el detalle.
+class PanelPlegable extends StatelessWidget {
+  final bool abierto;
+  final VoidCallback onAlternar;
+  final FaIconData icono;
+  final Color color;
+
+  /// Lo que se ve con el panel cerrado (por ejemplo "Buscando conductor...").
+  final String resumen;
+
+  /// Texto de la barra con el panel abierto.
+  final String tituloAbierto;
+  final Widget child;
+
+  /// Lo que sigue visible con el panel cerrado debajo del resumen (por ejemplo el boton del
+  /// siguiente paso del conductor), para no tener que abrirlo.
+  final Widget? accionPlegado;
+
+  const PanelPlegable({
+    super.key,
+    required this.abierto,
+    required this.onAlternar,
+    required this.icono,
+    required this.color,
+    required this.resumen,
+    required this.tituloAbierto,
+    required this.child,
+    this.accionPlegado,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final barra = Semantics(
+      button: true,
+      label: abierto ? 'Esconder detalle y ver el mapa' : 'Ver detalle',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onAlternar,
+        onVerticalDragEnd: (d) {
+          final v = d.primaryVelocity ?? 0;
+          if ((abierto && v > 150) || (!abierto && v < -150)) onAlternar();
+        },
+        child: Row(
+          children: [
+            if (!abierto) ...[FaIcon(icono, color: color, size: 16), const SizedBox(width: 10)],
+            Expanded(
+              child: Text(
+                abierto ? tituloAbierto : resumen,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: abierto
+                    ? const TextStyle(color: ColoresApp.textoSuave, fontSize: 13, fontWeight: FontWeight.w600)
+                    : TextStyle(color: color, fontSize: 15.5, fontWeight: FontWeight.w700),
+              ),
+            ),
+            IconButton(
+              onPressed: onAlternar,
+              tooltip: abierto ? 'Ver el mapa completo' : 'Ver detalle',
+              style: IconButton.styleFrom(backgroundColor: ColoresApp.azulSuave),
+              icon: AnimatedRotation(
+                turns: abierto ? 0.5 : 0,
+                duration: const Duration(milliseconds: 200),
+                child: const FaIcon(FontAwesomeIcons.chevronUp, color: ColoresApp.azul, size: 15),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        barra,
+        if (abierto) ...[const SizedBox(height: 8), child],
+        if (!abierto && accionPlegado != null) ...[const SizedBox(height: 8), accionPlegado!],
+      ],
     );
   }
 }

@@ -4,10 +4,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 import 'package:provider/provider.dart';
 
 import '../../comun/qr_pago.dart';
 import '../../core/api_excepcion.dart';
+import '../../core/cliente_api.dart';
 import '../../core/config.dart';
 import '../../core/formato.dart';
 import '../../core/navegador.dart';
@@ -40,7 +42,20 @@ class PantallaFormularioConductor extends StatefulWidget {
   /// cierra para ir al login.
   final VoidCallback? onCancelar;
 
-  const PantallaFormularioConductor({super.key, this.codigoGoogle, this.onCancelar});
+  /// Abierto como modal (Google en el APK o desde Mas): el boton de arriba es una X que lo cierra.
+  final bool enModal;
+
+  /// Un pasajero con sesion iniciada se registra como conductor desde Mas: nombre, correo, usuario y
+  /// contrasena ya los tiene. Al terminar se cierra devolviendo true; sigue como pasajero.
+  final bool desdePasajero;
+
+  const PantallaFormularioConductor({
+    super.key,
+    this.codigoGoogle,
+    this.onCancelar,
+    this.enModal = false,
+    this.desdePasajero = false,
+  });
 
   @override
   State<PantallaFormularioConductor> createState() => _PantallaFormularioConductorState();
@@ -70,10 +85,13 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
 
   bool get _conGoogle => widget.codigoGoogle != null;
 
+  /// Nombre y correo ya se conocen (Google o cuenta de pasajero): no se piden ni se editan.
+  bool get _datosConocidos => _conGoogle || widget.desdePasajero;
+
   @override
   void initState() {
     super.initState();
-    if (_conGoogle) _cargarGoogle();
+    if (_datosConocidos) _cargarGoogle();
   }
 
   @override
@@ -85,6 +103,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   }
 
   Future<void> _cargarGoogle() async {
+    if (widget.desdePasajero) return _cargarPasajero();
     try {
       final respuesta = await http
           .get(Uri.parse('${Config.apiUrl}/api/auth/google/registro/${widget.codigoGoogle}'))
@@ -93,11 +112,34 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       if (respuesta.statusCode >= 400 || json['ok'] != true) {
         throw ApiExcepcion(json['mensaje'] as String? ?? 'No se pudo leer tu cuenta de Google');
       }
-      if (mounted) setState(() => _google = json['datos'] as Map<String, dynamic>);
+      if (mounted) _precargar(json['datos'] as Map<String, dynamic>);
     } on ApiExcepcion catch (e) {
       if (mounted) setState(() => _errorGoogle = e.mensaje);
     } catch (_) {
       if (mounted) setState(() => _errorGoogle = 'No se pudo conectar con el servidor');
+    }
+  }
+
+  /// Si la persona ya estaba registrada (por ejemplo como pasajero) se precarga lo que se sabia.
+  void _precargar(Map<String, dynamic> datos) {
+    for (final campo in ['ci', 'complementoCi', 'telefono']) {
+      final valor = datos[campo] as String?;
+      if (valor != null && valor.isNotEmpty) _c[campo]!.text = valor;
+    }
+    final fecha = datos['fechaNacimiento'] as String?;
+    setState(() {
+      _google = datos;
+      if (fecha != null) _fechaNacimiento = DateTime.tryParse(fecha);
+    });
+  }
+
+  /// Datos de la cuenta de pasajero para precargar el formulario.
+  Future<void> _cargarPasajero() async {
+    try {
+      final datos = await context.read<ClienteApi>().get('/api/pasajero/registro-conductor') as Map<String, dynamic>;
+      if (mounted) _precargar(datos);
+    } on ApiExcepcion catch (e) {
+      if (mounted) setState(() => _errorGoogle = e.mensaje);
     }
   }
 
@@ -141,10 +183,22 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   Future<void> _enviar() async {
     FocusScope.of(context).unfocus();
     final valido = _clave.currentState?.validate() ?? false;
-    final faltan = _documentos.where((d) => d.obligatorio && !_pdf.containsKey(d.tipo)).map((d) => d.nombre).toList();
-    if (!valido || faltan.isNotEmpty) {
-      setState(() => _error = faltan.isEmpty ? 'Revisa los campos marcados en rojo.' : 'Falta el PDF de: ${faltan.join(', ')}.');
+    if (!valido || _fechaNacimiento == null) {
+      setState(() => _error = !valido ? 'Revisa los campos marcados en rojo.' : 'Elige tu fecha de nacimiento.');
       return;
+    }
+    // Se puede registrar sin los PDF obligatorios, pero la app queda bloqueada hasta subirlos.
+    final faltan = _documentos.where((d) => d.obligatorio && !_pdf.containsKey(d.tipo)).map((d) => d.nombre).toList();
+    if (faltan.isNotEmpty) {
+      final seguir = await confirmarAccion(
+        context,
+        titulo: '¿Registrarte sin tus documentos?',
+        mensaje: 'Falta el PDF de: ${faltan.join(' y ')}. Tu cuenta de conductor quedará bloqueada hasta que '
+            'los subas desde Más > Mis documentos.',
+        textoConfirmar: 'Sí, registrarme',
+        textoCancelar: 'Subirlos ahora',
+      );
+      if (!seguir || !mounted) return;
     }
     setState(() {
       _enviando = true;
@@ -170,7 +224,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       'telefono': _texto('telefono'),
       'conductor': conductor,
       if (_conGoogle) 'codigo': widget.codigoGoogle,
-      if (!_conGoogle) ...{
+      if (!_datosConocidos) ...{
         'nombres': _texto('nombres'),
         'apellidos': _texto('apellidos'),
         'correo': _texto('correo'),
@@ -178,6 +232,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         'password': _c['password']!.text,
       },
     };
+    if (widget.desdePasajero) return _enviarDesdePasajero(datos);
     final sesion = context.read<Sesion>();
     try {
       await sesion.registrarConductor(
@@ -186,14 +241,47 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         Map.of(_pdf),
         qrs: [for (final qr in _qrs) ArchivoPdf(qr.nombre, qr.bytes)],
       );
-      // Con la sesion iniciada la pantalla principal pasa a ser la del conductor (en revision).
+      // Con la sesion iniciada la pantalla principal pasa a ser la del conductor (en revision), o la
+      // del pasajero si la persona ya lo era: entra como conductor cuando la aprueben.
+      if (!mounted) return;
+      final comoPasajero = sesion.usuario?.rol == Config.rolPasajero;
+      await mostrarExito(
+        context,
+        titulo: '¡Registro enviado!',
+        mensaje: comoPasajero
+            ? 'La administración revisará tus datos y documentos. Mientras tanto sigues como pasajero; '
+                  'cuando te aprueben podrás cambiar a modo conductor desde Más.'
+            : 'La administración revisará tus datos y documentos. En Inicio puedes ver si ya aprobaron tu cuenta.',
+      );
+      if (mounted) Navigator.of(context).popUntil((ruta) => ruta.isFirst);
+    } on ApiExcepcion catch (e) {
+      if (mounted) setState(() => _error = e.mensaje);
+    } finally {
+      if (mounted) setState(() => _enviando = false);
+    }
+  }
+
+  Future<void> _enviarDesdePasajero(Map<String, dynamic> datos) async {
+    try {
+      await context.read<ClienteApi>().enviarFormulario('/api/pasajero/registro-conductor', datos, [
+        for (final e in _pdf.entries)
+          (campo: e.key, bytes: e.value.bytes, nombre: e.value.nombre, tipo: MediaType('application', 'pdf')),
+        for (var i = 0; i < _qrs.length; i++)
+          (
+            campo: 'QR${i + 1}',
+            bytes: _qrs[i].bytes,
+            nombre: _qrs[i].nombre,
+            tipo: _qrs[i].nombre.toLowerCase().endsWith('.png') ? MediaType('image', 'png') : MediaType('image', 'jpeg'),
+          ),
+      ]);
       if (!mounted) return;
       await mostrarExito(
         context,
         titulo: '¡Registro enviado!',
-        mensaje: 'La administración revisará tus datos y documentos. En Inicio puedes ver si ya aprobaron tu cuenta.',
+        mensaje: 'La administración revisará tus datos y documentos. Cuando te aprueben podrás cambiar a modo '
+            'conductor desde Más.',
       );
-      if (mounted) Navigator.of(context).popUntil((ruta) => ruta.isFirst);
+      if (mounted) Navigator.of(context).pop(true);
     } on ApiExcepcion catch (e) {
       if (mounted) setState(() => _error = e.mensaje);
     } finally {
@@ -208,10 +296,14 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       appBar: AppBar(
         backgroundColor: ColoresApp.azul,
         foregroundColor: ColoresApp.blanco,
-        leading: IconButton(tooltip: 'Volver', onPressed: _volver, icon: const Icon(Icons.arrow_back_rounded)),
+        leading: IconButton(
+          tooltip: widget.enModal ? 'Cerrar' : 'Volver',
+          onPressed: _volver,
+          icon: Icon(widget.enModal ? Icons.close_rounded : Icons.arrow_back_rounded),
+        ),
         title: const Text('Registro de conductor', style: TextStyle(fontWeight: FontWeight.w600)),
       ),
-      body: _conGoogle && _google == null ? _cargandoGoogle() : _formulario(),
+      body: _datosConocidos && _google == null ? _cargandoGoogle() : _formulario(),
     );
   }
 
@@ -230,8 +322,10 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             SizedBox(
               width: 280,
               child: BotonPrincipal(
-                texto: 'Elegir otra vez mi cuenta',
-                onPressed: () => Navegador.ir(Sesion.urlGoogle('CONDUCTOR')),
+                texto: _conGoogle && Navegador.puedeUsarGoogle ? 'Elegir otra vez mi cuenta' : 'Volver',
+                onPressed: _conGoogle && Navegador.puedeUsarGoogle
+                    ? () => Navegador.ir(Sesion.urlGoogle('CONDUCTOR'))
+                    : _volver,
               ),
             ),
           ],
@@ -268,12 +362,12 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
                 children: [
-                  if (_conGoogle) _tarjetaGoogle(),
+                  if (_datosConocidos) _tarjetaGoogle(),
                   _Seccion(
                     icono: FontAwesomeIcons.solidUser,
                     titulo: 'Datos personales',
                     children: [
-                      if (!_conGoogle) ...[
+                      if (!_datosConocidos) ...[
                         fila([
                           _campo('nombres', 'Nombres', obligatorio: true),
                           _campo('apellidos', 'Apellidos', obligatorio: true),
@@ -289,14 +383,14 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                         _campo('telefono', 'Teléfono', obligatorio: true, teclado: TextInputType.phone),
                         _campoFecha(),
                       ]),
-                      if (!_conGoogle) ...[
+                      if (!_datosConocidos) ...[
                         const SizedBox(height: 12),
                         _campo('correo', 'Correo electrónico', obligatorio: true, teclado: TextInputType.emailAddress,
                             validar: (v) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v) ? null : 'Correo no válido'),
                       ],
                     ],
                   ),
-                  if (!_conGoogle)
+                  if (!_datosConocidos)
                     _Seccion(
                       icono: FontAwesomeIcons.key,
                       titulo: 'Tu cuenta',
@@ -405,7 +499,11 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       ),
       child: Row(
         children: [
-          const FaIcon(FontAwesomeIcons.google, color: ColoresApp.azul, size: 22),
+          FaIcon(
+            widget.desdePasajero ? FontAwesomeIcons.solidUser : FontAwesomeIcons.google,
+            color: ColoresApp.azul,
+            size: 22,
+          ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -417,9 +515,11 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                 ),
                 Text('${google['correo'] ?? ''}', style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5)),
                 const SizedBox(height: 4),
-                const Text(
-                  'Entrarás siempre con esta cuenta de Google.',
-                  style: TextStyle(color: ColoresApp.texto, fontSize: 12.5),
+                Text(
+                  widget.desdePasajero
+                      ? 'Usarás el mismo usuario y contraseña de tu cuenta de pasajero.'
+                      : 'Entrarás siempre con esta cuenta de Google.',
+                  style: const TextStyle(color: ColoresApp.texto, fontSize: 12.5),
                 ),
               ],
             ),
@@ -467,7 +567,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       borderRadius: BorderRadius.circular(12),
       child: InputDecorator(
         decoration: const InputDecoration(
-          labelText: 'Fecha de nacimiento',
+          labelText: 'Fecha de nacimiento *',
           suffixIcon: SizedBox(width: 44, child: Center(child: FaIcon(FontAwesomeIcons.calendar, size: 15))),
         ),
         child: Text(

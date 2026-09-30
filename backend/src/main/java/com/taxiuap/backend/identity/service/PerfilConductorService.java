@@ -16,6 +16,7 @@ import com.taxiuap.backend.pricing.repository.BilleteraConductorRepository;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
+import com.taxiuap.backend.vehicle.service.DocumentoConductorService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -28,6 +29,7 @@ public class PerfilConductorService {
     private final ConductorRepository conductorRepository;
     private final BilleteraConductorRepository billeteraConductorRepository;
     private final PermisoEdicionService permisoEdicionService;
+    private final DocumentoConductorService documentoConductorService;
 
     public PerfilConductorResponse obtener(Long idUsuario) {
         return aRespuesta(buscarConductor(idUsuario));
@@ -90,6 +92,7 @@ public class PerfilConductorService {
                 conductor.getTotalCalificaciones(),
                 conductor.getFechaAprobacion(),
                 saldoBilletera,
-                usuario.getId());
+                usuario.getId(),
+                documentoConductorService.faltantes(conductor.getId()));
     }
 }

@@ -8,9 +8,11 @@ import 'package:flutter/material.dart';
 /// Se usan en todas las pantallas:
 ///
 /// - verde (check): la accion se realizo (registro, edicion).
-/// - naranja (signo de pregunta): pide confirmacion antes de editar o eliminar.
+/// - naranja (signo de pregunta): pide confirmacion antes de editar o eliminar, o antes de pedir un
+///   viaje, en cuyo caso el cuerpo lleva los datos ([confirmarViaje]).
 /// - rojo (X): se elimino un registro, o la accion fallo.
-enum TipoDialogo { exito, confirmacion, eliminado, error }
+/// - naranja (signo de exclamacion): aviso informativo, sin nada que confirmar.
+enum TipoDialogo { exito, confirmacion, eliminado, error, aviso }
 
 const _verde = Color(0xFF198754);
 const _verdeOscuro = Color(0xFF157347);
@@ -44,6 +46,15 @@ Future<void> mostrarErrorDialogo(
   return _mostrar(context, TipoDialogo.error, titulo, mensaje);
 }
 
+/// Modal naranja con signo de exclamacion: avisa algo sin pedir confirmacion.
+Future<void> mostrarAviso(BuildContext context, {required String titulo, required String mensaje, String textoBoton = 'Entendido'}) {
+  return _abrir<void>(
+    context,
+    barreraCierra: true,
+    tarjeta: _TarjetaAlerta(tipo: TipoDialogo.aviso, titulo: titulo, mensaje: mensaje, textoBoton: textoBoton),
+  );
+}
+
 /// Modal naranja con Cancelar / confirmar. Devuelve true si el usuario confirma.
 Future<bool> confirmarAccion(
   BuildContext context, {
@@ -52,6 +63,41 @@ Future<bool> confirmarAccion(
   String textoConfirmar = 'Sí, continuar',
   String textoCancelar = 'Cancelar',
 }) async {
+  return _confirmar(
+    context,
+    titulo: titulo,
+    mensaje: mensaje,
+    textoConfirmar: textoConfirmar,
+    textoCancelar: textoCancelar,
+  );
+}
+
+/// Modal naranja de confirmacion cuyo cuerpo son datos, no un texto: se usa al pedir un viaje para
+/// mostrar el servicio, la distancia, el pago y el precio. Devuelve true si el usuario confirma.
+Future<bool> confirmarViaje(
+  BuildContext context, {
+  String titulo = '¿Confirmas tu viaje?',
+  required Widget contenido,
+  String textoConfirmar = 'Confirmar',
+  String textoCancelar = 'Cancelar',
+}) async {
+  return _confirmar(
+    context,
+    titulo: titulo,
+    contenido: contenido,
+    textoConfirmar: textoConfirmar,
+    textoCancelar: textoCancelar,
+  );
+}
+
+Future<bool> _confirmar(
+  BuildContext context, {
+  required String titulo,
+  String? mensaje,
+  Widget? contenido,
+  required String textoConfirmar,
+  required String textoCancelar,
+}) async {
   final confirmado = await _abrir<bool>(
     context,
     barreraCierra: false,
@@ -59,6 +105,7 @@ Future<bool> confirmarAccion(
       tipo: TipoDialogo.confirmacion,
       titulo: titulo,
       mensaje: mensaje,
+      contenido: contenido,
       textoBoton: textoConfirmar,
       textoCancelar: textoCancelar,
       conCancelar: true,
@@ -100,7 +147,12 @@ Future<R?> _abrir<R>(BuildContext context, {required bool barreraCierra, require
 class _TarjetaAlerta extends StatelessWidget {
   final TipoDialogo tipo;
   final String titulo;
-  final String mensaje;
+
+  /// Texto del cuerpo. Se usa [contenido] en su lugar cuando se pasa.
+  final String? mensaje;
+
+  /// Cuerpo con datos en vez de texto (detalle de una solicitud, por ejemplo).
+  final Widget? contenido;
   final String textoBoton;
   final bool conCancelar;
   final String textoCancelar;
@@ -108,15 +160,16 @@ class _TarjetaAlerta extends StatelessWidget {
   const _TarjetaAlerta({
     required this.tipo,
     required this.titulo,
-    required this.mensaje,
     required this.textoBoton,
+    this.mensaje,
+    this.contenido,
     this.conCancelar = false,
     this.textoCancelar = 'Cancelar',
-  });
+  }) : assert(mensaje != null || contenido != null, 'Hay que pasar mensaje o contenido');
 
   (Color, Color) get _colores => switch (tipo) {
     TipoDialogo.exito => (_verde, _verdeOscuro),
-    TipoDialogo.confirmacion => (_naranja, _naranjaOscuro),
+    TipoDialogo.confirmacion || TipoDialogo.aviso => (_naranja, _naranjaOscuro),
     TipoDialogo.eliminado || TipoDialogo.error => (_rojo, _rojoOscuro),
   };
 
@@ -131,7 +184,8 @@ class _TarjetaAlerta extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         shadowColor: Colors.transparent,
         child: Container(
-          width: 320,
+          width: double.infinity,
+          constraints: const BoxConstraints(maxWidth: 320),
           padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(20),
@@ -153,10 +207,18 @@ class _TarjetaAlerta extends StatelessWidget {
                 style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: color),
               ),
               const SizedBox(height: 10),
-              Text(
-                mensaje,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14.5, color: Color(0xFF6C757D), height: 1.4),
+              // Con contenido largo la tarjeta podria pasarse de alto en telefonos chicos, asi que
+              // el cuerpo se desplaza dentro en vez de desbordar la pantalla.
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
+                child: SingleChildScrollView(
+                  child: contenido ??
+                      Text(
+                        mensaje!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(fontSize: 14.5, color: Color(0xFF6C757D), height: 1.4),
+                      ),
+                ),
               ),
               const SizedBox(height: 25),
               Wrap(
@@ -299,7 +361,7 @@ class _PintorIcono extends CustomPainter {
       canvas.drawPath(_parcial(trazo, progresoSimbolo), pincelSimbolo);
     }
 
-    if (tipo == TipoDialogo.confirmacion && opacidadPunto > 0) {
+    if ((tipo == TipoDialogo.confirmacion || tipo == TipoDialogo.aviso) && opacidadPunto > 0) {
       canvas.drawCircle(const Offset(26, 38), 2.5, Paint()..color = color.withValues(alpha: opacidadPunto));
     }
   }
@@ -323,6 +385,12 @@ class _PintorIcono extends CustomPainter {
           Path()
             ..moveTo(36, 16)
             ..lineTo(16, 36),
+        ];
+      case TipoDialogo.aviso:
+        return [
+          Path()
+            ..moveTo(26, 13)
+            ..lineTo(26, 30),
         ];
       case TipoDialogo.confirmacion:
         // M19,20 A7,7 0 1,1 26,27 C26,30 26,31 26,31

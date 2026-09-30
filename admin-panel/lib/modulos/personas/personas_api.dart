@@ -25,6 +25,10 @@ class PersonasApi {
 
   Future<void> eliminarUsuario(int id) => _api.delete('/api/admin/usuarios/$id');
 
+  /// Suspende (S) o habilita (A) la cuenta: la suspendida sale de la app en su siguiente peticion.
+  Future<void> cambiarEstadoUsuario(int id, {required bool suspender}) =>
+      _api.put('/api/admin/usuarios/$id/estado', {'estado': suspender ? 'S' : 'A'});
+
   Future<List<PasajeroAdmin>> listarPasajeros() => _api.lista('/api/admin/pasajeros', PasajeroAdmin.desdeJson);
 
   Future<List<ConductorAdmin>> listarConductores() => _api.lista('/api/admin/conductores', ConductorAdmin.desdeJson);

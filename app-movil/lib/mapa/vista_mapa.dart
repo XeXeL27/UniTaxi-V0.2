@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -9,7 +11,7 @@ import '../widgets/notificaciones.dart';
 import 'controlador_mapa.dart';
 import 'pin_mapa.dart';
 
-/// Mapa a pantalla completa: tiles de OpenStreetMap, ruta azul entre A y B, tramo gris de
+/// Mapa a pantalla completa: tiles de OpenStreetMap, ruta azul entre A y B, tramo naranja de
 /// acercamiento, punto azul del GPS y los pines A y B.
 class MapaBase extends StatelessWidget {
   final ControladorMapa controlador;
@@ -20,15 +22,20 @@ class MapaBase extends StatelessWidget {
   /// Marcadores de la pantalla (por ejemplo los mototaxistas en linea), debajo de A, B y el GPS.
   final List<Marker> marcadoresExtra;
 
-  /// Capa de marcadores que se repinta sola (los mototaxistas que se deslizan), debajo de A y B.
-  final Widget? capaAnimada;
+  /// Capas que se repintan solas (los mototaxistas que se deslizan, el radar de busqueda), debajo
+  /// de A, B y el GPS.
+  final List<Widget> capasAnimadas;
+
+  /// Partida y destino como circulos sin letra (azul y rojo) en vez de pines con A y B.
+  final bool puntosSinLetra;
 
   const MapaBase({
     super.key,
     required this.controlador,
     this.onTap,
     this.marcadoresExtra = const [],
-    this.capaAnimada,
+    this.capasAnimadas = const [],
+    this.puntosSinLetra = false,
   });
 
   @override
@@ -53,8 +60,10 @@ class MapaBase extends StatelessWidget {
             minZoom: 5,
             maxZoom: 19,
             backgroundColor: const Color(0xFFE8E6E1),
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+            // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
+            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
             onMapReady: c.alListarMapa,
+            onPositionChanged: (camara, _) => c.alMoverMapa(camara),
             onTap: onTap == null ? null : (_, punto) => onTap!(punto),
           ),
           children: [
@@ -70,14 +79,18 @@ class MapaBase extends StatelessWidget {
                   Polyline(
                     points: acercamiento.puntos,
                     strokeWidth: 5,
-                    color: ColoresApp.textoSuave,
+                    color: ColoresApp.rutaSecundaria,
+                    borderStrokeWidth: 1.5,
+                    borderColor: ColoresApp.rutaSecundariaBorde,
                     pattern: StrokePattern.dashed(segments: const [10, 8]),
                   ),
                 if (rutaConductor != null)
                   Polyline(
                     points: rutaConductor.puntos,
                     strokeWidth: 5,
-                    color: ColoresApp.textoSuave,
+                    color: ColoresApp.rutaSecundaria,
+                    borderStrokeWidth: 1.5,
+                    borderColor: ColoresApp.rutaSecundariaBorde,
                     pattern: StrokePattern.dashed(segments: const [10, 8]),
                   ),
                 if (ruta != null) ...[
@@ -97,26 +110,14 @@ class MapaBase extends StatelessWidget {
                 ],
               ],
             ),
-            ?capaAnimada,
+            ...capasAnimadas,
+            // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
             MarkerLayer(
+              rotate: true,
               markers: [
                 ...marcadoresExtra,
-                if (a != null)
-                  Marker(
-                    point: a.posicion,
-                    width: PinMapa.ancho,
-                    height: PinMapa.alto,
-                    alignment: Alignment.topCenter,
-                    child: const PinMapa(color: ColoresApp.azul, letra: 'A'),
-                  ),
-                if (b != null)
-                  Marker(
-                    point: b.posicion,
-                    width: PinMapa.ancho,
-                    height: PinMapa.alto,
-                    alignment: Alignment.topCenter,
-                    child: const PinMapa(color: ColoresApp.rojo, letra: 'B'),
-                  ),
+                if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
+                if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
                 // El GPS va encima de los pines: es lo que se mueve en vivo.
                 if (gps != null) Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
                 // Marcador del conductor asignado al viaje del pasajero.
@@ -143,6 +144,21 @@ class MapaBase extends StatelessWidget {
       },
     );
   }
+
+  Marker _punto(LatLng posicion, Color color, String letra) => puntosSinLetra
+      ? Marker(
+          point: posicion,
+          width: CirculoMapa.lado,
+          height: CirculoMapa.lado,
+          child: CirculoMapa(color: color),
+        )
+      : Marker(
+          point: posicion,
+          width: PinMapa.ancho,
+          height: PinMapa.alto,
+          alignment: Alignment.topCenter,
+          child: PinMapa(color: color, letra: letra),
+        );
 
   Polyline _tramoAPie(LatLng desde, LatLng hasta) => Polyline(
     points: [desde, hasta],
@@ -189,7 +205,95 @@ class BotonUbicacion extends StatelessWidget {
   }
 }
 
-/// Boton redondo que abre la eleccion de capa del mapa (calles, satelite, claro).
+/// Brujula: aparece solo con el mapa girado y, al tocarla, vuelve a poner el norte arriba. La
+/// aguja roja apunta al norte real.
+class BotonBrujula extends StatelessWidget {
+  final ControladorMapa controlador;
+
+  const BotonBrujula({super.key, required this.controlador});
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: controlador.rotacion,
+      builder: (context, grados, _) {
+        final girado = grados > 0.5 && grados < 359.5;
+        return AnimatedScale(
+          scale: girado ? 1 : 0,
+          duration: const Duration(milliseconds: 180),
+          child: Material(
+            color: ColoresApp.blanco,
+            shape: const CircleBorder(),
+            elevation: 4,
+            shadowColor: const Color(0x55000000),
+            child: InkWell(
+              customBorder: const CircleBorder(),
+              onTap: girado ? controlador.orientarAlNorte : null,
+              child: SizedBox(
+                width: 50,
+                height: 50,
+                child: Center(
+                  child: Transform.rotate(
+                    angle: grados * 3.141592653589793 / 180,
+                    child: const _Aguja(),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// Aguja de brujula: mitad roja (norte) y mitad gris.
+class _Aguja extends StatelessWidget {
+  const _Aguja();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(
+      width: 14,
+      height: 30,
+      child: Column(
+        children: [
+          Expanded(child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.rojo, arriba: true))),
+          Expanded(child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.textoSuave, arriba: false))),
+        ],
+      ),
+    );
+  }
+}
+
+class _Triangulo extends CustomPainter {
+  final Color color;
+  final bool arriba;
+
+  const _Triangulo(this.color, {required this.arriba});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final camino = ui.Path();
+    if (arriba) {
+      camino
+        ..moveTo(size.width / 2, 0)
+        ..lineTo(size.width, size.height)
+        ..lineTo(0, size.height);
+    } else {
+      camino
+        ..moveTo(0, 0)
+        ..lineTo(size.width, 0)
+        ..lineTo(size.width / 2, size.height);
+    }
+    canvas.drawPath(camino..close(), Paint()..color = color);
+  }
+
+  @override
+  bool shouldRepaint(_Triangulo anterior) => anterior.color != color || anterior.arriba != arriba;
+}
+
+/// Boton redondo que abre la eleccion de capa del mapa (calles o satelite).
 class BotonCapas extends StatelessWidget {
   final ControladorMapa controlador;
 
@@ -265,7 +369,6 @@ class _OpcionCapa extends StatelessWidget {
     final icono = switch (capa) {
       CapaMapa.calles => FontAwesomeIcons.road,
       CapaMapa.satelite => FontAwesomeIcons.earthAmericas,
-      CapaMapa.claro => FontAwesomeIcons.map,
     };
     return InkWell(
       onTap: onTap,
@@ -290,6 +393,123 @@ class _OpcionCapa extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Fila de botones redondos sobre el mapa: capas a la izquierda, brujula y ubicacion a la derecha.
+///
+/// Va anclada al borde inferior de la pantalla, en su propio Positioned y por encima del panel, para
+/// que no se mueva cuando el panel de abajo cambia de alto; el panel deja libre [alto] con
+/// PanelInferior.reservaInferior.
+class FilaBotonesMapa extends StatelessWidget {
+  final ControladorMapa controlador;
+
+  /// Alto de la fila: boton de 50 + separacion de 12.
+  static const double alto = 62;
+
+  const FilaBotonesMapa({super.key, required this.controlador});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+      child: Row(
+        children: [
+          BotonCapas(controlador: controlador),
+          const Spacer(),
+          BotonBrujula(controlador: controlador),
+          const SizedBox(width: 10),
+          BotonUbicacion(controlador: controlador),
+        ],
+      ),
+    );
+  }
+}
+
+/// Un anillo del radar de busqueda: donde llega y con qué fuerza se ve.
+class AnilloRadar {
+  /// Distancia al punto de partida, en metros.
+  final double radio;
+
+  /// Fuerza con la que se ve, de 0 a 1.
+  final double opacidad;
+
+  const AnilloRadar(this.radio, this.opacidad);
+}
+
+/// Anillos del radar en una fase del ciclo, listos para pintar en el mapa.
+///
+/// [avance] es la fase: 0 es el arranque de la vuelta y 1 vuelve al mismo punto. Cada anillo va
+/// desfasado un tercio del ciclo, asi que siempre hay uno saliendo, otro a media expansion y otro
+/// desvanecerse. El radio va de [radioInicial] a [radioFinal] metros y la opacidad sube al
+/// arrancar, baja mientras crece y llega a cero justo cuando el anillo desaparece, para que el
+/// ciclo no se note.
+List<AnilloRadar> anillosRadar(double avance) {
+  const cantidad = 3;
+  const radioInicial = 20.0;
+  const radioFinal = 400.0;
+  const opacidadMaxima = 0.45;
+  const entrada = 0.1;
+  final anillos = <AnilloRadar>[];
+  for (var i = 0; i < cantidad; i++) {
+    final fase = (avance + i / cantidad) % 1;
+    final aparecer = fase < entrada ? fase / entrada : 1.0;
+    anillos.add(
+      AnilloRadar(
+        radioInicial + (radioFinal - radioInicial) * fase,
+        opacidadMaxima * aparecer * (1 - fase),
+      ),
+    );
+  }
+  return anillos;
+}
+
+/// Radar de busqueda: anillos que salen del punto de partida mientras la solicitud esta abierta y
+/// no hay conductor aun. Se dibuja debajo de los pines, asi que no tapa nada.
+///
+/// El radio es ilustrativo: el backend no filtra por distancia, avisa a los conductores conectados,
+/// asi que el radar dice "estamos buscando por aqui" y no un alcance real. La informacion de
+/// cuantos mototaxistas hay cerca viene de los marcadores del mapa.
+class RadarBusqueda extends StatefulWidget {
+  /// Cuanto tarda en completarse una vuelta de los anillos.
+  static const Duration duracionCiclo = Duration(milliseconds: 2400);
+
+  final LatLng punto;
+
+  const RadarBusqueda({super.key, required this.punto});
+
+  @override
+  State<RadarBusqueda> createState() => _RadarBusquedaState();
+}
+
+class _RadarBusquedaState extends State<RadarBusqueda> with SingleTickerProviderStateMixin {
+  late final AnimationController _ciclo = AnimationController(vsync: this, duration: RadarBusqueda.duracionCiclo)
+    ..repeat();
+
+  @override
+  void dispose() {
+    _ciclo.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _ciclo,
+      builder: (context, _) => CircleLayer(
+        circles: [
+          for (final anillo in anillosRadar(_ciclo.value))
+            CircleMarker(
+              point: widget.punto,
+              radius: anillo.radio,
+              useRadiusInMeter: true,
+              color: ColoresApp.ruta.withValues(alpha: anillo.opacidad),
+              borderColor: ColoresApp.rutaBorde.withValues(alpha: anillo.opacidad * 0.6),
+              borderStrokeWidth: 1.5,
+            ),
+        ],
       ),
     );
   }

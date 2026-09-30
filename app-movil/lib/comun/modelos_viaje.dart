@@ -140,6 +140,9 @@ class Viaje {
   final DateTime? fechaInicio;
   final DateTime? fechaFin;
   final bool calificadoPorPasajero;
+
+  /// Al pasajero ya se le mostro el cuadro para calificar (se ofrece una sola vez).
+  final bool calificacionOfrecida;
   final String metodoPago;
 
   /// Cambio de metodo que pidio el pasajero y el conductor todavia no respondio.
@@ -166,6 +169,7 @@ class Viaje {
     required this.fechaInicio,
     required this.fechaFin,
     required this.calificadoPorPasajero,
+    this.calificacionOfrecida = false,
     this.metodoPago = MetodoPago.efectivo,
     this.metodoPagoPedido,
     this.conductorTieneQr = false,
@@ -191,6 +195,7 @@ class Viaje {
     fechaInicio: fechaDesdeJson(json['fechaInicio']),
     fechaFin: fechaDesdeJson(json['fechaFin']),
     calificadoPorPasajero: json['calificadoPorPasajero'] as bool? ?? false,
+    calificacionOfrecida: json['calificacionOfrecida'] as bool? ?? false,
     metodoPago: json['metodoPago'] as String? ?? MetodoPago.efectivo,
     metodoPagoPedido: json['metodoPagoPedido'] as String?,
     conductorTieneQr: json['conductorTieneQr'] as bool? ?? false,
@@ -212,4 +217,42 @@ class Viaje {
   String get primerNombreConductor => nombreConductor.trim().split(RegExp(r'\s+')).first;
 
   String get primerNombrePasajero => nombrePasajero.trim().split(RegExp(r'\s+')).first;
+}
+
+/// Que parte del historial se consulta: los ultimos 10 viajes completados, o un mes paginado.
+enum PeriodoHistorial {
+  recientes('RECIENTES', 'Últimos 10'),
+  mesActual('MES_ACTUAL', 'Este mes'),
+  mesAnterior('MES_ANTERIOR', 'Mes anterior');
+
+  final String codigo;
+  final String titulo;
+
+  const PeriodoHistorial(this.codigo, this.titulo);
+}
+
+/// Una pagina del historial (solo viajes completados). totalViajes y totalMonto son del periodo
+/// entero, no solo de la pagina.
+class PaginaHistorial {
+  final List<Viaje> viajes;
+  final int pagina;
+  final int totalPaginas;
+  final int totalViajes;
+  final double totalMonto;
+
+  const PaginaHistorial({
+    required this.viajes,
+    required this.pagina,
+    required this.totalPaginas,
+    required this.totalViajes,
+    required this.totalMonto,
+  });
+
+  factory PaginaHistorial.desdeJson(Map<String, dynamic> json) => PaginaHistorial(
+    viajes: [for (final v in json['viajes'] as List<dynamic>? ?? const []) Viaje.desdeJson(v as Map<String, dynamic>)],
+    pagina: (json['pagina'] as num?)?.toInt() ?? 0,
+    totalPaginas: (json['totalPaginas'] as num?)?.toInt() ?? 1,
+    totalViajes: (json['totalViajes'] as num?)?.toInt() ?? 0,
+    totalMonto: (json['totalMonto'] as num?)?.toDouble() ?? 0,
+  );
 }

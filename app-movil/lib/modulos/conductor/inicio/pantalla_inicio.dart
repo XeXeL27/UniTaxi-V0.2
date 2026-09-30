@@ -21,6 +21,7 @@ import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
 import '../../../widgets/barra_inferior.dart';
+import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
@@ -54,7 +55,6 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   final _comentarios = GlobalKey<PantallaComentariosState>();
   int _seccion = _seccionInicio;
 
-
   /// Direccion de la ubicacion actual para la cabecera, y donde se calculo.
   String? _direccion;
   LatLng? _puntoDireccion;
@@ -81,38 +81,62 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   }
 
   /// Un conductor recien registrado queda en revision: no recibe solicitudes ni aparece en el mapa
-  /// hasta que la administracion lo apruebe (regla 1).
+  /// hasta que la administracion lo apruebe (regla 1). Tampoco si le falta el PDF de algun
+  /// documento obligatorio: la app queda bloqueada salvo Mas, donde lo sube.
   Future<void> _arrancar() async {
-    final situacion = await _situacionAprobacion();
+    final perfil = await _perfil();
     if (!mounted) return;
-    final aprobado = situacion == null || situacion == 'APROBADO';
-    _flujo.enRevision = !aprobado;
-    _flujo.situacionAprobacion = situacion;
+    final habilitado = _aplicarPerfil(perfil);
     _flujo.iniciar();
-    if (aprobado) _emisor.iniciar();
+    if (habilitado) _emisor.iniciar();
   }
 
-  /// null si no se pudo consultar (se sigue como antes; el backend igual exige la aprobacion).
-  Future<String?> _situacionAprobacion() async {
+  /// Pasa al flujo la situacion y los documentos que faltan; devuelve si puede operar. Sin perfil
+  /// (no se pudo consultar) se sigue como antes: el backend igual exige la aprobacion.
+  bool _aplicarPerfil(Perfil? perfil) {
+    final situacion = perfil?.situacionAprobacion;
+    final faltantes = perfil?.documentosFaltantes ?? const <String>[];
+    final habilitado = (situacion == null || situacion == 'APROBADO') && faltantes.isEmpty;
+    _flujo.enRevision = !habilitado;
+    _flujo.situacionAprobacion = situacion;
+    _flujo.documentosFaltantes = faltantes;
+    return habilitado;
+  }
+
+  Future<Perfil?> _perfil() async {
     try {
-      return (await PerfilApi(context.read<ClienteApi>()).perfil()).situacionAprobacion;
+      return await PerfilApi(context.read<ClienteApi>()).perfil();
     } catch (_) {
       return null;
     }
   }
 
-  Future<void> _revisarAprobacion() async {
-    final situacion = await _situacionAprobacion();
-    if (!mounted) return;
-    if (situacion == 'APROBADO') {
+  /// Vuelve a consultar la aprobacion y los documentos. [silencioso]: sin aviso si nada cambio
+  /// (al volver de Mis documentos).
+  Future<void> _revisarAprobacion({bool silencioso = false}) async {
+    if (!_flujo.enRevision) return;
+    final perfil = await _perfil();
+    if (!mounted || perfil == null) return;
+    final situacion = perfil.situacionAprobacion;
+    if (situacion == 'APROBADO' && perfil.documentosFaltantes.isEmpty) {
       _flujo.aprobado();
       _emisor.iniciar();
-      mostrarMensaje(context, '¡Tu cuenta fue aprobada! Ya puedes recibir solicitudes.');
-    } else {
-      _flujo.situacionAprobacion = situacion ?? _flujo.situacionAprobacion;
-      setState(() {});
-      mostrarMensaje(context, 'Tu cuenta sigue en revisión.');
+      mostrarMensaje(context, '¡Tu cuenta está habilitada! Ya puedes recibir solicitudes.');
+      return;
     }
+    _aplicarPerfil(perfil);
+    setState(() {});
+    if (silencioso) return;
+    mostrarMensaje(
+      context,
+      perfil.documentosFaltantes.isNotEmpty ? 'Todavía te falta subir documentos.' : 'Tu cuenta sigue en revisión.',
+    );
+  }
+
+  /// Mis documentos; al volver se revisa si ya no falta ninguno.
+  Future<void> _abrirDocumentos() async {
+    await _abrirYRecargar(const PantallaDocumentos());
+    if (mounted) await _revisarAprobacion(silencioso: true);
   }
 
   /// Calcula la direccion de la cabecera con el primer GPS y otra vez si se movio mas de 300 m.
@@ -137,7 +161,12 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   /// Boton del centro: conectarse (aparece en linea y recibe solicitudes) o desconectarse.
   Future<void> _alternarEnLinea() async {
     if (_flujo.enRevision) {
-      mostrarMensaje(context, 'Podrás conectarte cuando la administración apruebe tu cuenta.');
+      mostrarMensaje(
+        context,
+        _flujo.documentosFaltantes.isNotEmpty
+            ? 'Sube tus documentos en Más > Mis documentos para poder conectarte.'
+            : 'Podrás conectarte cuando la administración apruebe tu cuenta.',
+      );
       return;
     }
     if (_flujo.etapa == EtapaConductor.enViaje) {
@@ -168,7 +197,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       final foto = await PerfilApi(context.read<ClienteApi>()).foto();
       if (mounted) setState(() => _foto = foto);
     } catch (_) {
-      // Sin foto quedan las iniciales.
+      // Sin foto quedan las iniciales (en Mas) y la moto (en la cabecera).
     }
   }
 
@@ -364,12 +393,12 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               index: _seccion,
               children: [
                 _vistaInicio(sesion.usuario),
-                PantallaHistorial(key: _historial, cargar: _flujo.api.misViajes, esConductor: true),
+                PantallaHistorial(key: _historial, cargarHistorial: _flujo.api.historial, esConductor: true),
                 PantallaComentarios(key: _comentarios),
                 PantallaMas(
                   foto: _foto,
                   onDatosPersonales: () => _abrirYRecargar(const PantallaPerfilConductor()),
-                  onDocumentos: () => _abrirYRecargar(const PantallaDocumentos()),
+                  onDocumentos: _abrirDocumentos,
                   onMisQr: () => _abrirYRecargar(const PantallaMisQr()),
                   onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
                   onCerrarSesion: _confirmarCerrarSesion,
@@ -386,6 +415,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               builder: (context, _) {
                 final enLinea = _flujo.enLinea;
                 final pendientes = enLinea && _seccion != _seccionInicio ? _flujo.nuevas : 0;
+                // Mirando una solicitud o con un viaje el boton de conectarse no se muestra: no tapa
+                // los botones del viaje ni se toca por error. Vuelve al terminar o cancelar.
+                final conViaje = _flujo.etapa == EtapaConductor.detalle || _flujo.etapa == EtapaConductor.enViaje;
                 return BarraInferior(
                   indice: _seccion,
                   onCambiar: _irA,
@@ -395,13 +427,15 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                     const ItemBarra(FontAwesomeIcons.solidComments, 'Opiniones'),
                     const ItemBarra(FontAwesomeIcons.ellipsis, 'Más'),
                   ],
-                  botonCentral: BotonCentral(
-                    icono: FontAwesomeIcons.powerOff,
-                    tooltip: enLinea ? 'Desconectarme' : 'Conectarme',
-                    activo: enLinea && !_flujo.enRevision,
-                    color: ColoresApp.exito,
-                    onTap: _alternarEnLinea,
-                  ),
+                  botonCentral: conViaje
+                      ? null
+                      : BotonCentral(
+                          icono: FontAwesomeIcons.powerOff,
+                          tooltip: enLinea ? 'Desconectarme' : 'Conectarme',
+                          activo: enLinea && !_flujo.enRevision,
+                          color: ColoresApp.exito,
+                          onTap: _alternarEnLinea,
+                        ),
                 );
               },
             ),
@@ -411,16 +445,78 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     );
   }
 
+  Widget _panelDetalle() {
+    final solicitud = _flujo.seleccionada;
+    return PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: FontAwesomeIcons.route,
+      color: ColoresApp.azul,
+      resumen: solicitud == null
+          ? 'Solicitud de viaje'
+          : '${solicitud.nombrePasajero.split(' ').first} - ${formatoBs(solicitud.precio)}',
+      tituloAbierto: 'Detalle de la solicitud',
+      accionPlegado: BotonPrincipal(texto: 'Aceptar viaje', cargando: _flujo.ocupado, onPressed: _aceptar),
+      child: PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
+    );
+  }
+
+  Widget _panelViaje() {
+    final viaje = _flujo.viaje;
+    final (texto, color, boton, colorBoton) = viaje == null
+        ? ('Viaje en curso', ColoresApp.azul, '', ColoresApp.azul)
+        : estadoViajeConductor(viaje);
+    return PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: FontAwesomeIcons.motorcycle,
+      color: color,
+      resumen: texto,
+      tituloAbierto: 'Detalle del viaje',
+      accionPlegado: boton.isEmpty
+          ? null
+          : BotonPrincipal(texto: boton, color: colorBoton, cargando: _flujo.ocupado, onPressed: _avanzar),
+      child: PanelViajeConductor(
+        flujo: _flujo,
+        onAvanzar: _avanzar,
+        onCancelar: _cancelarViaje,
+        onCambiarPago: _cambiarPago,
+        onResponderPago: _responderPago,
+      ),
+    );
+  }
+
+  /// Panel del detalle de una solicitud o del viaje: se baja para ver el mapa completo con el tramo
+  /// y se vuelve a abrir solo al cambiar de etapa.
+  bool _panelAbierto = true;
+  EtapaConductor? _etapaPanel;
+
+  bool get _plegable => _flujo.etapa == EtapaConductor.detalle || _flujo.etapa == EtapaConductor.enViaje;
+
+  void _alternarPanel() {
+    setState(() => _panelAbierto = !_panelAbierto);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _mapa.encuadrar();
+    });
+  }
+
   Widget _vistaInicio(UsuarioSesion? usuario) {
     final margen = MediaQuery.paddingOf(context);
     final alto = MediaQuery.sizeOf(context).height;
     final abajo = BarraInferior.espacio(context);
-    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 150, 56, abajo + alto * 0.4);
     return ListenableBuilder(
       listenable: Listenable.merge([_flujo, _mapa]),
       builder: (context, _) {
         final etapa = _flujo.etapa;
         final enLinea = _flujo.enLinea;
+        if (etapa != _etapaPanel) {
+          _etapaPanel = etapa;
+          _panelAbierto = true;
+        }
+        // Lo que tapan la cabecera y el panel, para encuadrar la ruta; con el panel bajado el mapa
+        // queda casi completo.
+        final plegado = _plegable && !_panelAbierto;
+        _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 175, 56, abajo + (plegado ? 190 : alto * 0.4));
         // El boton atras de Android vuelve de la ruta de una solicitud a la lista.
         return PopScope(
           canPop: etapa != EtapaConductor.detalle,
@@ -442,6 +538,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   ubicacion: _ubicacionCabecera(),
                   onAtras: etapa == EtapaConductor.detalle ? _flujo.volverALista : null,
                   onBoton: () => mostrarAyuda(context, esConductor: true),
+                  foto: _foto,
+                  iconoSinFoto: FontAwesomeIcons.motorcycle,
                 ),
               ),
               Positioned(
@@ -451,49 +549,44 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   enLinea: enLinea,
                   enViaje: etapa == EtapaConductor.enViaje,
                   enRevision: _flujo.enRevision,
+                  faltanDocumentos: _flujo.documentosFaltantes.isNotEmpty,
                 ),
               ),
               Positioned(
                 left: 0,
                 right: 0,
-                bottom: abajo + 10,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: Row(
-                        children: [
-                          BotonCapas(controlador: _mapa),
-                          const Spacer(),
-                          BotonUbicacion(controlador: _mapa),
-                        ],
-                      ),
+                bottom: abajo + 34,
+                child: PanelInferior(
+                  flotante: true,
+                  // Los botones del mapa quedan por encima del panel (van despues en el Stack) y el
+                  // panel deja libre su alto, para que no se muevan al cambiar el panel de alto.
+                  reservaInferior: FilaBotonesMapa.alto,
+                  // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
+                  altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
+                  child: switch (etapa) {
+                    EtapaConductor.cargando => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
-                    PanelInferior(
-                      flotante: true,
-                      altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.44,
-                      child: switch (etapa) {
-                        EtapaConductor.cargando => const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
-                        EtapaConductor.lista => PanelSolicitudes(
-                          flujo: _flujo,
-                          onRevisarAprobacion: _revisarAprobacion,
-                        ),
-                        EtapaConductor.detalle => PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
-                        EtapaConductor.enViaje => PanelViajeConductor(
-                          flujo: _flujo,
-                          onAvanzar: _avanzar,
-                          onCancelar: _cancelarViaje,
-                          onCambiarPago: _cambiarPago,
-                          onResponderPago: _responderPago,
-                        ),
-                      },
+                    EtapaConductor.lista => PanelSolicitudes(
+                      flujo: _flujo,
+                      onRevisarAprobacion: _revisarAprobacion,
+                      onSubirDocumentos: _abrirDocumentos,
                     ),
-                  ],
+                    EtapaConductor.detalle => _panelDetalle(),
+                    EtapaConductor.enViaje => _panelViaje(),
+                  },
                 ),
+              ),
+              // Los botones van despues del panel en el Stack para quedar por encima: anclados al
+              // borde inferior no se mueven cuando el panel de abajo cambia de alto. El 34 px
+              // tambien los deja por encima del boton de conectarse, que sobresale ~30 px de la
+              // barra.
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: abajo + 34,
+                child: FilaBotonesMapa(controlador: _mapa),
               ),
             ],
           ),
@@ -508,12 +601,20 @@ class _EstadoEnLinea extends StatelessWidget {
   final bool enLinea;
   final bool enViaje;
   final bool enRevision;
+  final bool faltanDocumentos;
 
-  const _EstadoEnLinea({required this.enLinea, required this.enViaje, required this.enRevision});
+  const _EstadoEnLinea({
+    required this.enLinea,
+    required this.enViaje,
+    required this.enRevision,
+    required this.faltanDocumentos,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final (color, texto) = enRevision
+    final (color, texto) = faltanDocumentos
+        ? (ColoresApp.rojo, 'Faltan documentos')
+        : enRevision
         ? (const Color(0xFFE67E22), 'En revisión')
         : enViaje
         ? (ColoresApp.rojo, 'En viaje')

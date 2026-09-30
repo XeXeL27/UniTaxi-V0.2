@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 /// Paleta de la app movil (diseno de referencia de la vista del pasajero).
 class ColoresApp {
@@ -16,6 +17,11 @@ class ColoresApp {
   /// Color de la ruta trazada en el mapa.
   static const Color ruta = Color(0xFF1A73E8);
   static const Color rutaBorde = Color(0xFF0D47A1);
+
+  /// Color de los tramos del conductor hacia el punto de referencia (acercamiento), para que
+  /// resalten sobre las calles y no se confundan con el gris del mapa.
+  static const Color rutaSecundaria = Color(0xFFF57C00);
+  static const Color rutaSecundariaBorde = Color(0xFFB26500);
   static const Color exito = Color(0xFF198754);
 }
 
@@ -52,5 +58,27 @@ ThemeData temaApp() {
       ),
     ),
     snackBarTheme: const SnackBarThemeData(behavior: SnackBarBehavior.floating),
+    appBarTheme: const AppBarTheme(systemOverlayStyle: BarraSistema.sobreAzul),
+  );
+}
+
+/// Estilo de la barra de estado del telefono (hora, bateria, senal) y de la barra de navegacion.
+/// Casi todas las pantallas tienen la cabecera azul detras de la barra de estado: iconos blancos.
+/// Las pocas de fondo claro arriba (pedir el correo, activar el GPS) usan [sobreClaro].
+class BarraSistema {
+  static const sobreAzul = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.light,
+    statusBarBrightness: Brightness.dark,
+    systemNavigationBarColor: ColoresApp.blanco,
+    systemNavigationBarIconBrightness: Brightness.dark,
+  );
+
+  static const sobreClaro = SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent,
+    statusBarIconBrightness: Brightness.dark,
+    statusBarBrightness: Brightness.light,
+    systemNavigationBarColor: ColoresApp.blanco,
+    systemNavigationBarIconBrightness: Brightness.dark,
   );
 }

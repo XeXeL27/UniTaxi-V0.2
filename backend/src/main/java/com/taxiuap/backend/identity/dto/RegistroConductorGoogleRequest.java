@@ -16,7 +16,7 @@ public record RegistroConductorGoogleRequest(
         @NotBlank String codigo,
         @NotBlank @Size(max = 30) String ci,
         @Size(max = 10) String complementoCi,
-        @Past LocalDate fechaNacimiento,
+        @NotNull @Past LocalDate fechaNacimiento,
         @NotBlank @Size(max = 20) String telefono,
         @Valid @NotNull DatosConductorRequest conductor) {
 }

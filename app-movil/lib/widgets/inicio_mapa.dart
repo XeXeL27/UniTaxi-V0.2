@@ -10,14 +10,18 @@ import 'notificaciones.dart';
 /// el buscador no se estiran de lado a lado.
 const double anchoControlesMapa = 560;
 
-/// Logo de TaxiUAP: cuadro rojo redondeado con el taxi.
-class LogoTaxiUap extends StatelessWidget {
+/// Foto de perfil en el cuadro rojo de la cabecera; sin foto, el icono del modo (moto para el
+/// conductor, silueta para el pasajero).
+class AvatarCabecera extends StatelessWidget {
+  final Uint8List? foto;
+  final FaIconData iconoSinFoto;
   final double tamano;
 
-  const LogoTaxiUap({super.key, this.tamano = 64});
+  const AvatarCabecera({super.key, this.foto, required this.iconoSinFoto, this.tamano = 58});
 
   @override
   Widget build(BuildContext context) {
+    final radio = BorderRadius.circular(tamano * 0.3);
     return Container(
       width: tamano,
       height: tamano,
@@ -27,16 +31,22 @@ class LogoTaxiUap extends StatelessWidget {
           end: Alignment.bottomRight,
           colors: [ColoresApp.rojo, ColoresApp.rojoOscuro],
         ),
-        borderRadius: BorderRadius.circular(tamano * 0.3),
+        borderRadius: radio,
         border: Border.all(color: ColoresApp.blanco.withValues(alpha: 0.25), width: 1.5),
       ),
-      child: Center(child: FaIcon(FontAwesomeIcons.taxi, color: ColoresApp.blanco, size: tamano * 0.42)),
+      child: foto == null
+          ? Center(child: FaIcon(iconoSinFoto, color: ColoresApp.blanco, size: tamano * 0.42))
+          : ClipRRect(
+              borderRadius: BorderRadius.circular(tamano * 0.3 - 1.5),
+              child: Image.memory(foto!, fit: BoxFit.cover, gaplessPlayback: true),
+            ),
     );
   }
 }
 
-/// Cabecera de la pantalla de inicio: fondo azul marino, tarjeta con el logo, "Bienvenido",
-/// "Hola, NOMBRE", la ubicacion actual y un boton redondo a la derecha (ayuda).
+/// Cabecera de la pantalla de inicio: fondo azul marino, tarjeta con la foto de perfil (o el icono
+/// del modo), "Bienvenido", "Hola, NOMBRE", la ubicacion actual y un boton redondo a la derecha
+/// (ayuda).
 class CabeceraInicio extends StatelessWidget {
   final String saludo;
   final String nombre;
@@ -48,8 +58,12 @@ class CabeceraInicio extends StatelessWidget {
   /// Espacio extra al pie del fondo azul, para que el buscador se monte encima.
   final double solape;
 
-  /// Si no es null, en lugar del logo va una flecha para volver (conductor viendo una ruta).
+  /// Si no es null, en lugar de la foto va una flecha para volver (conductor viendo una ruta).
   final VoidCallback? onAtras;
+
+  /// Foto de perfil; sin ella se muestra [iconoSinFoto].
+  final Uint8List? foto;
+  final FaIconData iconoSinFoto;
 
   const CabeceraInicio({
     super.key,
@@ -61,6 +75,8 @@ class CabeceraInicio extends StatelessWidget {
     required this.onBoton,
     this.solape = 0,
     this.onAtras,
+    this.foto,
+    this.iconoSinFoto = FontAwesomeIcons.solidUser,
   });
 
   @override
@@ -93,7 +109,7 @@ class CabeceraInicio extends StatelessWidget {
                 if (onAtras != null)
                   _BotonRedondo(icono: FontAwesomeIcons.arrowLeft, tooltip: 'Volver', onTap: onAtras!)
                 else
-                  const LogoTaxiUap(tamano: 58),
+                  AvatarCabecera(foto: foto, iconoSinFoto: iconoSinFoto),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(

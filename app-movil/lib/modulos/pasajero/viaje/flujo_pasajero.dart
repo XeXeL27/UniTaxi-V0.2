@@ -88,19 +88,24 @@ class FlujoPasajero extends ChangeNotifier {
       final activa = (await api.misSolicitudes()).where((s) => s.activa).firstOrNull;
       if (activa != null) return _entrarBuscando(activa);
       final omitidos = await _viajesOmitidos();
-      final porCalificar = (await api.misViajes())
-          .where(
-            (v) =>
-                v.situacion == SituacionViaje.completado &&
-                !v.calificadoPorPasajero &&
-                !omitidos.contains('${v.id}') &&
-                v.fechaFin != null &&
-                DateTime.now().difference(v.fechaFin!) < _ventanaCalificacion,
-          )
-          .firstOrNull;
+      // Solo el ultimo viaje completado: si ese ya se califico o ya se ofrecio, no se ofrecen los
+      // anteriores (antes salian uno por uno cada vez que se entraba).
+      final completados =
+          (await api.misViajes()).where((v) => v.situacion == SituacionViaje.completado && v.fechaFin != null).toList()
+            ..sort((x, y) => y.fechaFin!.compareTo(x.fechaFin!));
+      final ultimo = completados.firstOrNull;
+      final porCalificar =
+          ultimo != null &&
+              !ultimo.calificadoPorPasajero &&
+              !ultimo.calificacionOfrecida &&
+              !omitidos.contains('${ultimo.id}') &&
+              DateTime.now().difference(ultimo.fechaFin!) < _ventanaCalificacion
+          ? ultimo
+          : null;
       if (porCalificar != null) {
         viaje = porCalificar;
         etapa = EtapaPasajero.calificando;
+        unawaited(_marcarOfrecida(porCalificar.id));
         _avisar();
         return;
       }
@@ -349,6 +354,7 @@ class FlujoPasajero extends ChangeNotifier {
       _detenerSondeo();
       _detenerSeguimientoConductor();
       etapa = EtapaPasajero.calificando;
+      unawaited(_marcarOfrecida(nuevo.id));
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
       if (nuevo.canceladoPor == 'CONDUCTOR') {
         // El backend vuelve a publicar el pedido para otro conductor: se sigue buscando.
@@ -431,15 +437,28 @@ class FlujoPasajero extends ChangeNotifier {
   /// Cierra la calificacion enviada y vuelve a elegir destino.
   void terminarCalificacion() => _entrarEligiendo();
 
-  /// El pasajero no quiso calificar: ese viaje ya no se le vuelve a ofrecer (una sola oportunidad).
+  /// El pasajero no quiso calificar. El viaje ya quedo marcado al mostrar el cuadro.
   Future<void> omitirCalificacion() async {
     final actual = viaje;
     _entrarEligiendo();
-    if (actual == null) return;
+    if (actual != null) await _marcarOfrecida(actual.id);
+  }
+
+  /// La calificacion se ofrece una sola vez: apenas se muestra el cuadro el viaje queda marcado, asi
+  /// no vuelve a salir aunque la persona cierre la app o la sesion sin responder. Se guarda en el
+  /// telefono y cerrar sesion no lo borra.
+  Future<void> _marcarOfrecida(int idViaje) async {
+    try {
+      await api.marcarCalificacionOfrecida(idViaje);
+    } catch (_) {
+      // Queda la marca del telefono.
+    }
     try {
       final prefs = await SharedPreferences.getInstance();
-      final omitidos = prefs.getStringList(_claveOmitidos) ?? const [];
-      await prefs.setStringList(_claveOmitidos, [...omitidos.skip(omitidos.length > 30 ? 1 : 0), '${actual.id}']);
+      final ofrecidas = prefs.getStringList(_claveOmitidos) ?? const [];
+      if (ofrecidas.contains('$idViaje')) return;
+      final lista = [...ofrecidas, '$idViaje'];
+      await prefs.setStringList(_claveOmitidos, lista.length > 40 ? lista.sublist(lista.length - 40) : lista);
     } catch (_) {
       // Si no se puede guardar, a lo sumo se vuelve a ofrecer en la ventana de 2 horas.
     }

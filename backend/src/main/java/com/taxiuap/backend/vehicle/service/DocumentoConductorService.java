@@ -1,7 +1,9 @@
 package com.taxiuap.backend.vehicle.service;
 
 import java.time.LocalDate;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,6 +18,7 @@ import com.taxiuap.backend.identity.service.PermisoEdicionService;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.shared.exception.ConflictoException;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.vehicle.dto.DocumentoConductorAdminResponse;
@@ -24,7 +27,9 @@ import com.taxiuap.backend.vehicle.dto.DocumentoConductorResponse;
 import com.taxiuap.backend.vehicle.dto.RevisionDocumentoRequest;
 import com.taxiuap.backend.vehicle.entity.DocumentoConductor;
 import com.taxiuap.backend.vehicle.enums.SituacionRevision;
+import com.taxiuap.backend.vehicle.enums.TipoDocumento;
 import com.taxiuap.backend.vehicle.repository.DocumentoConductorRepository;
+import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 
 import lombok.RequiredArgsConstructor;
 
@@ -41,6 +46,7 @@ public class DocumentoConductorService {
     private final ConductorRepository conductorRepository;
     private final AlmacenamientoArchivos almacenamientoArchivos;
     private final PermisoEdicionService permisoEdicionService;
+    private final VehiculoRepository vehiculoRepository;
 
     public List<DocumentoConductorResponse> listar(Long idUsuario) {
         Conductor conductor = buscarConductor(idUsuario);
@@ -73,6 +79,54 @@ public class DocumentoConductorService {
         documento.setSituacionRevision(SituacionRevision.PENDIENTE);
         documento.setAdminRevisor(null);
         return aRespuesta(documento);
+    }
+
+    /**
+     * Documentos obligatorios (CI y licencia) que el conductor todavia no envio. Mientras falte
+     * alguno no puede operar y la app queda bloqueada, salvo Mis documentos para subirlos.
+     */
+    public List<TipoDocumento> faltantes(Long idConductor) {
+        Set<TipoDocumento> enviados = EnumSet.noneOf(TipoDocumento.class);
+        documentoConductorRepository
+                .findByConductorIdAndEstadoDocumentoConductorOrderByIdAsc(idConductor, EstadoRegistro.A)
+                .forEach(d -> enviados.add(d.getTipoDocumento()));
+        return RegistroMotoConductorService.DOCUMENTOS_OBLIGATORIOS.stream()
+                .filter(tipo -> !enviados.contains(tipo))
+                .toList();
+    }
+
+    /**
+     * El conductor sube un documento que omitio al registrarse (CI, licencia o SOAT). Solo si no
+     * tiene ninguno activo de ese tipo: para cambiar uno ya enviado necesita permiso del
+     * administrador (ver reemplazarArchivo). Queda PENDIENTE de revision.
+     */
+    @Transactional
+    public DocumentoConductorResponse agregarFaltante(Long idUsuario, TipoDocumento tipo, MultipartFile archivo) {
+        if (!RegistroMotoConductorService.DOCUMENTOS_PEDIDOS.contains(tipo)) {
+            throw new NegocioException("Ese documento no se puede subir desde la app");
+        }
+        Conductor conductor = buscarConductor(idUsuario);
+        boolean yaEnviado = documentoConductorRepository
+                .findByConductorIdAndEstadoDocumentoConductorOrderByIdAsc(conductor.getId(), EstadoRegistro.A).stream()
+                .anyMatch(d -> d.getTipoDocumento() == tipo);
+        if (yaEnviado) {
+            throw new ConflictoException("Ya enviaste ese documento. Para cambiarlo pide permiso a la administracion");
+        }
+        almacenamientoArchivos.validarPdf(archivo, tipo.name());
+
+        DocumentoConductor documento = new DocumentoConductor();
+        documento.setConductor(conductor);
+        if (RegistroMotoConductorService.DOCUMENTOS_DEL_VEHICULO.contains(tipo)) {
+            documento.setVehiculo(vehiculoRepository.findByConductorId(conductor.getId()).stream()
+                    .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
+                    .findFirst()
+                    .orElse(null));
+        }
+        documento.setTipoDocumento(tipo);
+        documento.setArchivoUrl(almacenamientoArchivos.guardarPdf(archivo,
+                almacenamientoArchivos.carpetaDocumentosConductor(conductor.getUsuario().getPersona()), tipo.name()));
+        documento.setSituacionRevision(SituacionRevision.PENDIENTE);
+        return aRespuesta(documentoConductorRepository.save(documento));
     }
 
     /** El administrador corrige el tipo o la fecha de vencimiento de un documento. */
@@ -140,14 +194,14 @@ public class DocumentoConductorService {
 
     /**
      * Un conductor puede operar (recibir solicitudes de viaje) solo si esta APROBADO (regla de
-     * negocio 1) y no tiene ningun documento vencido ni sin aprobar (regla de negocio 2). Este
-     * metodo lo usara el flujo de viaje antes de ofertar o aceptar solicitudes.
+     * negocio 1), envio los documentos obligatorios y no tiene ningun documento vencido ni sin
+     * aprobar (regla de negocio 2). Lo usa el flujo de viaje antes de ofertar o aceptar solicitudes.
      */
     public boolean puedeOperar(Long idConductor) {
         Conductor conductor = conductorRepository.findById(idConductor)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Conductor", idConductor));
 
-        if (conductor.getSituacionAprobacion() != SituacionAprobacion.APROBADO) {
+        if (conductor.getSituacionAprobacion() != SituacionAprobacion.APROBADO || !faltantes(idConductor).isEmpty()) {
             return false;
         }
 

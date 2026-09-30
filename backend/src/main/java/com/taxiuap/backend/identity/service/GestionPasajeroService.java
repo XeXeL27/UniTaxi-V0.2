@@ -41,6 +41,7 @@ public class GestionPasajeroService {
                 persona.getTelefono(),
                 pasajero.getCalificacionPromedio(),
                 pasajero.getTotalCalificaciones(),
-                usuario.getFechaRegistro());
+                usuario.getFechaRegistro(),
+                usuario.getEstadoUsuario().name());
     }
 }

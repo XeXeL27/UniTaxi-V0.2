@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../comun/historial_viajes.dart';
 import '../../../comun/modelos_viaje.dart';
@@ -14,6 +15,7 @@ import '../../../comun/perfil_api.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
+import '../../../core/formato.dart';
 import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -25,6 +27,7 @@ import '../../../widgets/dialogos.dart';
 import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
+import '../../registro/ingreso_google.dart';
 import '../favoritos/favoritos_api.dart';
 import '../favoritos/formulario_lugar.dart';
 import '../favoritos/lugares_frecuentes.dart';
@@ -52,6 +55,7 @@ class PantallaInicioPasajero extends StatefulWidget {
 class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with SingleTickerProviderStateMixin {
   static const _seccionInicio = 0;
   static const _seccionHistorial = 1;
+  static const _seccionMas = 2;
 
   final _mapa = ControladorMapa();
   final _historial = GlobalKey<PantallaHistorialState>();
@@ -63,7 +67,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   );
 
   int _seccion = _seccionInicio;
+
+  /// situacion_aprobacion de su registro de conductor ('' si todavia no se registro, null sin cargar).
+  String? _registroConductor;
   List<Favorito> _favoritos = const [];
+
+  /// Lugares que el pasajero quito de "Lugares frecuentes" (o favoritos que elimino): no se vuelven
+  /// a sugerir. Se guardan en el telefono.
+  List<LatLng> _frecuentesOcultos = const [];
+  static const _claveOcultos = 'taxiuap_frecuentes_ocultos';
   bool _cargandoFavoritos = true;
   String? _errorFavoritos;
   bool _enviando = false;
@@ -81,13 +93,23 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   Uint8List? _foto;
   bool _calificando = false;
 
+  /// Panel de la solicitud o del viaje: se puede bajar para ver la ruta en el mapa completo. Se
+  /// vuelve a abrir solo cuando cambia la etapa (buscando -> viaje asignado).
+  bool _panelAbierto = true;
+  EtapaPasajero? _etapaPanel;
+
+  /// Mototaxistas libres en linea; null mientras no hay una primera respuesta.
+  int? get _libres => _conductoresCargados ? _conductores.length : null;
+
   @override
   void initState() {
     super.initState();
     _flujo.addListener(_alCambiarFlujo);
     _flujo.iniciar();
     _cargarFavoritos();
+    _cargarOcultos();
     _cargarFoto();
+    _cargarRegistroConductor();
     _cargarConductores();
     _sondeoConductores = Timer.periodic(const Duration(seconds: 5), (_) => _cargarConductores());
   }
@@ -106,6 +128,11 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// terminar el viaje se abre el cuadro para calificar.
   void _alCambiarFlujo() {
     if (!mounted) return;
+    if (_flujo.etapa != _etapaPanel) {
+      _etapaPanel = _flujo.etapa;
+      // Eligiendo destino empieza compacto (solo tarifa, taxistas libres y pago); el viaje, abierto.
+      _panelAbierto = _flujo.etapa != EtapaPasajero.eligiendo;
+    }
     final aviso = _flujo.tomarAviso();
     if (aviso != null) mostrarMensaje(context, aviso, error: true);
     final novedad = _flujo.tomarNovedad();
@@ -113,7 +140,11 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (_flujo.etapa == EtapaPasajero.calificando && !_calificando) {
       _calificando = true;
       _irA(_seccionInicio);
-      mostrarCalificacion(context, _flujo).whenComplete(() => _calificando = false);
+      mostrarCalificacion(context, _flujo).whenComplete(() {
+        _calificando = false;
+        // Cerrado sin enviar ni omitir (boton atras): cuenta como omitido y vuelve al mapa.
+        if (mounted && _flujo.etapa == EtapaPasajero.calificando) _flujo.omitirCalificacion();
+      });
     }
   }
 
@@ -121,6 +152,43 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (seccion == _seccion) return;
     setState(() => _seccion = seccion);
     if (seccion == _seccionHistorial) _historial.currentState?.recargar();
+    // En Mas se vuelve a mirar si la administracion ya aprobo su registro de conductor.
+    if (seccion == _seccionMas) _cargarRegistroConductor();
+  }
+
+  Future<void> _cargarRegistroConductor() async {
+    try {
+      final datos = await context.read<ClienteApi>().get('/api/pasajero/registro-conductor') as Map<String, dynamic>;
+      if (mounted) setState(() => _registroConductor = datos['situacion'] as String? ?? '');
+    } catch (_) {
+      // Sin respuesta no se muestra la opcion.
+    }
+  }
+
+  /// Opcion de Mas segun en que va su registro de conductor (null: no se muestra).
+  (String, String)? _opcionRegistroConductor(Sesion sesion) {
+    if (sesion.otroModo != null) return null;
+    return switch (_registroConductor) {
+      '' => ('Registrarme como conductor', 'Lleva pasajeros con tu moto. La administración revisará tus datos'),
+      'PENDIENTE' => ('Registro de conductor en revisión', 'Te avisaremos aquí cuando la administración te apruebe'),
+      'RECHAZADO' => ('Registro de conductor rechazado', 'Comunícate con la administración de TaxiUAP'),
+      'SUSPENDIDO' => ('Cuenta de conductor suspendida', 'Comunícate con la administración de TaxiUAP'),
+      _ => null,
+    };
+  }
+
+  Future<void> _registroConductorTocado() async {
+    if (_registroConductor != '') {
+      mostrarMensaje(
+        context,
+        _registroConductor == 'PENDIENTE'
+            ? 'Tu registro de conductor está en revisión.'
+            : 'Comunícate con la administración de TaxiUAP.',
+      );
+      return;
+    }
+    final enviado = await abrirFormularioConductor(context, desdePasajero: true);
+    if (enviado == true) _cargarRegistroConductor();
   }
 
   Future<void> _cargarFoto() async {
@@ -128,7 +196,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       final foto = await PerfilApi(context.read<ClienteApi>()).foto();
       if (mounted) setState(() => _foto = foto);
     } catch (_) {
-      // Sin foto quedan las iniciales.
+      // Sin foto quedan las iniciales (en Mas) y la silueta (en la cabecera).
     }
   }
 
@@ -192,15 +260,60 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     frecuentes: sinRepetirConFavoritos(lugaresFrecuentes(viajes), [
       for (final favorito in _favoritos)
         if (favorito.posicion != null) favorito.posicion!,
+      ..._frecuentesOcultos,
     ]),
     cargando: _cargandoFavoritos,
     error: _errorFavoritos,
     onElegir: _irADestino,
     onEliminar: _eliminarFavorito,
     onPromover: _promoverFavorito,
+    onQuitarFrecuente: _quitarFrecuente,
     onAnadir: _iniciarAnadir,
     onReintentar: _cargarFavoritos,
   );
+
+  Future<void> _cargarOcultos() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final lista = [
+        for (final texto in prefs.getStringList(_claveOcultos) ?? const <String>[])
+          if (texto.split(',').length == 2)
+            LatLng(double.tryParse(texto.split(',')[0]) ?? 0, double.tryParse(texto.split(',')[1]) ?? 0),
+      ];
+      if (mounted) setState(() => _frecuentesOcultos = lista);
+    } catch (_) {
+      // Sin almacenamiento se muestran todos.
+    }
+  }
+
+  Future<void> _ocultarLugar(LatLng posicion) async {
+    setState(() => _frecuentesOcultos = [..._frecuentesOcultos, posicion]);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final textos = [for (final p in _frecuentesOcultos) '${p.latitude},${p.longitude}'];
+      await prefs.setStringList(_claveOcultos, textos.length > 50 ? textos.sublist(textos.length - 50) : textos);
+    } catch (_) {
+      // Queda oculto mientras la app este abierta.
+    }
+  }
+
+  Future<void> _quitarFrecuente(LugarFrecuente lugar) async {
+    final confirmado = await confirmarAccion(
+      context,
+      titulo: '¿Quitar este lugar?',
+      mensaje: '"${lugar.nombre}" ya no aparecerá en tus lugares frecuentes.',
+      textoConfirmar: 'Sí, quitar',
+    );
+    if (!confirmado || !mounted) return;
+    await _ocultarLugar(lugar.posicion);
+    if (mounted) {
+      await mostrarEliminado(
+        context,
+        titulo: 'Lugar quitado',
+        mensaje: '"${lugar.nombre}" ya no está en tus lugares frecuentes.',
+      );
+    }
+  }
 
   Future<void> _eliminarFavorito(Favorito favorito) async {
     final confirmado = await confirmarAccion(
@@ -214,6 +327,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       await _favoritosApi.eliminar(favorito.id);
       if (!mounted) return;
       setState(() => _favoritos = _favoritos.where((f) => f.id != favorito.id).toList());
+      // Si no, reaparece enseguida como "lugar frecuente" (sale de los mismos viajes).
+      if (favorito.posicion != null) await _ocultarLugar(favorito.posicion!);
+      if (!mounted) return;
       await mostrarEliminado(
         context,
         titulo: 'Favorito eliminado',
@@ -298,10 +414,26 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     mostrarMensaje(context, mensaje);
   }
 
+  /// Los dos botones de pedir el taxi (el del panel y el central) pasan por aqui: primero se
+  /// muestra el modal con el detalle y solo si el pasajero confirma se envia la solicitud.
   Future<void> _solicitar() async {
+    final confirmado = await confirmarViaje(
+      context,
+      contenido: DetalleSolicitudViaje(flujo: _flujo),
+    );
+    if (!confirmado || !mounted) return;
     setState(() => _enviando = true);
     try {
       await _flujo.solicitar();
+      if (mounted && _libres == 0) {
+        await mostrarAviso(
+          context,
+          titulo: 'No hay taxistas libres',
+          mensaje:
+              'Tu solicitud ya fue enviada. En este momento no hay taxistas libres, así que puede '
+              'demorar un poco encontrar uno que acepte tu viaje.',
+        );
+      }
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
@@ -360,6 +492,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     }
   }
 
+  /// Baja o sube el panel. Al bajarlo la ruta se encuadra en el mapa, que queda casi completo.
+  void _alternarPanel() {
+    setState(() => _panelAbierto = !_panelAbierto);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _mapa.encuadrar();
+    });
+  }
+
   /// Pasa al modo conductor (misma persona, otra cuenta) sin cerrar sesion.
   Future<void> _cambiarModo() async {
     if (_flujo.etapa == EtapaPasajero.buscando || _flujo.etapa == EtapaPasajero.enViaje) {
@@ -411,14 +551,18 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                 _vistaInicio(sesion.usuario),
                 PantallaHistorial(
                   key: _historial,
-                  cargar: _flujo.api.misViajes,
+                  cargarHistorial: _flujo.api.historial,
+                  cargarTodos: _flujo.api.misViajes,
                   esConductor: false,
                   pestanaFavoritos: _pestanaFavoritos,
                 ),
                 PantallaMas(
                   foto: _foto,
                   onDatosPersonales: _abrirPerfil,
-                  onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
+                  // Aprobado recien (la sesion todavia no lo sabia): tambien puede cambiar.
+                  onCambiarModo: sesion.otroModo != null || _registroConductor == 'APROBADO' ? _cambiarModo : null,
+                  registroConductor: _opcionRegistroConductor(sesion),
+                  onRegistroConductor: _registroConductorTocado,
                   onCerrarSesion: _confirmarCerrarSesion,
                 ),
               ],
@@ -459,12 +603,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final margen = MediaQuery.paddingOf(context);
     final alto = MediaQuery.sizeOf(context).height;
     final abajo = BarraInferior.espacio(context);
-    // Lo que tapan la cabecera con el buscador y el panel con la barra, para encuadrar la ruta.
-    _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 200, 110, abajo + alto * 0.36);
     return ListenableBuilder(
       listenable: Listenable.merge([_flujo, _mapa]),
       builder: (context, _) {
         final etapa = _flujo.etapa;
+        // Lo que tapan la cabecera con el buscador y el panel con la barra, para encuadrar la ruta.
+        final compacto = etapa == EtapaPasajero.buscando || (_panelEsPlegable && !_panelAbierto);
+        _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 200, 110, abajo + (compacto ? 170 : alto * 0.36));
         final eligiendo = etapa == EtapaPasajero.eligiendo;
         final panel = _panel(etapa);
         return Stack(
@@ -473,20 +618,44 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               child: MapaBase(
                 controlador: _mapa,
                 onTap: eligiendo ? _tocarMapa : null,
-                capaAnimada: ListenableBuilder(
-                  listenable: _posiciones,
-                  builder: (context, _) => MarkerLayer(
-                    markers: [
-                      for (final conductor in _conductores)
+                puntosSinLetra: true,
+                // Con la partida ya marcada, sus lugares guardados aparecen para elegirlos de un toque.
+                marcadoresExtra: [
+                  if (eligiendo && _mapa.a != null && !_flujo.guardandoLugar)
+                    for (final favorito in _favoritos)
+                      if (favorito.posicion != null && favorito.posicion != _mapa.b?.posicion)
                         Marker(
-                          point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
-                          width: _MarcadorMototaxi.ancho,
-                          height: _MarcadorMototaxi.alto,
-                          child: const _MarcadorMototaxi(),
+                          point: favorito.posicion!,
+                          width: _MarcadorFavorito.ancho,
+                          height: _MarcadorFavorito.alto,
+                          alignment: Alignment.topCenter,
+                          child: _MarcadorFavorito(
+                            nombre: favorito.nombre,
+                            onTap: () => _flujo.irAFavorito(favorito.posicion!, favorito.nombre),
+                          ),
                         ),
-                    ],
+                ],
+                capasAnimadas: [
+                  ListenableBuilder(
+                    listenable: _posiciones,
+                    builder: (context, _) => MarkerLayer(
+                      rotate: true,
+                      markers: [
+                        for (final conductor in _conductores)
+                          Marker(
+                            point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
+                            width: _MarcadorMototaxi.ancho,
+                            height: _MarcadorMototaxi.alto,
+                            child: const _MarcadorMototaxi(),
+                          ),
+                      ],
+                    ),
                   ),
-                ),
+                  // Radar de busqueda desde el punto de partida: solo mientras la solicitud esta
+                  // abierta. Va debajo de los pines, asi que no tapa nada.
+                  if (_flujo.etapa == EtapaPasajero.buscando && _mapa.a != null)
+                    RadarBusqueda(punto: _mapa.a!.posicion),
+                ],
               ),
             ),
             Positioned(
@@ -500,6 +669,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                     ubicacion: _ubicacionCabecera(),
                     onBoton: () => mostrarAyuda(context, esConductor: false),
                     solape: eligiendo ? 34 : 0,
+                    foto: _foto,
                   ),
                   const SizedBox(height: 8),
                   TarjetaSeguimientoConductor(flujo: _flujo),
@@ -543,43 +713,34 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                             : 'Viajas en mototaxi. Hay ${_conductores.length} libres cerca de ti.',
                       ),
                     ),
-                    OpcionVehiculo(
-                      nombre: 'Auto',
-                      proximamente: true,
-                      icono: const FaIcon(FontAwesomeIcons.carSide, color: ColoresApp.rojo, size: 30),
-                      onTap: () => mostrarMensaje(context, 'Muy pronto podrás pedir un auto.'),
-                    ),
                   ],
                 ),
               ),
+            if (panel != null)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: abajo + 34,
+                child: PanelInferior(
+                  flotante: true,
+                  // Los botones del mapa quedan por encima del panel (van despues en el Stack) y el
+                  // panel deja libre su alto, para que no se muevan al cambiar el panel de alto.
+                  reservaInferior: FilaBotonesMapa.alto,
+                  // Pagando por QR el panel crece un poco: debajo del viaje van los QR del conductor.
+                  altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
+                      ? 0.5
+                      : 0.42,
+                  child: panel,
+                ),
+              ),
+            // Los botones van despues del panel en el Stack para quedar por encima: anclados al
+            // borde inferior (34 px por encima del boton central, que sobresale ~30 px de la
+            // barra) no se mueven cuando el panel de abajo cambia de alto.
             Positioned(
               left: 0,
               right: 0,
-              bottom: abajo + 10,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                    child: Row(
-                      children: [
-                        BotonCapas(controlador: _mapa),
-                        const Spacer(),
-                        BotonUbicacion(controlador: _mapa),
-                      ],
-                    ),
-                  ),
-                  if (panel != null)
-                    PanelInferior(
-                      flotante: true,
-                      // Pagando por QR el panel crece un poco: debajo del viaje van los QR del conductor.
-                      altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
-                          ? 0.5
-                          : 0.42,
-                      child: panel,
-                    ),
-                ],
-              ),
+              bottom: abajo + 34,
+              child: FilaBotonesMapa(controlador: _mapa),
             ),
           ],
         );
@@ -594,19 +755,121 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       child: Center(child: CircularProgressIndicator()),
     ),
     EtapaPasajero.eligiendo when _mapa.a != null && _mapa.b == null && !_flujo.guardandoLugar => null,
-    EtapaPasajero.eligiendo => PanelEligiendo(
-      flujo: _flujo,
-      enviando: _enviando,
-      onSolicitar: _solicitar,
-      onGuardarDestino: () {
-        final b = _mapa.b;
-        if (b != null) _guardarLugar(b.posicion, b.texto);
-      },
+    EtapaPasajero.eligiendo when !_panelEsPlegable => _panelEligiendo(),
+    EtapaPasajero.eligiendo => PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: FontAwesomeIcons.moneyBillWave,
+      color: ColoresApp.azul,
+      resumen: _resumenRuta(),
+      tituloAbierto: 'Detalle del viaje',
+      accionPlegado: OpcionesEligiendo(flujo: _flujo, libres: _libres),
+      child: _panelEligiendo(),
     ),
-    EtapaPasajero.buscando => PanelBuscando(flujo: _flujo, cancelando: _enviando, onCancelar: _cancelarSolicitud),
-    EtapaPasajero.enViaje => PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
+    // Esperando conductor: solo el panel pequeno, sin plegar; el mapa y la ruta quedan a la vista.
+    EtapaPasajero.buscando => PanelBuscando(
+      flujo: _flujo,
+      cancelando: _enviando,
+      onCancelar: _cancelarSolicitud,
+      libres: _libres,
+    ),
+    EtapaPasajero.enViaje => _panelViaje(),
     EtapaPasajero.calificando => null,
   };
+
+  /// Barra compacta al elegir destino: con partida y destino ya marcados (no mientras se obtiene
+  /// el GPS ni al guardar un lugar, que necesitan su indicacion). En viaje, siempre.
+  bool get _panelEsPlegable {
+    final etapa = _flujo.etapa;
+    if (etapa == EtapaPasajero.enViaje) return true;
+    return etapa == EtapaPasajero.eligiendo && _mapa.a != null && _mapa.b != null && !_flujo.guardandoLugar;
+  }
+
+  /// "Tarifa: 8 Bs - 679 m - 2 min".
+  String _resumenRuta() {
+    final precio = _flujo.precio?.precio;
+    final ruta = _mapa.ruta;
+    return [
+      'Tarifa: ${precio != null ? formatoBs(precio) : 'a calcular'}',
+      if (ruta != null) ...[ruta.distanciaTexto, ruta.duracionTexto] else 'trazando la ruta...',
+    ].join(' - ');
+  }
+
+  Widget _panelEligiendo() => PanelEligiendo(
+    flujo: _flujo,
+    enviando: _enviando,
+    onSolicitar: _solicitar,
+    onGuardarDestino: () {
+      final b = _mapa.b;
+      if (b != null) _guardarLugar(b.posicion, b.texto);
+    },
+    libres: _libres,
+  );
+
+  Widget _panelViaje() {
+    final (icono, texto, color) = estadoViajePasajero(_flujo.viaje?.situacion ?? '');
+    return PanelPlegable(
+      abierto: _panelAbierto,
+      onAlternar: _alternarPanel,
+      icono: icono,
+      color: color,
+      resumen: texto,
+      tituloAbierto: 'Detalle del viaje',
+      child: PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
+    );
+  }
+}
+
+/// Lugar guardado del pasajero en el mapa: estrella y nombre. Tocarlo lo pone como destino. La
+/// punta de abajo del icono es el punto.
+class _MarcadorFavorito extends StatelessWidget {
+  static const double ancho = 170;
+  static const double alto = 58;
+
+  final String nombre;
+  final VoidCallback onTap;
+
+  const _MarcadorFavorito({required this.nombre, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            constraints: const BoxConstraints(maxWidth: ancho),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: ColoresApp.blanco,
+              borderRadius: BorderRadius.circular(10),
+              boxShadow: const [BoxShadow(color: Color(0x330A2342), blurRadius: 6, offset: Offset(0, 2))],
+            ),
+            child: Text(
+              nombre,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: ColoresApp.azul, fontSize: 11.5, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(height: 3),
+          Container(
+            width: 30,
+            height: 30,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: const Color(0xFFF5A623),
+              shape: BoxShape.circle,
+              border: Border.all(color: ColoresApp.blanco, width: 3),
+              boxShadow: const [BoxShadow(color: Color(0x40000000), blurRadius: 6, offset: Offset(0, 2))],
+            ),
+            child: const FaIcon(FontAwesomeIcons.solidStar, color: ColoresApp.blanco, size: 12),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Silueta del mototaxista en el mapa. Tamano fijo en pixeles: no cambia con el zoom.

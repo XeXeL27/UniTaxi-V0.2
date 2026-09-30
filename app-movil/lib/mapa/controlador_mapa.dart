@@ -19,8 +19,7 @@ class PuntoRuta {
 /// Estilo de los tiles del mapa (boton de capas).
 enum CapaMapa {
   calles('Calles', 'https://tile.openstreetmap.org/{z}/{x}/{y}.png'),
-  satelite('Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'),
-  claro('Claro', 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png');
+  satelite('Satélite', 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}');
 
   final String nombre;
   final String url;
@@ -29,8 +28,8 @@ enum CapaMapa {
 }
 
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
-/// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo gris desde su
-/// posicion hasta el punto A (acercamiento). En la app del pasajero, el tramo gris desde la
+/// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo naranja desde su
+/// posicion hasta el punto A (acercamiento). En la app del pasajero, el tramo naranja desde la
 /// posicion del conductor hasta el punto de referencia (origen o destino segun la etapa del viaje).
 class ControladorMapa extends ChangeNotifier {
   static const double zoomCalle = 17;
@@ -68,6 +67,25 @@ class ControladorMapa extends ChangeNotifier {
   int _consultaRutaConductor = 0;
 
   CapaMapa capa = CapaMapa.calles;
+
+  /// Giro del mapa en grados (0 = norte arriba). Aparte del resto del estado para que la brujula se
+  /// actualice sin redibujar el mapa entero.
+  final ValueNotifier<double> rotacion = ValueNotifier(0);
+
+  void alMoverMapa(MapCamera camara) {
+    final grados = camara.rotation % 360;
+    if ((grados - rotacion.value).abs() > 0.5) rotacion.value = grados;
+  }
+
+  /// Vuelve a dejar el norte arriba (boton de la brujula).
+  void orientarAlNorte() {
+    try {
+      mapa.rotate(0);
+    } catch (_) {
+      // El mapa todavia no esta listo.
+    }
+    rotacion.value = 0;
+  }
 
   void cambiarCapa(CapaMapa nueva) {
     if (capa == nueva) return;
@@ -153,7 +171,7 @@ class ControladorMapa extends ChangeNotifier {
     if (conAcercamiento) _trazarAcercamiento();
   }
 
-  /// Muestra u oculta el tramo gris desde el GPS hasta A.
+  /// Muestra u oculta el tramo naranja desde el GPS hasta A.
   void cambiarAcercamiento(bool mostrar) {
     if (mostrarAcercamiento == mostrar) return;
     mostrarAcercamiento = mostrar;
@@ -346,6 +364,7 @@ class ControladorMapa extends ChangeNotifier {
     _cerrado = true;
     _gps?.cancel();
     mapa.dispose();
+    rotacion.dispose();
     super.dispose();
   }
 }

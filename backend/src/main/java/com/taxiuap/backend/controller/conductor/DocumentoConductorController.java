@@ -10,7 +10,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -20,6 +22,7 @@ import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.vehicle.entity.DocumentoConductor;
 import com.taxiuap.backend.vehicle.dto.DocumentoConductorResponse;
+import com.taxiuap.backend.vehicle.enums.TipoDocumento;
 import com.taxiuap.backend.vehicle.service.DocumentoConductorService;
 
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,15 @@ public class DocumentoConductorController {
     @GetMapping
     public ResponseEntity<ApiResponse<List<DocumentoConductorResponse>>> listar() {
         return ResponseEntity.ok(ApiResponse.exito(documentoConductorService.listar(UsuarioActual.idUsuario())));
+    }
+
+    /** Sube un documento que omitio al registrarse (solo si no tiene ninguno de ese tipo). */
+    @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<DocumentoConductorResponse>> agregar(
+            @RequestParam("tipo") TipoDocumento tipo, @RequestPart("archivo") MultipartFile archivo) {
+        DocumentoConductorResponse creado =
+                documentoConductorService.agregarFaltante(UsuarioActual.idUsuario(), tipo, archivo);
+        return ResponseEntity.ok(ApiResponse.exito("Documento enviado a revision", creado));
     }
 
     /** PDF del documento, para verlo dentro de la app. */

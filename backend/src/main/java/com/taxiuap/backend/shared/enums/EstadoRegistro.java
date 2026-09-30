@@ -8,5 +8,7 @@ public enum EstadoRegistro {
     /** Activo. */
     A,
     /** Eliminado (borrado logico). */
-    X
+    X,
+    /** Suspendido por el administrador. Solo se usa en usuario.estado_usuario: no puede ingresar. */
+    S
 }

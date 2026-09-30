@@ -123,6 +123,13 @@ public class Viaje extends EntidadAuditable {
     @Column(name = "metodo_pago_pedido", length = 20)
     private MetodoPago metodoPagoPedido;
 
+    /**
+     * true cuando la app ya le mostro al pasajero el cuadro para calificar este viaje: se ofrece una
+     * sola vez, aunque no califique y aunque cierre la app o la sesion.
+     */
+    @Column(name = "calificacion_ofrecida_pasajero")
+    private Boolean calificacionOfrecidaPasajero = false;
+
     @Column(name = "fecha_inicio")
     private LocalDateTime fechaInicio;
 

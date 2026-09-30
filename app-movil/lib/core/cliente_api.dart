@@ -57,6 +57,25 @@ class ClienteApi {
     return _desempaquetar(respuesta);
   }
 
+  /// Formulario multipart con la parte "datos" en JSON y varios archivos (campo, bytes, nombre, tipo).
+  Future<dynamic> enviarFormulario(
+    String ruta,
+    Map<String, dynamic> datos,
+    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})> archivos,
+  ) async {
+    final respuesta = await _conReintento(() {
+      final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
+      peticion.files.add(
+        http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
+      );
+      for (final a in archivos) {
+        peticion.files.add(http.MultipartFile.fromBytes(a.campo, a.bytes, filename: a.nombre, contentType: a.tipo));
+      }
+      return peticion;
+    });
+    return _desempaquetar(respuesta);
+  }
+
   /// Envia la peticion y desempaqueta ApiResponse. La peticion se arma de nuevo en cada intento
   /// porque una peticion http ya enviada no se puede reenviar.
   Future<dynamic> _enviar(String metodo, String ruta, [Map<String, dynamic>? cuerpo]) async {
@@ -80,8 +99,11 @@ class ClienteApi {
         respuesta = await _enviarPeticion(crear());
       }
       if (respuesta.statusCode == 401) {
-        await sesion.cerrar();
-        throw ApiExcepcion('La sesion expiro, vuelva a iniciar sesion', codigo: 401);
+        // Si la administracion suspendio o elimino la cuenta, el backend dice por que.
+        final mensaje = _decodificar(respuesta)['mensaje'] as String?;
+        final motivo = mensaje != null && mensaje.startsWith('Tu cuenta') ? mensaje : null;
+        await sesion.cerrar(motivo: motivo);
+        throw ApiExcepcion(motivo ?? 'La sesion expiro, vuelva a iniciar sesion', codigo: 401);
       }
     }
     return respuesta;

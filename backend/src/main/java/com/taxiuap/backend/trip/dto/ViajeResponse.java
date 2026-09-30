@@ -38,5 +38,7 @@ public record ViajeResponse(
         /** Cambio de metodo que pidio el pasajero y el conductor todavia no respondio (o null). */
         MetodoPago metodoPagoPedido,
         /** true si el conductor tiene al menos un QR de cobro. */
-        boolean conductorTieneQr) {
+        boolean conductorTieneQr,
+        /** true si al pasajero ya se le ofrecio calificar este viaje (no se vuelve a ofrecer). */
+        boolean calificacionOfrecida) {
 }

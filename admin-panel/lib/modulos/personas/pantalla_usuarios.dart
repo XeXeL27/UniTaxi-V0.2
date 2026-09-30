@@ -7,6 +7,7 @@ import '../../core/tema.dart';
 import '../../widgets/flujos_crud.dart';
 import '../../widgets/listado_remoto.dart';
 import '../../widgets/tabla/columna_tabla.dart';
+import 'acciones_cuenta.dart';
 import 'formulario_habilitar_usuario.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
@@ -35,6 +36,12 @@ class PantallaUsuarios extends StatelessWidget {
           opciones: const ['ADMIN', 'PASAJERO', 'CONDUCTOR'],
           valor: (u) => u.rol,
         ),
+        ColumnaTabla(
+          titulo: 'Situación',
+          tipo: TipoColumna.estado,
+          opciones: const ['ACTIVO', 'SUSPENDIDO'],
+          valor: (u) => u.situacion,
+        ),
         ColumnaTabla(titulo: 'Registrado', tipo: TipoColumna.fechaHora, valor: (u) => u.fechaRegistro),
       ],
       acciones: (recargar) => [
@@ -51,6 +58,15 @@ class PantallaUsuarios extends StatelessWidget {
         ),
       ],
       accionesFila: (usuario, recargar) => [
+        botonSuspenderCuenta(
+          context,
+          api: api,
+          idUsuario: usuario.idUsuario,
+          suspendida: usuario.suspendida,
+          cuenta: 'el usuario ${nombreTipoUsuario(usuario.rol).toLowerCase()} "${usuario.nombreUsuario}" '
+              'de ${usuario.nombres} ${usuario.apellidos}',
+          recargar: recargar,
+        ),
         IconButton(
           tooltip: 'Eliminar',
           onPressed: () => flujoEliminar(

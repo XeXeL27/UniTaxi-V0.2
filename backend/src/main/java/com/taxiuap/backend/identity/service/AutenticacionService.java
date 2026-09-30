@@ -24,6 +24,8 @@ import com.taxiuap.backend.identity.dto.UsuarioResponse;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
+import com.taxiuap.backend.identity.enums.SituacionAprobacion;
+import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PersonaRepository;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
@@ -45,9 +47,12 @@ import static com.taxiuap.backend.identity.service.CuentaUsuarioService.normaliz
 public class AutenticacionService {
 
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales invalidas";
+    public static final String MENSAJE_CUENTA_SUSPENDIDA =
+            "Tu cuenta esta suspendida. Comunicate con la administracion de TaxiUAP";
 
     private final PersonaRepository personaRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ConductorRepository conductorRepository;
     private final GestionPersonaService gestionPersonaService;
     private final CuentaUsuarioService cuentaUsuarioService;
     private final PasswordEncoder passwordEncoder;
@@ -76,7 +81,7 @@ public class AutenticacionService {
      */
     @Transactional
     public TokenResponse registrarConductor(RegistroConductorRequest datos, Map<String, MultipartFile> archivos) {
-        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+        Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
         String nombreUsuario = normalizarNombreUsuario(datos.nombreUsuario());
         cuentaUsuarioService.validarNombreUsuarioDisponible(nombreUsuario, null);
@@ -103,13 +108,13 @@ public class AutenticacionService {
      * mas de una cuenta (la misma persona como pasajero y conductor) hace falta indicar el rol.
      */
     public TokenResponse login(LoginRequest datos) {
-        List<Usuario> candidatos = buscarCandidatos(datos.usuario().trim()).stream()
-                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+        List<Usuario> candidatos = sinSuspendidas(buscarCandidatos(datos.usuario().trim()).stream()
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
                 .filter(u -> u.getPersona().getEstadoPersona() == EstadoRegistro.A)
                 .filter(u -> datos.rol() == null || datos.rol().isBlank()
                         || u.getRol().getCodigo().equalsIgnoreCase(datos.rol().trim()))
                 .filter(u -> passwordEncoder.matches(datos.password(), u.getPasswordHash()))
-                .toList();
+                .toList());
 
         if (candidatos.isEmpty()) {
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS);
@@ -125,17 +130,46 @@ public class AutenticacionService {
      * usa para saber si la persona entra como pasajero, como conductor o si hay que preguntarle.
      */
     public List<String> cuentas(String identificador, String password) {
-        List<String> roles = buscarCandidatos(identificador.trim()).stream()
-                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+        List<Usuario> usuarios = sinSuspendidas(buscarCandidatos(identificador.trim()).stream()
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
                 .filter(u -> u.getPersona().getEstadoPersona() == EstadoRegistro.A)
                 .filter(u -> passwordEncoder.matches(password, u.getPasswordHash()))
+                .toList());
+        if (usuarios.isEmpty()) {
+            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS);
+        }
+        // Con cuenta de pasajero, la de conductor solo cuenta cuando el admin ya la aprobo: mientras
+        // tanto entra directo como pasajero, sin preguntarle.
+        boolean tienePasajero = usuarios.stream().anyMatch(u -> esRol(u, RolSistema.PASAJERO));
+        return usuarios.stream()
+                .filter(u -> !tienePasajero || conductorHabilitado(u))
                 .map(u -> u.getRol().getCodigo())
                 .distinct()
                 .toList();
-        if (roles.isEmpty()) {
-            throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS);
+    }
+
+    /**
+     * Deja solo las cuentas activas. Si la contrasena era correcta pero todas las cuentas estan
+     * suspendidas, se avisa eso en vez de "credenciales invalidas".
+     */
+    private static List<Usuario> sinSuspendidas(List<Usuario> cuentas) {
+        List<Usuario> activas = cuentas.stream().filter(u -> u.getEstadoUsuario() == EstadoRegistro.A).toList();
+        if (activas.isEmpty() && !cuentas.isEmpty()) {
+            throw new NegocioException(MENSAJE_CUENTA_SUSPENDIDA);
         }
-        return roles;
+        return activas;
+    }
+
+    /** true si no es cuenta de conductor, o si lo es y el administrador ya la aprobo. */
+    public boolean conductorHabilitado(Usuario usuario) {
+        if (!esRol(usuario, RolSistema.CONDUCTOR)) return true;
+        return conductorRepository.findByUsuarioId(usuario.getId())
+                .map(c -> c.getSituacionAprobacion() == SituacionAprobacion.APROBADO)
+                .orElse(false);
+    }
+
+    private static boolean esRol(Usuario usuario, RolSistema rol) {
+        return rol.getCodigo().equals(usuario.getRol().getCodigo());
     }
 
     /**
@@ -149,12 +183,15 @@ public class AutenticacionService {
         if (!RolSistema.PASAJERO.getCodigo().equals(destino) && !RolSistema.CONDUCTOR.getCodigo().equals(destino)) {
             throw new NegocioException("Solo se puede cambiar entre pasajero y conductor");
         }
-        return usuarioRepository.findByPersonaId(actual.getPersona().getId()).stream()
+        Usuario cuenta = usuarioRepository.findByPersonaId(actual.getPersona().getId()).stream()
                 .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
                 .filter(u -> u.getRol().getCodigo().equals(destino))
                 .findFirst()
-                .map(this::generarTokens)
                 .orElseThrow(() -> new NegocioException("No tiene una cuenta de " + destino.toLowerCase()));
+        if (!conductorHabilitado(cuenta)) {
+            throw new NegocioException("Tu registro de conductor todavia esta en revision");
+        }
+        return generarTokens(cuenta);
     }
 
     /**
@@ -183,7 +220,10 @@ public class AutenticacionService {
                         .filter(this::esCuentaDeApp)
                         .toList()
                 : List.of(actual);
-        cuentas.forEach(u -> u.setPasswordHash(hash));
+        cuentas.forEach(u -> {
+            u.setPasswordHash(hash);
+            u.setContrasenaGenerada(false);
+        });
         usuarioRepository.saveAll(cuentas);
     }
 
@@ -198,6 +238,9 @@ public class AutenticacionService {
             Usuario usuario = usuarioRepository.findById(jwtUser.idUsuario())
                     .orElseThrow(() -> new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS));
 
+            if (usuario.getEstadoUsuario() == EstadoRegistro.S) {
+                throw new NegocioException(MENSAJE_CUENTA_SUSPENDIDA);
+            }
             if (usuario.getEstadoUsuario() != EstadoRegistro.A
                     || usuario.getPersona().getEstadoPersona() != EstadoRegistro.A) {
                 throw new NegocioException("La cuenta no esta activa");
@@ -248,8 +291,10 @@ public class AutenticacionService {
                 persona.getTelefono(),
                 rolCodigo);
 
+        // La cuenta de conductor sin aprobar no se ofrece como "cambiar a modo conductor".
         List<String> rolesDisponibles = usuarioRepository.findByPersonaId(persona.getId()).stream()
                 .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A)
+                .filter(u -> u.getId().equals(usuario.getId()) || conductorHabilitado(u))
                 .map(u -> u.getRol().getCodigo())
                 .distinct()
                 .toList();

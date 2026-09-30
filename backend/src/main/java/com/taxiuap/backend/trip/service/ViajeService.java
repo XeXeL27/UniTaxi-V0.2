@@ -2,12 +2,16 @@ package com.taxiuap.backend.trip.service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 
 import org.locationtech.jts.io.WKTWriter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -39,6 +43,7 @@ import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
+import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
@@ -47,6 +52,7 @@ import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
+import com.taxiuap.backend.trip.enums.PeriodoHistorial;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 import com.taxiuap.backend.trip.repository.ViajeRepository;
@@ -302,6 +308,78 @@ public class ViajeService {
                 .toList();
     }
 
+    // ------------------------------------------------ historial de la app
+
+    private static final int TAMANO_HISTORIAL = 10;
+    private static final ZoneId ZONA = ZoneId.of("America/La_Paz");
+    private static final LocalDateTime SIN_LIMITE_DESDE = LocalDateTime.of(2000, 1, 1, 0, 0);
+    private static final LocalDateTime SIN_LIMITE_HASTA = LocalDateTime.of(3000, 1, 1, 0, 0);
+
+    private record Rango(LocalDateTime desde, LocalDateTime hasta) {
+    }
+
+    /** Consulta de una pagina y del monto total, para el pasajero o el conductor. */
+    private interface ConsultaHistorial {
+        Page<Viaje> pagina(LocalDateTime desde, LocalDateTime hasta, PageRequest pagina);
+
+        BigDecimal monto(LocalDateTime desde, LocalDateTime hasta);
+    }
+
+    /**
+     * Historial de viajes completados del pasajero: los ultimos 10, o los del mes actual / anterior
+     * paginados de a 10, del mas reciente al mas antiguo.
+     */
+    public HistorialViajesResponse historialDelPasajero(PeriodoHistorial periodo, int pagina) {
+        Long id = obtenerPasajeroActual().getId();
+        return historial(periodo, pagina, new ConsultaHistorial() {
+            public Page<Viaje> pagina(LocalDateTime desde, LocalDateTime hasta, PageRequest p) {
+                return viajeRepository.historialDePasajero(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta, p);
+            }
+
+            public BigDecimal monto(LocalDateTime desde, LocalDateTime hasta) {
+                return viajeRepository.montoHistorialDePasajero(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta);
+            }
+        });
+    }
+
+    public HistorialViajesResponse historialDelConductor(PeriodoHistorial periodo, int pagina) {
+        Long id = obtenerConductorActual().getId();
+        return historial(periodo, pagina, new ConsultaHistorial() {
+            public Page<Viaje> pagina(LocalDateTime desde, LocalDateTime hasta, PageRequest p) {
+                return viajeRepository.historialDeConductor(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta, p);
+            }
+
+            public BigDecimal monto(LocalDateTime desde, LocalDateTime hasta) {
+                return viajeRepository.montoHistorialDeConductor(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta);
+            }
+        });
+    }
+
+    private HistorialViajesResponse historial(PeriodoHistorial periodo, int pagina, ConsultaHistorial consulta) {
+        PeriodoHistorial elegido = periodo == null ? PeriodoHistorial.RECIENTES : periodo;
+        Rango rango = rangoDe(elegido);
+        // Recientes: siempre la primera pagina (los ultimos 10), sin paginar.
+        int numero = elegido == PeriodoHistorial.RECIENTES ? 0 : Math.max(pagina, 0);
+        Page<Viaje> resultado = consulta.pagina(rango.desde(), rango.hasta(), PageRequest.of(numero, TAMANO_HISTORIAL));
+        int totalPaginas = elegido == PeriodoHistorial.RECIENTES ? 1 : Math.max(resultado.getTotalPages(), 1);
+        return new HistorialViajesResponse(
+                elegido,
+                resultado.getContent().stream().map(this::aRespuesta).toList(),
+                numero,
+                totalPaginas,
+                resultado.getTotalElements(),
+                consulta.monto(rango.desde(), rango.hasta()));
+    }
+
+    private static Rango rangoDe(PeriodoHistorial periodo) {
+        LocalDate inicioMes = LocalDate.now(ZONA).withDayOfMonth(1);
+        return switch (periodo) {
+            case MES_ACTUAL -> new Rango(inicioMes.atStartOfDay(), inicioMes.plusMonths(1).atStartOfDay());
+            case MES_ANTERIOR -> new Rango(inicioMes.minusMonths(1).atStartOfDay(), inicioMes.atStartOfDay());
+            case RECIENTES -> new Rango(SIN_LIMITE_DESDE, SIN_LIMITE_HASTA);
+        };
+    }
+
     /** Viajes de un conductor, del mas reciente al mas antiguo (panel admin). */
     public List<ViajeResponse> listarPorConductor(Long idConductor) {
         return viajeRepository.findByConductorIdOrderByFechaInicioDesc(idConductor).stream()
@@ -448,7 +526,8 @@ public class ViajeService {
                 calificacionRepository.existsByViajeIdAndUsuarioEmisorId(viaje.getId(), usuarioPasajero.getId()),
                 metodoPagoDe(viaje),
                 viaje.getMetodoPagoPedido(),
-                qrPagoConductorService.tieneQr(viaje.getConductor().getId()));
+                qrPagoConductorService.tieneQr(viaje.getConductor().getId()),
+                Boolean.TRUE.equals(viaje.getCalificacionOfrecidaPasajero()));
     }
 
     /**
@@ -569,6 +648,17 @@ public class ViajeService {
             log.warn("No se pudo notificar por WebSocket el cambio de viaje {} al usuario {}",
                     respuesta.idViaje(), idUsuario, excepcion);
         }
+    }
+
+    /** La app mostro al pasajero el cuadro para calificar: no se le vuelve a ofrecer. */
+    @Transactional
+    public void marcarCalificacionOfrecida(Long idViaje) {
+        Viaje viaje = obtenerViaje(idViaje);
+        if (!viaje.getPasajero().getId().equals(obtenerPasajeroActual().getId())) {
+            throw RecursoNoEncontradoException.de("Viaje", idViaje);
+        }
+        viaje.setCalificacionOfrecidaPasajero(true);
+        viajeRepository.save(viaje);
     }
 
     private Viaje obtenerViajeDelConductor(Long idViaje) {

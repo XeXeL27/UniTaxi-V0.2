@@ -1,5 +1,6 @@
 package com.taxiuap.backend.identity.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,12 +20,17 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
 
     List<Usuario> findByEstadoUsuarioOrderByIdAsc(EstadoRegistro estado);
 
+    List<Usuario> findByEstadoUsuarioInOrderByIdAsc(Collection<EstadoRegistro> estados);
+
     boolean existsByNombreUsuarioAndRolCodigo(String nombreUsuario, String codigoRol);
 
     /** Un nombre de usuario pertenece a una sola persona (sus cuentas de distinto rol lo comparten). */
     boolean existsByNombreUsuarioAndPersonaIdNot(String nombreUsuario, Long idPersona);
 
     boolean existsByPersonaIdAndRolCodigoAndEstadoUsuario(Long idPersona, String codigoRol, EstadoRegistro estado);
+
+    boolean existsByPersonaIdAndRolCodigoAndEstadoUsuarioIn(Long idPersona, String codigoRol,
+            Collection<EstadoRegistro> estados);
 
     /** Busca un usuario por persona y código de rol (usado para login social/google). */
     Optional<Usuario> findByPersonaIdAndRolCodigo(Long idPersona, String codigoRol);

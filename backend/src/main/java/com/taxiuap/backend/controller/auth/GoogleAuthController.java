@@ -34,6 +34,8 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.dto.CanjeGoogleRequest;
+import com.taxiuap.backend.identity.dto.IngresoGoogleMovilRequest;
+import com.taxiuap.backend.identity.dto.IngresoGoogleMovilResponse;
 import com.taxiuap.backend.identity.dto.PerfilGoogle;
 import com.taxiuap.backend.identity.dto.PerfilGoogleResponse;
 import com.taxiuap.backend.identity.dto.RegistroConductorGoogleRequest;
@@ -91,6 +93,10 @@ public class GoogleAuthController {
     @Value("${google.userinfo-url:https://www.googleapis.com/oauth2/v2/userinfo}")
     private String googleUserinfoUrl;
 
+    /** Verificacion del id_token que entrega Google Sign-In en el APK. */
+    @Value("${google.tokeninfo-url:https://oauth2.googleapis.com/tokeninfo}")
+    private String googleTokeninfoUrl;
+
     /** Origenes del panel y la app con flutter run: tambien pueden recibir la vuelta de Google. */
     @Value("${cors.origenes:}")
     private String origenesCors;
@@ -136,16 +142,10 @@ public class GoogleAuthController {
         }
 
         try {
-            PerfilGoogle perfil = perfilDe(codigoGoogle);
-            return switch (pedido.modo()) {
-                case INGRESO -> volverCon(pedido.volver(), "google",
-                        temporal.guardarCanje(registroGoogleService.ingresar(perfil, foto(perfil))));
-                case PASAJERO -> volverCon(pedido.volver(), "google",
-                        temporal.guardarCanje(registroGoogleService.registrarPasajero(perfil, foto(perfil))));
-                case CONDUCTOR -> registroGoogleService.conductorExistente(perfil)
-                        .map(tokens -> volverCon(pedido.volver(), "google", temporal.guardarCanje(tokens)))
-                        .orElseGet(() -> volverCon(pedido.volver(), "google_registro", temporal.guardarRegistro(perfil)));
-            };
+            IngresoGoogleMovilResponse resultado = resolver(perfilDe(codigoGoogle), pedido.modo());
+            return resultado.sesion() != null
+                    ? volverCon(pedido.volver(), "google", temporal.guardarCanje(resultado.sesion()))
+                    : volverCon(pedido.volver(), "google_registro", resultado.codigoRegistro());
         } catch (NegocioException | ConflictoException e) {
             return volverCon(pedido.volver(), "google_error", e.getMessage());
         } catch (RestClientException | IllegalStateException e) {
@@ -156,6 +156,34 @@ public class GoogleAuthController {
             LOG.error("Error inesperado en el ingreso con Google", e);
             return volverCon(pedido.volver(), "google_error", "No se pudo completar el ingreso con Google.");
         }
+    }
+
+    /** Client ID web de Google: el APK lo usa como serverClientId para pedir el id_token. */
+    @GetMapping("/google/config")
+    public ResponseEntity<ApiResponse<Map<String, String>>> configuracion() {
+        if (googleClientId == null || googleClientId.isBlank()) {
+            throw new NegocioException("Login con Google no configurado: falta GOOGLE_CLIENT_ID en el .env");
+        }
+        return ResponseEntity.ok(ApiResponse.exito(Map.of("clientId", googleClientId)));
+    }
+
+    /**
+     * Ingreso con Google desde el APK (Google Sign-In nativo, sin redireccion: Google no acepta volver
+     * a http://IP-de-la-red). Se verifica el id_token con Google y se sigue la misma logica que la web:
+     * sesion iniciada, o codigo para el formulario de conductor.
+     */
+    @PostMapping("/google/movil")
+    public ResponseEntity<ApiResponse<IngresoGoogleMovilResponse>> ingresarMovil(
+            @Valid @RequestBody IngresoGoogleMovilRequest datos) {
+        PerfilGoogle perfil;
+        try {
+            perfil = perfilDeIdToken(datos.idToken());
+        } catch (RestClientException e) {
+            throw new CredencialesInvalidasException("Google no reconocio el ingreso: vuelve a intentarlo");
+        }
+        IngresoGoogleMovilResponse resultado = resolver(perfil, datos.modo());
+        return ResponseEntity.ok(ApiResponse.exito(
+                resultado.sesion() != null ? "Sesion iniciada con Google" : "Completa tus datos de conductor", resultado));
     }
 
     /** La app recoge la sesion con el codigo de la URL de vuelta (una sola vez, 2 minutos). */
@@ -170,8 +198,7 @@ public class GoogleAuthController {
     @GetMapping("/google/registro/{codigo}")
     public ResponseEntity<ApiResponse<PerfilGoogleResponse>> perfilRegistro(@PathVariable String codigo) {
         PerfilGoogle perfil = perfilRegistroVigente(codigo);
-        return ResponseEntity.ok(ApiResponse.exito(
-                new PerfilGoogleResponse(perfil.correo(), perfil.nombres(), perfil.apellidos())));
+        return ResponseEntity.ok(ApiResponse.exito(registroGoogleService.perfilParaRegistro(perfil)));
     }
 
     /**
@@ -189,6 +216,42 @@ public class GoogleAuthController {
     }
 
     // ------------------------------------------------------------------ Google
+
+    /**
+     * Lo mismo para la web y el APK: INGRESO entra con la cuenta que tenga (o la registra como
+     * pasajero), PASAJERO registra, CONDUCTOR entra si ya es conductor o da el codigo del formulario.
+     */
+    private IngresoGoogleMovilResponse resolver(PerfilGoogle perfil, ModoIngresoGoogle modo) {
+        return switch (modo) {
+            case INGRESO -> IngresoGoogleMovilResponse.sesion(registroGoogleService.ingresar(perfil, foto(perfil)));
+            case PASAJERO -> IngresoGoogleMovilResponse.sesion(registroGoogleService.registrarPasajero(perfil, foto(perfil)));
+            // Conductor sin aprobar que tambien es pasajero: entra como pasajero con un aviso.
+            case CONDUCTOR -> registroGoogleService.conductorExistente(perfil)
+                    .map(tokens -> new IngresoGoogleMovilResponse(tokens, null,
+                            "CONDUCTOR".equals(tokens.usuario().rol()) ? null
+                                    : "Tu registro de conductor todavia esta en revision. Por ahora entras como pasajero."))
+                    .orElseGet(() -> new IngresoGoogleMovilResponse(null, temporal.guardarRegistro(perfil), null));
+        };
+    }
+
+    /** Verifica con Google el id_token del APK: firma, vigencia, que sea para esta app y correo verificado. */
+    private PerfilGoogle perfilDeIdToken(String idToken) {
+        // URI ya codificada: con un String RestTemplate la volveria a codificar.
+        Map<String, Object> datos = restTemplate.exchange(
+                URI.create(googleTokeninfoUrl + "?id_token=" + codificar(idToken)), HttpMethod.GET, null,
+                new ParameterizedTypeReference<Map<String, Object>>() { }).getBody();
+        if (datos == null || !googleClientId.equals(datos.get("aud"))) {
+            throw new CredencialesInvalidasException("El ingreso con Google no es para esta aplicacion");
+        }
+        if (!(datos.get("email") instanceof String correo) || correo.isBlank()) {
+            throw new NegocioException("Google no compartio el correo de la cuenta");
+        }
+        if (!"true".equals(String.valueOf(datos.get("email_verified")))) {
+            throw new NegocioException("El correo de esa cuenta de Google no esta verificado");
+        }
+        return PerfilGoogle.desde(correo, texto(datos.get("name")), texto(datos.get("given_name")),
+                texto(datos.get("family_name")), texto(datos.get("picture")));
+    }
 
     private PerfilGoogle perfilDe(String codigoGoogle) {
         HttpHeaders cabeceras = new HttpHeaders();
