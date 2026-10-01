@@ -25,5 +25,11 @@ public record RegistroConductorRequest(
         @NotBlank @Pattern(regexp = ReglasRegistro.PATRON_CELULAR, message = ReglasRegistro.MENSAJE_CELULAR) String telefono,
         @NotBlank @Pattern(regexp = NombreUsuario.PATRON, message = NombreUsuario.MENSAJE) String nombreUsuario,
         @NotBlank @Size(min = 8, max = 72) String password,
-        @Valid @NotNull DatosConductorRequest conductor) {
+        @Valid @NotNull DatosConductorRequest conductor,
+        /** true: la persona indico que sus datos se leyeron mal; un administrador los revisa (OBSERVADO). */
+        Boolean observado) {
+
+    public boolean esObservado() {
+        return Boolean.TRUE.equals(observado);
+    }
 }

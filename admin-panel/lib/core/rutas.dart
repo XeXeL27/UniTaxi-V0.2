@@ -8,6 +8,7 @@ import '../modulos/flota/pantalla_flota.dart';
 import '../modulos/inicio/pantalla_inicio.dart';
 import '../modulos/mapa/pantalla_mapa.dart';
 import '../modulos/mapa/pantalla_zonas.dart';
+import '../modulos/personas/pantalla_carnets_observados.dart';
 import '../modulos/personas/pantalla_conductores.dart';
 import '../modulos/personas/pantalla_pasajeros.dart';
 import '../modulos/personas/pantalla_personas.dart';
@@ -39,6 +40,10 @@ GoRouter crearRutas(Sesion sesion) {
           GoRoute(path: Menu.usuarios.ruta, pageBuilder: (_, _) => pagina(const PantallaUsuarios())),
           GoRoute(path: Menu.pasajeros.ruta, pageBuilder: (_, _) => pagina(const PantallaPasajeros())),
           GoRoute(path: Menu.conductores.ruta, pageBuilder: (_, _) => pagina(const PantallaConductores())),
+          GoRoute(
+            path: Menu.carnetsObservados.ruta,
+            pageBuilder: (_, _) => pagina(const PantallaCarnetsObservados()),
+          ),
           GoRoute(path: Menu.zonas.ruta, pageBuilder: (_, _) => pagina(const PantallaZonas())),
           GoRoute(path: Menu.mapa.ruta, pageBuilder: (_, _) => pagina(const PantallaMapa())),
           GoRoute(path: Menu.flota.ruta, pageBuilder: (_, _) => pagina(const PantallaFlota())),

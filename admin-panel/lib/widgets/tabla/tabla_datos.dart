@@ -67,6 +67,12 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
   /// Ancho de cada boton de accion por fila (IconButton) mas margen.
   static const _anchoPorAccion = 42.0;
 
+  /// En tablas angostas (celular) los botones de acciones son compactos.
+  static const _anchoPorAccionCompacta = 34.0;
+
+  /// Bajo este ancho la tabla usa celdas y botones compactos.
+  static const _anchoCompacta = 560.0;
+
   final _controlBusqueda = TextEditingController();
 
   String _busqueda = '';
@@ -180,10 +186,14 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
   }
 
   /// Ancho de la columna de acciones: el ojo mas los botones de la primera fila.
-  double _anchoAcciones(List<T> filas) {
+  double _anchoAcciones(List<T> filas, {required bool compacta}) {
     final accionesFila = widget.accionesFila;
     final cantidad = 1 + (accionesFila == null || filas.isEmpty ? 0 : accionesFila(filas.first).length);
     // Nunca mas angosta que el titulo "Acciones".
+    if (compacta) {
+      final ancho = cantidad * _anchoPorAccionCompacta + 8;
+      return ancho < 90 ? 90 : ancho;
+    }
     final ancho = cantidad * _anchoPorAccion + 24;
     return ancho < 100 ? 100 : ancho;
   }
@@ -213,11 +223,13 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
       ),
       child: LayoutBuilder(
         builder: (context, restricciones) {
+          final compacta = restricciones.maxWidth < _anchoCompacta;
           final diseno = _DisenoTabla.calcular<T>(
             columnas: widget.columnas,
             // Se descuenta el borde exterior de la tabla (1 px por lado).
             anchoDisponible: restricciones.maxWidth - 2,
-            anchoAcciones: _anchoAcciones(widget.filas),
+            anchoAcciones: _anchoAcciones(widget.filas, compacta: compacta),
+            compacta: compacta,
           );
 
           return Column(
@@ -582,7 +594,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
   /// dibujan una sola vez encima de todas las filas.
   Widget _tabla(List<T> filasPagina, int inicio, _DisenoTabla diseno) {
     final separadores = <double>[];
-    var x = _DisenoTabla.anchoNumero;
+    var x = diseno.anchoNumero;
     separadores.add(x);
     for (final ancho in diseno.anchos) {
       x += ancho;
@@ -633,10 +645,11 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _contenedorCelda(
-              ancho: _DisenoTabla.anchoNumero,
+              ancho: diseno.anchoNumero,
               bordeDerecho: true,
               colorBorde: borde,
               alineacion: Alignment.center,
+              compacta: diseno.compacta,
               child: const Text('N°', style: estilo),
             ),
             for (var v = 0; v < diseno.visibles.length; v++)
@@ -644,12 +657,14 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
                 ancho: diseno.anchos[v],
                 bordeDerecho: true,
                 colorBorde: borde,
+                compacta: diseno.compacta,
                 child: _encabezado(diseno.visibles[v], columnas[diseno.visibles[v]]),
               ),
             _contenedorCelda(
               ancho: diseno.anchoAcciones,
               bordeDerecho: false,
-              child: const Text('Acciones', style: estilo),
+              compacta: diseno.compacta,
+              child: const Text('Acciones', style: estilo, maxLines: 1, overflow: TextOverflow.ellipsis),
             ),
           ],
         ),
@@ -672,6 +687,8 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
             Flexible(
               child: Text(
                 columna.titulo,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
               ),
             ),
@@ -693,11 +710,13 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
       child: Row(
         children: [
           _contenedorCelda(
-            ancho: _DisenoTabla.anchoNumero,
+            ancho: diseno.anchoNumero,
             bordeDerecho: false,
             alineacion: Alignment.center,
+            compacta: diseno.compacta,
             child: Text(
               '$numero',
+              maxLines: 1,
               style: const TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.azul),
             ),
           ),
@@ -705,25 +724,56 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
             _contenedorCelda(
               ancho: diseno.anchos[v],
               bordeDerecho: false,
-              child: _celda(widget.columnas[diseno.visibles[v]], fila),
+              compacta: diseno.compacta,
+              child: _celda(widget.columnas[diseno.visibles[v]], fila, unaLinea: true),
             ),
           _contenedorCelda(
             ancho: diseno.anchoAcciones,
             bordeDerecho: false,
             relleno: const EdgeInsets.symmetric(horizontal: 4),
-            child: Wrap(
-              children: [
-                IconButton(
-                  tooltip: widget.alVer == null ? 'Ver todos los datos' : 'Ver más',
-                  onPressed: () => widget.alVer == null ? _mostrarDetalle(fila, numero) : widget.alVer!(fila),
-                  icon: IconosTabla.ojo,
-                ),
-                if (accionesFila != null) ...accionesFila(fila),
-              ],
-            ),
+            child: _botonesAcciones(fila, numero, accionesFila, compacta: diseno.compacta),
           ),
         ],
       ),
+    );
+  }
+
+  /// El ojo y las acciones de la fila en una sola linea: en tablas angostas los botones son
+  /// compactos, y si aun asi no entran se achican en vez de pasar a otra linea.
+  Widget _botonesAcciones(
+    T fila,
+    int numero,
+    List<Widget> Function(T fila)? accionesFila, {
+    required bool compacta,
+  }) {
+    final botones = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          tooltip: widget.alVer == null ? 'Ver todos los datos' : 'Ver más',
+          onPressed: () => widget.alVer == null ? _mostrarDetalle(fila, numero) : widget.alVer!(fila),
+          icon: IconosTabla.ojo,
+        ),
+        if (accionesFila != null) ...accionesFila(fila),
+      ],
+    );
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      alignment: Alignment.centerLeft,
+      child: compacta
+          ? IconButtonTheme(
+              data: IconButtonThemeData(
+                style: IconButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(_anchoPorAccionCompacta, _anchoPorAccionCompacta),
+                  fixedSize: const Size(_anchoPorAccionCompacta, _anchoPorAccionCompacta),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  visualDensity: VisualDensity.compact,
+                ),
+              ),
+              child: botones,
+            )
+          : botones,
     );
   }
 
@@ -822,12 +872,16 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     required bool bordeDerecho,
     required Widget child,
     Color colorBorde = ColoresApp.borde,
-    EdgeInsets relleno = const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+    EdgeInsets? relleno,
     Alignment alineacion = Alignment.centerLeft,
+    bool compacta = false,
   }) {
     return Container(
       width: ancho,
-      padding: relleno,
+      padding: relleno ??
+          (compacta
+              ? const EdgeInsets.symmetric(horizontal: 8, vertical: 11)
+              : const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
       alignment: alineacion,
       decoration: BoxDecoration(
         border: bordeDerecho ? Border(right: BorderSide(color: colorBorde)) : null,
@@ -836,15 +890,26 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     );
   }
 
-  Widget _celda(ColumnaTabla<T> columna, T fila, {String vacio = ''}) {
+  /// [unaLinea]: en la tabla el texto no baja a otra linea (todas las filas miden lo mismo); si no
+  /// entra termina en "..." y se ve completo al pasar el mouse o mantener presionado, ademas del ojo.
+  Widget _celda(ColumnaTabla<T> columna, T fila, {String vacio = '', bool unaLinea = false}) {
     final propia = columna.celda;
     if (propia != null) return propia(fila);
     if (columna.tipo == TipoColumna.estado) {
       final valor = columna.valor(fila)?.toString();
-      return valor == null ? Text(vacio) : Align(alignment: Alignment.centerLeft, child: InsigniaEstado(valor));
+      if (valor == null) return Text(vacio);
+      final insignia = Align(alignment: Alignment.centerLeft, child: InsigniaEstado(valor));
+      return unaLinea
+          ? FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: insignia)
+          : insignia;
     }
     final texto = columna.texto(fila);
-    return Text(texto.isEmpty ? vacio : texto);
+    if (!unaLinea || texto.isEmpty) return Text(texto.isEmpty ? vacio : texto);
+    return Tooltip(
+      message: texto,
+      waitDuration: const Duration(milliseconds: 400),
+      child: Text(texto, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis),
+    );
   }
 
   Widget _paginacion(int total, int inicio, int enPagina, int pagina, int totalPaginas, bool movil) {
@@ -928,20 +993,26 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
 /// Que columnas entran en pantalla y con que ancho. Si no entran todas se ocultan las de la
 /// derecha (la primera siempre queda). La columna N° y la de acciones tienen ancho fijo.
 class _DisenoTabla {
-  static const anchoNumero = 56.0;
-
   final List<int> visibles;
   final List<int> ocultas;
   final List<double> anchos;
   final double anchoAcciones;
 
-  const _DisenoTabla(this.visibles, this.ocultas, this.anchos, this.anchoAcciones);
+  /// Ancho de la columna N°: mas angosta en tablas compactas (celular).
+  final double anchoNumero;
+
+  /// Tabla angosta: celdas con menos relleno y botones de acciones compactos.
+  final bool compacta;
+
+  const _DisenoTabla(this.visibles, this.ocultas, this.anchos, this.anchoAcciones, this.anchoNumero, this.compacta);
 
   static _DisenoTabla calcular<T>({
     required List<ColumnaTabla<T>> columnas,
     required double anchoDisponible,
     required double anchoAcciones,
+    required bool compacta,
   }) {
+    final anchoNumero = compacta ? 42.0 : 56.0;
     final fijo = anchoNumero + anchoAcciones;
     final visibles = <int>[];
     var usado = fijo;
@@ -968,6 +1039,6 @@ class _DisenoTabla {
     if (sumaAnchos > anchoDisponible && anchos.isNotEmpty) {
       anchos[0] = (anchos[0] - (sumaAnchos - anchoDisponible)).clamp(60.0, double.infinity);
     }
-    return _DisenoTabla(visibles, ocultas, anchos, anchoAcciones);
+    return _DisenoTabla(visibles, ocultas, anchos, anchoAcciones, anchoNumero, compacta);
   }
 }

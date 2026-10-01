@@ -205,14 +205,26 @@ class FlujoPasajero extends ChangeNotifier {
     _resolverDireccion(punto, esOrigen: false);
   }
 
-  /// Un favorito del menu lateral pasa a ser el destino.
+  /// Un favorito pasa a ser el destino. El pasajero ve su nombre; al conductor le llega la
+  /// direccion real del punto, que se busca aparte.
   void irAFavorito(LatLng posicion, String nombre) {
     if (etapa != EtapaPasajero.eligiendo) return;
     guardandoLugar = false;
     mapa.ponerB(PuntoRuta(posicion, nombre));
+    _favorito = (posicion: posicion, nombre: nombre);
+    _direccionFavorito = null;
+    unawaited(ServiciosMapa.direccionDe(posicion).then((texto) {
+      if (_favorito?.posicion == posicion) _direccionFavorito = texto;
+    }));
     if (mapa.a == null) mapa.centrarEn(posicion);
     _avisar();
   }
+
+  /// Favorito elegido como destino: su nombre solo lo ve el pasajero.
+  ({LatLng posicion, String nombre})? _favorito;
+
+  /// Direccion real del favorito (Nominatim), la que ve el conductor.
+  String? _direccionFavorito;
 
   void quitarDestino() {
     mapa.ponerB(null);
@@ -256,7 +268,18 @@ class FlujoPasajero extends ChangeNotifier {
     final b = mapa.b;
     if (a == null || b == null) return;
     final origen = PuntoRuta(a.posicion, direccionOrigen ?? a.texto);
-    final creada = await api.solicitar(origen, b, metodoPago: metodoPago);
+    // Si el destino es un favorito, el conductor recibe la direccion del punto y no el nombre que le
+    // puso el pasajero.
+    final favorito = _favorito;
+    final esFavorito = favorito != null && favorito.posicion == b.posicion && favorito.nombre == b.texto;
+    var destino = b;
+    if (esFavorito) {
+      final direccion =
+          _direccionFavorito ?? await ServiciosMapa.direccionDe(b.posicion) ?? coordenadasTexto(b.posicion);
+      destino = PuntoRuta(b.posicion, direccion);
+    }
+    final creada = await api.solicitar(origen, destino,
+        metodoPago: metodoPago, destinoNombre: esFavorito ? favorito.nombre : null);
     _entrarBuscando(creada);
   }
 

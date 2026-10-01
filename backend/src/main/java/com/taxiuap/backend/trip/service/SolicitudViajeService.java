@@ -74,6 +74,9 @@ public class SolicitudViajeService {
     @Transactional
     public SolicitudViajeResponse crear(SolicitudViajeRequest request) {
         Pasajero pasajero = buscarPasajero();
+        if (pasajero.getUsuario().getPersona().carnetObservado()) {
+            throw new NegocioException("Tus datos estan en revision: podras pedir viajes cuando un administrador los apruebe");
+        }
         // Pedidos simultaneos del mismo pasajero se atienden de a uno (ver PasajeroRepository.bloquear).
         pasajeroRepository.bloquear(pasajero.getId());
 
@@ -98,6 +101,8 @@ public class SolicitudViajeService {
         solicitud.setDestino(convertirAPunto(request.destinoWkt()));
         solicitud.setOrigenDireccion(request.origenDireccion());
         solicitud.setDestinoDireccion(request.destinoDireccion());
+        solicitud.setDestinoNombrePasajero(request.destinoNombre() == null || request.destinoNombre().isBlank()
+                ? null : request.destinoNombre().trim());
         solicitud.setPrecioSugerido(precioFijo != null ? precioFijo : request.precioSugerido());
         solicitud.setMetodoPago(metodoPagoPermitido(request.metodoPago()));
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
@@ -105,7 +110,7 @@ public class SolicitudViajeService {
         solicitud.setEstadoSolViaje(EstadoRegistro.A);
 
         SolicitudViajeResponse creada = aResponse(solicitudViajeRepository.save(solicitud));
-        viajeEventPublisher.publicarSolicitudNueva(creada);
+        viajeEventPublisher.publicarSolicitudNueva(creada.sinNombreDestino());
         return creada;
     }
 
@@ -250,7 +255,15 @@ public class SolicitudViajeService {
                 solicitud.getSituacionSolicitud(),
                 solicitud.getFechaSolicitud(),
                 cantidadOfertas,
-                solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO);
+                solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO,
+                // El nombre del favorito solo se devuelve al propio pasajero.
+                esDelUsuarioActual(solicitud.getPasajero()) ? solicitud.getDestinoNombrePasajero() : null);
+    }
+
+    private static boolean esDelUsuarioActual(Pasajero pasajero) {
+        return pasajero != null && UsuarioActual.obtener()
+                .map(u -> u.idUsuario().equals(pasajero.getUsuario().getId()))
+                .orElse(false);
     }
 
     /** Por ahora el pasajero paga en efectivo o con el QR del conductor. */

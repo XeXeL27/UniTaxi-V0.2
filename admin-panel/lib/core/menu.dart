@@ -27,13 +27,14 @@ class Menu {
   static const usuarios = ItemMenu('Usuarios', FontAwesomeIcons.userShield, '/usuarios');
   static const pasajeros = ItemMenu('Pasajeros', FontAwesomeIcons.userCheck, '/pasajeros');
   static const conductores = ItemMenu('Conductores', FontAwesomeIcons.carSide, '/conductores');
+  static const carnetsObservados = ItemMenu('Carnets observados', FontAwesomeIcons.idCardClip, '/carnets-observados');
   static const zonas = ItemMenu('Zonas de servicio', FontAwesomeIcons.drawPolygon, '/zonas');
   static const mapa = ItemMenu('Mapa', FontAwesomeIcons.mapLocationDot, '/mapa');
   static const flota = ItemMenu('Conductores en vivo', FontAwesomeIcons.carSide, '/flota');
   static const carpetaArchivos = ItemMenu('Carpeta de archivos', FontAwesomeIcons.folderOpen, '/sistema/carpeta');
 
   static const grupos = [
-    GrupoMenu('Personas', FontAwesomeIcons.users, [personas, usuarios, pasajeros, conductores]),
+    GrupoMenu('Personas', FontAwesomeIcons.users, [personas, usuarios, pasajeros, conductores, carnetsObservados]),
     GrupoMenu('Mapa', FontAwesomeIcons.map, [zonas, mapa, flota]),
     GrupoMenu('Sistema', FontAwesomeIcons.gear, [carpetaArchivos]),
   ];

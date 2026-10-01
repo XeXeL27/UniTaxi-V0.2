@@ -10,8 +10,8 @@ import '../../../comun/modelos_viaje.dart';
 import '../../../comun/qr_pago.dart';
 import '../../../comun/vista_chat.dart';
 
-/// Panel mientras el pasajero elige su destino: partida (GPS), destino, ruta, precio y el boton
-/// para solicitar el taxi.
+/// Panel mientras el pasajero elige su destino: arriba el precio y la forma de pago, luego partida
+/// (GPS), destino y ruta, y al final el boton para solicitar el taxi.
 class PanelEligiendo extends StatelessWidget {
   final FlujoPasajero flujo;
   final bool enviando;
@@ -54,6 +54,19 @@ class PanelEligiendo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Con el destino elegido, lo primero que se ve es el precio y como se paga.
+        if (b != null) ...[
+          RecuadroPrecio(
+            etiqueta: 'Precio del viaje',
+            detalle: flujo.metodoPago == MetodoPago.qr
+                ? 'Pagas con el QR del conductor'
+                : 'Pagas en efectivo al conductor',
+            monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
+          ),
+          const SizedBox(height: 10),
+          _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
+          const SizedBox(height: 12),
+        ],
         if (a == null)
           mapa.gpsDisponible == false
               ? const _Indicacion(
@@ -117,16 +130,6 @@ class PanelEligiendo extends StatelessWidget {
             ),
           const SizedBox(height: 12),
           DisponibilidadTaxis(libres: libres),
-          const SizedBox(height: 12),
-          _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
-          const SizedBox(height: 10),
-          RecuadroPrecio(
-            etiqueta: 'Precio del viaje',
-            detalle: flujo.metodoPago == MetodoPago.qr
-                ? 'Pagas con el QR del conductor'
-                : 'Pagas en efectivo al conductor',
-            monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
-          ),
           const SizedBox(height: 14),
           BotonPrincipal(
             texto: 'Solicitar taxi',
@@ -139,8 +142,9 @@ class PanelEligiendo extends StatelessWidget {
   }
 }
 
-/// Detalle que se muestra en el modal de confirmacion al pedir el taxi: servicio, distancia, forma
-/// de pago y el precio ya calculado. No trae tiempo estimado ni los puntos del recorrido.
+/// Detalle que se muestra en el modal de confirmacion al pedir el taxi: arriba el precio ya
+/// calculado y la forma de pago, luego servicio y distancia. No trae tiempo estimado ni los puntos
+/// del recorrido.
 class DetalleSolicitudViaje extends StatelessWidget {
   final FlujoPasajero flujo;
 
@@ -153,6 +157,29 @@ class DetalleSolicitudViaje extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        RecuadroPrecio(
+          etiqueta: 'Precio del viaje',
+          monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
+        ),
+        const SizedBox(height: 4),
+        _FilaDato(
+          etiqueta: 'Pago',
+          valor: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              FaIcon(
+                flujo.metodoPago == MetodoPago.qr ? FontAwesomeIcons.qrcode : FontAwesomeIcons.moneyBillWave,
+                color: ColoresApp.ruta,
+                size: 14,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                MetodoPago.nombre(flujo.metodoPago),
+                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+              ),
+            ],
+          ),
+        ),
         _FilaDato(
           etiqueta: 'Servicio',
           valor: Row(
@@ -173,29 +200,6 @@ class DetalleSolicitudViaje extends StatelessWidget {
             icono: FontAwesomeIcons.route,
             texto: ruta?.distanciaTexto ?? 'A calcular',
           ),
-        ),
-        _FilaDato(
-          etiqueta: 'Pago',
-          valor: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              FaIcon(
-                flujo.metodoPago == MetodoPago.qr ? FontAwesomeIcons.qrcode : FontAwesomeIcons.moneyBillWave,
-                color: ColoresApp.ruta,
-                size: 14,
-              ),
-              const SizedBox(width: 6),
-              Text(
-                MetodoPago.nombre(flujo.metodoPago),
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.texto),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 4),
-        RecuadroPrecio(
-          etiqueta: 'Precio del viaje',
-          monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
         ),
       ],
     );
@@ -342,7 +346,7 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
               child: Text(
                 solicitud == null
                     ? ''
-                    : 'Hacia ${solicitud.destinoDireccion} - ${formatoBs(solicitud.precio)}'
+                    : 'Hacia ${solicitud.destinoTexto} - ${formatoBs(solicitud.precio)}'
                           '${solicitud.metodoPago == MetodoPago.qr ? ' por QR' : ' en efectivo'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
@@ -467,7 +471,7 @@ class PanelViaje extends StatelessWidget {
         TarjetaMoto(viaje: viaje),
         const Divider(height: 26, color: ColoresApp.borde),
         FilaLugar.partida(texto: viaje.origenDireccion),
-        FilaLugar.destino(texto: viaje.destinoDireccion),
+        FilaLugar.destino(texto: viaje.destinoTexto),
         const SizedBox(height: 10),
         RecuadroPrecio(etiqueta: MetodoPago.frase('Pagas', viaje.metodoPago), monto: formatoBs(viaje.precioFinal)),
         const SizedBox(height: 6),

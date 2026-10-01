@@ -21,5 +21,14 @@ public record SolicitudViajeResponse(
         SituacionSolicitud situacionSolicitud,
         LocalDateTime fechaSolicitud,
         int cantidadOfertas,
-        MetodoPago metodoPago) {
+        MetodoPago metodoPago,
+        /** Nombre del favorito elegido como destino: solo en las respuestas al pasajero (si no, null). */
+        String destinoNombre) {
+
+    /** La misma solicitud sin el nombre del favorito, para los conductores. */
+    public SolicitudViajeResponse sinNombreDestino() {
+        return new SolicitudViajeResponse(idSolicitud, idPasajero, nombrePasajero, idCategoriaServicio,
+                nombreCategoriaServicio, origenWkt, destinoWkt, origenDireccion, destinoDireccion, precioSugerido,
+                situacionSolicitud, fechaSolicitud, cantidadOfertas, metodoPago, null);
+    }
 }

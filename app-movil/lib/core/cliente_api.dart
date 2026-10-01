@@ -104,7 +104,9 @@ class ClienteApi {
       if (respuesta.statusCode == 401) {
         // Si la administracion suspendio o elimino la cuenta, el backend dice por que.
         final mensaje = _decodificar(respuesta)['mensaje'] as String?;
-        final motivo = mensaje != null && mensaje.startsWith('Tu cuenta') ? mensaje : null;
+        final motivo = mensaje != null && (mensaje.startsWith('Tu cuenta') || mensaje.startsWith('No pudimos aprobar'))
+            ? mensaje
+            : null;
         await sesion.cerrar(motivo: motivo);
         throw ApiExcepcion(motivo ?? 'La sesion expiro, vuelva a iniciar sesion', codigo: 401);
       }

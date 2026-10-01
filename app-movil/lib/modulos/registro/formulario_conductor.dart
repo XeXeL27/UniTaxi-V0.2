@@ -28,9 +28,7 @@ import '../../widgets/formatos.dart';
 typedef _DocumentoPedido = ({String tipo, String nombre, bool obligatorio});
 
 /// El carnet y la licencia van como fotos; en PDF solo el SOAT, opcional.
-const List<_DocumentoPedido> _documentos = [
-  (tipo: 'SOAT', nombre: 'SOAT de la moto', obligatorio: false),
-];
+const List<_DocumentoPedido> _documentos = [(tipo: 'SOAT', nombre: 'SOAT de la moto', obligatorio: false)];
 
 /// Tamano maximo de cada PDF (regla 13), el mismo que valida el backend.
 const int _maximoPdf = 5 * 1024 * 1024;
@@ -75,8 +73,22 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   final _clave = GlobalKey<FormState>();
   final _c = {
     for (final campo in [
-      'nombres', 'apellidos', 'ci', 'complementoCi', 'correo', 'telefono', 'nombreUsuario', 'password',
-      'confirmacion', 'numeroLicencia', 'categoriaLicencia', 'placa', 'marca', 'modelo', 'color', 'anio',
+      'nombres',
+      'apellidos',
+      'ci',
+      'complementoCi',
+      'correo',
+      'telefono',
+      'nombreUsuario',
+      'password',
+      'confirmacion',
+      'numeroLicencia',
+      'categoriaLicencia',
+      'placa',
+      'marca',
+      'modelo',
+      'color',
+      'anio',
     ])
       campo: TextEditingController(),
   };
@@ -117,6 +129,10 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   /// El numero de licencia leido y confirmado por la persona (no se edita).
   bool _licenciaConfirmada = false;
   String? _errorLicencia;
+
+  /// [_errorLicencia] es porque el nombre de la licencia no coincide con el del carnet (no un
+  /// problema de la licencia misma): con el carnet en Observado no frena el registro.
+  bool _errorLicenciaPorNombre = false;
 
   bool get _pideCarnet => !_tieneCarnet;
 
@@ -266,18 +282,27 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
     if (datos == null) return;
     // Por ahora solo motos: otra categoria no se acepta.
     if (datos.categoria != null && !datos.esMoto) {
-      setState(() => _errorLicencia = 'Tu licencia es de categoría ${datos.categoria} '
-          '(${nombresCategoria[datos.categoria] ?? ''}). Por ahora solo aceptamos licencias de motocicleta (M).');
+      setState(
+        () => _errorLicencia =
+            'Tu licencia es de categoría ${datos.categoria} '
+            '(${nombresCategoria[datos.categoria] ?? ''}). Por ahora solo aceptamos licencias de motocicleta (M).',
+      );
       return;
     }
     if (!datos.completa) {
-      setState(() => _errorLicencia = 'No pudimos leer bien tu licencia. Vuelve a tomar las fotos de frente y con '
-          'buena luz, que se lean el número, la categoría y el vencimiento.');
+      setState(
+        () => _errorLicencia =
+            'No pudimos leer bien tu licencia. Vuelve a tomar las fotos de frente y con '
+            'buena luz, que se lean el número, la categoría y el vencimiento.',
+      );
       return;
     }
     if (datos.vencida) {
-      setState(() => _errorLicencia = 'Tu licencia venció el ${formatoFecha(datos.vencimiento)}. Necesitas una '
-          'licencia vigente para registrarte.');
+      setState(
+        () => _errorLicencia =
+            'Tu licencia venció el ${formatoFecha(datos.vencimiento)}. Necesitas una '
+            'licencia vigente para registrarte.',
+      );
       return;
     }
     // El numero se confirma al enviar, despues de confirmar los datos del carnet.
@@ -295,7 +320,10 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
     } else if (_carnet.textoAnverso != null && !nombreEnCarnet(datos, _carnet.texto)) {
       error = 'El nombre de la licencia no coincide con el de tu carnet. Revisa que las fotos sean tuyas.';
     }
-    setState(() => _errorLicencia = error);
+    setState(() {
+      _errorLicencia = error;
+      _errorLicenciaPorNombre = error != null;
+    });
     return error == null;
   }
 
@@ -411,8 +439,9 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       return;
     }
     // Si el nombre no se leyo solo o el corte no era seguro, lo escrito debe estar en el carnet.
-    final problemaNombre =
-        _nombreDelCarnet ? _carnet.datos?.revisarNombreEscrito(_c['nombres']!.text, _c['apellidos']!.text) : null;
+    final problemaNombre = _nombreDelCarnet
+        ? _carnet.datos?.revisarNombreEscrito(_c['nombres']!.text, _c['apellidos']!.text)
+        : null;
     if (problemaNombre != null) {
       setState(() => _error = problemaNombre);
       return;
@@ -421,46 +450,68 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       setState(() => _error = 'Agrega la foto del anverso y del reverso de tu licencia de conducir.');
       return;
     }
-    if (_errorLicencia != null || !_revisarNombreLicencia()) {
+    // Categoria, lectura o vencimiento de la licencia; el nombre se compara despues del carnet.
+    if (_errorLicencia != null && !_errorLicenciaPorNombre) {
       setState(() => _error = _errorLicencia);
       return;
     }
     final valido = _clave.currentState?.validate() ?? false;
     if (!valido || _fechaNacimiento == null || _vencimientoLicencia == null) {
-      setState(() => _error = !valido
-          ? 'Revisa los campos marcados en rojo.'
-          : _fechaNacimiento == null
-          ? 'Elige tu fecha de nacimiento.'
-          : 'Elige la fecha de vencimiento de tu licencia.');
+      setState(
+        () => _error = !valido
+            ? 'Revisa los campos marcados en rojo.'
+            : _fechaNacimiento == null
+            ? 'Elige tu fecha de nacimiento.'
+            : 'Elige la fecha de vencimiento de tu licencia.',
+      );
       return;
     }
     // Si el carnet no mostro su complemento pero la licencia si, es el mismo numero: se toma de ella.
     final complementoLicencia = _licencia.licencia?.complemento;
-    if (LectorDocumentos.puedeLeer && _c['complementoCi']!.text.trim().isEmpty && complementoLicencia != null &&
+    if (LectorDocumentos.puedeLeer &&
+        _c['complementoCi']!.text.trim().isEmpty &&
+        complementoLicencia != null &&
         _licencia.licencia?.numero == _c['ci']!.text.trim()) {
       _c['complementoCi']!.text = complementoLicencia;
     }
-    if (!_licenciaCoincideConCarnet) {
-      setState(() => _error = 'El número de tu licencia no coincide con el de tu carnet.');
-      return;
-    }
     // Carnet nuevo: la persona confirma el nombre y el numero leidos de sus fotos. Si dice que no,
-    // vuelve a tomar las fotos.
+    // vuelve a tomar las fotos; con Observado los revisa el administrador.
+    var observado = false;
     if (_pideCarnet) {
-      final confirma = await confirmarDatosCarnet(context,
-          nombre: _nombreCompleto,
-          ci: _c['ci']!.text.trim(),
-          complemento: _c['complementoCi']!.text,
-          fotos: _carnet);
+      final respuesta = await confirmarDatosCarnet(
+        context,
+        nombre: _nombreCompleto,
+        ci: _c['ci']!.text.trim(),
+        complemento: _c['complementoCi']!.text,
+        fotos: _carnet,
+      );
       if (!mounted) return;
-      if (!confirma) {
+      if (respuesta == RespuestaCarnet.repetir) {
         _reiniciarCarnet('Vuelve a tomar las fotos del anverso y del reverso de tu carnet.');
+        return;
+      }
+      observado = respuesta == RespuestaCarnet.observado;
+    }
+    // Con el carnet en Observado sus datos pueden estar mal leidos: la licencia se compara con el
+    // carnet cuando el administrador los corrija.
+    if (!observado) {
+      if (!_revisarNombreLicencia()) {
+        setState(() => _error = _errorLicencia);
+        return;
+      }
+      if (!_licenciaCoincideConCarnet) {
+        setState(() => _error = 'El número de tu licencia no coincide con el de tu carnet.');
         return;
       }
     }
     // Despues del carnet, el numero de la licencia (el mismo del carnet).
-    final confirmaLicencia = await confirmarNumeroLicencia(context,
-        numero: _c['numeroLicencia']!.text.trim(), categoria: 'M', vence: _vencimientoLicencia, fotos: _licencia);
+    final confirmaLicencia = await confirmarNumeroLicencia(
+      context,
+      numero: _c['numeroLicencia']!.text.trim(),
+      categoria: 'M',
+      vence: _vencimientoLicencia,
+      fotos: _licencia,
+    );
     if (!mounted) return;
     if (!confirmaLicencia) {
       _reiniciarLicencia('Vuelve a tomar las fotos del anverso y del reverso de tu licencia.');
@@ -472,7 +523,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       _error = null;
     });
     final v = _vencimientoLicencia!;
-    final aprobado = _licenciaVerificada;
+    final aprobado = !observado && _licenciaVerificada;
     final conductor = {
       'numeroLicencia': _texto('numeroLicencia'),
       'categoriaLicencia': 'M',
@@ -483,7 +534,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       'modelo': _texto('modelo'),
       'color': _texto('color'),
       'anio': int.tryParse(_c['anio']!.text.trim()),
-      'licenciaVerificada': _licenciaVerificada,
+      'licenciaVerificada': aprobado,
     };
     final fecha = _fechaNacimiento == null
         ? null
@@ -498,6 +549,8 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       // El nombre es el del carnet (con Google reemplaza al de la cuenta).
       'nombres': _texto('nombres'),
       'apellidos': _texto('apellidos'),
+      // Observado: la administracion revisa los datos del carnet antes de entregar las credenciales.
+      'observado': observado,
       if (_conGoogle) 'codigo': widget.codigoGoogle,
       if (!_datosConocidos) ...{
         'correo': _texto('correo'),
@@ -505,7 +558,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         'password': _c['password']!.text,
       },
     };
-    if (widget.desdePasajero) return _enviarDesdePasajero(datos, aprobado: aprobado);
+    if (widget.desdePasajero) return _enviarDesdePasajero(datos, aprobado: aprobado, observado: observado);
     final sesion = context.read<Sesion>();
     try {
       await sesion.registrarConductor(
@@ -519,14 +572,25 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       // Con la sesion iniciada la pantalla principal pasa a ser la del conductor (en revision), o la
       // del pasajero si la persona ya lo era: entra como conductor cuando la aprueben.
       if (!mounted) return;
+      if (observado) {
+        // La app pasa al aviso rojo de revision; las credenciales llegan cuando aprueben sus datos.
+        await mostrarExito(context, titulo: '¡Registro enviado!', mensaje: _mensajeObservado);
+        if (mounted) Navigator.of(context).popUntil((ruta) => ruta.isFirst);
+        return;
+      }
       final comoPasajero = sesion.usuario?.rol == Config.rolPasajero;
       final correo = sesion.usuario?.correo ?? '';
       await mostrarExito(
         context,
         titulo: aprobado ? '¡Ya eres conductor!' : '¡Registro enviado!',
-        mensaje: 'Te enviamos tus credenciales de acceso a tu correo $correo. '
-            '${aprobado ? 'Verificamos tu licencia con tu carnet: ya puedes conectarte y recibir viajes.' : comoPasajero ? 'La administración revisará tus datos. Mientras tanto sigues como pasajero; cuando te '
-                      'aprueben podrás cambiar a modo conductor desde Más.' : 'La administración revisará tus datos: '
+        mensaje:
+            'Te enviamos tus credenciales de acceso a tu correo $correo. '
+            '${aprobado
+                ? 'Verificamos tu licencia con tu carnet: ya puedes conectarte y recibir viajes.'
+                : comoPasajero
+                ? 'La administración revisará tus datos. Mientras tanto sigues como pasajero; cuando te '
+                      'aprueben podrás cambiar a modo conductor desde Más.'
+                : 'La administración revisará tus datos: '
                       'apenas te aprueben podrás recibir viajes, sin cerrar la app.'}',
       );
       await sesion.avisoCredencialesVisto();
@@ -538,15 +602,44 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
     }
   }
 
-  Future<void> _enviarDesdePasajero(Map<String, dynamic> datos, {required bool aprobado}) async {
+  static const _mensajeObservado =
+      'Enviaste tus datos del carnet a revisión. Un administrador los comparará con '
+      'las fotos de tu carnet y los corregirá si hace falta. Cuando los apruebe te llegarán una notificación y tu '
+      'usuario y contraseña a tu correo.';
+
+  Future<void> _enviarDesdePasajero(
+    Map<String, dynamic> datos, {
+    required bool aprobado,
+    required bool observado,
+  }) async {
     try {
       await context.read<ClienteApi>().enviarFormulario('/api/pasajero/registro-conductor', datos, [
         if (_pideCarnet) ...[
-          (campo: 'CARNET_ANVERSO', bytes: _carnet.anverso!, nombre: 'carnet_anverso.jpg', tipo: MediaType('image', 'jpeg')),
-          (campo: 'CARNET_REVERSO', bytes: _carnet.reverso!, nombre: 'carnet_reverso.jpg', tipo: MediaType('image', 'jpeg')),
+          (
+            campo: 'CARNET_ANVERSO',
+            bytes: _carnet.anverso!,
+            nombre: 'carnet_anverso.jpg',
+            tipo: MediaType('image', 'jpeg'),
+          ),
+          (
+            campo: 'CARNET_REVERSO',
+            bytes: _carnet.reverso!,
+            nombre: 'carnet_reverso.jpg',
+            tipo: MediaType('image', 'jpeg'),
+          ),
         ],
-        (campo: 'LICENCIA_ANVERSO', bytes: _licencia.anverso!, nombre: 'licencia_anverso.jpg', tipo: MediaType('image', 'jpeg')),
-        (campo: 'LICENCIA_REVERSO', bytes: _licencia.reverso!, nombre: 'licencia_reverso.jpg', tipo: MediaType('image', 'jpeg')),
+        (
+          campo: 'LICENCIA_ANVERSO',
+          bytes: _licencia.anverso!,
+          nombre: 'licencia_anverso.jpg',
+          tipo: MediaType('image', 'jpeg'),
+        ),
+        (
+          campo: 'LICENCIA_REVERSO',
+          bytes: _licencia.reverso!,
+          nombre: 'licencia_reverso.jpg',
+          tipo: MediaType('image', 'jpeg'),
+        ),
         for (final e in _pdf.entries)
           (campo: e.key, bytes: e.value.bytes, nombre: e.value.nombre, tipo: MediaType('application', 'pdf')),
         for (var i = 0; i < _qrs.length; i++)
@@ -554,18 +647,34 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             campo: 'QR${i + 1}',
             bytes: _qrs[i].bytes,
             nombre: _qrs[i].nombre,
-            tipo: _qrs[i].nombre.toLowerCase().endsWith('.png') ? MediaType('image', 'png') : MediaType('image', 'jpeg'),
+            tipo: _qrs[i].nombre.toLowerCase().endsWith('.png')
+                ? MediaType('image', 'png')
+                : MediaType('image', 'jpeg'),
           ),
       ]);
       if (!mounted) return;
       final sesion = context.read<Sesion>();
+      if (observado) {
+        await mostrarExito(context, titulo: '¡Registro enviado!', mensaje: _mensajeObservado);
+        // Con los datos en revision la cuenta pasa al aviso rojo hasta que los aprueben.
+        if (!mounted) return;
+        final api = context.read<ClienteApi>();
+        Navigator.of(context).pop(true);
+        try {
+          await sesion.reemplazarUsuario(await api.get('/api/cuenta/yo') as Map<String, dynamic>);
+        } on ApiExcepcion catch (_) {
+          // La siguiente consulta lo vuelve a intentar.
+        }
+        return;
+      }
       await mostrarExito(
         context,
         titulo: aprobado ? '¡Ya eres conductor!' : '¡Registro enviado!',
-        mensaje: 'Te enviamos un correo a ${sesion.usuario?.correo ?? 'tu correo'} con tus credenciales (las mismas '
+        mensaje:
+            'Te enviamos un correo a ${sesion.usuario?.correo ?? 'tu correo'} con tus credenciales (las mismas '
             'de tu cuenta de pasajero). ${aprobado ? 'Verificamos tu licencia con tu carnet: ya puedes cambiar a modo '
-                'conductor desde Más y recibir viajes.' : 'La administración revisará tus datos; cuando te aprueben '
-                'podrás cambiar a modo conductor desde Más.'}',
+                      'conductor desde Más y recibir viajes.' : 'La administración revisará tus datos; cuando te aprueben '
+                      'podrás cambiar a modo conductor desde Más.'}',
       );
       await sesion.avisoCredencialesVisto();
       if (mounted) Navigator.of(context).pop(true);
@@ -604,7 +713,11 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
           children: [
             const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 30),
             const SizedBox(height: 12),
-            Text(_errorGoogle!, textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.texto)),
+            Text(
+              _errorGoogle!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: ColoresApp.texto),
+            ),
             const SizedBox(height: 18),
             SizedBox(
               width: 280,
@@ -686,18 +799,30 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                             padding: const EdgeInsets.only(bottom: 12),
                             child: Text(
                               avisoNombreCarnet(_carnet.datos!),
-                              style: const TextStyle(color: ColoresApp.rutaSecundariaBorde, fontSize: 13, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                color: ColoresApp.rutaSecundariaBorde,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         fila([
-                          _campo('nombres', _nombreDelCarnet ? 'Nombres (del carnet)' : 'Nombres', obligatorio: true,
-                              soloLectura: _nombreDelCarnet && !(_carnet.datos?.nombresEditables ?? false),
-                              formatos: Formatos.letras,
-                              alCambiar: (_) => _revisarNombreSiHayLicencia()),
-                          _campo('apellidos', _nombreDelCarnet ? 'Apellidos (del carnet)' : 'Apellidos', obligatorio: true,
-                              soloLectura: _nombreDelCarnet && !(_carnet.datos?.apellidosEditables ?? false),
-                              formatos: Formatos.letras,
-                              alCambiar: (_) => _revisarNombreSiHayLicencia()),
+                          _campo(
+                            'nombres',
+                            _nombreDelCarnet ? 'Nombres (del carnet)' : 'Nombres',
+                            obligatorio: true,
+                            soloLectura: _nombreDelCarnet && !(_carnet.datos?.nombresEditables ?? false),
+                            formatos: Formatos.letras,
+                            alCambiar: (_) => _revisarNombreSiHayLicencia(),
+                          ),
+                          _campo(
+                            'apellidos',
+                            _nombreDelCarnet ? 'Apellidos (del carnet)' : 'Apellidos',
+                            obligatorio: true,
+                            soloLectura: _nombreDelCarnet && !(_carnet.datos?.apellidosEditables ?? false),
+                            formatos: Formatos.letras,
+                            alCambiar: (_) => _revisarNombreSiHayLicencia(),
+                          ),
                         ]),
                         const SizedBox(height: 12),
                       ],
@@ -710,26 +835,39 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                           ),
                         ),
                       fila([
-                        _campo('ci', 'Carnet de identidad', obligatorio: true, teclado: TextInputType.number,
-                            soloLectura: _tieneCarnet || _ciLeido || (LectorDocumentos.puedeLeer && _pideCarnet),
-                            formatos: [Formatos.soloDigitos],
-                            validar: (v) => RegExp(r'^\d{5,10}$').hasMatch(v) ? null : 'Solo los números de tu carnet'),
-                        _campo('complementoCi', LectorDocumentos.puedeLeer && _pideCarnet
-                                ? 'Complemento (se lee de la foto)'
-                                : 'Complemento (solo si tu carnet lo tiene)',
-                            soloLectura: _tieneCarnet || LectorDocumentos.puedeLeer,
-                            formatos: [
-                              FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')),
-                              LengthLimitingTextInputFormatter(2),
-                              MayusculasFormatter(),
-                            ],
-                            validar: (v) => complementoValido(v) ? null : 'Dos caracteres con un número, por ejemplo 1B'),
+                        _campo(
+                          'ci',
+                          'Carnet de identidad',
+                          obligatorio: true,
+                          teclado: TextInputType.number,
+                          soloLectura: _tieneCarnet || _ciLeido || (LectorDocumentos.puedeLeer && _pideCarnet),
+                          formatos: [Formatos.soloDigitos],
+                          validar: (v) => RegExp(r'^\d{5,10}$').hasMatch(v) ? null : 'Solo los números de tu carnet',
+                        ),
+                        _campo(
+                          'complementoCi',
+                          LectorDocumentos.puedeLeer && _pideCarnet
+                              ? 'Complemento (se lee de la foto)'
+                              : 'Complemento (solo si tu carnet lo tiene)',
+                          soloLectura: _tieneCarnet || LectorDocumentos.puedeLeer,
+                          formatos: [
+                            FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')),
+                            LengthLimitingTextInputFormatter(2),
+                            MayusculasFormatter(),
+                          ],
+                          validar: (v) => complementoValido(v) ? null : 'Dos caracteres con un número, por ejemplo 1B',
+                        ),
                       ]),
                       const SizedBox(height: 12),
                       fila([
-                        _campo('telefono', 'Celular', obligatorio: true, teclado: TextInputType.phone,
-                            formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(8)],
-                            validar: (v) => Formatos.celular.hasMatch(v) ? null : '8 dígitos que empiezan con 6 o 7'),
+                        _campo(
+                          'telefono',
+                          'Celular',
+                          obligatorio: true,
+                          teclado: TextInputType.phone,
+                          formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(8)],
+                          validar: (v) => Formatos.celular.hasMatch(v) ? null : '8 dígitos que empiezan con 6 o 7',
+                        ),
                         _campoFecha(),
                       ]),
                       const SizedBox(height: 6),
@@ -739,8 +877,13 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                       ),
                       if (!_datosConocidos) ...[
                         const SizedBox(height: 12),
-                        _campo('correo', 'Correo electrónico', obligatorio: true, teclado: TextInputType.emailAddress,
-                            validar: (v) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v) ? null : 'Correo no válido'),
+                        _campo(
+                          'correo',
+                          'Correo electrónico',
+                          obligatorio: true,
+                          teclado: TextInputType.emailAddress,
+                          validar: (v) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v) ? null : 'Correo no válido',
+                        ),
                       ],
                     ],
                   ),
@@ -749,17 +892,32 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                       icono: FontAwesomeIcons.key,
                       titulo: 'Tu cuenta',
                       children: [
-                        _campo('nombreUsuario', 'Nombre de usuario', obligatorio: true, validar: (v) {
-                          return RegExp(r'^[A-Za-z0-9._-]{3,50}$').hasMatch(v)
-                              ? null
-                              : 'De 3 a 50 caracteres: letras, números, punto, guion o guion bajo';
-                        }),
+                        _campo(
+                          'nombreUsuario',
+                          'Nombre de usuario',
+                          obligatorio: true,
+                          validar: (v) {
+                            return RegExp(r'^[A-Za-z0-9._-]{3,50}$').hasMatch(v)
+                                ? null
+                                : 'De 3 a 50 caracteres: letras, números, punto, guion o guion bajo';
+                          },
+                        ),
                         const SizedBox(height: 12),
                         fila([
-                          _campo('password', 'Contraseña', obligatorio: true, oculto: true,
-                              validar: (v) => v.length < 8 ? 'Al menos 8 caracteres' : null),
-                          _campo('confirmacion', 'Confirmar contraseña', obligatorio: true, oculto: true,
-                              validar: (v) => v != _c['password']!.text ? 'No coincide con la contraseña' : null),
+                          _campo(
+                            'password',
+                            'Contraseña',
+                            obligatorio: true,
+                            oculto: true,
+                            validar: (v) => v.length < 8 ? 'Al menos 8 caracteres' : null,
+                          ),
+                          _campo(
+                            'confirmacion',
+                            'Confirmar contraseña',
+                            obligatorio: true,
+                            oculto: true,
+                            validar: (v) => v != _c['password']!.text ? 'No coincide con la contraseña' : null,
+                          ),
                         ]),
                       ],
                     ),
@@ -782,17 +940,19 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                         documento: DocumentoFoto.licencia,
                         onCambio: _alCambiarLicencia,
                       ),
-                      if (_errorLicencia != null) ...[
-                        const SizedBox(height: 10),
-                        _aviso(_errorLicencia!),
-                      ],
+                      if (_errorLicencia != null) ...[const SizedBox(height: 10), _aviso(_errorLicencia!)],
                       if (_licencia.completa || !LectorDocumentos.puedeLeer) ...[
                         const SizedBox(height: 14),
                         fila([
-                          _campo('numeroLicencia', 'Número de licencia', obligatorio: true, teclado: TextInputType.number,
-                              soloLectura: LectorDocumentos.puedeLeer,
-                              formatos: [Formatos.soloDigitos],
-                              validar: (v) => RegExp(r'^\d{5,10}(-[0-9A-Z]{2})?$').hasMatch(v) ? null : 'Solo números'),
+                          _campo(
+                            'numeroLicencia',
+                            'Número de licencia',
+                            obligatorio: true,
+                            teclado: TextInputType.number,
+                            soloLectura: LectorDocumentos.puedeLeer,
+                            formatos: [Formatos.soloDigitos],
+                            validar: (v) => RegExp(r'^\d{5,10}(-[0-9A-Z]{2})?$').hasMatch(v) ? null : 'Solo números',
+                          ),
                           _campo('categoriaLicencia', 'Categoría', soloLectura: true),
                           _campoVencimiento(),
                         ]),
@@ -803,7 +963,10 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                               children: [
                                 FaIcon(FontAwesomeIcons.solidCircleCheck, color: ColoresApp.exito, size: 14),
                                 SizedBox(width: 8),
-                                Text('Número de licencia confirmado', style: TextStyle(color: ColoresApp.exito, fontSize: 13)),
+                                Text(
+                                  'Número de licencia confirmado',
+                                  style: TextStyle(color: ColoresApp.exito, fontSize: 13),
+                                ),
                               ],
                             ),
                           ),
@@ -816,20 +979,42 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                     children: [
                       fila([
                         _campo('placa', 'Placa', obligatorio: true, formatos: Formatos.alfanumerico),
-                        _campo('marca', 'Marca', obligatorio: true, formatos: Formatos.letrasMayusculas,
-                            validar: (v) => Formatos.marca.hasMatch(v) ? null : 'Solo letras en mayúsculas'),
+                        _campo(
+                          'marca',
+                          'Marca',
+                          obligatorio: true,
+                          formatos: Formatos.letrasMayusculas,
+                          validar: (v) => Formatos.marca.hasMatch(v) ? null : 'Solo letras en mayúsculas',
+                        ),
                       ]),
                       const SizedBox(height: 12),
                       fila([
-                        _campo('modelo', 'Modelo', obligatorio: true, formatos: Formatos.alfanumerico,
-                            validar: (v) => Formatos.modelo.hasMatch(v) ? null : 'Solo letras y números'),
-                        _campo('color', 'Color', obligatorio: true, formatos: Formatos.letras,
-                            validar: (v) => Formatos.color.hasMatch(v) ? null : 'Solo letras'),
-                        _campo('anio', 'Año', teclado: TextInputType.number, formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(4)],
-                            validar: (v) {
-                          final anio = int.tryParse(v);
-                          return anio == null || anio < 1950 || anio > DateTime.now().year + 1 ? 'Año no válido' : null;
-                        }),
+                        _campo(
+                          'modelo',
+                          'Modelo',
+                          obligatorio: true,
+                          formatos: Formatos.alfanumerico,
+                          validar: (v) => Formatos.modelo.hasMatch(v) ? null : 'Solo letras y números',
+                        ),
+                        _campo(
+                          'color',
+                          'Color',
+                          obligatorio: true,
+                          formatos: Formatos.letras,
+                          validar: (v) => Formatos.color.hasMatch(v) ? null : 'Solo letras',
+                        ),
+                        _campo(
+                          'anio',
+                          'Año',
+                          teclado: TextInputType.number,
+                          formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(4)],
+                          validar: (v) {
+                            final anio = int.tryParse(v);
+                            return anio == null || anio < 1950 || anio > DateTime.now().year + 1
+                                ? 'Año no válido'
+                                : null;
+                          },
+                        ),
                       ]),
                       const SizedBox(height: 6),
                       const Text(
@@ -871,7 +1056,9 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                         children: [
                           const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
                           const SizedBox(width: 10),
-                          Expanded(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro))),
+                          Expanded(
+                            child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
+                          ),
                         ],
                       ),
                     ),
@@ -910,11 +1097,16 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  _pideCarnet ? '${google['correo'] ?? ''}' : '${google['nombres'] ?? ''} ${google['apellidos'] ?? ''}'.trim(),
+                  _pideCarnet
+                      ? '${google['correo'] ?? ''}'
+                      : '${google['nombres'] ?? ''} ${google['apellidos'] ?? ''}'.trim(),
                   style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
                 ),
                 if (!_pideCarnet)
-                  Text('${google['correo'] ?? ''}', style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5)),
+                  Text(
+                    '${google['correo'] ?? ''}',
+                    style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
+                  ),
                 const SizedBox(height: 4),
                 Text(
                   [
@@ -959,10 +1151,17 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             ? IconButton(
                 tooltip: _ocultar ? 'Mostrar' : 'Ocultar',
                 onPressed: () => setState(() => _ocultar = !_ocultar),
-                icon: FaIcon(_ocultar ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash, size: 15, color: ColoresApp.textoSuave),
+                icon: FaIcon(
+                  _ocultar ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash,
+                  size: 15,
+                  color: ColoresApp.textoSuave,
+                ),
               )
             : soloLectura
-            ? const SizedBox(width: 40, child: Center(child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave)))
+            ? const SizedBox(
+                width: 40,
+                child: Center(child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave)),
+              )
             : null,
       ),
       validator: (valor) {
@@ -985,7 +1184,9 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
           fillColor: ColoresApp.gris,
           suffixIcon: SizedBox(
             width: 44,
-            child: Center(child: FaIcon(fija ? FontAwesomeIcons.lock : FontAwesomeIcons.calendar, size: fija ? 13 : 15)),
+            child: Center(
+              child: FaIcon(fija ? FontAwesomeIcons.lock : FontAwesomeIcons.calendar, size: fija ? 13 : 15),
+            ),
           ),
         ),
         child: Text(
@@ -1009,12 +1210,17 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
           fillColor: ColoresApp.gris,
           suffixIcon: SizedBox(
             width: 44,
-            child: Center(child: FaIcon(fijo ? FontAwesomeIcons.lock : FontAwesomeIcons.calendar, size: fijo ? 13 : 15)),
+            child: Center(
+              child: FaIcon(fijo ? FontAwesomeIcons.lock : FontAwesomeIcons.calendar, size: fijo ? 13 : 15),
+            ),
           ),
         ),
         child: Text(
           _vencimientoLicencia == null ? (fijo ? '' : 'Elegir') : formatoFecha(_vencimientoLicencia),
-          style: TextStyle(color: _vencimientoLicencia == null ? ColoresApp.textoSuave : ColoresApp.texto, fontSize: 16),
+          style: TextStyle(
+            color: _vencimientoLicencia == null ? ColoresApp.textoSuave : ColoresApp.texto,
+            fontSize: 16,
+          ),
         ),
       ),
     );
@@ -1048,7 +1254,9 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             child: FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 15),
           ),
           const SizedBox(width: 10),
-          Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.rojoOscuro, fontSize: 13.5))),
+          Expanded(
+            child: Text(texto, style: const TextStyle(color: ColoresApp.rojoOscuro, fontSize: 13.5)),
+          ),
         ],
       ),
     );
@@ -1130,7 +1338,10 @@ class _Seccion extends StatelessWidget {
             children: [
               FaIcon(icono, size: 15, color: ColoresApp.rojo),
               const SizedBox(width: 10),
-              Text(titulo, style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700)),
+              Text(
+                titulo,
+                style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
             ],
           ),
           const SizedBox(height: 14),

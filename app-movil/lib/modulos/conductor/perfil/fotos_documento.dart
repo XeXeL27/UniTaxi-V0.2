@@ -57,13 +57,20 @@ class TarjetaFotosDocumento extends StatelessWidget {
         children: [
           Row(
             children: [
-              FaIcon(_esLicencia ? FontAwesomeIcons.solidIdBadge : FontAwesomeIcons.idCard, color: ColoresApp.azul, size: 22),
+              FaIcon(
+                _esLicencia ? FontAwesomeIcons.solidIdBadge : FontAwesomeIcons.idCard,
+                color: ColoresApp.azul,
+                size: 22,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(titulo, style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
+                    Text(
+                      titulo,
+                      style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
+                    ),
                     Text(detalle, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
                   ],
                 ),
@@ -117,7 +124,10 @@ class TarjetaFotosDocumento extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: Text(titulo, style: const TextStyle(color: ColoresApp.azul, fontSize: 17, fontWeight: FontWeight.w700)),
+                      child: Text(
+                        titulo,
+                        style: const TextStyle(color: ColoresApp.azul, fontSize: 17, fontWeight: FontWeight.w700),
+                      ),
                     ),
                     IconButton(
                       tooltip: 'Cerrar',
@@ -136,7 +146,10 @@ class TarjetaFotosDocumento extends StatelessWidget {
                       future: cargar(lado),
                       builder: (context, foto) {
                         if (foto.connectionState != ConnectionState.done) {
-                          return const SizedBox(height: 180, child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)));
+                          return const SizedBox(
+                            height: 180,
+                            child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+                          );
                         }
                         final bytes = foto.data;
                         if (bytes == null) {
@@ -187,9 +200,8 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
   bool get _esLicencia => widget.documento == DocumentoFoto.licencia;
 
   /// Nombre leido (o escrito y comparado) de las fotos nuevas del carnet; en la web, el de la cuenta.
-  String get _nombreLeido => _seleccion.datos != null
-      ? '${_nombres.text.trim()} ${_apellidos.text.trim()}'
-      : widget.perfil.nombreCompleto;
+  String get _nombreLeido =>
+      _seleccion.datos != null ? '${_nombres.text.trim()} ${_apellidos.text.trim()}' : widget.perfil.nombreCompleto;
 
   @override
   void dispose() {
@@ -234,7 +246,9 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
     if (datos.vencida) return 'Esta licencia venció el ${formatoFecha(datos.vencimiento)}.';
     final complementoCarnet = widget.perfil.complementoCi ?? '';
     if (datos.numero != widget.perfil.ci ||
-        (datos.complemento != null && complementoCarnet.isNotEmpty && datos.complemento != complementoCarnet.toUpperCase())) {
+        (datos.complemento != null &&
+            complementoCarnet.isNotEmpty &&
+            datos.complemento != complementoCarnet.toUpperCase())) {
       return 'El número de la licencia (${datos.numeroCompleto}) no coincide con tu carnet (${widget.perfil.ciCompleto}).';
     }
     if (!nombreCoincide(widget.perfil.nombreCompleto, datos)) {
@@ -254,9 +268,11 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
     if (_error != null) return;
     final numero = _numero.text.trim();
     if (!RegExp(r'^\d{5,10}(-[0-9A-Z]{2})?$').hasMatch(numero) || _fecha == null) {
-      setState(() => _error = LectorDocumentos.puedeLeer
-          ? 'No se leyeron todos los datos. Vuelve a tomar las fotos.'
-          : 'Escribe el número y elige la fecha.');
+      setState(
+        () => _error = LectorDocumentos.puedeLeer
+            ? 'No se leyeron todos los datos. Vuelve a tomar las fotos.'
+            : 'Escribe el número y elige la fecha.',
+      );
       return;
     }
     final problemaNombre = _esLicencia ? null : _seleccion.datos?.revisarNombreEscrito(_nombres.text, _apellidos.text);
@@ -266,8 +282,16 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
     }
     final confirmado = _esLicencia
         ? await confirmarNumeroLicencia(context, numero: numero, categoria: 'M', vence: _fecha, fotos: _seleccion)
-        : await confirmarDatosCarnet(context,
-            nombre: _nombreLeido, ci: numero, complemento: _complemento.text, fotos: _seleccion);
+        : await confirmarDatosCarnet(
+                context,
+                nombre: _nombreLeido,
+                ci: numero,
+                complemento: _complemento.text,
+                fotos: _seleccion,
+                // Ya es conductor: el cambio de fotos se hace con permiso del administrador.
+                conObservado: false,
+              ) ==
+              RespuestaCarnet.confirma;
     if (!mounted) return;
     // "No": las fotos nuevas y lo leido se descartan y se vuelven a tomar.
     if (!confirmado) {
@@ -291,30 +315,40 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
     final api = DocumentosApi(context.read<ClienteApi>());
     try {
       if (_esLicencia) {
-        await api.cambiarLicencia({
-          'numeroLicencia': numero,
-          'categoriaLicencia': 'M',
-          'vencimientoLicencia': _fechaJson(_fecha!),
-          'password': contrasena,
-        }, _seleccion.anverso!, _seleccion.reverso!);
-      } else {
-        await api.cambiarCarnet({
-          'ci': numero,
-          'complementoCi': _complemento.text.trim().toUpperCase(),
-          'fechaNacimiento': _fechaJson(_fecha!),
-          // El nombre de las fotos nuevas reemplaza al anterior (en la web queda el de la cuenta).
-          if (_seleccion.datos?.tieneNombre ?? false) ...{
-            'nombres': _nombres.text.trim(),
-            'apellidos': _apellidos.text.trim(),
+        await api.cambiarLicencia(
+          {
+            'numeroLicencia': numero,
+            'categoriaLicencia': 'M',
+            'vencimientoLicencia': _fechaJson(_fecha!),
+            'password': contrasena,
           },
-          'password': contrasena,
-        }, _seleccion.anverso!, _seleccion.reverso!);
+          _seleccion.anverso!,
+          _seleccion.reverso!,
+        );
+      } else {
+        await api.cambiarCarnet(
+          {
+            'ci': numero,
+            'complementoCi': _complemento.text.trim().toUpperCase(),
+            'fechaNacimiento': _fechaJson(_fecha!),
+            // El nombre de las fotos nuevas reemplaza al anterior (en la web queda el de la cuenta).
+            if (_seleccion.datos?.tieneNombre ?? false) ...{
+              'nombres': _nombres.text.trim(),
+              'apellidos': _apellidos.text.trim(),
+            },
+            'password': contrasena,
+          },
+          _seleccion.anverso!,
+          _seleccion.reverso!,
+        );
       }
       if (!mounted) return;
       await mostrarExito(
         context,
         titulo: '¡Fotos actualizadas!',
-        mensaje: _esLicencia ? 'Guardamos las fotos nuevas de tu licencia.' : 'Guardamos las fotos nuevas de tu carnet.',
+        mensaje: _esLicencia
+            ? 'Guardamos las fotos nuevas de tu licencia.'
+            : 'Guardamos las fotos nuevas de tu carnet.',
       );
       if (mounted) Navigator.of(context).pop(true);
     } on ApiExcepcion catch (e) {
@@ -342,7 +376,10 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
       appBar: AppBar(
         backgroundColor: ColoresApp.azul,
         foregroundColor: ColoresApp.blanco,
-        title: Text(_esLicencia ? 'Fotos de tu licencia' : 'Fotos de tu carnet', style: const TextStyle(fontWeight: FontWeight.w600)),
+        title: Text(
+          _esLicencia ? 'Fotos de tu licencia' : 'Fotos de tu carnet',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
@@ -373,7 +410,11 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
               const SizedBox(height: 12),
               Text(
                 avisoNombreCarnet(_seleccion.datos!),
-                style: const TextStyle(color: ColoresApp.rutaSecundariaBorde, fontSize: 13, fontWeight: FontWeight.w600),
+                style: const TextStyle(
+                  color: ColoresApp.rutaSecundariaBorde,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               const SizedBox(height: 12),
               TextField(

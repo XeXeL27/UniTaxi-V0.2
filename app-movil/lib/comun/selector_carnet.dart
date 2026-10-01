@@ -92,11 +92,11 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
   _Lado? _leyendo;
 
   String _tituloEditor(_Lado lado) => switch ((_esLicencia, lado)) {
-        (false, _Lado.anverso) => 'Anverso del carnet',
-        (false, _Lado.reverso) => 'Reverso del carnet',
-        (true, _Lado.anverso) => 'Anverso de la licencia',
-        (true, _Lado.reverso) => 'Reverso de la licencia',
-      };
+    (false, _Lado.anverso) => 'Anverso del carnet',
+    (false, _Lado.reverso) => 'Reverso del carnet',
+    (true, _Lado.anverso) => 'Anverso de la licencia',
+    (true, _Lado.reverso) => 'Reverso de la licencia',
+  };
 
   Future<void> _elegir(_Lado lado) async {
     if (_leyendo != null) return;
@@ -249,45 +249,53 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
   }
 
   String _noEsElDocumento(_Lado lado) => switch ((_esLicencia, lado)) {
-        (false, _Lado.anverso) => 'Esta foto no es el anverso de un carnet de identidad (el lado con tu foto y el '
-            'número). Tómala de frente, con buena luz y que se lea todo el carnet, y gírala hasta que las letras '
-            'queden derechas.',
-        (false, _Lado.reverso) => 'Esta foto no es el reverso de un carnet de identidad. Tómala de frente, con '
-            'buena luz y que se lea todo el carnet, y gírala hasta que las letras queden derechas.',
-        (true, _Lado.anverso) => 'Esta foto no es el anverso de una licencia de conducir (el lado con tu foto y '
-            'tu nombre). Tómala de frente, con buena luz y que se lea toda la licencia, y gírala hasta que las '
-            'letras queden derechas.',
-        (true, _Lado.reverso) => 'Esta foto no es el reverso de una licencia de conducir (el lado con la '
-            'categoría y el vencimiento). Tómala de frente, con buena luz y que se lea toda la licencia, y '
-            'gírala hasta que las letras queden derechas.',
-      };
+    (false, _Lado.anverso) =>
+      'Esta foto no es el anverso de un carnet de identidad (el lado con tu foto y el '
+          'número). Tómala de frente, con buena luz y que se lea todo el carnet, y gírala hasta que las letras '
+          'queden derechas.',
+    (false, _Lado.reverso) =>
+      'Esta foto no es el reverso de un carnet de identidad. Tómala de frente, con '
+          'buena luz y que se lea todo el carnet, y gírala hasta que las letras queden derechas.',
+    (true, _Lado.anverso) =>
+      'Esta foto no es el anverso de una licencia de conducir (el lado con tu foto y '
+          'tu nombre). Tómala de frente, con buena luz y que se lea toda la licencia, y gírala hasta que las '
+          'letras queden derechas.',
+    (true, _Lado.reverso) =>
+      'Esta foto no es el reverso de una licencia de conducir (el lado con la '
+          'categoría y el vencimiento). Tómala de frente, con buena luz y que se lea toda la licencia, y '
+          'gírala hasta que las letras queden derechas.',
+  };
 
   void _avisar() {
     final la = _lecturas[_Lado.anverso];
     final lr = _lecturas[_Lado.reverso];
     if (la != null && lr != null) {
-      widget.onCambio(SeleccionCarnet(
-        anverso: _fotos[_Lado.anverso],
-        reverso: _fotos[_Lado.reverso],
-        datos: _esLicencia ? null : datosCarnetDeLecturas(la, lr),
-        licencia: _esLicencia ? datosLicenciaDeLecturas(la, lr) : null,
-        textoAnverso: textoDeLectura(la),
-        textoReverso: textoDeLectura(lr),
-        delServidor: true,
-      ));
+      widget.onCambio(
+        SeleccionCarnet(
+          anverso: _fotos[_Lado.anverso],
+          reverso: _fotos[_Lado.reverso],
+          datos: _esLicencia ? null : datosCarnetDeLecturas(la, lr),
+          licencia: _esLicencia ? datosLicenciaDeLecturas(la, lr) : null,
+          textoAnverso: textoDeLectura(la),
+          textoReverso: textoDeLectura(lr),
+          delServidor: true,
+        ),
+      );
       return;
     }
     final anverso = _textos[_Lado.anverso];
     final reverso = _textos[_Lado.reverso];
     final leidas = anverso != null && reverso != null;
-    widget.onCambio(SeleccionCarnet(
-      anverso: _fotos[_Lado.anverso],
-      reverso: _fotos[_Lado.reverso],
-      datos: leidas && !_esLicencia ? extraerDatosCarnet(anverso, reverso) : null,
-      licencia: leidas && _esLicencia ? extraerDatosLicencia(anverso, reverso) : null,
-      textoAnverso: anverso,
-      textoReverso: reverso,
-    ));
+    widget.onCambio(
+      SeleccionCarnet(
+        anverso: _fotos[_Lado.anverso],
+        reverso: _fotos[_Lado.reverso],
+        datos: leidas && !_esLicencia ? extraerDatosCarnet(anverso, reverso) : null,
+        licencia: leidas && _esLicencia ? extraerDatosLicencia(anverso, reverso) : null,
+        textoAnverso: anverso,
+        textoReverso: reverso,
+      ),
+    );
   }
 
   @override
@@ -347,16 +355,20 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                   children: [
                     // El anverso lleva la foto de la persona; el reverso, no (dorso de la tarjeta).
                     FaIcon(
-                        switch ((_esLicencia, lado)) {
-                          (false, _Lado.anverso) => FontAwesomeIcons.idCard,
-                          (false, _Lado.reverso) => FontAwesomeIcons.creditCard,
-                          (true, _Lado.anverso) => FontAwesomeIcons.solidIdBadge,
-                          (true, _Lado.reverso) => FontAwesomeIcons.solidCreditCard,
-                        },
-                        color: ColoresApp.tinta,
-                        size: 26),
+                      switch ((_esLicencia, lado)) {
+                        (false, _Lado.anverso) => FontAwesomeIcons.idCard,
+                        (false, _Lado.reverso) => FontAwesomeIcons.creditCard,
+                        (true, _Lado.anverso) => FontAwesomeIcons.solidIdBadge,
+                        (true, _Lado.reverso) => FontAwesomeIcons.solidCreditCard,
+                      },
+                      color: ColoresApp.tinta,
+                      size: 26,
+                    ),
                     const SizedBox(height: 8),
-                    Text(titulo, style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700)),
+                    Text(
+                      titulo,
+                      style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700),
+                    ),
                     Text(ayuda, style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 12)),
                   ],
                 ),
@@ -372,7 +384,10 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                       children: [
                         const FaIcon(FontAwesomeIcons.check, color: ColoresApp.blanco, size: 11),
                         const SizedBox(width: 5),
-                        Text(titulo, style: const TextStyle(color: ColoresApp.blanco, fontSize: 12, fontWeight: FontWeight.w600)),
+                        Text(
+                          titulo,
+                          style: const TextStyle(color: ColoresApp.blanco, fontSize: 12, fontWeight: FontWeight.w600),
+                        ),
                       ],
                     ),
                   ),
@@ -400,7 +415,11 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                   child: const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(width: 26, height: 26, child: CircularProgressIndicator(color: ColoresApp.blanco, strokeWidth: 2.5)),
+                      SizedBox(
+                        width: 26,
+                        height: 26,
+                        child: CircularProgressIndicator(color: ColoresApp.blanco, strokeWidth: 2.5),
+                      ),
                       SizedBox(height: 8),
                       Text('Leyendo la foto...', style: TextStyle(color: ColoresApp.blanco, fontSize: 12.5)),
                     ],
@@ -421,45 +440,102 @@ String avisoNombreCarnet(DatosCarnet datos) => datos.tieneNombre
     : 'No pudimos leer tu nombre automáticamente. Escríbelo tal como está en tu carnet: lo compararemos con '
           'las fotos.';
 
+/// Lo que la persona responde al ver los datos leidos de su carnet.
+enum RespuestaCarnet {
+  /// Son sus datos: se guardan.
+  confirma,
+
+  /// Vuelve a tomar las fotos.
+  repetir,
+
+  /// Observado: dice que se leyeron mal y los envia a revision; solo el administrador los corrige y,
+  /// cuando los aprueba, le llegan sus credenciales.
+  observado,
+}
+
 /// "Tu nombre completo es: ... / Tu número de carnet es: 6565204-1B": la persona confirma sus
-/// datos antes de guardar. Devuelve true si confirma; con "No" vuelve a tomar las fotos.
-Future<bool> confirmarDatosCarnet(BuildContext context,
-    {required String nombre, required String ci, String? complemento, SeleccionCarnet? fotos}) {
+/// datos antes de guardar, vuelve a tomar las fotos o (en el registro, [conObservado]) los envia a
+/// revision del administrador con "Observado".
+Future<RespuestaCarnet> confirmarDatosCarnet(
+  BuildContext context, {
+  required String nombre,
+  required String ci,
+  String? complemento,
+  SeleccionCarnet? fotos,
+  bool conObservado = true,
+}) async {
   final numero = (complemento ?? '').trim().isEmpty ? ci : '$ci-${complemento!.trim().toUpperCase()}';
   const etiqueta = TextStyle(color: ColoresApp.textoSuave);
-  return confirmarViaje(
-    context,
-    titulo: 'Confirma tus datos',
-    textoConfirmar: 'Sí, son mis datos',
-    textoCancelar: 'No',
-    contenido: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const Text('Tu nombre completo es:', textAlign: TextAlign.center, style: etiqueta),
-        const SizedBox(height: 6),
-        Text(
-          nombre.trim().toUpperCase(),
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: ColoresApp.tinta, fontSize: 19, fontWeight: FontWeight.w800),
-        ),
-        const SizedBox(height: 14),
-        const Text('Tu número de carnet es:', textAlign: TextAlign.center, style: etiqueta),
-        const SizedBox(height: 6),
-        Text(
-          numero,
-          textAlign: TextAlign.center,
-          style: const TextStyle(color: ColoresApp.tinta, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 0.5),
-        ),
-        if (fotos != null && fotos.completa) _FotosLeidas(seleccion: fotos, documento: 'carnet'),
-      ],
-    ),
+  final contenido = Column(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      const Text('Tu nombre completo es:', textAlign: TextAlign.center, style: etiqueta),
+      const SizedBox(height: 6),
+      Text(
+        nombre.trim().toUpperCase(),
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: ColoresApp.tinta, fontSize: 19, fontWeight: FontWeight.w800),
+      ),
+      const SizedBox(height: 14),
+      const Text('Tu número de carnet es:', textAlign: TextAlign.center, style: etiqueta),
+      const SizedBox(height: 6),
+      Text(
+        numero,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: ColoresApp.tinta, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+      ),
+      if (fotos != null && fotos.completa) _FotosLeidas(seleccion: fotos, documento: 'carnet'),
+    ],
   );
+  if (!conObservado) {
+    final confirma = await confirmarViaje(
+      context,
+      titulo: 'Confirma tus datos',
+      textoConfirmar: 'Sí, son mis datos',
+      textoCancelar: 'No',
+      contenido: contenido,
+    );
+    return confirma ? RespuestaCarnet.confirma : RespuestaCarnet.repetir;
+  }
+  while (true) {
+    if (!context.mounted) return RespuestaCarnet.repetir;
+    final respuesta = await elegirOpcion<RespuestaCarnet>(
+      context,
+      titulo: 'Confirma tus datos',
+      contenido: contenido,
+      opciones: const [
+        (texto: 'Sí, son mis datos', valor: RespuestaCarnet.confirma, principal: true),
+        (texto: 'No, volver a tomar las fotos', valor: RespuestaCarnet.repetir, principal: false),
+        (texto: 'Observado: mis datos están mal', valor: RespuestaCarnet.observado, principal: false),
+      ],
+    );
+    if (respuesta != RespuestaCarnet.observado) return respuesta ?? RespuestaCarnet.repetir;
+    if (!context.mounted) return RespuestaCarnet.repetir;
+    final envia = await confirmarAccion(
+      context,
+      titulo: '¿Enviar tus datos a revisión?',
+      mensaje:
+          'Observado significa que un administrador verificará los datos que llenó el sistema (la IA o '
+          'el lector del teléfono) comparándolos con las fotos de tu carnet. Solo el administrador puede '
+          'modificarlos y corregirlos; tú no podrás cambiarlos.\n\n'
+          'Cuando los apruebe te llegarán una notificación y tu usuario y contraseña a tu correo. Mientras '
+          'tanto no podrás usar la app.',
+      textoConfirmar: 'Sí, enviar a revisión',
+      textoCancelar: 'Volver',
+    );
+    if (envia) return RespuestaCarnet.observado;
+  }
 }
 
 /// "Confirma que tu número de licencia es: 6565204-1B" despues de confirmar el carnet. Devuelve true
 /// si confirma; con "No" vuelve a tomar las fotos de la licencia.
-Future<bool> confirmarNumeroLicencia(BuildContext context,
-    {required String numero, String? categoria, DateTime? vence, SeleccionCarnet? fotos}) {
+Future<bool> confirmarNumeroLicencia(
+  BuildContext context, {
+  required String numero,
+  String? categoria,
+  DateTime? vence,
+  SeleccionCarnet? fotos,
+}) {
   return confirmarViaje(
     context,
     titulo: 'Confirma tu licencia',
@@ -468,19 +544,29 @@ Future<bool> confirmarNumeroLicencia(BuildContext context,
     contenido: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Text('Confirma que tu número de licencia es:', textAlign: TextAlign.center, style: TextStyle(color: ColoresApp.textoSuave)),
+        const Text(
+          'Confirma que tu número de licencia es:',
+          textAlign: TextAlign.center,
+          style: TextStyle(color: ColoresApp.textoSuave),
+        ),
         const SizedBox(height: 8),
         Text(
           numero,
           textAlign: TextAlign.center,
-          style: const TextStyle(color: ColoresApp.tinta, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+          style: const TextStyle(
+            color: ColoresApp.tinta,
+            fontSize: 26,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.5,
+          ),
         ),
         if (categoria != null || vence != null) ...[
           const SizedBox(height: 8),
           Text(
             [
               if (categoria != null) 'Categoría $categoria',
-              if (vence != null) 'vence el ${vence.day.toString().padLeft(2, '0')}/${vence.month.toString().padLeft(2, '0')}/${vence.year}',
+              if (vence != null)
+                'vence el ${vence.day.toString().padLeft(2, '0')}/${vence.month.toString().padLeft(2, '0')}/${vence.year}',
             ].join(', '),
             textAlign: TextAlign.center,
             style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
@@ -502,41 +588,47 @@ class _FotosLeidas extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget miniatura(Uint8List foto, String lado) => Expanded(
-          child: Material(
-            color: ColoresApp.gris,
-            borderRadius: BorderRadius.circular(10),
-            clipBehavior: Clip.antiAlias,
-            child: InkWell(
-              onTap: () => verFoto(context, foto, titulo: '${lado[0].toUpperCase()}${lado.substring(1)} de tu $documento'),
-              child: AspectRatio(
-                aspectRatio: 1.45,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    Image.memory(foto, fit: BoxFit.cover, gaplessPlayback: true),
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        color: const Color(0x99000000),
-                        padding: const EdgeInsets.symmetric(vertical: 3),
-                        child: Text(lado, textAlign: TextAlign.center,
-                            style: const TextStyle(color: ColoresApp.blanco, fontSize: 12, fontWeight: FontWeight.w600)),
-                      ),
+      child: Material(
+        color: ColoresApp.gris,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: () => verFoto(context, foto, titulo: '${lado[0].toUpperCase()}${lado.substring(1)} de tu $documento'),
+          child: AspectRatio(
+            aspectRatio: 1.45,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.memory(foto, fit: BoxFit.cover, gaplessPlayback: true),
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    color: const Color(0x99000000),
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Text(
+                      lado,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: ColoresApp.blanco, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+              ],
             ),
           ),
-        );
+        ),
+      ),
+    );
     return Padding(
       padding: const EdgeInsets.only(top: 16),
       child: Column(
         children: [
-          Text('Leído de estas fotos (tócalas para verlas):',
-              textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+          Text(
+            'Leído de estas fotos (tócalas para verlas):',
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -553,26 +645,28 @@ class _FotosLeidas extends StatelessWidget {
 
 /// Muestra una foto a pantalla completa, con zoom de dos dedos.
 Future<void> verFoto(BuildContext context, Uint8List foto, {required String titulo}) {
-  return Navigator.of(context).push(MaterialPageRoute<void>(
-    fullscreenDialog: true,
-    builder: (context) => Scaffold(
-      backgroundColor: ColoresApp.tinta,
-      appBar: AppBar(
+  return Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      fullscreenDialog: true,
+      builder: (context) => Scaffold(
         backgroundColor: ColoresApp.tinta,
-        foregroundColor: ColoresApp.blanco,
-        title: Text(titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-        leading: IconButton(
-          tooltip: 'Cerrar',
-          onPressed: () => Navigator.of(context).pop(),
-          icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.blanco, size: 20),
+        appBar: AppBar(
+          backgroundColor: ColoresApp.tinta,
+          foregroundColor: ColoresApp.blanco,
+          title: Text(titulo, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          leading: IconButton(
+            tooltip: 'Cerrar',
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.blanco, size: 20),
+          ),
         ),
-      ),
-      body: SafeArea(
-        child: InteractiveViewer(
-          maxScale: 6,
-          child: Center(child: Image.memory(foto, fit: BoxFit.contain, gaplessPlayback: true)),
+        body: SafeArea(
+          child: InteractiveViewer(
+            maxScale: 6,
+            child: Center(child: Image.memory(foto, fit: BoxFit.contain, gaplessPlayback: true)),
+          ),
         ),
       ),
     ),
-  ));
+  );
 }

@@ -2,6 +2,7 @@ package com.taxiuap.backend.identity.service;
 
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Map;
 
 import org.springframework.core.io.Resource;
@@ -17,6 +18,7 @@ import com.taxiuap.backend.identity.dto.UsuarioResponse;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
+import com.taxiuap.backend.identity.enums.SituacionCarnet;
 import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
@@ -40,6 +42,9 @@ public class CarnetService {
 
     public static final String PARTE_ANVERSO = "CARNET_ANVERSO";
     public static final String PARTE_REVERSO = "CARNET_REVERSO";
+
+    /** Motivo de un carnet OBSERVADO a pedido de la persona. */
+    public static final String MOTIVO_PEDIDO = "La persona indicó que el sistema leyó mal sus datos";
 
     private final UsuarioRepository usuarioRepository;
     private final GestionPersonaService gestionPersonaService;
@@ -79,16 +84,40 @@ public class CarnetService {
                 datos.apellidos());
     }
 
-    /** Pantalla "Verifica tu carnet" de la app: guarda los datos y las fotos de la persona. */
+    /**
+     * Con el carnet ya guardado: queda OBSERVADO si la persona pidio la revision ([pedido]) o si su
+     * nombre no parece real (NombresPermitidos); si no, VERIFICADO. Mientras este observado no usa la
+     * app ni recibe sus credenciales: las recibe cuando un administrador lo aprueba
+     * (RevisionCarnetService). Devuelve true si quedo observado.
+     */
+    public boolean revisar(Persona persona, boolean pedido) {
+        String motivo = pedido ? MOTIVO_PEDIDO : NombresPermitidos.problema(persona.getNombres(), persona.getApellidos());
+        if (motivo == null) {
+            persona.setSituacionCarnet(SituacionCarnet.VERIFICADO);
+            persona.setMotivoObservacion(null);
+            persona.setFechaObservacion(null);
+            return false;
+        }
+        persona.setSituacionCarnet(SituacionCarnet.OBSERVADO);
+        persona.setMotivoObservacion(motivo.length() > 300 ? motivo.substring(0, 300) : motivo);
+        persona.setFechaObservacion(LocalDateTime.now());
+        return true;
+    }
+
+    /**
+     * Pantalla "Verifica tu carnet" de la app: guarda los datos y las fotos de la persona. Si queda
+     * OBSERVADO, las credenciales esperan a que el administrador apruebe sus datos.
+     */
     public UsuarioResponse registrar(Long idUsuario, CarnetRequest datos, MultipartFile anverso, MultipartFile reverso) {
         FotosCarnet fotos = validar(anverso, reverso);
-        verificarLectura(fotos, datos);
+        // Si la persona dice que sus datos se leyeron mal no se comparan con la lectura: los revisa el admin.
+        if (!datos.esObservado()) verificarLectura(fotos, datos);
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
         Persona persona = usuario.getPersona();
         actualizarDatos(persona, datos);
         guardar(persona, fotos);
-        entregarCredenciales(usuario);
+        if (!revisar(persona, datos.esObservado())) entregarCredenciales(usuario);
         return UsuarioResponse.de(usuario);
     }
 

@@ -22,5 +22,11 @@ public record RegistroConductorPasajeroRequest(
         /** Nombres y apellidos leidos del carnet (mandan sobre los de Google); opcionales. */
         @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String nombres,
         @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String apellidos,
-        @Valid @NotNull DatosConductorRequest conductor) {
+        @Valid @NotNull DatosConductorRequest conductor,
+        /** true: la persona indico que sus datos se leyeron mal; un administrador los revisa (OBSERVADO). */
+        Boolean observado) {
+
+    public boolean esObservado() {
+        return Boolean.TRUE.equals(observado);
+    }
 }

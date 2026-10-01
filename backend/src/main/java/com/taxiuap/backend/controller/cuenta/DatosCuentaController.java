@@ -1,6 +1,7 @@
 package com.taxiuap.backend.controller.cuenta;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -26,6 +27,12 @@ import lombok.RequiredArgsConstructor;
 public class DatosCuentaController {
 
     private final DatosCuentaService datosCuentaService;
+
+    /** Datos de la cuenta actual (por ejemplo, para saber si el administrador ya aprobo su carnet). */
+    @GetMapping("/yo")
+    public ResponseEntity<ApiResponse<UsuarioResponse>> actual() {
+        return ResponseEntity.ok(ApiResponse.exito(datosCuentaService.actual(UsuarioActual.idUsuario())));
+    }
 
     /** Cambia correo y telefono (y la licencia en blanco del conductor), confirmado con la contrasena. */
     @PutMapping("/datos")

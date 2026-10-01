@@ -443,7 +443,7 @@ class _TarjetaViaje extends StatelessWidget {
               ),
               const SizedBox(height: 6),
               FilaLugar.partida(texto: viaje.origenDireccion),
-              FilaLugar.destino(texto: viaje.destinoDireccion),
+              FilaLugar.destino(texto: viaje.destinoTexto),
               const SizedBox(height: 4),
               Row(
                 children: [
@@ -536,7 +536,7 @@ class _PantallaDetalleViajeState extends State<PantallaDetalleViaje> {
                 ),
                 const SizedBox(height: 10),
                 FilaLugar.partida(texto: viaje.origenDireccion),
-                FilaLugar.destino(texto: viaje.destinoDireccion),
+                FilaLugar.destino(texto: viaje.destinoTexto),
                 const SizedBox(height: 10),
                 ListenableBuilder(
                   listenable: _mapa,

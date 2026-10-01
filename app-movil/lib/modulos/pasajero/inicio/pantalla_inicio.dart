@@ -1058,7 +1058,7 @@ class TarjetaSeguimientoConductor extends StatelessWidget {
             : 'Llegas en ~${ruta.duracionTexto}';
         final subtitulo = esRecogida
             ? 'A ${ruta.distanciaTexto} · ${viaje.placa ?? viaje.vehiculo}'
-            : '${ruta.distanciaTexto} hasta ${viaje.destinoDireccion}';
+            : '${ruta.distanciaTexto} hasta ${viaje.destinoTexto}';
 
         return ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: anchoControlesMapa),

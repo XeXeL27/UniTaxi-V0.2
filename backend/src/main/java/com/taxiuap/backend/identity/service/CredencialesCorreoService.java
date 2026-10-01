@@ -152,6 +152,22 @@ public class CredencialesCorreoService {
         correoService.enviar(persona.getCorreo(), "Tu cuenta de conductor fue aprobada", cuerpo);
     }
 
+    /**
+     * El administrador rechazo los datos del carnet que la persona envio a revision: su registro se
+     * elimino y puede volver a registrarse con fotos claras de su carnet.
+     */
+    public void registroRechazado(Persona persona, String correo, String motivo) {
+        if (correo == null || correo.isBlank()) return;
+        String cuerpo = saludo(persona)
+                + "Revisamos los datos y las fotos del carnet que enviaste al registrarte en UNITAXI y no pudimos "
+                + "aprobarlos.\n\n"
+                + "Motivo: " + motivo + "\n\n"
+                + "Tu registro fue eliminado. Puedes volver a registrarte en la app con fotos claras del anverso y del "
+                + "reverso de tu carnet de identidad."
+                + FIRMA;
+        correoService.enviar(correo, "No pudimos aprobar tu registro", cuerpo);
+    }
+
     public void codigoRestablecer(Persona persona, String codigo, long minutos) {
         String cuerpo = saludo(persona)
                 + "Tu código para restablecer la contraseña de UNITAXI es:\n\n"

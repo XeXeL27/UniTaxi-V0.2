@@ -89,9 +89,15 @@ public class AutenticacionService {
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
         CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(archivos);
         LicenciaService.FotosLicencia licencia = licenciaService.validarDelRegistro(archivos);
-        carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
-                datos.nombres(), datos.apellidos());
-        licenciaService.validarDatosRegistro(datos.conductor(), licencia, datos.ci(), datos.complementoCi());
+        // Carnet observado (la persona dice que se leyo mal): no se compara con la lectura ni con el
+        // numero de la licencia; lo revisa el administrador.
+        boolean pidioRevision = datos.esObservado();
+        if (!pidioRevision) {
+            carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                    datos.nombres(), datos.apellidos());
+        }
+        licenciaService.validarDatosRegistro(datos.conductor(), licencia, pidioRevision ? null : datos.ci(),
+                pidioRevision ? null : datos.complementoCi());
         String nombreUsuario = normalizarNombreUsuario(datos.nombreUsuario());
         cuentaUsuarioService.validarNombreUsuarioDisponible(nombreUsuario, null);
 
@@ -100,13 +106,17 @@ public class AutenticacionService {
         Usuario usuario = cuentaUsuarioService.crearUsuario(persona, RolSistema.CONDUCTOR, nombreUsuario,
                 cuentaUsuarioService.codificar(datos.password()));
         carnetService.guardar(persona, carnet);
+        boolean observado = carnetService.revisar(persona, pidioRevision);
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
         licenciaService.guardar(conductor, licencia, datos.conductor().vencimientoLicencia());
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
-        boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
-        credencialesCorreoService.conductorRegistrado(usuario, null, "la que elegiste al registrarte", aprobado);
+        // Observado: sin aprobar ni correo hasta que el administrador revise sus datos.
+        if (!observado) {
+            boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
+            credencialesCorreoService.conductorRegistrado(usuario, null, "la que elegiste al registrarte", aprobado);
+        }
 
         return generarTokens(usuario);
     }

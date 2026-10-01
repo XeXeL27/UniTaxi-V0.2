@@ -21,7 +21,7 @@ class ColumnaTabla<T> {
   final Widget Function(T fila)? celda;
 
   /// Ancho minimo propio (si es null se usa el del tipo). Si la suma de minimos no entra en
-  /// pantalla, la tabla se muestra como tarjetas.
+  /// pantalla, se ocultan las columnas de la derecha (el ojo muestra todos los datos).
   final double? ancho;
 
   /// Proporcion propia del ancho disponible (si es null se usa la del tipo).

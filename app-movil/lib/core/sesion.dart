@@ -32,6 +32,10 @@ class UsuarioSesion {
   /// Se le enviaron sus credenciales por correo y todavia no vio el aviso en la pantalla principal.
   final bool avisoCredenciales;
 
+  /// Envio sus datos del carnet a revision (OBSERVADO): ve el aviso de revision hasta que la
+  /// administracion los apruebe.
+  final bool carnetObservado;
+
   UsuarioSesion({
     required this.idUsuario,
     required this.nombreUsuario,
@@ -43,6 +47,7 @@ class UsuarioSesion {
     this.mostrarGuia = false,
     this.requiereCarnet = false,
     this.avisoCredenciales = false,
+    this.carnetObservado = false,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -72,6 +77,7 @@ class UsuarioSesion {
     mostrarGuia: json['mostrarGuia'] as bool? ?? false,
     requiereCarnet: json['requiereCarnet'] as bool? ?? false,
     avisoCredenciales: json['avisoCredenciales'] as bool? ?? false,
+    carnetObservado: json['carnetObservado'] as bool? ?? false,
   );
 
   Map<String, dynamic> aJson() => {
@@ -85,6 +91,7 @@ class UsuarioSesion {
     'mostrarGuia': mostrarGuia,
     'requiereCarnet': requiereCarnet,
     'avisoCredenciales': avisoCredenciales,
+    'carnetObservado': carnetObservado,
   };
 }
 

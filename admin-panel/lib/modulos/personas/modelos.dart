@@ -263,3 +263,68 @@ class DocumentoConductor {
     situacionRevision: json['situacionRevision'] as String? ?? '',
   );
 }
+
+/// Persona cuyo carnet espera revision (CarnetObservadoResponse): los datos que leyo el sistema (IA u
+/// otro lector) o que escribio la persona, para compararlos con las fotos.
+class CarnetObservado {
+  final int idPersona;
+
+  /// Cuenta con que se piden las fotos del carnet.
+  final int? idUsuario;
+
+  /// Si es conductor, para ver las fotos de su licencia.
+  final int? idConductor;
+  final String nombres;
+  final String apellidos;
+  final String? ci;
+  final String? complementoCi;
+  final DateTime? fechaNacimiento;
+  final String? correo;
+  final String? telefono;
+
+  /// "Pasajero", "Conductor" o "Pasajero y conductor".
+  final String cuentas;
+  final String? numeroLicencia;
+  final String? motivo;
+  final DateTime? fechaObservacion;
+
+  CarnetObservado({
+    required this.idPersona,
+    this.idUsuario,
+    this.idConductor,
+    required this.nombres,
+    required this.apellidos,
+    this.ci,
+    this.complementoCi,
+    this.fechaNacimiento,
+    this.correo,
+    this.telefono,
+    required this.cuentas,
+    this.numeroLicencia,
+    this.motivo,
+    this.fechaObservacion,
+  });
+
+  String get nombreCompleto => '$nombres $apellidos';
+
+  bool get esConductor => idConductor != null;
+
+  String get carnet => (complementoCi ?? '').isEmpty ? (ci ?? '') : '${ci ?? ''}-$complementoCi';
+
+  factory CarnetObservado.desdeJson(Map<String, dynamic> json) => CarnetObservado(
+    idPersona: Formato.leerEntero(json['idPersona'])!,
+    idUsuario: Formato.leerEntero(json['idUsuario']),
+    idConductor: Formato.leerEntero(json['idConductor']),
+    nombres: json['nombres'] as String? ?? '',
+    apellidos: json['apellidos'] as String? ?? '',
+    ci: json['ci'] as String?,
+    complementoCi: json['complementoCi'] as String?,
+    fechaNacimiento: Formato.leerFecha(json['fechaNacimiento']),
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
+    cuentas: json['cuentas'] as String? ?? '',
+    numeroLicencia: json['numeroLicencia'] as String?,
+    motivo: json['motivo'] as String?,
+    fechaObservacion: Formato.leerFecha(json['fechaObservacion']),
+  );
+}

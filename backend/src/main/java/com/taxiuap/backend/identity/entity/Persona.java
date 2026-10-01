@@ -1,9 +1,11 @@
 package com.taxiuap.backend.identity.entity;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Locale;
 
 import com.taxiuap.backend.config.EntidadAuditable;
+import com.taxiuap.backend.identity.enums.SituacionCarnet;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 
 import jakarta.persistence.Column;
@@ -70,6 +72,21 @@ public class Persona extends EntidadAuditable {
     @Column(name = "carnet_reverso_url", length = 500)
     private String carnetReversoUrl;
 
+    /**
+     * OBSERVADO: los datos del carnet esperan la revision de un administrador (ver
+     * RevisionCarnetService); mientras tanto la persona no usa la app ni recibe sus credenciales.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "situacion_carnet", length = 20)
+    private SituacionCarnet situacionCarnet;
+
+    /** Por que quedo observado (lo pidio la persona o su nombre parece falso u ofensivo). */
+    @Column(name = "motivo_observacion", length = 300)
+    private String motivoObservacion;
+
+    @Column(name = "fecha_observacion")
+    private LocalDateTime fechaObservacion;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_persona", length = 20, nullable = false)
     private EstadoRegistro estadoPersona = EstadoRegistro.A;
@@ -87,6 +104,10 @@ public class Persona extends EntidadAuditable {
 
     public void setApellidos(String apellidos) {
         this.apellidos = enMayusculas(apellidos);
+    }
+
+    public boolean carnetObservado() {
+        return situacionCarnet == SituacionCarnet.OBSERVADO;
     }
 
     private static String enMayusculas(String texto) {

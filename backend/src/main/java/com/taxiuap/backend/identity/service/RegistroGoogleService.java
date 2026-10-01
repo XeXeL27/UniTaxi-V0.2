@@ -94,7 +94,7 @@ public class RegistroGoogleService {
             // Un pasajero de antes que no registro su carnet tambien entra: la app se lo pide.
             Optional<Usuario> cuenta = cuentaActiva(persona, RolSistema.PASAJERO);
             if (cuenta.isPresent()) return Optional.of(autenticacionService.tokensDe(cuenta.get()));
-            if (!sinCarnet(persona)) return Optional.of(crearPasajero(persona, foto.get()));
+            if (!sinCarnet(persona)) return Optional.of(crearPasajero(persona, foto.get(), !persona.carnetObservado()));
         }
         return Optional.empty();
     }
@@ -107,8 +107,11 @@ public class RegistroGoogleService {
     public TokenResponse registrarPasajeroConCarnet(PerfilGoogle perfil, CarnetRequest datos, MultipartFile anverso,
             MultipartFile reverso, Supplier<byte[]> foto) {
         CarnetService.FotosCarnet fotos = carnetService.validar(anverso, reverso);
-        carnetService.verificarLectura(fotos, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
-                datos.nombres(), datos.apellidos());
+        // Si la persona dice que sus datos se leyeron mal no se comparan con la lectura: los revisa el admin.
+        if (!datos.esObservado()) {
+            carnetService.verificarLectura(fotos, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                    datos.nombres(), datos.apellidos());
+        }
         Optional<Persona> existente = personaActiva(perfil);
         if (existente.isPresent() && cuentaActiva(existente.get(), RolSistema.PASAJERO).isPresent()) {
             throw new ConflictoException("Ya tienes una cuenta de pasajero: ingresa con Google desde el inicio");
@@ -127,16 +130,25 @@ public class RegistroGoogleService {
             persona.setIngresoGoogle(true);
         }
         carnetService.guardar(persona, fotos);
-        return crearPasajero(persona, foto.get());
+        boolean observado = carnetService.revisar(persona, datos.esObservado());
+        return crearPasajero(persona, foto.get(), !observado);
     }
 
-    /** Cuenta de pasajero de una persona con su carnet ya registrado, y su correo de bienvenida. */
-    private TokenResponse crearPasajero(Persona persona, byte[] foto) {
+    /**
+     * Cuenta de pasajero de una persona con su carnet ya registrado, y su correo de bienvenida. Con el
+     * carnet OBSERVADO ([entregar] false) la contrasena queda sin entregar: le llega cuando el
+     * administrador aprueba sus datos.
+     */
+    private TokenResponse crearPasajero(Persona persona, byte[] foto, boolean entregar) {
         CuentaNueva nueva = crearCuenta(persona, RolSistema.PASAJERO);
         Usuario usuario = nueva.usuario();
         cuentaUsuarioService.crearPasajero(usuario);
         if (foto != null) fotoPerfilService.guardarImagen(usuario, foto);
-        enviarBienvenida(persona, nueva);
+        if (entregar) {
+            enviarBienvenida(persona, nueva);
+        } else if (nueva.contrasena() != null) {
+            usuario.setContrasenaGenerada(true);
+        }
         return autenticacionService.tokensDe(usuario);
     }
 
@@ -187,11 +199,17 @@ public class RegistroGoogleService {
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
         CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(existente.orElse(null), archivos);
         LicenciaService.FotosLicencia licencia = licenciaService.validarDelRegistro(archivos);
+        // Carnet observado (la persona dice que se leyo mal): no se compara con la lectura ni con el
+        // numero de la licencia; lo revisa el administrador.
+        boolean pidioRevision = carnet != null && datos.esObservado();
         String ci = carnet == null ? existente.get().getCi() : datos.ci();
         String complemento = carnet == null ? existente.get().getComplementoCi() : datos.complementoCi();
-        carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
-                datos.nombres(), datos.apellidos());
-        licenciaService.validarDatosRegistro(datos.conductor(), licencia, ci, complemento);
+        if (!pidioRevision) {
+            carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                    datos.nombres(), datos.apellidos());
+        }
+        licenciaService.validarDatosRegistro(datos.conductor(), licencia, pidioRevision ? null : ci,
+                pidioRevision ? null : complemento);
 
         Persona persona;
         if (existente.isPresent()) {
@@ -205,8 +223,10 @@ public class RegistroGoogleService {
                     datos.fechaNacimiento(), perfil.correo(), datos.telefono()));
             persona.setIngresoGoogle(true);
         }
+        boolean observado = false;
         if (carnet != null) {
             carnetService.guardar(persona, carnet);
+            observado = carnetService.revisar(persona, pidioRevision);
         }
 
         CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);
@@ -216,8 +236,13 @@ public class RegistroGoogleService {
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
         licenciaService.guardar(conductor, licencia, datos.conductor().vencimientoLicencia());
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
-        boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
-        entregarCredencialesConductor(persona, usuario, nueva, aprobado);
+        if (observado) {
+            // Sin aprobar ni credenciales hasta que el administrador revise sus datos.
+            if (nueva.contrasena() != null) usuario.setContrasenaGenerada(true);
+        } else {
+            boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
+            entregarCredencialesConductor(persona, usuario, nueva, aprobado);
+        }
         return autenticacionService.tokensDe(entradaDe(persona, usuario));
     }
 

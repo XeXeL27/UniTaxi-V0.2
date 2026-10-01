@@ -79,6 +79,10 @@ class Solicitud {
   final LatLng? destino;
   final String origenDireccion;
   final String destinoDireccion;
+
+  /// Nombre del favorito que el pasajero eligio como destino ("Casa de mi mama"). Solo llega en
+  /// las respuestas al pasajero: el conductor ve [destinoDireccion].
+  final String? destinoNombre;
   final double? precio;
   final String situacion;
   final DateTime? fecha;
@@ -91,6 +95,7 @@ class Solicitud {
     required this.destino,
     required this.origenDireccion,
     required this.destinoDireccion,
+    this.destinoNombre,
     required this.precio,
     required this.situacion,
     required this.fecha,
@@ -104,6 +109,7 @@ class Solicitud {
     destino: puntoDesdeWkt(json['destinoWkt'] as String?),
     origenDireccion: json['origenDireccion'] as String? ?? 'Punto de partida',
     destinoDireccion: json['destinoDireccion'] as String? ?? 'Destino',
+    destinoNombre: json['destinoNombre'] as String?,
     precio: numeroDesdeJson(json['precioSugerido']),
     situacion: json['situacionSolicitud'] as String? ?? '',
     fecha: fechaDesdeJson(json['fechaSolicitud']),
@@ -116,7 +122,10 @@ class Solicitud {
 
   PuntoRuta get puntoA => PuntoRuta(origen!, origenDireccion);
 
-  PuntoRuta get puntoB => PuntoRuta(destino!, destinoDireccion);
+  /// Lo que se muestra del destino: el nombre del favorito (solo el pasajero lo tiene) o la direccion.
+  String get destinoTexto => (destinoNombre ?? '').trim().isEmpty ? destinoDireccion : destinoNombre!;
+
+  PuntoRuta get puntoB => PuntoRuta(destino!, destinoTexto);
 }
 
 /// Viaje asignado (ViajeResponse).
@@ -133,6 +142,10 @@ class Viaje {
   final LatLng? destino;
   final String origenDireccion;
   final String destinoDireccion;
+
+  /// Nombre del favorito que el pasajero eligio como destino ("Casa de mi mama"). Solo llega en
+  /// las respuestas al pasajero: el conductor ve [destinoDireccion].
+  final String? destinoNombre;
   final double? distanciaKm;
   final double? precioFinal;
   final String situacion;
@@ -162,6 +175,7 @@ class Viaje {
     required this.destino,
     required this.origenDireccion,
     required this.destinoDireccion,
+    this.destinoNombre,
     required this.distanciaKm,
     required this.precioFinal,
     required this.situacion,
@@ -188,6 +202,7 @@ class Viaje {
     destino: puntoDesdeWkt(json['destinoWkt'] as String?),
     origenDireccion: json['origenDireccion'] as String? ?? 'Punto de partida',
     destinoDireccion: json['destinoDireccion'] as String? ?? 'Destino',
+    destinoNombre: json['destinoNombre'] as String?,
     distanciaKm: numeroDesdeJson(json['distanciaKm']),
     precioFinal: numeroDesdeJson(json['precioFinal']),
     situacion: json['situacionViaje'] as String? ?? '',
@@ -207,7 +222,10 @@ class Viaje {
 
   PuntoRuta get puntoA => PuntoRuta(origen!, origenDireccion);
 
-  PuntoRuta get puntoB => PuntoRuta(destino!, destinoDireccion);
+  /// Lo que se muestra del destino: el nombre del favorito (solo el pasajero lo tiene) o la direccion.
+  String get destinoTexto => (destinoNombre ?? '').trim().isEmpty ? destinoDireccion : destinoNombre!;
+
+  PuntoRuta get puntoB => PuntoRuta(destino!, destinoTexto);
 
   bool get terminado => situacion == SituacionViaje.completado || situacion == SituacionViaje.cancelado;
 

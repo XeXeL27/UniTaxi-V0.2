@@ -28,6 +28,7 @@ import jakarta.servlet.http.HttpServletResponse;
  * usan siempre token JWT, asi que una sola cadena cubre todo. Tampoco hay UserDetailsService:
  * el login (dominio identity) valida la contrasena con PasswordEncoder y emite el JWT.
  */
+import com.taxiuap.backend.identity.repository.PersonaRepository;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
 
 @Configuration
@@ -63,7 +64,7 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService,
-            UsuarioRepository usuarioRepository) throws Exception {
+            UsuarioRepository usuarioRepository, PersonaRepository personaRepository) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())
                 .cors(cors -> {})
@@ -87,7 +88,7 @@ public class SecurityConfig {
                                 "No autenticado"))
                         .accessDeniedHandler((req, res, e) -> escribir(res, HttpServletResponse.SC_FORBIDDEN,
                                 "Sin permiso para este recurso")))
-                .addFilterBefore(new JwtAuthFilter(jwtService, usuarioRepository), UsernamePasswordAuthenticationFilter.class);
+                .addFilterBefore(new JwtAuthFilter(jwtService, usuarioRepository, personaRepository), UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

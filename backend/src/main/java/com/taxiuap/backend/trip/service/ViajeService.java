@@ -297,6 +297,7 @@ public class ViajeService {
         nueva.setDestino(anterior.getDestino());
         nueva.setOrigenDireccion(anterior.getOrigenDireccion());
         nueva.setDestinoDireccion(anterior.getDestinoDireccion());
+        nueva.setDestinoNombrePasajero(anterior.getDestinoNombrePasajero());
         nueva.setPrecioSugerido(anterior.getPrecioSugerido());
         nueva.setMetodoPago(metodoPagoDe(viaje));
         nueva.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
@@ -563,7 +564,10 @@ public class ViajeService {
                 metodoPagoDe(viaje),
                 viaje.getMetodoPagoPedido(),
                 qrPagoConductorService.tieneQr(viaje.getConductor().getId()),
-                Boolean.TRUE.equals(viaje.getCalificacionOfrecidaPasajero()));
+                Boolean.TRUE.equals(viaje.getCalificacionOfrecidaPasajero()),
+                // El nombre del favorito solo se devuelve al propio pasajero.
+                UsuarioActual.obtener().map(u -> u.idUsuario().equals(usuarioPasajero.getId())).orElse(false)
+                        ? viaje.getSolicitud().getDestinoNombrePasajero() : null);
     }
 
     /**
@@ -673,7 +677,7 @@ public class ViajeService {
     // y el flujo de viaje compartan un unico publicador de eventos en tiempo real.
     private void notificarCambio(Viaje viaje, ViajeResponse respuesta) {
         notificarUsuario(viaje.getPasajero().getUsuario().getId(), respuesta);
-        notificarUsuario(viaje.getConductor().getUsuario().getId(), respuesta);
+        notificarUsuario(viaje.getConductor().getUsuario().getId(), respuesta.sinNombreDestino());
     }
 
     private void notificarUsuario(Long idUsuario, ViajeResponse respuesta) {

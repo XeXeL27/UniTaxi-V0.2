@@ -17,7 +17,12 @@ public record UsuarioResponse(
         /** true si entro con Google y todavia no registro su carnet: la app pide la foto del carnet. */
         boolean requiereCarnet,
         /** true si se le enviaron sus credenciales por correo y todavia no vio el aviso en la app. */
-        boolean avisoCredenciales) {
+        boolean avisoCredenciales,
+        /**
+         * true si sus datos del carnet esperan la revision de un administrador (OBSERVADO): la app
+         * muestra el aviso de revision en vez de la pantalla principal.
+         */
+        boolean carnetObservado) {
 
     public static UsuarioResponse de(Usuario usuario) {
         Persona persona = usuario.getPersona();
@@ -31,6 +36,7 @@ public record UsuarioResponse(
                 usuario.getRol().getCodigo(),
                 Boolean.FALSE.equals(usuario.getGuiaVista()),
                 Boolean.TRUE.equals(persona.getIngresoGoogle()) && (persona.getCi() == null || persona.getCi().isBlank()),
-                Boolean.TRUE.equals(usuario.getAvisoCredenciales()));
+                Boolean.TRUE.equals(usuario.getAvisoCredenciales()),
+                persona.carnetObservado());
     }
 }

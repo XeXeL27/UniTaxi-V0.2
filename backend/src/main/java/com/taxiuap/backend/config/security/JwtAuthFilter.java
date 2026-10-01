@@ -14,8 +14,10 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 
 import com.taxiuap.backend.identity.entity.Usuario;
+import com.taxiuap.backend.identity.repository.PersonaRepository;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.identity.service.AutenticacionService;
+import com.taxiuap.backend.identity.service.RevisionCarnetService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
     private final UsuarioRepository usuarioRepository;
+    private final PersonaRepository personaRepository;
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -49,7 +52,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 if (estado != EstadoRegistro.A) {
                     request.setAttribute(ATRIBUTO_MOTIVO, estado == EstadoRegistro.S
                             ? AutenticacionService.MENSAJE_CUENTA_SUSPENDIDA
-                            : "Tu cuenta fue eliminada. Comunicate con la administracion de UNITAXI");
+                            : motivoEliminada(usuario.idUsuario()));
                     SecurityContextHolder.clearContext();
                     chain.doFilter(request, response);
                     return;
@@ -64,5 +67,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /** Si el administrador rechazo sus datos del carnet se le dice por que; si no, el aviso general. */
+    private String motivoEliminada(Long idUsuario) {
+        return personaRepository.motivoObservacionDeUsuario(idUsuario)
+                .flatMap(RevisionCarnetService::mensajeRechazo)
+                .orElse("Tu cuenta fue eliminada. Comunicate con la administracion de UNITAXI");
     }
 }

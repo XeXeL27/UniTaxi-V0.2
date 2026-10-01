@@ -60,6 +60,13 @@ public class SolicitudViaje extends EntidadAuditable {
     @Column(name = "destino_direccion", length = 255)
     private String destinoDireccion;
 
+    /**
+     * Nombre que el pasajero le puso a su lugar favorito ("Casa de mi mama") cuando lo eligio como
+     * destino. Solo lo ve el pasajero: el conductor ve la direccion del punto.
+     */
+    @Column(name = "destino_nombre_pasajero", length = 100)
+    private String destinoNombrePasajero;
+
     @Column(name = "precio_sugerido", precision = 10, scale = 2)
     private BigDecimal precioSugerido;
 

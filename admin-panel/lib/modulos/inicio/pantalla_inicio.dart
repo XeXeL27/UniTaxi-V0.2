@@ -24,12 +24,13 @@ class _PantallaInicioState extends State<PantallaInicio> {
     _api.listarUsuarios().then((l) => l.length),
     _api.listarPasajeros().then((l) => l.length),
     _api.listarConductores().then((l) => l.length),
+    _api.listarCarnetsObservados().then((l) => l.length),
   ]);
 
   @override
   Widget build(BuildContext context) {
     final usuario = context.watch<Sesion>().usuario;
-    final tarjetas = [Menu.personas, Menu.usuarios, Menu.pasajeros, Menu.conductores];
+    final tarjetas = [Menu.personas, Menu.usuarios, Menu.pasajeros, Menu.conductores, Menu.carnetsObservados];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

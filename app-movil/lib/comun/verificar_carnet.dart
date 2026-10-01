@@ -178,10 +178,15 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
     }
     // La persona confirma el nombre y el numero leidos de su carnet.
     final nombre = '${_nombres.text.trim()} ${_apellidos.text.trim()}';
-    final confirma = await confirmarDatosCarnet(context,
-        nombre: nombre, ci: _ci.text.trim(), complemento: _complemento.text, fotos: _seleccion);
+    final respuesta = await confirmarDatosCarnet(
+      context,
+      nombre: nombre,
+      ci: _ci.text.trim(),
+      complemento: _complemento.text,
+      fotos: _seleccion,
+    );
     if (!mounted) return;
-    if (!confirma) {
+    if (respuesta == RespuestaCarnet.repetir) {
       _reiniciar('Vuelve a tomar las fotos del anverso y del reverso de tu carnet.');
       return;
     }
@@ -197,13 +202,18 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       'nombres': _nombres.text.trim(),
       'apellidos': _apellidos.text.trim(),
       'fechaNacimiento': '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
+      // Observado: la administracion revisa los datos antes de entregar las credenciales.
+      'observado': respuesta == RespuestaCarnet.observado,
     };
     try {
       if (_registro) {
         // Recien ahora se guarda todo; con la sesion iniciada la app pasa sola a la vista del pasajero.
         final navegador = Navigator.of(context);
-        await sesion.registrarPasajeroGoogle({...datos, 'codigo': widget.codigoGoogle},
-            anverso: _seleccion.anverso!, reverso: _seleccion.reverso!);
+        await sesion.registrarPasajeroGoogle(
+          {...datos, 'codigo': widget.codigoGoogle},
+          anverso: _seleccion.anverso!,
+          reverso: _seleccion.reverso!,
+        );
         if (widget.onCancelar == null) navegador.popUntil((ruta) => ruta.isFirst);
         return;
       }
@@ -272,7 +282,11 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                             padding: const EdgeInsets.only(bottom: 12),
                             child: Text(
                               avisoNombreCarnet(_seleccion.datos!),
-                              style: const TextStyle(color: ColoresApp.rutaSecundariaBorde, fontSize: 13, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                color: ColoresApp.rutaSecundariaBorde,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         _campo(
@@ -305,7 +319,9 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                         // En el APK el complemento sale de la foto, no se escribe.
                         _campo(
                           _complemento,
-                          LectorDocumentos.puedeLeer ? 'Complemento (se lee de la foto)' : 'Complemento (solo si tu carnet lo tiene)',
+                          LectorDocumentos.puedeLeer
+                              ? 'Complemento (se lee de la foto)'
+                              : 'Complemento (solo si tu carnet lo tiene)',
                           FontAwesomeIcons.hashtag,
                           soloLectura: LectorDocumentos.puedeLeer,
                           formatos: [
@@ -329,7 +345,12 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                               filled: _fechaLeida,
                               fillColor: ColoresApp.gris,
                               suffixIcon: _fechaLeida
-                                  ? const SizedBox(width: 44, child: Center(child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave)))
+                                  ? const SizedBox(
+                                      width: 44,
+                                      child: Center(
+                                        child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave),
+                                      ),
+                                    )
                                   : null,
                               prefixIcon: const SizedBox(
                                 width: 44,
@@ -349,12 +370,17 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                         const SizedBox(height: 16),
                         Container(
                           padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(12)),
+                          decoration: BoxDecoration(
+                            color: ColoresApp.rojoSuave,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
                           child: Row(
                             children: [
                               const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
                               const SizedBox(width: 10),
-                              Expanded(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro))),
+                              Expanded(
+                                child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
+                              ),
                             ],
                           ),
                         ),
@@ -369,8 +395,10 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                       const SizedBox(height: 10),
                       TextButton(
                         onPressed: _enviando ? null : _cancelar,
-                        child: Text(_registro ? 'Cancelar registro' : 'Cerrar sesión',
-                            style: const TextStyle(color: ColoresApp.grisTexto)),
+                        child: Text(
+                          _registro ? 'Cancelar registro' : 'Cerrar sesión',
+                          style: const TextStyle(color: ColoresApp.grisTexto),
+                        ),
                       ),
                     ],
                   ),
@@ -404,9 +432,15 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
           filled: soloLectura,
           fillColor: ColoresApp.gris,
           suffixIcon: soloLectura
-              ? const SizedBox(width: 44, child: Center(child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave)))
+              ? const SizedBox(
+                  width: 44,
+                  child: Center(child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave)),
+                )
               : null,
-          prefixIcon: SizedBox(width: 44, child: Center(child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave))),
+          prefixIcon: SizedBox(
+            width: 44,
+            child: Center(child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave)),
+          ),
         ),
         validator: validar,
       ),

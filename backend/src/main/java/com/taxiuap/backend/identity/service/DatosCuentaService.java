@@ -37,6 +37,12 @@ public class DatosCuentaService {
     private final CredencialesCorreoService credencialesCorreoService;
     private final CuentaUsuarioService cuentaUsuarioService;
 
+    /** Datos de la cuenta con que se inicio sesion (la app lo consulta mientras su carnet esta observado). */
+    @Transactional(readOnly = true)
+    public UsuarioResponse actual(Long idUsuario) {
+        return UsuarioResponse.de(buscar(idUsuario));
+    }
+
     /** La persona termino o salto la guia de inicio de la app: no se vuelve a mostrar. */
     public void marcarGuiaVista(Long idUsuario) {
         Usuario usuario = usuarioRepository.findById(idUsuario)

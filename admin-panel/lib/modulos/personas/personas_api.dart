@@ -41,4 +41,16 @@ class PersonasApi {
 
   Future<Uint8List> archivoDocumento(int idDocumento) =>
       _api.bytes('/api/admin/documentos-conductor/$idDocumento/archivo');
+
+  /// Carnets que la persona envio a revision (Observado) o cuyo nombre parecia falso u ofensivo.
+  Future<List<CarnetObservado>> listarCarnetsObservados() =>
+      _api.lista('/api/admin/carnets-observados', CarnetObservado.desdeJson);
+
+  /// Guarda los datos corregidos y aprueba: recien ahi le llegan sus credenciales.
+  Future<void> aprobarCarnet(int idPersona, Map<String, dynamic> datos) =>
+      _api.put('/api/admin/carnets-observados/$idPersona/aprobar', datos);
+
+  /// Rechaza los datos: le llega el motivo por correo y su registro se elimina.
+  Future<void> rechazarCarnet(int idPersona, String motivo) =>
+      _api.put('/api/admin/carnets-observados/$idPersona/rechazar', {'motivo': motivo});
 }

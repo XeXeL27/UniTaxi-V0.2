@@ -12,7 +12,8 @@ import 'package:flutter/material.dart';
 ///   viaje, en cuyo caso el cuerpo lleva los datos ([confirmarViaje]).
 /// - rojo (X): se elimino un registro, o la accion fallo.
 /// - naranja (signo de exclamacion): aviso informativo, sin nada que confirmar.
-enum TipoDialogo { exito, confirmacion, eliminado, error, aviso }
+/// - rojo (signo de exclamacion): algo espera una revision (datos del carnet en revision).
+enum TipoDialogo { exito, confirmacion, eliminado, error, aviso, revision }
 
 const _verde = Color(0xFF198754);
 const _verdeOscuro = Color(0xFF157347);
@@ -47,7 +48,12 @@ Future<void> mostrarErrorDialogo(
 }
 
 /// Modal naranja con signo de exclamacion: avisa algo sin pedir confirmacion.
-Future<void> mostrarAviso(BuildContext context, {required String titulo, required String mensaje, String textoBoton = 'Entendido'}) {
+Future<void> mostrarAviso(
+  BuildContext context, {
+  required String titulo,
+  required String mensaje,
+  String textoBoton = 'Entendido',
+}) {
   return _abrir<void>(
     context,
     barreraCierra: true,
@@ -122,6 +128,130 @@ Future<void> _mostrar(BuildContext context, TipoDialogo tipo, String titulo, Str
   );
 }
 
+/// Opcion de [elegirOpcion]: [principal] va como boton lleno del color del modal; las demas, con
+/// borde.
+typedef OpcionModal<T> = ({String texto, T valor, bool principal});
+
+/// Modal naranja con varias opciones apiladas (por ejemplo confirmar, repetir o enviar a revision).
+/// Devuelve el valor de la opcion elegida; null si se cerro sin elegir.
+Future<T?> elegirOpcion<T>(
+  BuildContext context, {
+  required String titulo,
+  required Widget contenido,
+  required List<OpcionModal<T>> opciones,
+}) {
+  return _abrir<T>(
+    context,
+    barreraCierra: false,
+    tarjeta: Builder(
+      builder: (context) => _TarjetaAlerta(
+        tipo: TipoDialogo.confirmacion,
+        titulo: titulo,
+        contenido: contenido,
+        textoBoton: '',
+        acciones: [
+          for (final opcion in opciones)
+            _BotonModal(
+              texto: opcion.texto,
+              principal: opcion.principal,
+              tipo: TipoDialogo.confirmacion,
+              onPressed: () => Navigator.of(context).pop(opcion.valor),
+            ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Tarjeta de un modal fija en una pantalla (no se abre como dialogo ni se puede cerrar), con sus
+/// propios botones. La usa el aviso de datos en revision.
+class TarjetaModal extends StatelessWidget {
+  final TipoDialogo tipo;
+  final String titulo;
+  final String mensaje;
+
+  /// Botones apilados de ancho completo (ver [BotonModal]).
+  final List<Widget> acciones;
+
+  const TarjetaModal({
+    super.key,
+    required this.tipo,
+    required this.titulo,
+    required this.mensaje,
+    required this.acciones,
+  });
+
+  @override
+  Widget build(BuildContext context) =>
+      _TarjetaAlerta(tipo: tipo, titulo: titulo, mensaje: mensaje, textoBoton: '', acciones: acciones);
+}
+
+/// Boton de ancho completo con el estilo de los modales: lleno del color del tipo si es
+/// [principal], con borde gris si no.
+class BotonModal extends StatelessWidget {
+  final String texto;
+  final bool principal;
+  final TipoDialogo tipo;
+  final VoidCallback? onPressed;
+
+  const BotonModal({super.key, required this.texto, required this.tipo, this.principal = true, this.onPressed});
+
+  @override
+  Widget build(BuildContext context) =>
+      _BotonModal(texto: texto, principal: principal, tipo: tipo, onPressed: onPressed);
+}
+
+class _BotonModal extends StatelessWidget {
+  final String texto;
+  final bool principal;
+  final TipoDialogo tipo;
+  final VoidCallback? onPressed;
+
+  const _BotonModal({required this.texto, required this.principal, required this.tipo, this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final (color, colorHover) = _coloresDe(tipo);
+    final forma = RoundedRectangleBorder(borderRadius: BorderRadius.circular(6));
+    const relleno = EdgeInsets.symmetric(horizontal: 16, vertical: 13);
+    final hijo = Text(texto, textAlign: TextAlign.center);
+    return SizedBox(
+      width: double.infinity,
+      child: principal
+          ? FilledButton(
+              onPressed: onPressed,
+              style: ButtonStyle(
+                backgroundColor: WidgetStateProperty.resolveWith(
+                  (estados) => estados.contains(WidgetState.hovered) ? colorHover : color,
+                ),
+                foregroundColor: const WidgetStatePropertyAll(Colors.white),
+                padding: const WidgetStatePropertyAll(relleno),
+                shape: WidgetStatePropertyAll(forma),
+                textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
+              ),
+              child: hijo,
+            )
+          : OutlinedButton(
+              onPressed: onPressed,
+              style: OutlinedButton.styleFrom(
+                backgroundColor: const Color(0xFFF8F9FA),
+                foregroundColor: const Color(0xFF212529),
+                side: const BorderSide(color: Color(0xFFDEE2E6)),
+                padding: relleno,
+                shape: forma,
+              ),
+              child: hijo,
+            ),
+    );
+  }
+}
+
+(Color, Color) _coloresDe(TipoDialogo tipo) => switch (tipo) {
+  TipoDialogo.exito => (_verde, _verdeOscuro),
+  TipoDialogo.confirmacion || TipoDialogo.aviso => (_naranja, _naranjaOscuro),
+  TipoDialogo.eliminado || TipoDialogo.error || TipoDialogo.revision => (_rojo, _rojoOscuro),
+};
+
 /// Fondo oscuro que aparece en 0,3 s y tarjeta que entra con escala 0,8 -> 1 con rebote.
 Future<R?> _abrir<R>(BuildContext context, {required bool barreraCierra, required Widget tarjeta}) {
   return showGeneralDialog<R>(
@@ -157,6 +287,9 @@ class _TarjetaAlerta extends StatelessWidget {
   final bool conCancelar;
   final String textoCancelar;
 
+  /// Botones propios apilados en lugar de Cancelar / [textoBoton].
+  final List<Widget>? acciones;
+
   const _TarjetaAlerta({
     required this.tipo,
     required this.titulo,
@@ -165,13 +298,10 @@ class _TarjetaAlerta extends StatelessWidget {
     this.contenido,
     this.conCancelar = false,
     this.textoCancelar = 'Cancelar',
+    this.acciones,
   }) : assert(mensaje != null || contenido != null, 'Hay que pasar mensaje o contenido');
 
-  (Color, Color) get _colores => switch (tipo) {
-    TipoDialogo.exito => (_verde, _verdeOscuro),
-    TipoDialogo.confirmacion || TipoDialogo.aviso => (_naranja, _naranjaOscuro),
-    TipoDialogo.eliminado || TipoDialogo.error => (_rojo, _rojoOscuro),
-  };
+  (Color, Color) get _colores => _coloresDe(tipo);
 
   @override
   Widget build(BuildContext context) {
@@ -213,7 +343,8 @@ class _TarjetaAlerta extends StatelessWidget {
               ConstrainedBox(
                 constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * 0.6),
                 child: SingleChildScrollView(
-                  child: contenido ??
+                  child:
+                      contenido ??
                       Text(
                         mensaje!,
                         textAlign: TextAlign.center,
@@ -222,39 +353,47 @@ class _TarjetaAlerta extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 25),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  if (conCancelar)
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF8F9FA),
-                        foregroundColor: const Color(0xFF212529),
-                        side: const BorderSide(color: Color(0xFFDEE2E6)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+              if (acciones != null)
+                Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final (i, accion) in acciones!.indexed) ...[if (i > 0) const SizedBox(height: 8), accion],
+                  ],
+                )
+              else
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    if (conCancelar)
+                      OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(false),
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: const Color(0xFFF8F9FA),
+                          foregroundColor: const Color(0xFF212529),
+                          side: const BorderSide(color: Color(0xFFDEE2E6)),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                        ),
+                        child: Text(textoCancelar),
                       ),
-                      child: Text(textoCancelar),
-                    ),
-                  FilledButton(
-                    autofocus: true,
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStateProperty.resolveWith(
-                        (estados) => estados.contains(WidgetState.hovered) ? colorHover : color,
+                    FilledButton(
+                      autofocus: true,
+                      onPressed: () => Navigator.of(context).pop(true),
+                      style: ButtonStyle(
+                        backgroundColor: WidgetStateProperty.resolveWith(
+                          (estados) => estados.contains(WidgetState.hovered) ? colorHover : color,
+                        ),
+                        foregroundColor: const WidgetStatePropertyAll(Colors.white),
+                        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 30, vertical: 12)),
+                        shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
+                        textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
                       ),
-                      foregroundColor: const WidgetStatePropertyAll(Colors.white),
-                      padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 30, vertical: 12)),
-                      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                      textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
+                      child: Text(textoBoton),
                     ),
-                    child: Text(textoBoton),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -362,7 +501,8 @@ class _PintorIcono extends CustomPainter {
       canvas.drawPath(_parcial(trazo, progresoSimbolo), pincelSimbolo);
     }
 
-    if ((tipo == TipoDialogo.confirmacion || tipo == TipoDialogo.aviso) && opacidadPunto > 0) {
+    final conPunto = tipo == TipoDialogo.confirmacion || tipo == TipoDialogo.aviso || tipo == TipoDialogo.revision;
+    if (conPunto && opacidadPunto > 0) {
       canvas.drawCircle(const Offset(26, 38), 2.5, Paint()..color = color.withValues(alpha: opacidadPunto));
     }
   }
@@ -388,6 +528,7 @@ class _PintorIcono extends CustomPainter {
             ..lineTo(16, 36),
         ];
       case TipoDialogo.aviso:
+      case TipoDialogo.revision:
         return [
           Path()
             ..moveTo(26, 13)

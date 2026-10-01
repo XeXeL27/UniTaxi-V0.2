@@ -77,10 +77,16 @@ public class RegistroConductorPasajeroService {
         CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(persona, archivos);
         LicenciaService.FotosLicencia licencia = licenciaService.validarDelRegistro(archivos);
         boolean conservarCarnet = carnet == null;
-        carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
-                datos.nombres(), datos.apellidos());
-        licenciaService.validarDatosRegistro(datos.conductor(), licencia, conservarCarnet ? persona.getCi() : datos.ci(),
-                conservarCarnet ? persona.getComplementoCi() : datos.complementoCi());
+        // Carnet observado (la persona dice que se leyo mal): no se compara con la lectura ni con el
+        // numero de la licencia; lo revisa el administrador.
+        boolean pidioRevision = !conservarCarnet && datos.esObservado();
+        if (!pidioRevision) {
+            carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                    datos.nombres(), datos.apellidos());
+        }
+        licenciaService.validarDatosRegistro(datos.conductor(), licencia,
+                pidioRevision ? null : conservarCarnet ? persona.getCi() : datos.ci(),
+                pidioRevision ? null : conservarCarnet ? persona.getComplementoCi() : datos.complementoCi());
 
         gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(
                 conservarCarnet ? persona.getCi() : datos.ci(),
@@ -89,8 +95,10 @@ public class RegistroConductorPasajeroService {
                 conservarCarnet ? persona.getApellidos() : ReglasRegistro.nombreOActual(datos.apellidos(), persona.getApellidos()),
                 conservarCarnet ? persona.getFechaNacimiento() : datos.fechaNacimiento(),
                 persona.getCorreo(), datos.telefono()));
+        boolean observado = false;
         if (carnet != null) {
             carnetService.guardar(persona, carnet);
+            observado = carnetService.revisar(persona, pidioRevision);
         }
         Usuario usuario = cuentaUsuarioService.crearUsuario(persona, RolSistema.CONDUCTOR,
                 pasajero.getNombreUsuario(), pasajero.getPasswordHash());
@@ -99,8 +107,11 @@ public class RegistroConductorPasajeroService {
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
         licenciaService.guardar(conductor, licencia, datos.conductor().vencimientoLicencia());
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
-        boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
-        credencialesCorreoService.conductorRegistrado(usuario, null, "la misma de tu cuenta de pasajero", aprobado);
+        // Observado: sin aprobar ni correo hasta que el administrador revise sus datos.
+        if (!observado) {
+            boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
+            credencialesCorreoService.conductorRegistrado(usuario, null, "la misma de tu cuenta de pasajero", aprobado);
+        }
         return estado(idUsuario);
     }
 

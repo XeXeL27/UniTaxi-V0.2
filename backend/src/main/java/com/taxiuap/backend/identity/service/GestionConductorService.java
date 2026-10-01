@@ -14,6 +14,7 @@ import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.DocumentoConductorRepository;
@@ -46,6 +47,9 @@ public class GestionConductorService {
     @Transactional
     public ConductorAdminResponse cambiarSituacion(Long id, CambiarSituacionConductorRequest request) {
         Conductor conductor = buscarPorId(id);
+        if (request.situacion() == SituacionAprobacion.APROBADO && conductor.getUsuario().getPersona().carnetObservado()) {
+            throw new NegocioException("Primero revise los datos de su carnet en Personas > Carnets observados");
+        }
         boolean yaAprobado = conductor.getSituacionAprobacion() == SituacionAprobacion.APROBADO;
         conductor.setSituacionAprobacion(request.situacion());
 

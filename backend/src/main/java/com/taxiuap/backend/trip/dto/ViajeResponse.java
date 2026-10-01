@@ -40,5 +40,16 @@ public record ViajeResponse(
         /** true si el conductor tiene al menos un QR de cobro. */
         boolean conductorTieneQr,
         /** true si al pasajero ya se le ofrecio calificar este viaje (no se vuelve a ofrecer). */
-        boolean calificacionOfrecida) {
+        boolean calificacionOfrecida,
+        /** Nombre del favorito elegido como destino: solo en las respuestas al pasajero (si no, null). */
+        String destinoNombre) {
+
+    /** El mismo viaje sin el nombre del favorito, para el conductor. */
+    public ViajeResponse sinNombreDestino() {
+        return new ViajeResponse(idViaje, idSolicitud, idPasajero, nombrePasajero, idConductor, nombreConductor,
+                placaVehiculo, marcaVehiculo, modeloVehiculo, colorVehiculo, calificacionConductor, origenWkt,
+                destinoWkt, origenDireccion, destinoDireccion, distanciaKm, duracionMin, precioOriginal,
+                montoDescuento, precioFinal, situacionViaje, canceladoPor, fechaInicio, fechaFin,
+                calificadoPorPasajero, metodoPago, metodoPagoPedido, conductorTieneQr, calificacionOfrecida, null);
+    }
 }

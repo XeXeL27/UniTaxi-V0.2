@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
+import '../comun/carnet_observado.dart';
 import 'cliente_api.dart';
 import 'notificador.dart';
 import 'preferencias_aviso.dart';
@@ -71,8 +72,24 @@ Future<void> mensajeEnSegundoPlano(RemoteMessage mensaje) async {
   await mostrarAvisoPush(mensaje.data);
 }
 
-/// Notificacion del aviso del viaje con el mismo id que usa la app abierta (idViaje * 10 + evento).
+/// Notificacion del aviso del viaje con el mismo id que usa la app abierta (idViaje * 10 + evento), o
+/// de la revision de los datos del carnet.
 Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
+  // Revision de los datos del carnet (Observado): aprobados o rechazados por la administracion.
+  final idCuenta = switch (datos['tipo']) {
+    'CUENTA_APROBADA' => idNotificacionCarnetAprobado,
+    'CUENTA_RECHAZADA' => idNotificacionCarnetAprobado + 1,
+    _ => null,
+  };
+  if (idCuenta != null) {
+    await Notificador.avisoViaje(
+      '${datos['titulo'] ?? 'UNITAXI'}',
+      '${datos['cuerpo'] ?? ''}',
+      id: idCuenta,
+      pedirPermiso: false,
+    );
+    return;
+  }
   final idViaje = int.tryParse('${datos['idViaje'] ?? ''}');
   final evento = switch (datos['tipo']) {
     'VIAJE_ACEPTADO' => 1,

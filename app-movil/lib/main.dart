@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
+import 'comun/carnet_observado.dart';
 import 'comun/completar_correo.dart';
 import 'comun/verificar_carnet.dart';
 import 'core/api_excepcion.dart';
@@ -94,6 +95,7 @@ class _TaxiUapState extends State<TaxiUap> {
     final motivoCierre = context.select<Sesion, String?>((s) => s.motivoCierre);
     final sinCorreo = context.select<Sesion, bool>((s) => (s.usuario?.correo ?? '').trim().isEmpty);
     final sinCarnet = context.select<Sesion, bool>((s) => s.usuario?.requiereCarnet ?? false);
+    final carnetObservado = context.select<Sesion, bool>((s) => s.usuario?.carnetObservado ?? false);
     // Administrador que entro desde el login del APK: el panel se abre dentro de la app.
     final panelAdmin = context.select<Sesion, Map<String, dynamic>?>((s) => s.panelAdmin);
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
@@ -121,6 +123,8 @@ class _TaxiUapState extends State<TaxiUap> {
         _ when rol != null && sinCorreo => const PantallaCompletarCorreo(),
         // Entro con Google sin CI: primero la foto de su carnet.
         _ when rol != null && sinCarnet => const PantallaVerificarCarnet(),
+        // Envio sus datos del carnet a revision: espera a que la administracion los apruebe.
+        _ when rol != null && carnetObservado => const PantallaCarnetObservado(),
         Config.rolConductor => const RequiereGps(
           key: ValueKey(Config.rolConductor),
           child: PantallaInicioConductor(),
