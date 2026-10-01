@@ -73,8 +73,16 @@ public class GoogleAuthController {
     private final RegistroGoogleService registroGoogleService;
     private final IngresoGoogleTemporal temporal;
 
-    /** Cliente HTTP para llamar a los endpoints de Google (no requiere bean). */
-    private final RestTemplate restTemplate = new RestTemplate();
+    /** Cliente HTTP para llamar a los endpoints de Google (no requiere bean), con tiempos maximos. */
+    private final RestTemplate restTemplate = clienteGoogle();
+
+    private static RestTemplate clienteGoogle() {
+        org.springframework.http.client.SimpleClientHttpRequestFactory fabrica =
+                new org.springframework.http.client.SimpleClientHttpRequestFactory();
+        fabrica.setConnectTimeout(java.time.Duration.ofSeconds(10));
+        fabrica.setReadTimeout(java.time.Duration.ofSeconds(15));
+        return new RestTemplate(fabrica);
+    }
 
     @Value("${google.client-id:}")
     private String googleClientId;
@@ -180,12 +188,7 @@ public class GoogleAuthController {
     @PostMapping("/google/movil")
     public ResponseEntity<ApiResponse<IngresoGoogleMovilResponse>> ingresarMovil(
             @Valid @RequestBody IngresoGoogleMovilRequest datos) {
-        PerfilGoogle perfil;
-        try {
-            perfil = perfilDeIdToken(datos.idToken());
-        } catch (RestClientException e) {
-            throw new CredencialesInvalidasException("Google no reconocio el ingreso: vuelve a intentarlo");
-        }
+        PerfilGoogle perfil = perfilDeIdTokenConReintentos(datos.idToken());
         IngresoGoogleMovilResponse resultado = resolver(perfil, datos.modo());
         String mensaje = resultado.sesion() != null ? "Sesion iniciada con Google"
                 : resultado.codigoRegistroPasajero() != null ? "Verifica tu carnet para terminar el registro"
@@ -265,6 +268,33 @@ public class GoogleAuthController {
     }
 
     /** Verifica con Google el id_token del APK: firma, vigencia, que sea para esta app y correo verificado. */
+    /**
+     * Verifica el id_token con Google. Una falla de red o un 5xx de Google se reintenta (hasta 3 veces):
+     * antes un corte momentaneo obligaba a la persona a elegir su cuenta varias veces. Si Google
+     * rechaza el token (4xx) se registra el motivo.
+     */
+    private PerfilGoogle perfilDeIdTokenConReintentos(String idToken) {
+        for (int intento = 1;; intento++) {
+            try {
+                return perfilDeIdToken(idToken);
+            } catch (org.springframework.web.client.HttpClientErrorException e) {
+                LOG.warn("Google rechazo el id_token ({}): {}", e.getStatusCode().value(), e.getResponseBodyAsString());
+                throw new CredencialesInvalidasException("Google no reconocio el ingreso: vuelve a intentarlo");
+            } catch (RestClientException e) {
+                LOG.warn("No se pudo verificar el id_token con Google (intento {}): {}", intento, e.getMessage());
+                if (intento >= 3) {
+                    throw new CredencialesInvalidasException("No se pudo conectar con Google: vuelve a intentarlo");
+                }
+                try {
+                    Thread.sleep(700L * intento);
+                } catch (InterruptedException interrumpido) {
+                    Thread.currentThread().interrupt();
+                    throw new CredencialesInvalidasException("No se pudo conectar con Google: vuelve a intentarlo");
+                }
+            }
+        }
+    }
+
     private PerfilGoogle perfilDeIdToken(String idToken) {
         // URI ya codificada: con un String RestTemplate la volveria a codificar.
         Map<String, Object> datos = restTemplate.exchange(

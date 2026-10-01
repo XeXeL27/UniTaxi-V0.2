@@ -19,7 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Envio de correos. El correo se encola como evento y sale en segundo plano recien cuando la
  * transaccion que lo pidio termina bien: si el registro falla no llega un correo con credenciales
- * que no existen, y si el SMTP falla el registro no se pierde (solo queda en el log).
+ * que no existen, y si el SMTP falla el registro no se pierde (se reintenta y, si sigue fallando, queda en
+ * el log).
  */
 @Slf4j
 @Service
@@ -51,17 +52,28 @@ public class CorreoService {
             log.warn("Correo sin configurar (spring.mail.username): no se envio '{}' a {}", correo.asunto(), correo.para());
             return;
         }
-        try {
-            MimeMessage mensaje = sender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mensaje, false, StandardCharsets.UTF_8.name());
-            helper.setFrom(new InternetAddress(remitente, nombreRemitente, StandardCharsets.UTF_8.name()));
-            helper.setTo(correo.para());
-            helper.setSubject(correo.asunto());
-            helper.setText(correo.cuerpo(), false);
-            sender.send(mensaje);
-            log.info("Correo '{}' enviado a {}", correo.asunto(), correo.para());
-        } catch (Exception e) {
-            log.error("No se pudo enviar el correo '{}' a {}: {}", correo.asunto(), correo.para(), e.getMessage());
+        // Un corte momentaneo del SMTP no debe perder el correo (por ejemplo, las credenciales): se
+        // reintenta despues de 5 y de 30 segundos.
+        long[] esperas = { 0, 5_000, 30_000 };
+        for (int intento = 0; intento < esperas.length; intento++) {
+            try {
+                Thread.sleep(esperas[intento]);
+                MimeMessage mensaje = sender.createMimeMessage();
+                MimeMessageHelper helper = new MimeMessageHelper(mensaje, false, StandardCharsets.UTF_8.name());
+                helper.setFrom(new InternetAddress(remitente, nombreRemitente, StandardCharsets.UTF_8.name()));
+                helper.setTo(correo.para());
+                helper.setSubject(correo.asunto());
+                helper.setText(correo.cuerpo(), false);
+                sender.send(mensaje);
+                log.info("Correo '{}' enviado a {}", correo.asunto(), correo.para());
+                return;
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            } catch (Exception e) {
+                log.error("No se pudo enviar el correo '{}' a {} (intento {} de {}): {}", correo.asunto(), correo.para(),
+                        intento + 1, esperas.length, e.getMessage());
+            }
         }
     }
 }
