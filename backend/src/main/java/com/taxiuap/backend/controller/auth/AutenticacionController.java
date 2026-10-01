@@ -49,7 +49,7 @@ public class AutenticacionController {
             @Valid @RequestPart("datos") RegistroConductorRequest datos,
             @RequestParam Map<String, MultipartFile> archivos) {
         TokenResponse token = autenticacionService.registrarConductor(datos, archivos);
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro enviado a revision", token));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro de conductor recibido", token));
     }
 
     @PostMapping("/login")

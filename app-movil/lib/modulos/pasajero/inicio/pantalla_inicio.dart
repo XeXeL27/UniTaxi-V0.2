@@ -8,10 +8,12 @@ import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../comun/aviso_credenciales.dart';
 import '../../../comun/historial_viajes.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/pantalla_mas.dart';
 import '../../../comun/perfil_api.dart';
+import '../../../core/push.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
@@ -23,6 +25,7 @@ import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/posiciones_animadas.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
+import '../../../widgets/panel_recuperando.dart';
 import '../../../widgets/barra_inferior.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../widgets/guia_inicio.dart';
@@ -119,7 +122,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _flujo.addListener(_alCambiarFlujo);
     _mapa.addListener(_revisarGuia);
     RequiereGps.listo.addListener(_revisarGuia);
+    RequiereGps.listo.addListener(_revisarAvisoCredenciales);
     _flujo.iniciar();
+    // Este telefono recibe los avisos push de la cuenta (tambien con la app cerrada).
+    unawaited(Push.registrar(context.read<ClienteApi>()));
     _cargarFavoritos();
     _cargarOcultos();
     _cargarFoto();
@@ -131,7 +137,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   @override
   void dispose() {
     _sondeoConductores?.cancel();
+    _sondeoRegistro?.cancel();
     RequiereGps.listo.removeListener(_revisarGuia);
+    RequiereGps.listo.removeListener(_revisarAvisoCredenciales);
     _mapa.removeListener(_revisarGuia);
     _posiciones.dispose();
     _flujo.removeListener(_alCambiarFlujo);
@@ -169,6 +177,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// sin destino ni viaje y sin otra pantalla encima.
   bool get _listoParaGuia =>
       context.read<Sesion>().usuario?.mostrarGuia == true &&
+      !(context.read<Sesion>().usuario?.avisoCredenciales ?? false) &&
+      !_avisoEnCurso &&
       RequiereGps.listo.value &&
       _seccion == _seccionInicio &&
       _flujo.etapa == EtapaPasajero.eligiendo &&
@@ -229,20 +239,68 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   Future<void> _cargarRegistroConductor() async {
     try {
       final datos = await context.read<ClienteApi>().get('/api/pasajero/registro-conductor') as Map<String, dynamic>;
-      if (mounted) setState(() => _registroConductor = datos['situacion'] as String? ?? '');
+      if (!mounted) return;
+      final anterior = _registroConductor;
+      final situacion = datos['situacion'] as String? ?? '';
+      setState(() => _registroConductor = situacion);
+      if (situacion == 'PENDIENTE') {
+        _sondeoRegistro ??= Timer.periodic(const Duration(seconds: 20), (_) => _cargarRegistroConductor());
+      } else {
+        _sondeoRegistro?.cancel();
+        _sondeoRegistro = null;
+      }
+      if (anterior == 'PENDIENTE' && situacion == 'APROBADO') await _avisarConductorAprobado();
     } catch (_) {
       // Sin respuesta no se muestra la opcion.
     }
+  }
+
+  /// Registro de conductor en revision: se consulta solo cada 20 segundos.
+  Timer? _sondeoRegistro;
+
+  /// La administracion aprobo su registro de conductor mientras usaba la app como pasajero.
+  Future<void> _avisarConductorAprobado() async {
+    final cambiar = await confirmarAccion(
+      context,
+      titulo: '¡Ya eres conductor!',
+      mensaje: 'La administración aprobó tu cuenta de conductor. ¿Quieres cambiar a modo conductor para empezar a '
+          'recibir solicitudes de viaje?',
+      textoConfirmar: 'Cambiar a modo conductor',
+      textoCancelar: 'Ahora no',
+    );
+    if (!cambiar || !mounted) return;
+    if (_flujo.etapa != EtapaPasajero.eligiendo) {
+      mostrarMensaje(context, 'Termina tu viaje o solicitud y cambia a modo conductor desde Más.');
+      return;
+    }
+    try {
+      await context.read<Sesion>().cambiarModo(Config.rolConductor);
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
+  }
+
+  /// Aviso de credenciales enviadas al correo, con la pantalla principal a la vista (GPS listo).
+  bool _avisoEnCurso = false;
+
+  Future<void> _revisarAvisoCredenciales() async {
+    if (_avisoEnCurso || !mounted || !RequiereGps.listo.value) return;
+    if (!(context.read<Sesion>().usuario?.avisoCredenciales ?? false)) return;
+    _avisoEnCurso = true;
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (mounted) await mostrarAvisoCredenciales(context);
+    _avisoEnCurso = false;
+    _revisarGuia();
   }
 
   /// Opcion de Mas segun en que va su registro de conductor (null: no se muestra).
   (String, String)? _opcionRegistroConductor(Sesion sesion) {
     if (sesion.otroModo != null) return null;
     return switch (_registroConductor) {
-      '' => ('Registrarme como conductor', 'Lleva pasajeros con tu moto. La administración revisará tus datos'),
+      '' => ('Registrarme como conductor', 'Lleva pasajeros con tu moto. Con tu licencia verificada empiezas al instante'),
       'PENDIENTE' => ('Registro de conductor en revisión', 'Te avisaremos aquí cuando la administración te apruebe'),
-      'RECHAZADO' => ('Registro de conductor rechazado', 'Comunícate con la administración de TaxiUAP'),
-      'SUSPENDIDO' => ('Cuenta de conductor suspendida', 'Comunícate con la administración de TaxiUAP'),
+      'RECHAZADO' => ('Registro de conductor rechazado', 'Comunícate con la administración de UNITAXI'),
+      'SUSPENDIDO' => ('Cuenta de conductor suspendida', 'Comunícate con la administración de UNITAXI'),
       _ => null,
     };
   }
@@ -253,7 +311,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         context,
         _registroConductor == 'PENDIENTE'
             ? 'Tu registro de conductor está en revisión.'
-            : 'Comunícate con la administración de TaxiUAP.',
+            : 'Comunícate con la administración de UNITAXI.',
       );
       return;
     }
@@ -826,10 +884,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
 
   /// Panel sobre la barra; sin destino elegido no hace falta (el buscador ya invita a elegirlo).
   Widget? _panel(EtapaPasajero etapa) => switch (etapa) {
-    EtapaPasajero.cargando => const Padding(
-      padding: EdgeInsets.symmetric(vertical: 8),
-      child: Center(child: CircularProgressIndicator()),
-    ),
+    EtapaPasajero.cargando => PanelRecuperando(sinRed: _flujo.recuperandoSinRed),
     EtapaPasajero.eligiendo when _mapa.a != null && _mapa.b == null && !_flujo.guardandoLugar => null,
     EtapaPasajero.eligiendo when !_panelEsPlegable => _panelEligiendo(),
     EtapaPasajero.eligiendo => PanelPlegable(

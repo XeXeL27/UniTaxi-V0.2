@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
+import '../../core/formato.dart';
 import '../../core/tema.dart';
 import '../../widgets/archivos_web.dart';
 import '../../widgets/modal_formulario.dart';
@@ -173,7 +175,7 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
     if (tipo.incluyeConductor) {
       datos['conductor'] = {
         'numeroLicencia': _licencia.text.trim(),
-        'categoriaLicencia': _categoria.text.trim(),
+        'categoriaLicencia': _categoria.text.trim().isEmpty ? null : _categoria.text.trim().toUpperCase(),
         'placa': _placa.text.trim(),
         'marca': _marca.text.trim(),
         'modelo': _modelo.text.trim(),
@@ -323,8 +325,9 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
         ),
         TextFormField(
           controller: _categoria,
-          maxLength: 10,
-          decoration: const InputDecoration(labelText: 'Categoría', counterText: ''),
+          maxLength: 1,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[PMABCpmabc]')), MayusculasFormatter()],
+          decoration: const InputDecoration(labelText: 'Categoría (P, M, A, B o C)', counterText: ''),
         ),
       ]),
       const _Seccion('Motocicleta'),
@@ -339,19 +342,32 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
         TextFormField(
           controller: _marca,
           maxLength: 100,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[A-Za-zÑñ ]')), MayusculasFormatter()],
           decoration: const InputDecoration(labelText: 'Marca *', counterText: ''),
-          validator: _requerido,
+          validator: (v) {
+            final texto = v?.trim() ?? '';
+            if (texto.isEmpty) return 'Campo obligatorio';
+            return RegExp(r'^[A-ZÑ]+( [A-ZÑ]+)*$').hasMatch(texto) ? null : 'Solo letras en mayúsculas';
+          },
         ),
       ]),
       _Fila([
         TextFormField(
           controller: _modelo,
           maxLength: 100,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[A-Za-z0-9Ññ -]')), MayusculasFormatter()],
           decoration: const InputDecoration(labelText: 'Modelo', counterText: ''),
+          validator: (v) {
+            final texto = v?.trim() ?? '';
+            return texto.isEmpty || RegExp(r'^[A-Za-z0-9Ññ]+([ -][A-Za-z0-9Ññ]+)*$').hasMatch(texto)
+                ? null
+                : 'Solo letras y números';
+          },
         ),
         TextFormField(
           controller: _color,
           maxLength: 50,
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp('[A-Za-zÁÉÍÓÚÜÑáéíóúüñ ]')), MayusculasFormatter()],
           decoration: const InputDecoration(labelText: 'Color', counterText: ''),
         ),
         TextFormField(

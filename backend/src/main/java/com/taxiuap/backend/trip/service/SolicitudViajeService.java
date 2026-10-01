@@ -74,6 +74,8 @@ public class SolicitudViajeService {
     @Transactional
     public SolicitudViajeResponse crear(SolicitudViajeRequest request) {
         Pasajero pasajero = buscarPasajero();
+        // Pedidos simultaneos del mismo pasajero se atienden de a uno (ver PasajeroRepository.bloquear).
+        pasajeroRepository.bloquear(pasajero.getId());
 
         // Regla de negocio 4: un pasajero solo puede tener una solicitud activa a la vez.
         boolean tieneSolicitudActiva = solicitudViajeRepository.existsByPasajeroIdAndSituacionSolicitudIn(

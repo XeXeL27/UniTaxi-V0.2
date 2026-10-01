@@ -48,7 +48,7 @@ public class AutenticacionService {
 
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales invalidas";
     public static final String MENSAJE_CUENTA_SUSPENDIDA =
-            "Tu cuenta esta suspendida. Comunicate con la administracion de TaxiUAP";
+            "Tu cuenta esta suspendida. Comunicate con la administracion de UNITAXI";
 
     private final PersonaRepository personaRepository;
     private final UsuarioRepository usuarioRepository;
@@ -59,6 +59,9 @@ public class AutenticacionService {
     private final RegistroMotoConductorService registroMotoConductorService;
     private final QrPagoConductorService qrPagoConductorService;
     private final JwtService jwtService;
+    private final CarnetService carnetService;
+    private final LicenciaService licenciaService;
+    private final CredencialesCorreoService credencialesCorreoService;
 
     @Transactional
     public TokenResponse registrarPasajero(RegistroPasajeroRequest datos) {
@@ -76,13 +79,19 @@ public class AutenticacionService {
     }
 
     /**
-     * Registro publico de conductor con el formulario: persona, cuenta, conductor PENDIENTE, su moto
-     * y los PDF (CI y LICENCIA obligatorios) en revision. Los PDF se validan antes de crear nada.
+     * Registro publico de conductor con el formulario: persona, cuenta, conductor PENDIENTE (APROBADO si
+     * la app verifico su licencia contra el carnet), su moto, las fotos del carnet y de la licencia y el
+     * SOAT opcional. Todo se valida antes de crear nada.
      */
     @Transactional
     public TokenResponse registrarConductor(RegistroConductorRequest datos, Map<String, MultipartFile> archivos) {
         Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
+        CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(archivos);
+        LicenciaService.FotosLicencia licencia = licenciaService.validarDelRegistro(archivos);
+        carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                datos.nombres(), datos.apellidos());
+        licenciaService.validarDatosRegistro(datos.conductor(), licencia, datos.ci(), datos.complementoCi());
         String nombreUsuario = normalizarNombreUsuario(datos.nombreUsuario());
         cuentaUsuarioService.validarNombreUsuarioDisponible(nombreUsuario, null);
 
@@ -90,10 +99,14 @@ public class AutenticacionService {
                 datos.nombres(), datos.apellidos(), datos.fechaNacimiento(), datos.correo(), datos.telefono()));
         Usuario usuario = cuentaUsuarioService.crearUsuario(persona, RolSistema.CONDUCTOR, nombreUsuario,
                 cuentaUsuarioService.codificar(datos.password()));
+        carnetService.guardar(persona, carnet);
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
+        licenciaService.guardar(conductor, licencia, datos.conductor().vencimientoLicencia());
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
+        boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
+        credencialesCorreoService.conductorRegistrado(usuario, null, "la que elegiste al registrarte", aprobado);
 
         return generarTokens(usuario);
     }

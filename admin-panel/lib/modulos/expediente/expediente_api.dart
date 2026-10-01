@@ -29,8 +29,18 @@ class ExpedienteApi {
   Future<List<PermisoEdicion>> permisos(int idConductor) =>
       _api.lista('/api/admin/conductores/$idConductor/permisos', PermisoEdicion.desdeJson);
 
-  Future<void> otorgarPermisos(int idConductor, {required bool datos, required List<int> documentos}) =>
-      _api.post('/api/admin/conductores/$idConductor/permisos', {'datos': datos, 'documentos': documentos});
+  Future<void> otorgarPermisos(
+    int idConductor, {
+    required bool datos,
+    required List<int> documentos,
+    bool carnet = false,
+    bool licencia = false,
+  }) => _api.post('/api/admin/conductores/$idConductor/permisos', {
+    'datos': datos,
+    'documentos': documentos,
+    'carnet': carnet,
+    'licencia': licencia,
+  });
 
   Future<void> revocarPermisos(int idConductor) => _api.delete('/api/admin/conductores/$idConductor/permisos');
 
@@ -45,6 +55,45 @@ class ExpedienteApi {
 
   /// Foto del carnet de la persona de una cuenta: [lado] "anverso" o "reverso" (404 si no la tiene).
   Future<Uint8List> carnet(int idUsuario, String lado) => _api.bytes('/api/admin/usuarios/$idUsuario/carnet/$lado');
+
+  /// Cambia una o las dos fotos del carnet de la persona de una cuenta.
+  Future<void> cambiarCarnet(int idUsuario, {ArchivoSubida? anverso, ArchivoSubida? reverso}) =>
+      _api.enviarMultipart('PUT', '/api/admin/usuarios/$idUsuario/carnet', archivos: {'anverso': ?anverso, 'reverso': ?reverso});
+
+  /// Foto de la licencia del conductor: [lado] "anverso" o "reverso" (404 si no la tiene).
+  Future<Uint8List> licencia(int idConductor, String lado) => _api.bytes('/api/admin/conductores/$idConductor/licencia/$lado');
+
+  /// Cambia una foto de la licencia sin tocar sus datos.
+  Future<void> cambiarFotoLicencia(int idConductor, String lado, ArchivoSubida archivo) async {
+    final perfil = await perfilConductor(idConductor);
+    await actualizarLicencia(
+      idConductor,
+      numero: perfil.numeroLicencia ?? '',
+      categoria: perfil.categoriaLicencia,
+      vencimiento: perfil.licenciaVencimiento,
+      anverso: lado == 'anverso' ? archivo : null,
+      reverso: lado == 'reverso' ? archivo : null,
+    );
+  }
+
+  /// Corrige numero, categoria y vencimiento de la licencia y, si vienen, cambia sus fotos.
+  Future<void> actualizarLicencia(
+    int idConductor, {
+    required String numero,
+    String? categoria,
+    DateTime? vencimiento,
+    ArchivoSubida? anverso,
+    ArchivoSubida? reverso,
+  }) => _api.enviarMultipart(
+    'PUT',
+    '/api/admin/conductores/$idConductor/licencia',
+    datos: {
+      'numeroLicencia': numero,
+      'categoriaLicencia': categoria,
+      'vencimientoLicencia': Formato.fechaIso(vencimiento),
+    },
+    archivos: {'anverso': ?anverso, 'reverso': ?reverso},
+  );
 
   // ------------------------------------------------------------ documentos
 

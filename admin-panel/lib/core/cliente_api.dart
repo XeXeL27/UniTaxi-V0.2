@@ -45,6 +45,32 @@ class ClienteApi {
     });
   }
 
+  /// Multipart con la parte "datos" en JSON (si se da) y fotos JPG / PNG, cada una en la parte con
+  /// el nombre de su clave (por ejemplo las fotos del carnet o de la licencia).
+  Future<dynamic> enviarMultipart(
+    String metodo,
+    String ruta, {
+    Map<String, dynamic>? datos,
+    Map<String, ArchivoSubida> archivos = const {},
+  }) {
+    return _ejecutar(() {
+      final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
+      if (datos != null) {
+        peticion.files.add(
+          http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
+        );
+      }
+      archivos.forEach((clave, archivo) {
+        final png = archivo.nombre.toLowerCase().endsWith('.png');
+        peticion.files.add(
+          http.MultipartFile.fromBytes(clave, archivo.bytes,
+              filename: archivo.nombre, contentType: MediaType('image', png ? 'png' : 'jpeg')),
+        );
+      });
+      return peticion;
+    });
+  }
+
   /// PUT multipart con un solo archivo en la parte [campo] (por ejemplo reemplazar un PDF).
   Future<dynamic> putArchivo(String ruta, String campo, ArchivoSubida archivo, {String tipo = 'pdf'}) {
     return _ejecutar(() {

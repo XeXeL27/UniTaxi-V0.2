@@ -50,7 +50,7 @@ class Huella {
 
   /// Pide la huella (o el PIN o patron del telefono) y devuelve las credenciales guardadas; null
   /// si no se reconocio o no hay. Tambien confirma cambios en Mi perfil sin escribir la contrasena.
-  static Future<Credenciales?> ingresar({String motivo = 'Usa tu huella para ingresar a TaxiUAP'}) async {
+  static Future<Credenciales?> ingresar({String motivo = 'Usa tu huella para ingresar a UNITAXI'}) async {
     final guardadas = await _credenciales();
     if (guardadas == null) return null;
     if (!await verificar(motivo)) return null;

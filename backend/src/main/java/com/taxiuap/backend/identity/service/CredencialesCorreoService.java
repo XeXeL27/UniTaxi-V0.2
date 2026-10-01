@@ -35,7 +35,7 @@ public class CredencialesCorreoService {
     private static final String NUMEROS = "23456789";
     private static final SecureRandom AZAR = new SecureRandom();
 
-    private static final String FIRMA = "\n\nSaludos,\nEquipo Unitaxi";
+    private static final String FIRMA = "\n\nSaludos,\nEquipo UNITAXI";
     private static final String CAMBIAR = "Puedes cambiar tu contraseña cuando quieras en la app, en Más > Cambiar contraseña.";
 
     private final UsuarioRepository usuarioRepository;
@@ -86,37 +86,45 @@ public class CredencialesCorreoService {
     /** contrasena null: la persona ya la conoce (la eligio o es la de su otra cuenta). */
     public void bienvenidaPasajero(Usuario usuario, String contrasena, String origenContrasena) {
         Persona persona = usuario.getPersona();
+        marcarAviso(persona);
         String cuerpo = saludo(persona)
-                + "Tu cuenta de pasajero en Unitaxi ya está lista. Estos son tus datos de ingreso:\n\n"
+                + "Tu cuenta de pasajero en UNITAXI ya está lista. Estos son tus datos de ingreso:\n\n"
                 + "Usuario: " + usuario.getNombreUsuario() + "\n"
                 + "Contraseña: " + (contrasena != null ? contrasena : origenContrasena) + "\n\n"
                 + "También puedes seguir ingresando con Google. "
                 + (contrasena != null ? CAMBIAR : "")
                 + enlace("PASAJERO")
                 + FIRMA;
-        correoService.enviar(persona.getCorreo(), "Bienvenido a Unitaxi", cuerpo);
+        correoService.enviar(persona.getCorreo(), "Bienvenido a UNITAXI", cuerpo);
     }
 
     /**
-     * Registro de conductor recibido (con Google, ya con su carnet): llegan sus credenciales y el
-     * aviso de que todavia se revisan sus datos. Puede entrar a la app, pero no recibe viajes hasta
-     * que lo aprueben. contrasena null: ya la conoce (es la de su cuenta de pasajero).
+     * Registro de conductor recibido: llegan sus credenciales. Si la app verifico su licencia contra
+     * el carnet ([aprobado]) ya puede recibir viajes; si no, el aviso de que todavia se revisan sus
+     * datos (puede entrar a la app, pero no recibe viajes hasta que lo aprueben). contrasena null: ya
+     * la conoce y se describe con origenContrasena.
      */
-    public void conductorEnRevision(Usuario usuario, String contrasena) {
+    public void conductorRegistrado(Usuario usuario, String contrasena, String origenContrasena, boolean aprobado) {
         Persona persona = usuario.getPersona();
         if (persona.getCorreo() == null || persona.getCorreo().isBlank()) return;
+        marcarAviso(persona);
+        String estado = aprobado
+                ? "Recibimos tu registro de conductor en UNITAXI. Tu licencia y tu carnet fueron verificados, así que "
+                        + "tu cuenta de conductor ya está aprobada: puedes recibir viajes desde ahora.\n\n"
+                : "Recibimos tu registro de conductor en UNITAXI. Todavía estamos revisando tus datos y documentos "
+                        + "para habilitarte como conductor.\n\n"
+                        + "Mientras tanto puedes ingresar a la app y ver tu cuenta, pero no podrás recibir viajes hasta que "
+                        + "te aprobemos. Te avisaremos por correo.\n\n";
         String cuerpo = saludo(persona)
-                + "Recibimos tu registro de conductor en Unitaxi. Todavía estamos revisando tus datos y documentos "
-                + "para habilitarte como conductor.\n\n"
-                + "Mientras tanto puedes ingresar a la app y ver tu cuenta, pero no podrás recibir viajes hasta que "
-                + "te aprobemos. Te avisaremos por correo.\n\n"
+                + estado
                 + "Usuario: " + usuario.getNombreUsuario() + "\n"
-                + "Contraseña: " + (contrasena != null ? contrasena : "la misma de tu cuenta de pasajero") + "\n\n"
+                + "Contraseña: " + (contrasena != null ? contrasena : origenContrasena) + "\n\n"
                 + "También puedes ingresar con Google. "
                 + (contrasena != null ? CAMBIAR : "")
                 + enlace("CONDUCTOR")
                 + FIRMA;
-        correoService.enviar(persona.getCorreo(), "Recibimos tu registro de conductor", cuerpo);
+        correoService.enviar(persona.getCorreo(), aprobado ? "Tu cuenta de conductor fue aprobada"
+                : "Recibimos tu registro de conductor", cuerpo);
     }
 
     /**
@@ -126,6 +134,7 @@ public class CredencialesCorreoService {
     public void conductorAprobado(Usuario usuario) {
         Persona persona = usuario.getPersona();
         if (persona.getCorreo() == null || persona.getCorreo().isBlank()) return;
+        marcarAviso(persona);
 
         String contrasena = null;
         if (Boolean.TRUE.equals(usuario.getContrasenaGenerada())) {
@@ -133,9 +142,9 @@ public class CredencialesCorreoService {
             aplicarEnCuentasDeApp(persona, contrasena, false);
         }
         String cuerpo = saludo(persona)
-                + "Revisamos tus datos y tu cuenta de conductor fue aprobada. Ya puedes recibir viajes en Unitaxi.\n\n"
+                + "Revisamos tus datos y tu cuenta de conductor fue aprobada. Ya puedes recibir viajes en UNITAXI.\n\n"
                 + "Usuario: " + usuario.getNombreUsuario() + "\n"
-                + "Contraseña: " + (contrasena != null ? contrasena : "la que ya usas para ingresar a Unitaxi") + "\n\n"
+                + "Contraseña: " + (contrasena != null ? contrasena : "la que ya usas para ingresar a UNITAXI") + "\n\n"
                 + "Ingresa a la app, elige Conductor y conéctate para ver las solicitudes. "
                 + (contrasena != null ? CAMBIAR : "Si no la recuerdas, usa ¿Olvidaste tu contraseña? en el inicio de sesión.")
                 + enlace("CONDUCTOR")
@@ -145,7 +154,7 @@ public class CredencialesCorreoService {
 
     public void codigoRestablecer(Persona persona, String codigo, long minutos) {
         String cuerpo = saludo(persona)
-                + "Tu código para restablecer la contraseña de Unitaxi es:\n\n"
+                + "Tu código para restablecer la contraseña de UNITAXI es:\n\n"
                 + "    " + codigo + "\n\n"
                 + "Vence en " + minutos + " minutos. Si no lo pediste, puedes ignorar este correo."
                 + enlace("PASAJERO")
@@ -153,23 +162,21 @@ public class CredencialesCorreoService {
         correoService.enviar(persona.getCorreo(), "Código para restablecer tu contraseña", cuerpo);
     }
 
-    /** Codigo para confirmar el cambio de correo o telefono desde Mi perfil (va al correo actual). */
-    public void codigoCambioDatos(Persona persona, String codigo, long minutos) {
-        String cuerpo = saludo(persona)
-                + "Pediste cambiar tus datos de contacto en Unitaxi. Tu código de confirmación es:\n\n"
-                + "    " + codigo + "\n\n"
-                + "Vence en " + minutos + " minutos. Si no lo pediste, no compartas este código y cambia tu contraseña."
-                + FIRMA;
-        correoService.enviar(persona.getCorreo(), "Código para cambiar tus datos", cuerpo);
-    }
-
     /** Aviso al correo anterior de que la cuenta ya usa otro correo. */
     public void avisoCorreoCambiado(Persona persona, String correoAnterior) {
         String cuerpo = saludo(persona)
-                + "El correo de tu cuenta de Unitaxi se cambió a " + persona.getCorreo() + ".\n\n"
+                + "El correo de tu cuenta de UNITAXI se cambió a " + persona.getCorreo() + ".\n\n"
                 + "Si no fuiste tú, comunícate con la administración."
                 + FIRMA;
-        correoService.enviar(correoAnterior, "Tu correo de Unitaxi cambió", cuerpo);
+        correoService.enviar(correoAnterior, "Tu correo de UNITAXI cambió", cuerpo);
+    }
+
+    /**
+     * La app muestra "Tus credenciales llegaron a tu correo" en la pantalla principal, en la cuenta
+     * con que entre (pasajero o conductor), hasta que la persona lo vea.
+     */
+    private void marcarAviso(Persona persona) {
+        cuentasDeApp(persona).forEach(u -> u.setAvisoCredenciales(true));
     }
 
     /** En el celular con la app instalada la abre; si no, abre la web (/app o /admin). */

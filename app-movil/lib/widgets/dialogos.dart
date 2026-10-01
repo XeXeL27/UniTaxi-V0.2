@@ -176,7 +176,8 @@ class _TarjetaAlerta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final (color, colorHover) = _colores;
-    return Padding(
+    // En pantallas bajas (o con letra grande) la tarjeta entera se desplaza en vez de desbordar.
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Material(
         color: Colors.white,

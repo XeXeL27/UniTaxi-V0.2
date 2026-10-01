@@ -15,7 +15,9 @@ public record UsuarioResponse(
         /** true la primera vez que entra a la app: muestra la guia de inicio. */
         boolean mostrarGuia,
         /** true si entro con Google y todavia no registro su carnet: la app pide la foto del carnet. */
-        boolean requiereCarnet) {
+        boolean requiereCarnet,
+        /** true si se le enviaron sus credenciales por correo y todavia no vio el aviso en la app. */
+        boolean avisoCredenciales) {
 
     public static UsuarioResponse de(Usuario usuario) {
         Persona persona = usuario.getPersona();
@@ -28,6 +30,7 @@ public record UsuarioResponse(
                 persona.getTelefono(),
                 usuario.getRol().getCodigo(),
                 Boolean.FALSE.equals(usuario.getGuiaVista()),
-                Boolean.TRUE.equals(persona.getIngresoGoogle()) && (persona.getCi() == null || persona.getCi().isBlank()));
+                Boolean.TRUE.equals(persona.getIngresoGoogle()) && (persona.getCi() == null || persona.getCi().isBlank()),
+                Boolean.TRUE.equals(usuario.getAvisoCredenciales()));
     }
 }

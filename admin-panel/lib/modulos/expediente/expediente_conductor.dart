@@ -1,6 +1,6 @@
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../core/api_excepcion.dart';
@@ -46,7 +46,7 @@ class ExpedienteConductor extends StatelessWidget {
     final id = conductor.idConductor;
     return Carga<PerfilExpediente>(
       cargar: () => api.perfilConductor(id),
-      builder: (perfil, _) => MarcoExpediente(
+      builder: (perfil, recargar) => MarcoExpediente(
         foto: FotoUsuario(nombre: perfil.nombreCompleto, radio: 30, color: ColoresApp.rojo, cargar: () => api.foto(perfil.idUsuario)),
         titulo: perfil.nombreCompleto,
         subtitulo: 'Conductor  |  usuario ${conductor.nombreUsuario}',
@@ -60,7 +60,7 @@ class ExpedienteConductor extends StatelessWidget {
           (FontAwesomeIcons.userPen, 'Permisos'),
         ],
         vistas: [
-          _Datos(api: api, perfil: perfil, idConductor: id, nombreUsuario: conductor.nombreUsuario),
+          _Datos(api: api, perfil: perfil, idConductor: id, nombreUsuario: conductor.nombreUsuario, alCambiar: recargar),
           _Documentos(api: api, personasApi: personasApi, conductor: conductor, alCambiar: alCambiar),
           _QrCobro(api: api, conductor: conductor),
           Carga<List<ViajeExpediente>>(
@@ -250,7 +250,23 @@ class _Datos extends StatelessWidget {
   final int idConductor;
   final String nombreUsuario;
 
-  const _Datos({required this.api, required this.perfil, required this.idConductor, required this.nombreUsuario});
+  final VoidCallback alCambiar;
+
+  const _Datos({
+    required this.api,
+    required this.perfil,
+    required this.idConductor,
+    required this.nombreUsuario,
+    required this.alCambiar,
+  });
+
+  Future<void> _editarLicencia(BuildContext context) => flujoEditar(
+    context,
+    descripcion: 'la licencia de ${perfil.nombreCompleto}',
+    formulario: _FormularioLicencia(api: api, idConductor: idConductor, perfil: perfil),
+    mensajeExito: 'Los datos de la licencia se actualizaron.',
+    alTerminar: alCambiar,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -275,9 +291,21 @@ class _Datos extends StatelessWidget {
         SeccionExpediente(
           titulo: 'Conductor',
           icono: FontAwesomeIcons.idBadge,
+          accion: Wrap(
+            children: [
+              BotonVerLicencia(api: api, idConductor: idConductor, nombre: perfil.nombreCompleto),
+              TextButton.icon(
+                onPressed: () => _editarLicencia(context),
+                style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
+                icon: const FaIcon(FontAwesomeIcons.penToSquare, size: 14),
+                label: const Text('Editar licencia', style: TextStyle(fontWeight: FontWeight.w600)),
+              ),
+            ],
+          ),
           child: DatosEnGrilla([
             ('Número de licencia', perfil.numeroLicencia),
             ('Categoría de licencia', perfil.categoriaLicencia),
+            ('Licencia vence', Formato.fecha(perfil.licenciaVencimiento)),
             ('Situación', Formato.enumTexto(perfil.situacionAprobacion)),
             ('Aprobado el', Formato.fechaHora(perfil.fechaAprobacion)),
             ('Calificación', perfil.calificacionPromedio?.toStringAsFixed(2).replaceAll('.', ',')),
@@ -532,7 +560,8 @@ class _FormularioRevisionState extends State<_FormularioRevision> {
 
 // ---------------------------------------------------------------------------- permisos
 
-/// Permisos para que el conductor actualice sus datos o el PDF de documentos puntuales. Cada uno
+/// Permisos para que el conductor actualice sus datos, las fotos de su carnet o su licencia o el PDF
+/// de documentos puntuales. Cada uno
 /// se cierra cuando el conductor hace el cambio o, aunque no lo haga, a la hora de otorgado.
 class _Permisos extends StatefulWidget {
   final ExpedienteApi api;
@@ -547,6 +576,8 @@ class _Permisos extends StatefulWidget {
 
 class _PermisosState extends State<_Permisos> {
   bool _datos = false;
+  bool _carnet = false;
+  bool _licencia = false;
   final Set<int> _documentos = {};
   bool _guardando = false;
   int _version = 0;
@@ -556,6 +587,8 @@ class _PermisosState extends State<_Permisos> {
   Future<void> _otorgar(List<DocumentoConductor> documentos) async {
     final partes = [
       if (_datos) 'sus datos personales y de licencia',
+      if (_carnet) 'las fotos de su carnet',
+      if (_licencia) 'las fotos de su licencia',
       for (final d in documentos.where((d) => _documentos.contains(d.id))) 'el PDF de ${nombreDocumento(d.tipoDocumento)}',
     ];
     final confirmado = await confirmarAccion(
@@ -567,9 +600,17 @@ class _PermisosState extends State<_Permisos> {
     if (!confirmado || !mounted) return;
     setState(() => _guardando = true);
     try {
-      await widget.api.otorgarPermisos(_id, datos: _datos, documentos: _documentos.toList());
+      await widget.api.otorgarPermisos(
+        _id,
+        datos: _datos,
+        documentos: _documentos.toList(),
+        carnet: _carnet,
+        licencia: _licencia,
+      );
       setState(() {
         _datos = false;
+        _carnet = false;
+        _licencia = false;
         _documentos.clear();
         _version++;
       });
@@ -633,9 +674,12 @@ class _PermisosState extends State<_Permisos> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
-                                  p.tipo == 'DATOS'
-                                      ? 'Actualizar sus datos personales y de licencia'
-                                      : 'Reemplazar el PDF de ${nombreDocumento(p.tipoDocumento)}',
+                                  switch (p.tipo) {
+                                    'DATOS' => 'Actualizar sus datos personales y de licencia',
+                                    'CARNET' => 'Volver a tomar las fotos de su carnet',
+                                    'LICENCIA' => 'Volver a tomar las fotos de su licencia',
+                                    _ => 'Reemplazar el PDF de ${nombreDocumento(p.tipoDocumento)}',
+                                  },
                                 ),
                               ),
                               Text(_restante(p.venceEn), style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
@@ -666,7 +710,8 @@ class _PermisosState extends State<_Permisos> {
               children: [
                 const Text(
                   'Elija qué puede actualizar. Cada permiso se cierra cuando el conductor hace el cambio; '
-                  'si no lo hace, vence solo en una hora. Los PDF nuevos quedan pendientes de revisión.',
+                  'si no lo hace, vence solo en una hora. El conductor confirma cada cambio con su contraseña o su '
+                  'huella. Los PDF nuevos quedan pendientes de revisión.',
                   style: TextStyle(color: ColoresApp.textoSuave),
                 ),
                 CheckboxListTile(
@@ -674,6 +719,18 @@ class _PermisosState extends State<_Permisos> {
                   onChanged: (v) => setState(() => _datos = v ?? false),
                   controlAffinity: ListTileControlAffinity.leading,
                   title: const Text('Datos personales y de licencia'),
+                ),
+                CheckboxListTile(
+                  value: _carnet,
+                  onChanged: (v) => setState(() => _carnet = v ?? false),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Volver a tomar las fotos de su carnet'),
+                ),
+                CheckboxListTile(
+                  value: _licencia,
+                  onChanged: (v) => setState(() => _licencia = v ?? false),
+                  controlAffinity: ListTileControlAffinity.leading,
+                  title: const Text('Volver a tomar las fotos de su licencia'),
                 ),
                 for (final d in documentos)
                   CheckboxListTile(
@@ -686,7 +743,9 @@ class _PermisosState extends State<_Permisos> {
                 Align(
                   alignment: Alignment.centerLeft,
                   child: FilledButton.icon(
-                    onPressed: _guardando || (!_datos && _documentos.isEmpty) ? null : () => _otorgar(documentos),
+                    onPressed: _guardando || (!_datos && !_carnet && !_licencia && _documentos.isEmpty)
+                        ? null
+                        : () => _otorgar(documentos),
                     icon: const FaIcon(FontAwesomeIcons.unlock, size: 14),
                     label: const Text('Dar permiso por 1 hora'),
                   ),
@@ -696,6 +755,83 @@ class _PermisosState extends State<_Permisos> {
           ),
         ),
       ],
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------- licencia
+
+/// Datos de la licencia que corrige el administrador: numero, categoria (P, M, A, B o C) y
+/// vencimiento. Las fotos se cambian en "Ver licencia".
+class _FormularioLicencia extends StatefulWidget {
+  final ExpedienteApi api;
+  final int idConductor;
+  final PerfilExpediente perfil;
+
+  const _FormularioLicencia({required this.api, required this.idConductor, required this.perfil});
+
+  @override
+  State<_FormularioLicencia> createState() => _FormularioLicenciaState();
+}
+
+class _FormularioLicenciaState extends State<_FormularioLicencia> {
+  final _clave = GlobalKey<FormState>();
+  late final _numero = TextEditingController(text: widget.perfil.numeroLicencia ?? '');
+  late String? _categoria = const ['P', 'M', 'A', 'B', 'C'].contains(widget.perfil.categoriaLicencia)
+      ? widget.perfil.categoriaLicencia
+      : null;
+  late DateTime? _vence = widget.perfil.licenciaVencimiento;
+
+  @override
+  void dispose() {
+    _numero.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ModalFormulario(
+      titulo: 'Editar licencia',
+      icono: FontAwesomeIcons.solidIdBadge,
+      claveFormulario: _clave,
+      campos: [
+        TextFormField(
+          controller: _numero,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          decoration: const InputDecoration(labelText: 'Número de licencia *'),
+          validator: (v) => (v ?? '').trim().isEmpty ? 'Obligatorio' : null,
+        ),
+        DropdownButtonFormField<String>(
+          initialValue: _categoria,
+          decoration: const InputDecoration(labelText: 'Categoría *'),
+          items: const [
+            DropdownMenuItem(value: 'P', child: Text('P - Particular')),
+            DropdownMenuItem(value: 'M', child: Text('M - Motociclista')),
+            DropdownMenuItem(value: 'A', child: Text('A - Profesional')),
+            DropdownMenuItem(value: 'B', child: Text('B - Profesional')),
+            DropdownMenuItem(value: 'C', child: Text('C - Profesional')),
+          ],
+          onChanged: (v) => setState(() => _categoria = v),
+          validator: (v) => v == null ? 'Elija la categoría' : null,
+        ),
+        CampoFecha(
+          etiqueta: 'Vence',
+          initialValue: _vence,
+          alCambiar: (v) => _vence = v,
+          primeraFecha: DateTime(2000),
+          ultimaFecha: DateTime(DateTime.now().year + 20),
+        ),
+      ],
+      alGuardar: () async {
+        await widget.api.actualizarLicencia(
+          widget.idConductor,
+          numero: _numero.text.trim(),
+          categoria: _categoria,
+          vencimiento: _vence,
+        );
+        return true;
+      },
     );
   }
 }

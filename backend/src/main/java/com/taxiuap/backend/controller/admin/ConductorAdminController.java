@@ -3,6 +3,13 @@ package com.taxiuap.backend.controller.admin;
 import java.util.List;
 
 import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.multipart.MultipartFile;
+
+import com.taxiuap.backend.identity.dto.LicenciaRequest;
+import com.taxiuap.backend.identity.service.LicenciaService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -61,6 +68,7 @@ public class ConductorAdminController {
     private final AdministradorRepository administradorRepository;
     private final QrPagoConductorService qrPagoConductorService;
     private final AlmacenamientoArchivos almacenamientoArchivos;
+    private final LicenciaService licenciaService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ConductorAdminResponse>>> listar(
@@ -127,6 +135,29 @@ public class ConductorAdminController {
             @PathVariable Long id, @Valid @RequestBody CambiarSituacionConductorRequest request) {
         ConductorAdminResponse actualizado = gestionConductorService.cambiarSituacion(id, request);
         return ResponseEntity.ok(ApiResponse.exito("Situacion del conductor actualizada", actualizado));
+    }
+
+    /** Foto de la licencia del conductor: lado "anverso" o "reverso" (404 si no la tiene). */
+    @GetMapping("/{id}/licencia/{lado}")
+    public ResponseEntity<Resource> licencia(@PathVariable Long id, @PathVariable String lado) {
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_JPEG)
+                .cacheControl(CacheControl.noCache())
+                .body(licenciaService.leer(id, lado));
+    }
+
+    /**
+     * Corrige los datos de la licencia (numero, categoria, vencimiento) y, si vienen, cambia una o las
+     * dos fotos. Multipart: "datos" (JSON), "anverso" y "reverso" opcionales.
+     */
+    @PutMapping(value = "/{id}/licencia", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<PerfilConductorResponse>> actualizarLicencia(
+            @PathVariable Long id,
+            @Valid @RequestPart("datos") LicenciaRequest datos,
+            @RequestPart(value = "anverso", required = false) MultipartFile anverso,
+            @RequestPart(value = "reverso", required = false) MultipartFile reverso) {
+        licenciaService.actualizarPorAdmin(id, datos, anverso, reverso);
+        return ResponseEntity.ok(ApiResponse.exito("Licencia actualizada", perfilConductorService.obtenerPorConductor(id)));
     }
 
     /** QR de cobro que subio el conductor (de 0 a 3). */

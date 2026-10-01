@@ -457,28 +457,14 @@ class PanelViaje extends StatelessWidget {
                       ),
                     ],
                   ),
-                  if (viaje.vehiculo.isNotEmpty) ...[
-                    const SizedBox(height: 3),
-                    Text(viaje.vehiculo, style: const TextStyle(color: ColoresApp.texto, fontSize: 13)),
-                  ],
                 ],
               ),
             ),
-            if (viaje.placa != null)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  border: Border.all(color: ColoresApp.azul, width: 1.5),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  viaje.placa!,
-                  style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w800, letterSpacing: 1),
-                ),
-              ),
             BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombreConductor),
           ],
         ),
+        const SizedBox(height: 12),
+        TarjetaMoto(viaje: viaje),
         const Divider(height: 26, color: ColoresApp.borde),
         FilaLugar.partida(texto: viaje.origenDireccion),
         FilaLugar.destino(texto: viaje.destinoDireccion),
@@ -758,6 +744,83 @@ class OpcionesEligiendo extends StatelessWidget {
         const SizedBox(width: 6),
         pago(MetodoPago.qr, FontAwesomeIcons.qrcode, 'QR'),
       ],
+    );
+  }
+}
+
+/// La moto en la que sube el pasajero: marca, modelo, color y placa bien visibles para que la
+/// reconozca y no se equivoque.
+class TarjetaMoto extends StatelessWidget {
+  final Viaje viaje;
+
+  const TarjetaMoto({super.key, required this.viaje});
+
+  @override
+  Widget build(BuildContext context) {
+    final datos = <(String, String?)>[
+      ('Marca', viaje.marca),
+      ('Modelo', viaje.modelo),
+      ('Color', viaje.color),
+    ].where((d) => (d.$2 ?? '').trim().isNotEmpty).toList();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+      decoration: BoxDecoration(
+        color: ColoresApp.gris,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const FaIcon(FontAwesomeIcons.motorcycle, color: ColoresApp.tinta, size: 15),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text('Tu moto', style: TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700, fontSize: 14)),
+              ),
+              if (viaje.placa != null)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: ColoresApp.blanco,
+                    border: Border.all(color: ColoresApp.tinta, width: 1.5),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    viaje.placa!,
+                    style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                  ),
+                ),
+            ],
+          ),
+          if (datos.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < datos.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(datos[i].$1, style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 11.5)),
+                        const SizedBox(height: 2),
+                        Text(
+                          datos[i].$2!.trim(),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700, fontSize: 14.5),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

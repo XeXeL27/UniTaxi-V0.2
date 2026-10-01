@@ -8,6 +8,8 @@ void abrirPanelAdmin() {}
 
 void ir(String url) {}
 
+void recargar() {}
+
 String get direccionActual => '';
 
 void limpiarParametros() {}

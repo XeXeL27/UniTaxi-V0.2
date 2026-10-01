@@ -1,6 +1,7 @@
 package com.taxiuap.backend.identity.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 import com.taxiuap.backend.config.EntidadAuditable;
@@ -44,6 +45,17 @@ public class Conductor extends EntidadAuditable {
 
     @Column(name = "categoria_licencia", length = 10)
     private String categoriaLicencia;
+
+    /** Fotos de la licencia (anverso y reverso), rutas relativas dentro de la carpeta de archivos. */
+    @Column(name = "licencia_anverso_url", length = 300)
+    private String licenciaAnversoUrl;
+
+    @Column(name = "licencia_reverso_url", length = 300)
+    private String licenciaReversoUrl;
+
+    /** Vencimiento leido de la licencia: vencida no puede operar. */
+    @Column(name = "licencia_vencimiento")
+    private LocalDate licenciaVencimiento;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "situacion_aprobacion", length = 20, nullable = false)

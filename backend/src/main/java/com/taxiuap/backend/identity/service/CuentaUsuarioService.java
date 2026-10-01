@@ -69,6 +69,16 @@ public class CuentaUsuarioService {
                 idPersona, rol.getCodigo(), List.of(EstadoRegistro.A, EstadoRegistro.S));
     }
 
+    /**
+     * Confirmacion de un cambio con la contrasena de la cuenta (la app la toma de la huella si esta
+     * habilitada). 422 y no 401: la sesion sigue abierta.
+     */
+    public void confirmarContrasena(Usuario usuario, String password) {
+        if (password == null || password.isEmpty() || !passwordEncoder.matches(password, usuario.getPasswordHash())) {
+            throw new NegocioException("La contrasena no es correcta");
+        }
+    }
+
     public String codificar(String password) {
         return passwordEncoder.encode(password);
     }

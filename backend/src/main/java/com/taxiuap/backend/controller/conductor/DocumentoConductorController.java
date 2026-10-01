@@ -61,12 +61,16 @@ public class DocumentoConductorController {
                 .body(almacenamientoArchivos.leer(documento.getArchivoUrl()));
     }
 
-    /** Reemplaza el PDF (solo con permiso vigente del administrador para ese documento). */
+    /**
+     * Reemplaza el PDF (solo con permiso vigente del administrador para ese documento), confirmando
+     * con la contrasena de la cuenta.
+     */
     @PutMapping(value = "/{id}/archivo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<DocumentoConductorResponse>> reemplazar(
-            @PathVariable Long id, @RequestPart("archivo") MultipartFile archivo) {
+            @PathVariable Long id, @RequestPart("archivo") MultipartFile archivo,
+            @RequestParam(value = "password", required = false) String password) {
         DocumentoConductorResponse actualizado =
-                documentoConductorService.reemplazarArchivo(UsuarioActual.idUsuario(), id, archivo);
+                documentoConductorService.reemplazarArchivo(UsuarioActual.idUsuario(), id, archivo, password);
         return ResponseEntity.ok(ApiResponse.exito("Documento enviado a revision", actualizado));
     }
 }

@@ -90,7 +90,7 @@ class Exportador {
     const azul = PdfColor.fromInt(0xFF0B2341);
     const rojo = PdfColor.fromInt(0xFFB71234);
 
-    final documento = pw.Document(title: titulo, author: 'TaxiUAP');
+    final documento = pw.Document(title: titulo, author: 'UNITAXI');
     documento.addPage(
       pw.MultiPage(
         pageFormat: PdfPageFormat.a4.landscape,
@@ -106,7 +106,7 @@ class Exportador {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                'TaxiUAP - $titulo',
+                'UNITAXI - $titulo',
                 style: pw.TextStyle(font: negrita, fontSize: 14, color: azul),
               ),
               pw.Text(

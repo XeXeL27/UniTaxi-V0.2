@@ -1,6 +1,7 @@
 package com.taxiuap.backend.identity.entity;
 
 import java.time.LocalDate;
+import java.util.Locale;
 
 import com.taxiuap.backend.config.EntidadAuditable;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
@@ -72,4 +73,23 @@ public class Persona extends EntidadAuditable {
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_persona", length = 20, nullable = false)
     private EstadoRegistro estadoPersona = EstadoRegistro.A;
+
+    private static final Locale ESPANOL = Locale.forLanguageTag("es");
+
+    /**
+     * Nombres y apellidos se guardan en mayusculas, como estan en el carnet, vengan del carnet, del
+     * formulario, del admin o de la cuenta de Google. Los nombres guardados antes los pasa a
+     * mayusculas config/NombresMayusculasInitializer.
+     */
+    public void setNombres(String nombres) {
+        this.nombres = enMayusculas(nombres);
+    }
+
+    public void setApellidos(String apellidos) {
+        this.apellidos = enMayusculas(apellidos);
+    }
+
+    private static String enMayusculas(String texto) {
+        return texto == null ? null : texto.trim().toUpperCase(ESPANOL);
+    }
 }

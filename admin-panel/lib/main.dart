@@ -44,7 +44,7 @@ class _AppAdminState extends State<AppAdmin> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'TaxiUAP - Administración',
+      title: 'UNITAXI - Administración',
       debugShowCheckedModeBanner: false,
       theme: crearTema(),
       routerConfig: _rutas,

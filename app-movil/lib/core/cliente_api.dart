@@ -47,11 +47,13 @@ class ClienteApi {
     String campo,
     Uint8List contenido,
     String nombre,
-    MediaType tipo,
-  ) async {
+    MediaType tipo, {
+    Map<String, String> campos = const {},
+  }) async {
     final respuesta = await _conReintento(() {
       final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
       peticion.files.add(http.MultipartFile.fromBytes(campo, contenido, filename: nombre, contentType: tipo));
+      peticion.fields.addAll(campos);
       return peticion;
     });
     return _desempaquetar(respuesta);
@@ -61,10 +63,11 @@ class ClienteApi {
   Future<dynamic> enviarFormulario(
     String ruta,
     Map<String, dynamic> datos,
-    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})> archivos,
-  ) async {
+    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})> archivos, {
+    String metodo = 'POST',
+  }) async {
     final respuesta = await _conReintento(() {
-      final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
+      final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
       peticion.files.add(
         http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
       );
@@ -129,8 +132,12 @@ class ClienteApi {
     peticion.headers['Accept'] = 'application/json, */*;q=0.8';
     final token = sesion.tokenAcceso;
     if (token != null) peticion.headers['Authorization'] = 'Bearer $token';
+    // Subir fotos o PDF con internet lento tarda mas que una consulta.
+    final espera = Duration(seconds: peticion is http.MultipartRequest ? 90 : 20);
     try {
-      return await http.Response.fromStream(await peticion.send()).timeout(const Duration(seconds: 20));
+      // El envio tambien tiene limite: si Android congelo la app a mitad de una peticion, al volver
+      // no queda colgada para siempre (y la consulta periodica sigue).
+      return await http.Response.fromStream(await peticion.send().timeout(espera)).timeout(espera);
     } catch (_) {
       throw ApiExcepcion('No se pudo conectar con el servidor');
     }

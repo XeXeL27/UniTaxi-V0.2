@@ -26,10 +26,18 @@ const List<SeccionLegal> politicasPrivacidad = [
         'el conductor ve el nombre del pasajero y los puntos de partida y destino. No vendemos tus datos.',
   ),
   (
+    titulo: 'Fotos del carnet y de la licencia',
+    texto:
+        'Para leer tu número, tu nombre y tus fechas, las fotos de tu carnet y de tu licencia se envían a '
+        'Gemini, el servicio de inteligencia artificial de Google, solo en el momento de leerlas. Las fotos '
+        'quedan guardadas en el servidor de UNITAXI y solo las ve la administración para verificar tu '
+        'identidad. Si Gemini no está disponible, la lectura se hace en tu teléfono.',
+  ),
+  (
     titulo: 'Tus derechos',
     texto:
         'Puedes revisar y corregir tus datos desde Datos personales, y pedir a la administración de '
-        'TaxiUAP que desactive tu cuenta.',
+        'UNITAXI que desactive tu cuenta.',
   ),
 ];
 
@@ -38,7 +46,7 @@ const List<SeccionLegal> terminosCondiciones = [
   (
     titulo: 'Uso del servicio',
     texto:
-        'TaxiUAP conecta pasajeros con conductores habilitados por la administración. Las cuentas son '
+        'UNITAXI conecta pasajeros con conductores habilitados por la administración. Las cuentas son '
         'personales: no compartas tu usuario ni tu contraseña.',
   ),
   (

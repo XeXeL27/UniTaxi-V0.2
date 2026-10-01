@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
+import '../../../comun/confirmar_identidad.dart';
+import '../../../comun/perfil_api.dart';
+import '../../../comun/selector_carnet.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
@@ -10,10 +13,11 @@ import '../../../core/tema.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../widgets/visor_pdf.dart';
 import 'documentos_api.dart';
+import 'fotos_documento.dart';
 
-/// Documentos del conductor: los puede ver siempre (en un modal) y reemplazar el PDF solo si el
-/// administrador le dio permiso para ese documento. Los que no envio al registrarse (CI, licencia,
-/// SOAT) los agrega aqui; mientras falte uno obligatorio la app queda bloqueada.
+/// Documentos del conductor: las fotos del carnet y de la licencia y los PDF. Los puede ver siempre
+/// y cambiarlos solo si el administrador le dio permiso, confirmando con la huella o la contrasena.
+/// El SOAT, si no lo envio al registrarse, lo agrega aqui.
 class PantallaDocumentos extends StatefulWidget {
   const PantallaDocumentos({super.key});
 
@@ -23,15 +27,26 @@ class PantallaDocumentos extends StatefulWidget {
 
 class _PantallaDocumentosState extends State<PantallaDocumentos> {
   late final DocumentosApi _api = DocumentosApi(context.read<ClienteApi>());
-  late Future<(List<DocumentoPropio>, List<PermisoVigente>)> _datos = _cargar();
+  late Future<(List<DocumentoPropio>, List<PermisoVigente>, Perfil)> _datos = _cargar();
   int? _subiendo;
 
   /// Tipo del documento faltante que se esta subiendo.
   String? _agregando;
 
-  Future<(List<DocumentoPropio>, List<PermisoVigente>)> _cargar() async {
-    final resultados = await Future.wait([_api.documentos(), _api.permisos()]);
-    return (resultados[0] as List<DocumentoPropio>, resultados[1] as List<PermisoVigente>);
+  Future<(List<DocumentoPropio>, List<PermisoVigente>, Perfil)> _cargar() async {
+    final resultados = await Future.wait<Object>([
+      _api.documentos(),
+      _api.permisos(),
+      PerfilApi(context.read<ClienteApi>()).perfil(),
+    ]);
+    return (resultados[0] as List<DocumentoPropio>, resultados[1] as List<PermisoVigente>, resultados[2] as Perfil);
+  }
+
+  Future<void> _cambiarFotos(DocumentoFoto documento, Perfil perfil) async {
+    final cambiado = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(builder: (_) => PantallaCambiarFotos(documento: documento, perfil: perfil)),
+    );
+    if (cambiado == true && mounted) setState(() => _datos = _cargar());
   }
 
   Future<void> _reemplazar(DocumentoPropio documento) async {
@@ -44,9 +59,11 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
       textoConfirmar: 'Sí, enviar',
     );
     if (!confirmado || !mounted) return;
+    final contrasena = await confirmarIdentidad(context, accion: 'reemplazar el documento');
+    if (contrasena == null || !mounted) return;
     setState(() => _subiendo = documento.id);
     try {
-      await _api.reemplazarPdf(documento.id, await archivo.readAsBytes(), archivo.name);
+      await _api.reemplazarPdf(documento.id, await archivo.readAsBytes(), archivo.name, contrasena);
       if (!mounted) return;
       setState(() => _datos = _cargar());
       await mostrarExito(
@@ -96,7 +113,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
         foregroundColor: ColoresApp.blanco,
         title: const Text('Mis documentos', style: TextStyle(fontWeight: FontWeight.w600)),
       ),
-      body: FutureBuilder<(List<DocumentoPropio>, List<PermisoVigente>)>(
+      body: FutureBuilder<(List<DocumentoPropio>, List<PermisoVigente>, Perfil)>(
         future: _datos,
         builder: (context, instantanea) {
           if (instantanea.hasError) {
@@ -109,11 +126,14 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
           }
           final datos = instantanea.data;
           if (datos == null) return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
-          final (documentos, permisos) = datos;
+          final (documentos, permisos, perfil) = datos;
           final permitidos = {
             for (final p in permisos)
               if (!p.esDatos && p.idDocumento != null) p.idDocumento!: p,
           };
+          final permisoCarnet = permisos.any((p) => p.esCarnet);
+          final permisoLicencia = permisos.any((p) => p.esLicencia);
+          final vence = perfil.licenciaVencimiento;
           final enviados = {for (final d in documentos) d.tipo};
           final faltan = documentosPedidos.where((p) => !enviados.contains(p.tipo)).toList();
           final obligatoriosFaltantes = faltan.where((p) => p.obligatorio).map((p) => p.nombre.toLowerCase()).toList();
@@ -122,6 +142,32 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
             child: ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                TarjetaFotosDocumento(
+                  documento: DocumentoFoto.carnet,
+                  detalle: 'N° ${perfil.ciCompleto}',
+                  tieneFotos: perfil.tieneFotosCarnet,
+                  permitido: permisoCarnet,
+                  alCambiar: () => _cambiarFotos(DocumentoFoto.carnet, perfil),
+                ),
+                TarjetaFotosDocumento(
+                  documento: DocumentoFoto.licencia,
+                  detalle: [
+                    'N° ${perfil.numeroLicencia ?? ''}',
+                    if ((perfil.categoriaLicencia ?? '').isNotEmpty) 'categoría ${perfil.categoriaLicencia}',
+                    if (vence != null) 'vence el ${formatoFecha(vence)}',
+                  ].join(', '),
+                  tieneFotos: perfil.tieneFotosLicencia,
+                  permitido: permisoLicencia,
+                  alCambiar: () => _cambiarFotos(DocumentoFoto.licencia, perfil),
+                ),
+                if (!permisoCarnet && !permisoLicencia)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 14),
+                    child: Text(
+                      'Para cambiar las fotos de tu carnet o de tu licencia, pide permiso a la administración.',
+                      style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                    ),
+                  ),
                 if (documentos.isNotEmpty) ...[
                   Text(
                     permitidos.isEmpty

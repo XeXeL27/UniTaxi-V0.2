@@ -264,7 +264,7 @@ class _PanelMarca extends StatelessWidget {
                 ),
                 SizedBox(height: compacta ? 14 : 26),
                 Text(
-                  'TaxiUAP',
+                  'UNITAXI',
                   style: TextStyle(
                     fontSize: compacta ? 28 : 38,
                     fontWeight: FontWeight.w700,

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
@@ -10,13 +11,15 @@ import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
 import '../widgets/dialogos.dart';
+import '../widgets/formatos.dart';
+import 'confirmar_identidad.dart';
 import 'cuenta_api.dart';
 import 'perfil_api.dart';
 
 /// Datos de Mi perfil (pasajero y conductor). Se ven en una tarjeta; con "Editar" solo se cambian
-/// el correo y el telefono (y la licencia del conductor si esta en blanco). Al guardar llega un
-/// codigo al correo actual y recien al escribirlo se aplican los cambios. El resto de los datos lo
-/// cambia la administracion.
+/// el correo y el telefono (y la licencia del conductor si esta en blanco), confirmando con la huella
+/// o la contrasena. El nombre, el carnet y la fecha de nacimiento (leidos del carnet) no se editan
+/// aqui: los cambia la administracion.
 class DatosPerfil extends StatefulWidget {
   final Perfil perfil;
   final bool esConductor;
@@ -66,17 +69,20 @@ class _DatosPerfilState extends State<DatosPerfil> {
   Future<void> _guardar() async {
     FocusScope.of(context).unfocus();
     if (!(_clave.currentState?.validate() ?? false)) return;
-    setState(() => _guardando = true);
     final api = CuentaApi(context.read<ClienteApi>());
     final sesion = context.read<Sesion>();
     final anterior = widget.perfil;
-    final String destino;
+    final contrasena = await confirmarIdentidad(context);
+    if (contrasena == null || !mounted) return;
+    setState(() => _guardando = true);
+    final Map<String, dynamic> usuario;
     try {
-      destino = await api.pedirCodigoDatos({
+      usuario = await api.actualizarDatos({
         'correo': _correo.text.trim(),
         'telefono': _telefono.text.trim(),
         if (_licenciaEditable) 'numeroLicencia': _licencia.text.trim(),
-        if (_categoriaEditable) 'categoriaLicencia': _categoria.text.trim(),
+        if (_categoriaEditable) 'categoriaLicencia': _categoria.text.trim().toUpperCase(),
+        'password': contrasena,
       });
     } on ApiExcepcion catch (e) {
       if (!mounted) return;
@@ -86,12 +92,6 @@ class _DatosPerfilState extends State<DatosPerfil> {
     }
     if (!mounted) return;
     setState(() => _guardando = false);
-    final usuario = await showDialog<Map<String, dynamic>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _DialogoCodigo(destino: destino, api: api),
-    );
-    if (usuario == null || !mounted) return;
     await sesion.reemplazarUsuario(usuario);
     await _actualizarRecordadas(anterior, usuario);
     if (!mounted) return;
@@ -198,16 +198,48 @@ class _DatosPerfilState extends State<DatosPerfil> {
                         return null;
                       },
                     ),
-                    _campo(_telefono, 'Teléfono', FontAwesomeIcons.phone, teclado: TextInputType.phone),
-                    if (_licenciaEditable) _campo(_licencia, 'Número de licencia', FontAwesomeIcons.idBadge),
-                    if (_categoriaEditable) _campo(_categoria, 'Categoría de licencia', FontAwesomeIcons.layerGroup),
+                    _campo(
+                      _telefono,
+                      widget.esConductor ? 'Celular *' : 'Teléfono',
+                      FontAwesomeIcons.phone,
+                      teclado: TextInputType.phone,
+                      formatos: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                      validar: (v) {
+                        final texto = v?.trim() ?? '';
+                        if (texto.isEmpty) return widget.esConductor ? 'Campo obligatorio' : null;
+                        return RegExp(r'^[67]\d{7}$').hasMatch(texto) ? null : '8 dígitos que empiezan con 6 o 7';
+                      },
+                    ),
+                    if (_licenciaEditable)
+                      _campo(
+                        _licencia,
+                        'Número de licencia',
+                        FontAwesomeIcons.idBadge,
+                        teclado: TextInputType.number,
+                        formatos: [FilteringTextInputFormatter.digitsOnly],
+                      ),
+                    if (_categoriaEditable)
+                      _campo(
+                        _categoria,
+                        'Categoría de licencia (P, M, A, B o C)',
+                        FontAwesomeIcons.layerGroup,
+                        formatos: [
+                          LengthLimitingTextInputFormatter(1),
+                          FilteringTextInputFormatter.allow(RegExp('[PMABCpmabc]')),
+                          MayusculasFormatter(),
+                        ],
+                        validar: (v) {
+                          final texto = v?.trim() ?? '';
+                          return texto.isEmpty || RegExp(r'^[PMABC]$').hasMatch(texto) ? null : 'Una letra: P, M, A, B o C';
+                        },
+                      ),
                   ],
                 ),
               ),
             ],
           ),
           const SizedBox(height: 16),
-          BotonPrincipal(texto: 'Enviar código y guardar', color: ColoresApp.azul, cargando: _guardando, onPressed: _guardar),
+          BotonPrincipal(texto: 'Guardar cambios', color: ColoresApp.azul, cargando: _guardando, onPressed: _guardar),
           const SizedBox(height: 6),
           TextButton(
             onPressed: _guardando ? null : () => setState(() => _editando = false),
@@ -225,12 +257,14 @@ class _DatosPerfilState extends State<DatosPerfil> {
     String? Function(String?)? validar,
     TextInputType? teclado,
     bool mayusculaInicial = false,
+    List<TextInputFormatter>? formatos,
   }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextFormField(
         controller: controlador,
         keyboardType: teclado,
+        inputFormatters: formatos,
         textCapitalization: mayusculaInicial ? TextCapitalization.words : TextCapitalization.none,
         textInputAction: TextInputAction.next,
         decoration: InputDecoration(labelText: etiqueta, prefixIcon: _IconoCampo(icono)),
@@ -286,93 +320,5 @@ class _IconoCampo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(width: 44, child: Center(child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave)));
-  }
-}
-
-/// Pide el codigo enviado al correo actual y confirma el cambio. Devuelve el usuario actualizado o
-/// null si se cancela. Un codigo incorrecto se avisa aqui mismo y se puede volver a escribir.
-class _DialogoCodigo extends StatefulWidget {
-  final String destino;
-  final CuentaApi api;
-
-  const _DialogoCodigo({required this.destino, required this.api});
-
-  @override
-  State<_DialogoCodigo> createState() => _DialogoCodigoState();
-}
-
-class _DialogoCodigoState extends State<_DialogoCodigo> {
-  final _codigo = TextEditingController();
-  String? _error;
-  bool _enviando = false;
-
-  @override
-  void dispose() {
-    _codigo.dispose();
-    super.dispose();
-  }
-
-  Future<void> _confirmar() async {
-    final codigo = _codigo.text.trim();
-    if (codigo.length != 6) {
-      setState(() => _error = 'Escribe los 6 dígitos del código.');
-      return;
-    }
-    setState(() {
-      _enviando = true;
-      _error = null;
-    });
-    try {
-      final usuario = await widget.api.confirmarDatos(codigo);
-      if (mounted) Navigator.of(context).pop(usuario);
-    } on ApiExcepcion catch (e) {
-      if (mounted) {
-        setState(() {
-          _enviando = false;
-          _error = e.mensaje;
-        });
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Confirma el cambio', style: TextStyle(fontWeight: FontWeight.w800)),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(
-            'Enviamos un código de 6 dígitos a ${widget.destino}. Escríbelo para guardar tus datos.',
-            style: const TextStyle(color: ColoresApp.textoSuave),
-          ),
-          const SizedBox(height: 14),
-          TextField(
-            controller: _codigo,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 22, letterSpacing: 8, fontWeight: FontWeight.w700),
-            decoration: InputDecoration(counterText: '', hintText: '000000', errorText: _error, errorMaxLines: 3),
-            onSubmitted: (_) => _confirmar(),
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: _enviando ? null : () => Navigator.of(context).pop(),
-          child: const Text('Cancelar', style: TextStyle(color: ColoresApp.textoSuave)),
-        ),
-        FilledButton(
-          onPressed: _enviando ? null : _confirmar,
-          style: FilledButton.styleFrom(backgroundColor: ColoresApp.azul),
-          child: _enviando
-              ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.blanco))
-              : const Text('Confirmar'),
-        ),
-      ],
-    );
   }
 }

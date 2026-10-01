@@ -14,6 +14,7 @@ import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
+import com.taxiuap.backend.identity.service.CuentaUsuarioService;
 import com.taxiuap.backend.identity.service.PermisoEdicionService;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
@@ -46,6 +47,7 @@ public class DocumentoConductorService {
     private final ConductorRepository conductorRepository;
     private final AlmacenamientoArchivos almacenamientoArchivos;
     private final PermisoEdicionService permisoEdicionService;
+    private final CuentaUsuarioService cuentaUsuarioService;
     private final VehiculoRepository vehiculoRepository;
 
     public List<DocumentoConductorResponse> listar(Long idUsuario) {
@@ -71,8 +73,9 @@ public class DocumentoConductorService {
      * para ese documento; el permiso se cierra al usarlo y el documento vuelve a PENDIENTE.
      */
     @Transactional
-    public DocumentoConductorResponse reemplazarArchivo(Long idUsuario, Long id, MultipartFile archivo) {
+    public DocumentoConductorResponse reemplazarArchivo(Long idUsuario, Long id, MultipartFile archivo, String password) {
         DocumentoConductor documento = obtenerDelConductor(idUsuario, id);
+        cuentaUsuarioService.confirmarContrasena(documento.getConductor().getUsuario(), password);
         almacenamientoArchivos.validarPdf(archivo, documento.getTipoDocumento().name());
         permisoEdicionService.consumir(documento.getConductor().getId(), TipoPermisoEdicion.DOCUMENTO, id);
         guardarNuevoArchivo(documento, archivo);
@@ -82,8 +85,8 @@ public class DocumentoConductorService {
     }
 
     /**
-     * Documentos obligatorios (CI y licencia) que el conductor todavia no envio. Mientras falte
-     * alguno no puede operar y la app queda bloqueada, salvo Mis documentos para subirlos.
+     * Documentos obligatorios del alta del panel (CI y licencia en PDF) que el conductor no tiene. Ya
+     * no bloquean la app: el registro desde la app manda fotos del carnet y de la licencia.
      */
     public List<TipoDocumento> faltantes(Long idConductor) {
         Set<TipoDocumento> enviados = EnumSet.noneOf(TipoDocumento.class);
@@ -193,25 +196,18 @@ public class DocumentoConductorService {
     }
 
     /**
-     * Un conductor puede operar (recibir solicitudes de viaje) solo si esta APROBADO (regla de
-     * negocio 1), envio los documentos obligatorios y no tiene ningun documento vencido ni sin
-     * aprobar (regla de negocio 2). Lo usa el flujo de viaje antes de ofertar o aceptar solicitudes.
+     * Un conductor puede operar (recibir solicitudes de viaje) apenas el administrador lo pone en
+     * APROBADO (regla de negocio 1), aunque sus documentos sigan en revision (regla 2). Solo lo frena
+     * la licencia vencida. Lo usa el flujo de viaje antes de ofertar o aceptar solicitudes.
      */
     public boolean puedeOperar(Long idConductor) {
         Conductor conductor = conductorRepository.findById(idConductor)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Conductor", idConductor));
-
-        if (conductor.getSituacionAprobacion() != SituacionAprobacion.APROBADO || !faltantes(idConductor).isEmpty()) {
+        if (conductor.getSituacionAprobacion() != SituacionAprobacion.APROBADO) {
             return false;
         }
-
-        List<DocumentoConductor> documentos = documentoConductorRepository
-                .findByConductorIdAndEstadoDocumentoConductorOrderByIdAsc(idConductor, EstadoRegistro.A);
-        LocalDate hoy = LocalDate.now();
-
-        return documentos.stream().allMatch(documento ->
-                documento.getSituacionRevision() == SituacionRevision.APROBADO
-                        && (documento.getFechaVencimiento() == null || !documento.getFechaVencimiento().isBefore(hoy)));
+        LocalDate vence = conductor.getLicenciaVencimiento();
+        return vence == null || !vence.isBefore(LocalDate.now());
     }
 
     private Conductor buscarConductor(Long idUsuario) {

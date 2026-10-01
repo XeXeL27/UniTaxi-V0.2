@@ -21,7 +21,7 @@ Widget botonSuspenderCuenta(
     onPressed: () => flujoAccion(
       context,
       mensajeConfirmacion: suspendida
-          ? 'Va a habilitar $cuenta. Podrá volver a ingresar a TaxiUAP.'
+          ? 'Va a habilitar $cuenta. Podrá volver a ingresar a UNITAXI.'
           : 'Va a suspender $cuenta. No podrá ingresar y, si tiene la sesión abierta, se cerrará.',
       textoConfirmar: suspendida ? 'Sí, habilitar' : 'Sí, suspender',
       accion: () => api.cambiarEstadoUsuario(idUsuario, suspender: !suspendida),

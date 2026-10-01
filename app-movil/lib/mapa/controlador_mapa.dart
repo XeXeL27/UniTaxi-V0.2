@@ -6,6 +6,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../core/config.dart';
+import '../widgets/requiere_gps.dart';
 import 'servicios_mapa.dart';
 
 /// Punto de la ruta con su texto (direccion o nombre del favorito).
@@ -137,8 +138,19 @@ class ControladorMapa extends ChangeNotifier {
   bool _mapaListo = false;
   bool _cerrado = false;
 
-  /// Pide el permiso, centra el mapa en la ubicacion actual y empieza a seguir el GPS.
+  /// Espera a que el GPS este encendido y con permiso (RequiereGps), centra el mapa en la ubicacion
+  /// actual y empieza a seguir el GPS.
   Future<void> iniciarGps() async {
+    if (!RequiereGps.listo.value) {
+      final listo = Completer<void>();
+      void alCambiar() {
+        if (RequiereGps.listo.value && !listo.isCompleted) listo.complete();
+      }
+      RequiereGps.listo.addListener(alCambiar);
+      await listo.future;
+      RequiereGps.listo.removeListener(alCambiar);
+      if (_cerrado) return;
+    }
     final posicion = await ServiciosMapa.ubicacionActual();
     if (_cerrado) return;
     gpsDisponible = posicion != null;

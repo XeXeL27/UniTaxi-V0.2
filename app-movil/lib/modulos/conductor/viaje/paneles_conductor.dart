@@ -506,12 +506,12 @@ class _EnRevision extends StatelessWidget {
       ),
       'RECHAZADO' => (
         'Registro rechazado',
-        'La administración rechazó tu registro. Revisa tus documentos en Más > Mis documentos o comunícate con TaxiUAP.',
+        'La administración rechazó tu registro. Revisa tus documentos en Más > Mis documentos o comunícate con UNITAXI.',
         ColoresApp.rojo,
       ),
       'SUSPENDIDO' => (
         'Cuenta suspendida',
-        'Tu cuenta de conductor está suspendida. Comunícate con la administración de TaxiUAP.',
+        'Tu cuenta de conductor está suspendida. Comunícate con la administración de UNITAXI.',
         ColoresApp.rojo,
       ),
       _ => (

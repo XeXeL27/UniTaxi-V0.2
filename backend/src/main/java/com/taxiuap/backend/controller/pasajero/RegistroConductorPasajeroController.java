@@ -39,7 +39,7 @@ public class RegistroConductorPasajeroController {
     public ResponseEntity<ApiResponse<RegistroConductorEstadoResponse>> registrar(
             @Valid @RequestPart("datos") RegistroConductorPasajeroRequest datos,
             @RequestParam Map<String, MultipartFile> archivos) {
-        return ResponseEntity.ok(ApiResponse.exito("Registro de conductor enviado a revision",
+        return ResponseEntity.ok(ApiResponse.exito("Registro de conductor recibido",
                 registroService.registrar(UsuarioActual.idUsuario(), datos, archivos)));
     }
 }

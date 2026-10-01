@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -5,11 +6,13 @@ import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
+import '../../../comun/aviso_credenciales.dart';
 import '../../../comun/historial_viajes.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/pantalla_mas.dart';
 import '../../../comun/perfil_api.dart';
 import '../../../comun/qr_pago.dart';
+import '../../../core/push.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/config.dart';
@@ -21,6 +24,7 @@ import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
+import '../../../widgets/panel_recuperando.dart';
 import '../../../widgets/barra_inferior.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
@@ -93,8 +97,33 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     _flujo.addListener(_alCambiarFlujo);
     _mapa.addListener(_revisarDireccion);
     RequiereGps.listo.addListener(_revisarGuia);
+    RequiereGps.listo.addListener(_revisarAvisoCredenciales);
     _arrancar();
+    // Este telefono recibe los avisos push de la cuenta (tambien con la app cerrada).
+    unawaited(Push.registrar(context.read<ClienteApi>()));
     _cargarFoto();
+  }
+
+  /// Aviso de credenciales enviadas al correo, con la pantalla principal a la vista (GPS listo).
+  bool _avisoEnCurso = false;
+
+  Future<void> _revisarAvisoCredenciales() async {
+    if (_avisoEnCurso || !mounted || !RequiereGps.listo.value) return;
+    if (!(context.read<Sesion>().usuario?.avisoCredenciales ?? false)) return;
+    _avisoEnCurso = true;
+    await Future<void>.delayed(const Duration(milliseconds: 600));
+    if (mounted) await mostrarAvisoCredenciales(context);
+    _avisoEnCurso = false;
+    _revisarGuia();
+  }
+
+  /// Mientras la cuenta esta en revision se consulta sola cada 15 segundos: apenas la administracion
+  /// la aprueba empieza a recibir solicitudes, sin recargar.
+  Timer? _sondeoAprobacion;
+
+  void _vigilarAprobacion() {
+    _sondeoAprobacion?.cancel();
+    _sondeoAprobacion = Timer.periodic(const Duration(seconds: 15), (_) => _revisarAprobacion(silencioso: true));
   }
 
   /// Un conductor recien registrado queda en revision: no recibe solicitudes ni aparece en el mapa
@@ -105,15 +134,20 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     if (!mounted) return;
     final habilitado = _aplicarPerfil(perfil);
     _flujo.iniciar();
-    if (habilitado) _emisor.iniciar();
+    if (habilitado) {
+      _emisor.iniciar();
+    } else {
+      _vigilarAprobacion();
+    }
   }
 
-  /// Pasa al flujo la situacion y los documentos que faltan; devuelve si puede operar. Sin perfil
-  /// (no se pudo consultar) se sigue como antes: el backend igual exige la aprobacion.
+  /// Pasa al flujo la situacion; devuelve si puede operar. Con la cuenta APROBADA opera aunque sus
+  /// documentos sigan en revision. Sin perfil (no se pudo consultar) se sigue como antes: el backend
+  /// igual exige la aprobacion.
   bool _aplicarPerfil(Perfil? perfil) {
     final situacion = perfil?.situacionAprobacion;
     final faltantes = perfil?.documentosFaltantes ?? const <String>[];
-    final habilitado = (situacion == null || situacion == 'APROBADO') && faltantes.isEmpty;
+    final habilitado = situacion == null || situacion == 'APROBADO';
     _flujo.enRevision = !habilitado;
     _flujo.situacionAprobacion = situacion;
     _flujo.documentosFaltantes = faltantes;
@@ -135,10 +169,17 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final perfil = await _perfil();
     if (!mounted || perfil == null) return;
     final situacion = perfil.situacionAprobacion;
-    if (situacion == 'APROBADO' && perfil.documentosFaltantes.isEmpty) {
+    if (situacion == 'APROBADO') {
+      _sondeoAprobacion?.cancel();
+      _flujo.documentosFaltantes = const [];
       _flujo.aprobado();
       _emisor.iniciar();
-      mostrarMensaje(context, '¡Tu cuenta está habilitada! Ya puedes recibir solicitudes.');
+      await mostrarExito(
+        context,
+        titulo: '¡Ya estás habilitado!',
+        mensaje: 'La administración aprobó tu cuenta de conductor. Desde ahora recibes solicitudes de viaje.',
+      );
+      _revisarGuia();
       return;
     }
     _aplicarPerfil(perfil);
@@ -226,8 +267,10 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
 
   @override
   void dispose() {
+    _sondeoAprobacion?.cancel();
     _emisor.dispose();
     RequiereGps.listo.removeListener(_revisarGuia);
+    RequiereGps.listo.removeListener(_revisarAvisoCredenciales);
     _mapa.removeListener(_revisarDireccion);
     _flujo.removeListener(_alCambiarFlujo);
     _flujo.dispose();
@@ -255,6 +298,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   /// listo, en Inicio con la lista de solicitudes y sin otra pantalla encima.
   bool get _listoParaGuia =>
       context.read<Sesion>().usuario?.mostrarGuia == true &&
+      !(context.read<Sesion>().usuario?.avisoCredenciales ?? false) &&
+      !_avisoEnCurso &&
       RequiereGps.listo.value &&
       _seccion == _seccionInicio &&
       _flujo.etapa == EtapaConductor.lista &&
@@ -647,10 +692,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                       // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
                       altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
                       child: switch (etapa) {
-                        EtapaConductor.cargando => const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 8),
-                          child: Center(child: CircularProgressIndicator()),
-                        ),
+                        EtapaConductor.cargando => PanelRecuperando(sinRed: _flujo.recuperandoSinRed),
                         EtapaConductor.lista => PanelSolicitudes(
                           key: _guiaSolicitudes,
                           flujo: _flujo,

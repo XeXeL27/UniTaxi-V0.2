@@ -1,6 +1,7 @@
 package com.taxiuap.backend.trip.service;
 
 import java.math.BigDecimal;
+import java.util.Map;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
+import com.taxiuap.backend.communication.service.NotificacionPushService;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.entity.Usuario;
@@ -91,6 +93,7 @@ public class ViajeService {
     private final SolicitudViajeRepository solicitudViajeRepository;
     private final OfertaViajeRepository ofertaViajeRepository;
     private final UbicacionConductorRepository ubicacionConductorRepository;
+    private final NotificacionPushService notificacionPushService;
 
     @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
@@ -140,7 +143,22 @@ public class ViajeService {
         // Regla de negocio 6: cada cambio de situacion se registra en el historial, incluido el alta.
         historialViajeService.registrar(viaje, SituacionViaje.CONFIRMADO, pasajero.getUsuario().getId());
 
+        avisarPasajero(viaje, "VIAJE_ACEPTADO", "Tu viaje fue aceptado", " va en camino a recogerte.");
         return viaje;
+    }
+
+    /**
+     * Push al telefono del pasajero (llega aunque la app este cerrada). La app arma la notificacion
+     * con su sonido; si ademas la app estaba abierta y ya aviso, no suena dos veces (mismo id).
+     */
+    private void avisarPasajero(Viaje viaje, String tipo, String titulo, String resto) {
+        String nombre = viaje.getConductor().getUsuario().getPersona().getNombres();
+        String primerNombre = nombre == null || nombre.isBlank() ? "Tu conductor" : nombre.trim().split("\\s+")[0];
+        notificacionPushService.enviar(viaje.getPasajero().getUsuario().getId(), Map.of(
+                "tipo", tipo,
+                "idViaje", String.valueOf(viaje.getId()),
+                "titulo", titulo,
+                "cuerpo", primerNombre + resto));
     }
 
     @Transactional
@@ -156,6 +174,7 @@ public class ViajeService {
         Viaje viaje = obtenerViajeDelConductor(idViaje);
         validarTransicion(viaje, SituacionViaje.CONDUCTOR_EN_CAMINO, SituacionViaje.CONDUCTOR_LLEGO);
         viaje = viajeRepository.save(viaje);
+        avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Tu conductor llegó", " te espera en el punto de partida.");
         return registrarYNotificar(viaje);
     }
 

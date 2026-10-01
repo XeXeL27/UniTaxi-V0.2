@@ -178,8 +178,8 @@ class ServiciosMapa {
 
   static Future<LatLng?> _ubicacion() async {
     if (!await Geolocator.isLocationServiceEnabled()) return null;
-    var permiso = await Geolocator.checkPermission();
-    if (permiso == LocationPermission.denied) permiso = await Geolocator.requestPermission();
+    // El permiso lo pide RequiereGps una sola vez, con la pantalla principal a la vista.
+    final permiso = await Geolocator.checkPermission();
     if (permiso == LocationPermission.denied || permiso == LocationPermission.deniedForever) return null;
     final posicion = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)),

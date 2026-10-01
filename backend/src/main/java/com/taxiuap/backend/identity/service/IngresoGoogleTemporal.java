@@ -22,8 +22,9 @@ import com.taxiuap.backend.identity.enums.ModoIngresoGoogle;
  *   que nadie pueda inyectar un codigo ajeno, y recuerda el modo y a donde volver.
  * - canje: la sesion lista; la app la recoge una sola vez con un codigo que viaja en la URL de
  *   vuelta. Los JWT nunca van en la URL.
- * - registro: el perfil de Google de quien se esta registrando como conductor, mientras llena el
- *   formulario de la licencia, la moto y los PDF.
+ * - registro: el perfil de Google de quien se esta registrando, mientras llena el formulario de
+ *   conductor (licencia, moto, PDF) o confirma su carnet de pasajero. Hasta que termina no hay nada
+ *   guardado en la BD.
  */
 @Component
 public class IngresoGoogleTemporal {

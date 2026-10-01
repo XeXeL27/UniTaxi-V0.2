@@ -24,6 +24,11 @@ class Perfil {
   /// queda bloqueada hasta que los suba en Mis documentos.
   final List<String> documentosFaltantes;
 
+  /// Conductor: vencimiento de la licencia y si tiene las fotos del carnet y de la licencia.
+  final DateTime? licenciaVencimiento;
+  final bool tieneFotosCarnet;
+  final bool tieneFotosLicencia;
+
   const Perfil({
     required this.nombres,
     required this.apellidos,
@@ -38,6 +43,9 @@ class Perfil {
     this.categoriaLicencia,
     this.situacionAprobacion,
     this.documentosFaltantes = const [],
+    this.licenciaVencimiento,
+    this.tieneFotosCarnet = false,
+    this.tieneFotosLicencia = false,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -58,6 +66,9 @@ class Perfil {
     categoriaLicencia: json['categoriaLicencia'] as String?,
     situacionAprobacion: json['situacionAprobacion'] as String?,
     documentosFaltantes: [for (final t in (json['documentosFaltantes'] as List<dynamic>? ?? const [])) '$t'],
+    licenciaVencimiento: fechaDesdeJson(json['licenciaVencimiento']),
+    tieneFotosCarnet: json['tieneFotosCarnet'] as bool? ?? false,
+    tieneFotosLicencia: json['tieneFotosLicencia'] as bool? ?? false,
   );
 }
 

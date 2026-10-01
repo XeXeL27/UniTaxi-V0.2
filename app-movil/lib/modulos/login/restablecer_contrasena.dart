@@ -56,7 +56,7 @@ Future<String?> abrirRestablecerContrasena(BuildContext context, {String? correo
     await mostrarExito(
       context,
       titulo: 'Contraseña restablecida',
-      mensaje: 'Ya puedes ingresar a TaxiUAP con tu nueva contraseña.',
+      mensaje: 'Ya puedes ingresar a UNITAXI con tu nueva contraseña.',
     );
   }
   return correo;

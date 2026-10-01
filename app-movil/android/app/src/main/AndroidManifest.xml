@@ -6,13 +6,25 @@
     <!-- Notificacion de solicitud nueva al conductor (Android 13 o superior) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
+    <!-- Servicio en primer plano mientras el pasajero busca taxi o esta en viaje: Android congela las
+         apps minimizadas y sin esto los avisos del viaje (sonido y notificacion) no llegarian -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>
+    <!-- El conductor conectado sigue enviando su GPS con la app minimizada -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <!-- Guardar en la galeria la imagen del QR del conductor (paquete gal; Android 9 o anterior) -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>
     <application
-        android:label="TaxiUAP"
+        android:label="UNITAXI"
         android:usesCleartextTraffic="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Servicio de flutter_local_notifications para "Siguiendo tu viaje" (Notificador) -->
+        <service
+            android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
+            android:exported="false"
+            android:stopWithTask="true"
+            android:foregroundServiceType="dataSync|location"/>
         <activity
             android:name=".MainActivity"
             android:exported="true"

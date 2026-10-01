@@ -1,4 +1,12 @@
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+
+/// Pasa a mayusculas lo que se escribe (nombres, apellidos, marca, modelo, color, categoria).
+class MayusculasFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue anterior, TextEditingValue nuevo) =>
+      nuevo.copyWith(text: nuevo.text.toUpperCase());
+}
 
 /// Conversiones comunes entre JSON del backend y valores de Dart.
 class Formato {

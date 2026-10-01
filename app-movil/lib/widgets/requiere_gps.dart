@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../core/navegador.dart';
 import '../core/tema.dart';
 import 'boton_principal.dart';
 
@@ -32,6 +33,7 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
   _EstadoGps _estado = _EstadoGps.verificando;
   StreamSubscription<ServiceStatus>? _servicio;
   Timer? _reintento;
+  Timer? _inicio;
   bool _pidiendo = false;
 
   @override
@@ -45,7 +47,13 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
         // Sin el aviso del sistema basta con revisar al volver a la app y cada pocos segundos.
       }
     }
-    _verificar(pedir: true);
+    // El permiso se pide ya con la pantalla principal a la vista (no encima del login que se esta
+    // cerrando): despues del primer cuadro y una pausa corta.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _inicio = Timer(const Duration(milliseconds: 700), () {
+        if (mounted) _verificar(pedir: true);
+      });
+    });
   }
 
   @override
@@ -53,13 +61,14 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     _servicio?.cancel();
     _reintento?.cancel();
+    _inicio?.cancel();
     RequiereGps.listo.value = false;
     super.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) _verificar();
+    if (state == AppLifecycleState.resumed && _estado != _EstadoGps.verificando) _verificar();
   }
 
   Future<void> _verificar({bool pedir = false}) async {
@@ -105,7 +114,9 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
         await _verificar(pedir: true);
       case _EstadoGps.bloqueado:
         if (kIsWeb) {
-          await _verificar(pedir: true);
+          // Firefox y Chrome no vuelven a preguntar en la misma pagina: al recargar toman el permiso
+          // que la persona cambio en el icono de la barra de direcciones.
+          Navegador.recargar();
         } else {
           await Geolocator.openAppSettings();
         }
@@ -132,15 +143,16 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
     final (titulo, texto, boton) = switch (_estado) {
       _EstadoGps.apagado => (
         'Activa tu ubicación',
-        'TaxiUAP necesita el GPS de tu celular encendido para ubicarte en el mapa y conectarte con '
+        'UNITAXI necesita el GPS de tu celular encendido para ubicarte en el mapa y conectarte con '
             'el taxi. Enciéndelo para continuar.',
         'Activar ubicación',
       ),
       _EstadoGps.bloqueado when kIsWeb => (
         'Permite tu ubicación',
-        'El navegador tiene bloqueada la ubicación para TaxiUAP. Permítela desde el icono junto a la '
-            'dirección de la página y vuelve a intentar.',
-        'Ya la permití',
+        'El navegador tiene bloqueada la ubicación para UNITAXI. Haz clic en el icono de ubicación '
+            '(tachado) o del candado junto a la dirección de la página, quita el bloqueo o elige Permitir, '
+            'y recarga la página.',
+        'Recargar la página',
       ),
       _EstadoGps.bloqueado => (
         'Permite tu ubicación',
@@ -150,46 +162,65 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
       ),
       _ => (
         'Permite tu ubicación',
-        'TaxiUAP necesita saber dónde estás para mostrarte en el mapa y conectarte con el taxi.',
+        'UNITAXI necesita saber dónde estás para mostrarte en el mapa y conectarte con el taxi.',
         'Permitir ubicación',
       ),
     };
+    final contenido = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 96,
+          height: 96,
+          decoration: const BoxDecoration(color: ColoresApp.rojoSuave, shape: BoxShape.circle),
+          child: const Center(
+            child: FaIcon(FontAwesomeIcons.locationDot, color: ColoresApp.rojo, size: 40),
+          ),
+        ),
+        const SizedBox(height: 24),
+        Text(
+          titulo,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: ColoresApp.azul, fontSize: 23, fontWeight: FontWeight.w800),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          texto,
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 15, height: 1.45),
+        ),
+        const SizedBox(height: 28),
+        BotonPrincipal(texto: boton, onPressed: _activar),
+      ],
+    );
+    // En el navegador el mapa se sigue viendo atras, oscurecido, con el aviso en una tarjeta.
+    if (kIsWeb) {
+      return Material(
+        color: Colors.black54,
+        child: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 460),
+                child: Container(
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(color: ColoresApp.blanco, borderRadius: BorderRadius.circular(20)),
+                  child: contenido,
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    }
     return Material(
       color: ColoresApp.fondo,
       child: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(28),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 96,
-                    height: 96,
-                    decoration: const BoxDecoration(color: ColoresApp.rojoSuave, shape: BoxShape.circle),
-                    child: const Center(
-                      child: FaIcon(FontAwesomeIcons.locationDot, color: ColoresApp.rojo, size: 40),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    titulo,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: ColoresApp.azul, fontSize: 23, fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    texto,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 15, height: 1.45),
-                  ),
-                  const SizedBox(height: 28),
-                  BotonPrincipal(texto: boton, onPressed: _activar),
-                ],
-              ),
-            ),
+            child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 420), child: contenido),
           ),
         ),
       ),

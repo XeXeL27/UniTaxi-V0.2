@@ -9,6 +9,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.RolSistema;
+import com.taxiuap.backend.identity.dto.ReglasRegistro;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.RegistroConductorEstadoResponse;
 import com.taxiuap.backend.identity.dto.RegistroConductorPasajeroRequest;
@@ -42,6 +43,9 @@ public class RegistroConductorPasajeroService {
     private final CuentaUsuarioService cuentaUsuarioService;
     private final RegistroMotoConductorService registroMotoConductorService;
     private final QrPagoConductorService qrPagoConductorService;
+    private final CarnetService carnetService;
+    private final LicenciaService licenciaService;
+    private final CredencialesCorreoService credencialesCorreoService;
 
     public RegistroConductorEstadoResponse estado(Long idUsuario) {
         Usuario pasajero = cuentaPasajero(idUsuario);
@@ -54,7 +58,8 @@ public class RegistroConductorPasajeroService {
                 persona.getCi(),
                 persona.getComplementoCi(),
                 persona.getTelefono(),
-                persona.getFechaNacimiento());
+                persona.getFechaNacimiento(),
+                carnetService.tieneCarnet(persona));
     }
 
     @Transactional
@@ -65,19 +70,37 @@ public class RegistroConductorPasajeroService {
         if (conductorDe(persona).isPresent()) {
             throw new ConflictoException("Ya enviaste tu registro de conductor");
         }
-        // Se valida todo antes de crear nada para no dejar registros a medias.
+        // Se valida todo antes de crear nada para no dejar registros a medias. El carnet que ya
+        // registro como pasajero se reutiliza (con su CI, complemento y fecha de nacimiento).
         Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
+        CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(persona, archivos);
+        LicenciaService.FotosLicencia licencia = licenciaService.validarDelRegistro(archivos);
+        boolean conservarCarnet = carnet == null;
+        carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                datos.nombres(), datos.apellidos());
+        licenciaService.validarDatosRegistro(datos.conductor(), licencia, conservarCarnet ? persona.getCi() : datos.ci(),
+                conservarCarnet ? persona.getComplementoCi() : datos.complementoCi());
 
-        gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(datos.ci(), datos.complementoCi(),
-                persona.getNombres(), persona.getApellidos(), datos.fechaNacimiento(), persona.getCorreo(),
-                datos.telefono()));
+        gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(
+                conservarCarnet ? persona.getCi() : datos.ci(),
+                conservarCarnet ? persona.getComplementoCi() : datos.complementoCi(),
+                conservarCarnet ? persona.getNombres() : ReglasRegistro.nombreOActual(datos.nombres(), persona.getNombres()),
+                conservarCarnet ? persona.getApellidos() : ReglasRegistro.nombreOActual(datos.apellidos(), persona.getApellidos()),
+                conservarCarnet ? persona.getFechaNacimiento() : datos.fechaNacimiento(),
+                persona.getCorreo(), datos.telefono()));
+        if (carnet != null) {
+            carnetService.guardar(persona, carnet);
+        }
         Usuario usuario = cuentaUsuarioService.crearUsuario(persona, RolSistema.CONDUCTOR,
                 pasajero.getNombreUsuario(), pasajero.getPasswordHash());
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
+        licenciaService.guardar(conductor, licencia, datos.conductor().vencimientoLicencia());
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
+        boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
+        credencialesCorreoService.conductorRegistrado(usuario, null, "la misma de tu cuenta de pasajero", aprobado);
         return estado(idUsuario);
     }
 

@@ -134,6 +134,13 @@ public class OfertaViajeService {
             throw RecursoNoEncontradoException.de("SolicitudViaje", solicitudSolicitada.getId());
         }
         Long idSolicitud = solicitudSolicitada.getId();
+        // El conductor de la oferta no puede quedar con dos viajes si dos pasajeros aceptan sus
+        // ofertas a la vez: se bloquea su fila y se revisa.
+        Long idConductorOferta = ofertaSolicitada.getConductor().getId();
+        conductorRepository.bloquear(idConductorOferta);
+        if (viajeService.conductorTieneViajeActivo(idConductorOferta)) {
+            throw new ConflictoException("El conductor de esta oferta ya tomo otro viaje");
+        }
 
         int filasAfectadas = solicitudViajeRepository.aceptarSiDisponible(idSolicitud);
         if (filasAfectadas == 0) {
@@ -172,6 +179,9 @@ public class OfertaViajeService {
     @Transactional
     public ViajeResponse aceptarDirecto(Long idSolicitud) {
         Conductor conductor = buscarConductor();
+        // Si el mismo conductor acepta dos solicitudes a la vez, la segunda espera aqui y luego ve
+        // el viaje de la primera ("Ya tiene un viaje en curso").
+        conductorRepository.bloquear(conductor.getId());
         // Reglas de negocio 1 y 2.
         if (!documentoConductorService.puedeOperar(conductor.getId())) {
             throw new NegocioException("El conductor no esta habilitado para recibir solicitudes");

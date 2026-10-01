@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.dto.UsuarioAdminResponse;
@@ -73,5 +75,15 @@ public class UsuarioAdminController {
                 .contentType(MediaType.IMAGE_JPEG)
                 .cacheControl(CacheControl.noCache())
                 .body(carnetService.leer(id, lado));
+    }
+
+    /** Cambia una o las dos fotos del carnet de la persona de la cuenta (multipart "anverso" / "reverso"). */
+    @PutMapping(value = "/{id}/carnet", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<Void>> cambiarCarnet(
+            @PathVariable Long id,
+            @RequestPart(value = "anverso", required = false) MultipartFile anverso,
+            @RequestPart(value = "reverso", required = false) MultipartFile reverso) {
+        carnetService.reemplazarPorAdmin(id, anverso, reverso);
+        return ResponseEntity.ok(ApiResponse.exito("Fotos del carnet actualizadas", null));
     }
 }

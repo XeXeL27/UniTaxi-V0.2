@@ -13,6 +13,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.entity.Persona;
@@ -138,6 +140,11 @@ public class AlmacenamientoArchivos {
         return carpetaPersona(persona) + "/conductor/documentos";
     }
 
+    /** Fotos de la licencia de conducir (anverso y reverso). */
+    public String carpetaLicencia(Persona persona) {
+        return carpetaPersona(persona) + "/conductor/licencia";
+    }
+
     /** Imagenes de los QR de cobro del conductor. */
     public String carpetaQrConductor(Persona persona) {
         return carpetaPersona(persona) + "/conductor/qr";
@@ -204,6 +211,40 @@ public class AlmacenamientoArchivos {
         return rutaRelativa;
     }
 
+    /**
+     * Como guardarConSello, pero la foto nueva reemplaza a la [anterior]: el archivo anterior se borra
+     * (carnet y licencia: si la persona vuelve a subir sus fotos, quedan solo las nuevas). El borrado
+     * espera al commit: si la transaccion falla, la ruta anterior sigue guardada y su archivo tambien.
+     */
+    public String reemplazarConSello(String anterior, byte[] contenido, String carpeta, String nombreBase,
+            String extension) {
+        String nueva = guardarConSello(contenido, carpeta, nombreBase, extension);
+        if (anterior != null && !anterior.isBlank() && !anterior.equals(nueva)) {
+            borrarAlConfirmar(anterior);
+        }
+        return nueva;
+    }
+
+    private void borrarAlConfirmar(String rutaRelativa) {
+        Runnable borrar = () -> {
+            try {
+                Files.deleteIfExists(resolver(rutaRelativa));
+            } catch (IOException | RuntimeException e) {
+                // Si no se puede borrar queda un archivo suelto; la BD ya apunta a la foto nueva.
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    borrar.run();
+                }
+            });
+        } else {
+            borrar.run();
+        }
+    }
+
     // ------------------------------------------------------------------ generico
 
     /** Escribe (o reemplaza) un archivo en la ruta relativa indicada. */
@@ -238,12 +279,30 @@ public class AlmacenamientoArchivos {
         }
     }
 
+    /**
+     * Escribe el archivo. Si es nuevo y la transaccion en curso se deshace (por ejemplo, un registro que
+     * fallo a la mitad), se borra: la BD no lo conoce y no debe quedar suelto.
+     */
     private void escribir(Path destino, byte[] contenido) {
+        boolean nuevo = !Files.exists(destino);
         try {
             Files.createDirectories(destino.getParent());
             Files.write(destino, contenido);
         } catch (IOException e) {
             throw new IllegalStateException("No se pudo guardar el archivo " + destino, e);
+        }
+        if (nuevo && TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCompletion(int estado) {
+                    if (estado == STATUS_COMMITTED) return;
+                    try {
+                        Files.deleteIfExists(destino);
+                    } catch (IOException e) {
+                        // Queda un archivo suelto que la BD no conoce.
+                    }
+                }
+            });
         }
     }
 

@@ -67,6 +67,13 @@ public class Usuario extends EntidadAuditable {
     @Column(name = "guia_vista")
     private Boolean guiaVista;
 
+    /**
+     * true cuando se le envio un correo con sus credenciales y todavia no vio el aviso en la app
+     * ("Tus credenciales llegaron a tu correo"). Se apaga al mostrarlo.
+     */
+    @Column(name = "aviso_credenciales")
+    private Boolean avisoCredenciales;
+
     @Column(name = "foto_url", length = 500)
     private String fotoUrl;
 

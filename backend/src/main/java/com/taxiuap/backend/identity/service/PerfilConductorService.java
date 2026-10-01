@@ -1,6 +1,7 @@
 package com.taxiuap.backend.identity.service;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -16,7 +17,8 @@ import com.taxiuap.backend.pricing.repository.BilleteraConductorRepository;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
-import com.taxiuap.backend.vehicle.service.DocumentoConductorService;
+
+import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 
 import lombok.RequiredArgsConstructor;
 
@@ -29,7 +31,8 @@ public class PerfilConductorService {
     private final ConductorRepository conductorRepository;
     private final BilleteraConductorRepository billeteraConductorRepository;
     private final PermisoEdicionService permisoEdicionService;
-    private final DocumentoConductorService documentoConductorService;
+    private final CuentaUsuarioService cuentaUsuarioService;
+    private final AlmacenamientoArchivos almacenamientoArchivos;
 
     public PerfilConductorResponse obtener(Long idUsuario) {
         return aRespuesta(buscarConductor(idUsuario));
@@ -45,6 +48,7 @@ public class PerfilConductorService {
     @Transactional
     public PerfilConductorResponse actualizar(Long idUsuario, ActualizarPerfilConductorRequest request) {
         Conductor conductor = buscarConductor(idUsuario);
+        cuentaUsuarioService.confirmarContrasena(conductor.getUsuario(), request.password());
         permisoEdicionService.consumir(conductor.getId(), TipoPermisoEdicion.DATOS, null);
         Usuario usuario = conductor.getUsuario();
         Persona persona = usuario.getPersona();
@@ -58,7 +62,8 @@ public class PerfilConductorService {
         // situacionAprobacion no se toca aqui: solo la cambia un administrador
         // (ver GestionConductorService).
         conductor.setNumeroLicencia(request.numeroLicencia());
-        conductor.setCategoriaLicencia(request.categoriaLicencia());
+        conductor.setCategoriaLicencia(request.categoriaLicencia() == null || request.categoriaLicencia().isBlank()
+                ? null : request.categoriaLicencia().trim().toUpperCase());
 
         return aRespuesta(conductor);
     }
@@ -93,6 +98,10 @@ public class PerfilConductorService {
                 conductor.getFechaAprobacion(),
                 saldoBilletera,
                 usuario.getId(),
-                documentoConductorService.faltantes(conductor.getId()));
+                // El carnet y la licencia van como fotos: ningun PDF bloquea la app.
+                List.of(),
+                conductor.getLicenciaVencimiento(),
+                almacenamientoArchivos.existe(persona.getCarnetAnversoUrl()),
+                almacenamientoArchivos.existe(conductor.getLicenciaAnversoUrl()));
     }
 }

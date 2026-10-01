@@ -42,7 +42,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             style: TextStyle(color: ColoresApp.azul, fontSize: 26, fontWeight: FontWeight.w700, letterSpacing: -0.4),
           ),
           const SizedBox(height: 6),
-          const Text('¿Cómo quieres usar TaxiUAP?', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14.5)),
+          const Text('¿Cómo quieres usar UNITAXI?', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14.5)),
           const SizedBox(height: 20),
           Row(
             children: [
@@ -109,7 +109,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
         else
           const _Nota(
             icono: FontAwesomeIcons.globe,
-            texto: 'Por ahora el registro con Google se hace desde la versión web de TaxiUAP.',
+            texto: 'Por ahora el registro con Google se hace desde la versión web de UNITAXI.',
           ),
       ],
     );

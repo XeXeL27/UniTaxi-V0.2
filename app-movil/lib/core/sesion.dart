@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
@@ -7,8 +8,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'api_excepcion.dart';
 import 'config.dart';
+import 'formato.dart';
 import 'google_movil.dart';
 import 'navegador.dart';
+import 'push.dart';
 
 /// Datos del usuario autenticado (UsuarioResponse del backend).
 class UsuarioSesion {
@@ -26,6 +29,9 @@ class UsuarioSesion {
   /// Entro con Google y no tiene CI: antes de usar la app registra su carnet con fotos.
   final bool requiereCarnet;
 
+  /// Se le enviaron sus credenciales por correo y todavia no vio el aviso en la pantalla principal.
+  final bool avisoCredenciales;
+
   UsuarioSesion({
     required this.idUsuario,
     required this.nombreUsuario,
@@ -36,14 +42,15 @@ class UsuarioSesion {
     required this.rol,
     this.mostrarGuia = false,
     this.requiereCarnet = false,
+    this.avisoCredenciales = false,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
 
-  /// Primer nombre, para el saludo.
+  /// Primer nombre, para el saludo: "JUAN CARLOS" -> "Juan" (los nombres se guardan en mayusculas).
   String get primerNombre {
     final partes = nombres.trim().split(RegExp(r'\s+'));
-    return partes.first.isEmpty ? nombreUsuario : partes.first;
+    return partes.first.isEmpty ? nombreUsuario : enTitulo(partes.first);
   }
 
   String get iniciales {
@@ -64,6 +71,7 @@ class UsuarioSesion {
     rol: json['rol'] as String? ?? '',
     mostrarGuia: json['mostrarGuia'] as bool? ?? false,
     requiereCarnet: json['requiereCarnet'] as bool? ?? false,
+    avisoCredenciales: json['avisoCredenciales'] as bool? ?? false,
   );
 
   Map<String, dynamic> aJson() => {
@@ -76,10 +84,15 @@ class UsuarioSesion {
     'rol': rol,
     'mostrarGuia': mostrarGuia,
     'requiereCarnet': requiereCarnet,
+    'avisoCredenciales': avisoCredenciales,
   };
 }
 
 /// PDF elegido para subir con el registro de conductor.
+/// Registro con Google sin terminar: [codigo] temporal del servidor; [pasajero] true si falta
+/// verificar el carnet del pasajero, false si falta el formulario de conductor.
+typedef RegistroGoogle = ({String codigo, bool pasajero});
+
 /// El usuario cerro el selector de cuentas de Google sin elegir ninguna.
 class GoogleCancelado implements Exception {
   const GoogleCancelado();
@@ -159,7 +172,7 @@ class Sesion extends ChangeNotifier {
     var elegido = rol;
     if (elegido == null) {
       final modos = await cuentas(usuario, password);
-      if (modos.isEmpty) throw ApiExcepcion('Esta cuenta no tiene acceso a TaxiUAP');
+      if (modos.isEmpty) throw ApiExcepcion('Esta cuenta no tiene acceso a UNITAXI');
       if (modos.length > 1) return modos;
       elegido = modos.first;
     }
@@ -213,11 +226,12 @@ class Sesion extends ChangeNotifier {
       '${Config.apiUrl}/api/auth/google?modo=$modo&volver=${Uri.encodeQueryComponent(Navegador.direccionActual)}';
 
   /// Ingreso con Google en el APK (selector nativo). [modo]: INGRESO, PASAJERO o CONDUCTOR.
-  /// Si la sesion queda iniciada devuelve null; si es un conductor nuevo devuelve el codigo para el
-  /// formulario de conductor. Lanza [GoogleCancelado] si el usuario cierra el selector.
+  /// Si la sesion queda iniciada devuelve null; si falta terminar un registro devuelve su codigo:
+  /// el formulario de conductor o, si [RegistroGoogle.pasajero], la verificacion del carnet (hasta
+  /// entonces el servidor no guarda nada). Lanza [GoogleCancelado] si el usuario cierra el selector.
   /// [antesDeEntrar] muestra el aviso del servidor (por ejemplo, conductor todavia en revision) antes
   /// de que la app cambie de pantalla.
-  Future<String?> ingresarConGoogleMovil(String modo, {Future<void> Function(String aviso)? antesDeEntrar}) async {
+  Future<RegistroGoogle?> ingresarConGoogleMovil(String modo, {Future<void> Function(String aviso)? antesDeEntrar}) async {
     final config = await _getAuth('/api/auth/google/config') as Map<String, dynamic>;
     final idToken = await GoogleMovil.idToken(config['clientId'] as String);
     if (idToken == null) throw const GoogleCancelado();
@@ -229,7 +243,26 @@ class Sesion extends ChangeNotifier {
       await _guardar(sesion);
       return null;
     }
-    return datos['codigoRegistro'] as String?;
+    final pasajero = datos['codigoRegistroPasajero'] as String?;
+    if (pasajero != null) return (codigo: pasajero, pasajero: true);
+    final conductor = datos['codigoRegistro'] as String?;
+    return conductor == null ? null : (codigo: conductor, pasajero: false);
+  }
+
+  /// Nombre y correo de Google de quien se esta registrando (codigo temporal del ingreso).
+  Future<Map<String, dynamic>> perfilRegistroGoogle(String codigo) async =>
+      await _getAuth('/api/auth/google/registro/$codigo') as Map<String, dynamic>;
+
+  /// Termina el registro de pasajero con Google: recien aqui el servidor guarda la persona, el carnet
+  /// y la cuenta, y envia las credenciales. Al terminar la sesion queda iniciada.
+  Future<void> registrarPasajeroGoogle(Map<String, dynamic> datos, {required Uint8List anverso, required Uint8List reverso}) async {
+    final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}/api/auth/registro/pasajero/google'));
+    peticion.files.addAll([
+      http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
+      http.MultipartFile.fromBytes('anverso', anverso, filename: 'carnet_anverso.jpg', contentType: MediaType('image', 'jpeg')),
+      http.MultipartFile.fromBytes('reverso', reverso, filename: 'carnet_reverso.jpg', contentType: MediaType('image', 'jpeg')),
+    ]);
+    await _guardar(await _enviarMultipart(peticion));
   }
 
   /// Recoge la sesion que dejo lista el backend al volver de Google.
@@ -247,6 +280,7 @@ class Sesion extends ChangeNotifier {
     Map<String, ArchivoPdf> documentos, {
     List<ArchivoPdf> qrs = const [],
     ({Uint8List anverso, Uint8List reverso})? carnet,
+    ({Uint8List anverso, Uint8List reverso})? licencia,
   }) async {
     final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
     peticion.files.add(
@@ -277,9 +311,23 @@ class Sesion extends ChangeNotifier {
             filename: 'carnet_reverso.jpg', contentType: MediaType('image', 'jpeg')),
       ]);
     }
+    // Fotos de la licencia (partes LICENCIA_ANVERSO y LICENCIA_REVERSO).
+    if (licencia != null) {
+      peticion.files.addAll([
+        http.MultipartFile.fromBytes('LICENCIA_ANVERSO', licencia.anverso,
+            filename: 'licencia_anverso.jpg', contentType: MediaType('image', 'jpeg')),
+        http.MultipartFile.fromBytes('LICENCIA_REVERSO', licencia.reverso,
+            filename: 'licencia_reverso.jpg', contentType: MediaType('image', 'jpeg')),
+      ]);
+    }
+    await _guardar(await _enviarMultipart(peticion));
+  }
+
+  /// Envia un registro multipart y devuelve la sesion que responde el servidor.
+  Future<Map<String, dynamic>> _enviarMultipart(http.MultipartRequest peticion) async {
     final http.Response respuesta;
     try {
-      respuesta = await http.Response.fromStream(await peticion.send().timeout(const Duration(seconds: 60)));
+      respuesta = await http.Response.fromStream(await peticion.send().timeout(const Duration(seconds: 90)));
     } catch (_) {
       throw ApiExcepcion('No se pudo conectar con el servidor');
     }
@@ -289,7 +337,7 @@ class Sesion extends ChangeNotifier {
       final detalle = errores is Map && errores.isNotEmpty ? ': ${errores.values.join(', ')}' : '';
       throw ApiExcepcion('${json['mensaje'] ?? 'Error ${respuesta.statusCode}'}$detalle', codigo: respuesta.statusCode);
     }
-    await _guardar(json['datos'] as Map<String, dynamic>);
+    return json['datos'] as Map<String, dynamic>;
   }
 
   /// Pasa a la otra cuenta de la persona (pasajero o conductor) sin pedir la contrasena.
@@ -366,6 +414,24 @@ class Sesion extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// La persona ya vio el aviso de que sus credenciales llegaron a su correo: se marca en el servidor
+  /// (en todas sus cuentas) y en este telefono.
+  Future<void> avisoCredencialesVisto() async {
+    final actual = _usuario;
+    if (actual == null || !actual.avisoCredenciales) return;
+    await reemplazarUsuario({...actual.aJson(), 'avisoCredenciales': false});
+    try {
+      await http
+          .post(Uri.parse('${Config.apiUrl}/api/cuenta/aviso-credenciales'), headers: {
+            'Content-Type': 'application/json',
+            if (_tokenAcceso != null) 'Authorization': 'Bearer $_tokenAcceso',
+          })
+          .timeout(const Duration(seconds: 20));
+    } catch (_) {
+      // Si falla, el aviso ya no se muestra en este telefono.
+    }
+  }
+
   /// La guia de inicio ya se vio (o se salto): no se vuelve a mostrar en este telefono.
   Future<void> guiaVista() async {
     final actual = _usuario;
@@ -386,6 +452,18 @@ class Sesion extends ChangeNotifier {
   }
 
   Future<void> cerrar({String? motivo}) async {
+    // Este telefono deja de recibir los avisos push de la cuenta que sale.
+    final tokenPush = Push.token;
+    final acceso = _tokenAcceso;
+    if (tokenPush != null && acceso != null) {
+      unawaited(http
+          .post(Uri.parse('${Config.apiUrl}/api/cuenta/dispositivo/baja'),
+              headers: {'Content-Type': 'application/json', 'Authorization': 'Bearer $acceso'},
+              body: jsonEncode({'token': tokenPush}))
+          .timeout(const Duration(seconds: 10))
+          .then((_) {}, onError: (_) {}));
+    }
+    unawaited(Push.olvidar());
     motivoCierre = motivo;
     _panelAdmin = null;
     _tokenAcceso = null;
@@ -433,13 +511,14 @@ class Sesion extends ChangeNotifier {
 
   Future<dynamic> _getAuth(String ruta) => _auth(() => http.get(Uri.parse('${Config.apiUrl}$ruta')));
 
-  /// Peticion sin token a /api/auth; desempaqueta ApiResponse.
+  /// Peticion sin token a /api/auth; desempaqueta ApiResponse. Espera hasta un minuto: con internet
+  /// lento el login avisa a los 20 y a los 40 segundos (PantallaLogin) antes de rendirse.
   Future<dynamic> _auth(Future<http.Response> Function() enviar) async {
     final http.Response respuesta;
     try {
-      respuesta = await enviar().timeout(const Duration(seconds: 20));
+      respuesta = await enviar().timeout(const Duration(seconds: 60));
     } catch (_) {
-      throw ApiExcepcion('No se pudo conectar con el servidor');
+      throw ApiExcepcion('No se pudo conectar con el servidor. Revisa tu conexión a internet e intenta de nuevo.');
     }
     final json = _decodificar(respuesta);
     if (respuesta.statusCode >= 400 || json['ok'] != true) {

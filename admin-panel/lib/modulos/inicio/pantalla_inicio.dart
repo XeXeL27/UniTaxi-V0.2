@@ -38,7 +38,7 @@ class _PantallaInicioState extends State<PantallaInicio> {
           style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: ColoresApp.azul),
         ),
         const SizedBox(height: 4),
-        const Text('Resumen general de TaxiUAP', style: TextStyle(color: Colors.black54)),
+        const Text('Resumen general de UNITAXI', style: TextStyle(color: Colors.black54)),
         const SizedBox(height: 20),
         FutureBuilder<List<int>>(
           future: _totales,

@@ -23,7 +23,7 @@ public class EnlaceIngresoController {
                 <!doctype html>
                 <html lang="es"><head><meta charset="utf-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1">
-                <title>Unitaxi - Iniciar sesion</title>
+                <title>UNITAXI - Iniciar sesion</title>
                 <style>
                   body{margin:0;font-family:system-ui,Roboto,Arial,sans-serif;background:#0A2342;color:#fff;
                        min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center}
@@ -32,7 +32,7 @@ public class EnlaceIngresoController {
                   .app{background:#D32F2F;color:#fff}.web{background:#fff;color:#0A2342}
                 </style></head>
                 <body><div class="caja">
-                  <h2>Unitaxi</h2><p id="msg">Abriendo Unitaxi...</p>
+                  <h2>UNITAXI</h2><p id="msg">Abriendo UNITAXI...</p>
                   <a class="app" id="app" href="#" style="display:none">Abrir la app</a>
                   <a class="web" id="web" href="WEB">Ingresar desde el navegador</a>
                 </div>

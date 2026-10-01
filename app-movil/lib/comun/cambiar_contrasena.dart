@@ -57,7 +57,7 @@ Future<void> abrirCambiarContrasena(BuildContext context) async {
     await mostrarExito(
       context,
       titulo: 'Contraseña actualizada',
-      mensaje: 'Desde ahora ingresa a TaxiUAP con tu nueva contraseña.',
+      mensaje: 'Desde ahora ingresa a UNITAXI con tu nueva contraseña.',
     );
   }
 }

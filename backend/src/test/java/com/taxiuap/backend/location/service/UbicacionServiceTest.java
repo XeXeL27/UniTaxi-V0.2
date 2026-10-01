@@ -308,8 +308,8 @@ class UbicacionServiceTest {
 
         assertEquals(2, flota.size());
         PosicionConductor primero = flota.get(0);
-        assertEquals("Mario", primero.nombres());
-        assertEquals("Quispe", primero.apellidos());
+        assertEquals("MARIO", primero.nombres());
+        assertEquals("QUISPE", primero.apellidos());
         assertEquals("1234-ABC", primero.placa());
         assertEquals(-11.02, primero.latitud().doubleValue(), 1e-9);
         assertEquals(45.0, primero.rumbo());

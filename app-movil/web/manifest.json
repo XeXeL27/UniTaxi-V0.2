@@ -1,11 +1,11 @@
 {
-    "name": "TaxiUAP",
-    "short_name": "TaxiUAP",
+    "name": "UNITAXI",
+    "short_name": "UNITAXI",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#012852",
     "theme_color": "#012852",
-    "description": "TaxiUAP - pasajeros y conductores",
+    "description": "UNITAXI - pasajeros y conductores",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

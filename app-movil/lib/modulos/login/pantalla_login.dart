@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
+import '../../core/conexion.dart';
 import '../../core/config.dart';
 import '../../core/credenciales.dart';
 import '../../core/huella.dart';
@@ -38,6 +41,35 @@ class _PantallaLoginState extends State<PantallaLogin> {
   /// La huella esta activada en este telefono (solo el APK de Android).
   bool _huellaActiva = false;
 
+  /// Aviso de internet lento mientras se inicia sesion: a los 20 segundos "lento" y a los 40 "muy
+  /// lento". A los 60 se rinde (Sesion) con un error.
+  String? _avisoLento;
+  final List<Timer> _esperas = [];
+
+  void _empezarEspera() {
+    _terminarEspera();
+    _esperas.addAll([
+      Timer(const Duration(seconds: 20), () {
+        if (!mounted) return;
+        setState(() => _avisoLento = 'Tu internet está lento y el inicio de sesión está demorando. '
+            'Si no avanza, intenta después.');
+      }),
+      Timer(const Duration(seconds: 40), () {
+        if (!mounted) return;
+        setState(() => _avisoLento = 'Tu internet está muy lento. Seguimos intentando iniciar sesión; '
+            'si no se logra, conéctate a una red mejor e intenta después.');
+      }),
+    ]);
+  }
+
+  void _terminarEspera() {
+    for (final espera in _esperas) {
+      espera.cancel();
+    }
+    _esperas.clear();
+    if (mounted && _avisoLento != null) setState(() => _avisoLento = null);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +95,9 @@ class _PantallaLoginState extends State<PantallaLogin> {
 
   @override
   void dispose() {
+    for (final espera in _esperas) {
+      espera.cancel();
+    }
     _usuario.dispose();
     _password.dispose();
     super.dispose();
@@ -71,10 +106,16 @@ class _PantallaLoginState extends State<PantallaLogin> {
   Future<void> _ingresar() async {
     FocusScope.of(context).unfocus();
     if (!(_claveFormulario.currentState?.validate() ?? false)) return;
+    if (Conexion.sinInternet.value) {
+      setState(() => _error = 'No tienes conexión a internet. Conéctate a una red Wi-Fi o a tus datos móviles para '
+          'iniciar sesión.');
+      return;
+    }
     setState(() {
       _cargando = true;
       _error = null;
     });
+    _empezarEspera();
     try {
       // Al autenticarse, main muestra sola la pantalla de inicio.
       // Se toman antes: al iniciar sesion esta pantalla se cierra.
@@ -98,6 +139,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
     } on ApiExcepcion catch (e) {
       if (mounted) setState(() => _error = e.mensaje);
     } finally {
+      _terminarEspera();
       if (mounted) setState(() => _cargando = false);
     }
   }
@@ -170,6 +212,12 @@ class _PantallaLoginState extends State<PantallaLogin> {
   Future<void> _ingresarConGoogle() async {
     final modo = await _elegirModo(const [Config.rolPasajero, Config.rolConductor], conGoogle: true);
     if (modo == null || !mounted) return;
+    if (Conexion.sinInternet.value) {
+      setState(() => _error = 'No tienes conexión a internet. Conéctate a una red Wi-Fi o a tus datos móviles para '
+          'iniciar sesión.');
+      return;
+    }
+    // Sin avisos de lentitud: mientras tanto la persona elige su cuenta de Google.
     await continuarConGoogle(context, modo, alCargar: (cargando) => setState(() => _cargando = cargando));
   }
 
@@ -214,6 +262,16 @@ class _PantallaLoginState extends State<PantallaLogin> {
               style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14.5),
             ),
             const SizedBox(height: 24),
+            ValueListenableBuilder<bool>(
+              valueListenable: Conexion.sinInternet,
+              builder: (context, sinInternet, _) => sinInternet
+                  ? const _AvisoRed(
+                      icono: FontAwesomeIcons.wifi,
+                      texto: 'Sin conexión a internet. Conéctate a una red Wi-Fi o a tus datos móviles para iniciar sesión.',
+                    )
+                  : const SizedBox.shrink(),
+            ),
+            if (_avisoLento != null) _AvisoRed(icono: FontAwesomeIcons.hourglassHalf, texto: _avisoLento!),
             if (_error != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
@@ -414,6 +472,38 @@ class _OpcionModo extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Aviso naranja de la red en el login (sin internet o internet lento).
+class _AvisoRed extends StatelessWidget {
+  final FaIconData icono;
+  final String texto;
+
+  const _AvisoRed({required this.icono, required this.texto});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF4E5),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFF5A623).withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: FaIcon(icono, color: const Color(0xFFB26A00), size: 15),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(texto, style: const TextStyle(color: Color(0xFF7A4A00), height: 1.35))),
+        ],
       ),
     );
   }

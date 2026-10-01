@@ -27,6 +27,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
 	implementation 'org.hibernate.orm:hibernate-spatial'
 	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
+	// Notificaciones push (FCM) al telefono aunque la app este cerrada
+	implementation 'com.google.firebase:firebase-admin:9.4.3'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.13.0'
 	compileOnly 'org.projectlombok:lombok'
@@ -57,7 +59,12 @@ tasks.named('bootRun') {
 			def limpia = linea.trim()
 			if (limpia && !limpia.startsWith('#') && limpia.contains('=')) {
 				def partes = limpia.split('=', 2)
-				vars[partes[0].trim()] = partes[1].trim()
+				def valor = partes[1].trim()
+				// Valores entre comillas (rutas con espacios, como "SISTEMAS 2026"): sin las comillas.
+				if (valor.length() >= 2 && ((valor.startsWith('"') && valor.endsWith('"')) || (valor.startsWith("'") && valor.endsWith("'")))) {
+					valor = valor.substring(1, valor.length() - 1)
+				}
+				vars[partes[0].trim()] = valor
 			}
 		}
 		environment vars

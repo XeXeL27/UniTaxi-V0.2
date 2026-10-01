@@ -87,20 +87,41 @@ class FlujoConductor extends ChangeNotifier {
     mapa.alMoverseGps = _alMoverseGps;
   }
 
+  /// true mientras se reintenta recuperar el viaje en curso sin conexion.
+  bool recuperandoSinRed = false;
+
   Future<void> iniciar() async {
     unawaited(mapa.iniciarGps());
+    unawaited(_cargarPrecio());
+    // El viaje en curso se recupera primero; sin conexion se reintenta cada 3 segundos para no
+    // perderlo (no se muestra la lista hasta saber si hay uno).
+    while (!_cerrado) {
+      try {
+        final enCurso = await api.viajeEnCurso();
+        recuperandoSinRed = false;
+        if (enCurso != null) return _entrarViaje(enCurso);
+        break;
+      } on ApiExcepcion catch (e) {
+        final codigo = e.codigo;
+        if (codigo != null && codigo < 500) break;
+      } catch (_) {
+        // Sin respuesta: se reintenta.
+      }
+      recuperandoSinRed = true;
+      _avisar();
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
+    recuperandoSinRed = false;
+    if (!_cerrado) _entrarLista();
+  }
+
+  Future<void> _cargarPrecio() async {
     try {
       precio = await api.precio();
+      _avisar();
     } catch (_) {
       // El precio de cada solicitud llega igual en la lista.
     }
-    try {
-      final enCurso = await api.viajeEnCurso();
-      if (enCurso != null) return _entrarViaje(enCurso);
-    } catch (_) {
-      // Si falla se muestra la lista.
-    }
-    _entrarLista();
   }
 
   // ---------------------------------------------------------------- lista y detalle
@@ -399,12 +420,29 @@ class FlujoConductor extends ChangeNotifier {
   }
 
   void _avisar() {
-    if (!_cerrado) notifyListeners();
+    if (_cerrado) return;
+    _revisarSeguimiento();
+    notifyListeners();
+  }
+
+  /// Conectado (o en viaje): la notificacion fija mantiene viva la app minimizada, asi sigue
+  /// enviando su GPS y avisando las solicitudes nuevas (Android la congela si no).
+  void _revisarSeguimiento() {
+    final activo = !enRevision && etapa != EtapaConductor.cargando && (enLinea || etapa == EtapaConductor.enViaje);
+    if (activo) {
+      unawaited(Notificador.seguirViaje(
+        'Conectado: recibes solicitudes de viaje y compartes tu ubicación.',
+        ubicacion: true,
+      ));
+    } else {
+      unawaited(Notificador.dejarDeSeguir());
+    }
   }
 
   @override
   void dispose() {
     _cerrado = true;
+    unawaited(Notificador.dejarDeSeguir());
     _detenerSondeo();
     mapa.alMoverseGps = null;
     super.dispose();

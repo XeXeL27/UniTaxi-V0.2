@@ -1,11 +1,11 @@
 {
-    "name": "TaxiUAP Admin",
-    "short_name": "TaxiUAP",
+    "name": "UNITAXI Admin",
+    "short_name": "UNITAXI",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0B2341",
     "theme_color": "#0B2341",
-    "description": "Panel de administracion de TaxiUAP",
+    "description": "Panel de administracion de UNITAXI",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

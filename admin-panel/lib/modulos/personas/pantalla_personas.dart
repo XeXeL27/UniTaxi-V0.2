@@ -112,8 +112,8 @@ class _FormularioPersonaState extends State<FormularioPersona> {
   final _claveFormulario = GlobalKey<FormState>();
   late final _ci = TextEditingController(text: widget.persona?.ci);
   late final _complemento = TextEditingController(text: widget.persona?.complementoCi);
-  late final _nombres = TextEditingController(text: widget.persona?.nombres);
-  late final _apellidos = TextEditingController(text: widget.persona?.apellidos);
+  late final _nombres = TextEditingController(text: widget.persona?.nombres.toUpperCase());
+  late final _apellidos = TextEditingController(text: widget.persona?.apellidos.toUpperCase());
   late final _correo = TextEditingController(text: widget.persona?.correo);
   late final _telefono = TextEditingController(text: widget.persona?.telefono);
   late DateTime? _fechaNacimiento = widget.persona?.fechaNacimiento;
@@ -187,12 +187,14 @@ class _FormularioPersonaState extends State<FormularioPersona> {
         TextFormField(
           controller: _nombres,
           maxLength: 100,
+          inputFormatters: [MayusculasFormatter()],
           decoration: const InputDecoration(labelText: 'Nombres *', counterText: ''),
           validator: _requerido,
         ),
         TextFormField(
           controller: _apellidos,
           maxLength: 100,
+          inputFormatters: [MayusculasFormatter()],
           decoration: const InputDecoration(labelText: 'Apellidos *', counterText: ''),
           validator: _requerido,
         ),

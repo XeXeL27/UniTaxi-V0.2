@@ -4,16 +4,42 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../core/api_excepcion.dart';
+import '../../core/cliente_api.dart';
 import '../../core/tema.dart';
 import '../../widgets/archivos_web.dart';
+import '../../widgets/dialogos.dart';
 import 'expediente_api.dart';
 
 /// Fotos del carnet (anverso y reverso) de la persona de una cuenta, en un solo modal. Las sube la
-/// persona desde la app al entrar con Google; solo el administrador puede verlas.
+/// persona desde la app; solo el administrador puede verlas y cambiarlas.
 Future<void> mostrarCarnet(BuildContext context, {required ExpedienteApi api, required int idUsuario, required String nombre}) {
+  return mostrarFotosDocumento(
+    context,
+    titulo: 'Carnet de $nombre',
+    icono: FontAwesomeIcons.idCard,
+    documento: 'carnet',
+    cargar: (lado) => api.carnet(idUsuario, lado),
+    cambiar: (lado, archivo) => api.cambiarCarnet(
+      idUsuario,
+      anverso: lado == 'anverso' ? archivo : null,
+      reverso: lado == 'reverso' ? archivo : null,
+    ),
+  );
+}
+
+/// Fotos del anverso y del reverso de un documento (carnet o licencia). Con [cambiar] cada lado
+/// tiene el boton "Cambiar foto".
+Future<void> mostrarFotosDocumento(
+  BuildContext context, {
+  required String titulo,
+  required FaIconData icono,
+  required String documento,
+  required Future<Uint8List> Function(String lado) cargar,
+  Future<void> Function(String lado, ArchivoSubida archivo)? cambiar,
+}) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _ModalCarnet(api: api, idUsuario: idUsuario, nombre: nombre),
+    builder: (_) => _ModalCarnet(titulo: titulo, icono: icono, documento: documento, cargar: cargar, cambiar: cambiar),
   );
 }
 
@@ -37,19 +63,27 @@ class BotonVerCarnet extends StatelessWidget {
 }
 
 class _ModalCarnet extends StatelessWidget {
-  final ExpedienteApi api;
-  final int idUsuario;
-  final String nombre;
+  final String titulo;
+  final FaIconData icono;
+  final String documento;
+  final Future<Uint8List> Function(String lado) cargar;
+  final Future<void> Function(String lado, ArchivoSubida archivo)? cambiar;
 
-  const _ModalCarnet({required this.api, required this.idUsuario, required this.nombre});
+  const _ModalCarnet({required this.titulo, required this.icono, required this.documento, required this.cargar, this.cambiar});
 
   @override
   Widget build(BuildContext context) {
     final tamano = MediaQuery.sizeOf(context);
     final angosto = tamano.width < 600;
     final lados = [
-      _Lado(titulo: 'Anverso', cargar: () => api.carnet(idUsuario, 'anverso'), nombreDescarga: 'carnet_anverso.jpg'),
-      _Lado(titulo: 'Reverso', cargar: () => api.carnet(idUsuario, 'reverso'), nombreDescarga: 'carnet_reverso.jpg'),
+      for (final lado in const ['anverso', 'reverso'])
+        _Lado(
+          titulo: lado == 'anverso' ? 'Anverso' : 'Reverso',
+          documento: documento,
+          cargar: () => cargar(lado),
+          nombreDescarga: '${documento}_$lado.jpg',
+          cambiar: cambiar == null ? null : (archivo) => cambiar!(lado, archivo),
+        ),
     ];
     final contenido = Column(
       children: [
@@ -58,11 +92,11 @@ class _ModalCarnet extends StatelessWidget {
           decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
           child: Row(
             children: [
-              const FaIcon(FontAwesomeIcons.idCard, color: ColoresApp.rojo, size: 18),
+              FaIcon(icono, color: ColoresApp.rojo, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
-                  'Carnet de $nombre',
+                  titulo,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: ColoresApp.azul),
                 ),
@@ -109,17 +143,43 @@ class _ModalCarnet extends StatelessWidget {
 
 class _Lado extends StatefulWidget {
   final String titulo;
+  final String documento;
   final Future<Uint8List> Function() cargar;
   final String nombreDescarga;
+  final Future<void> Function(ArchivoSubida archivo)? cambiar;
 
-  const _Lado({required this.titulo, required this.cargar, required this.nombreDescarga});
+  const _Lado({required this.titulo, required this.documento, required this.cargar, required this.nombreDescarga, this.cambiar});
 
   @override
   State<_Lado> createState() => _LadoState();
 }
 
 class _LadoState extends State<_Lado> {
-  late final Future<Uint8List> _imagen = widget.cargar();
+  late Future<Uint8List> _imagen = widget.cargar();
+  bool _subiendo = false;
+
+  Future<void> _cambiar() async {
+    final archivo = await seleccionarArchivo(aceptar: 'image/jpeg,image/png,.jpg,.jpeg,.png');
+    if (archivo == null || !mounted) return;
+    final confirmado = await confirmarAccion(
+      context,
+      mensaje: 'Va a cambiar la foto del ${widget.titulo.toLowerCase()} de${widget.documento == 'carnet' ? 'l carnet' : ' la licencia'} '
+          'por "${archivo.nombre}".',
+      textoConfirmar: 'Sí, cambiar',
+    );
+    if (!confirmado || !mounted) return;
+    setState(() => _subiendo = true);
+    try {
+      await widget.cambiar!(archivo);
+      if (!mounted) return;
+      setState(() => _imagen = widget.cargar());
+      await mostrarExito(context, titulo: '¡Foto cambiada!', mensaje: 'La foto del ${widget.titulo.toLowerCase()} se actualizó.');
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    } finally {
+      if (mounted) setState(() => _subiendo = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -144,6 +204,14 @@ class _LadoState extends State<_Lado> {
                   Expanded(
                     child: Text(widget.titulo, style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
                   ),
+                  if (widget.cambiar != null)
+                    TextButton.icon(
+                      onPressed: _subiendo ? null : _cambiar,
+                      icon: _subiendo
+                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                          : const FaIcon(FontAwesomeIcons.camera, size: 14),
+                      label: const Text('Cambiar foto'),
+                    ),
                   IconButton(
                     tooltip: 'Descargar',
                     onPressed: bytes == null ? null : () => descargarArchivo(bytes, widget.nombreDescarga, 'image/jpeg'),
@@ -157,7 +225,7 @@ class _LadoState extends State<_Lado> {
                     ? Center(
                         child: Text(
                           error is ApiExcepcion && error.codigo == 404
-                              ? 'No registró la foto del ${widget.titulo.toLowerCase()} de su carnet'
+                              ? 'No registró la foto del ${widget.titulo.toLowerCase()} de su ${widget.documento}'
                               : 'No se pudo cargar la imagen',
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: ColoresApp.textoSuave),
@@ -171,6 +239,32 @@ class _LadoState extends State<_Lado> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Boton "Ver licencia" para la seccion del conductor en el expediente.
+class BotonVerLicencia extends StatelessWidget {
+  final ExpedienteApi api;
+  final int idConductor;
+  final String nombre;
+
+  const BotonVerLicencia({super.key, required this.api, required this.idConductor, required this.nombre});
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      onPressed: () => mostrarFotosDocumento(
+        context,
+        titulo: 'Licencia de $nombre',
+        icono: FontAwesomeIcons.solidIdBadge,
+        documento: 'licencia',
+        cargar: (lado) => api.licencia(idConductor, lado),
+        cambiar: (lado, archivo) => api.cambiarFotoLicencia(idConductor, lado, archivo),
+      ),
+      style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
+      icon: const FaIcon(FontAwesomeIcons.solidIdBadge, size: 14),
+      label: const Text('Ver licencia', style: TextStyle(fontWeight: FontWeight.w600)),
     );
   }
 }

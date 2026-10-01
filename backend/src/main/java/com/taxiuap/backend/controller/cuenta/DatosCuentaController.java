@@ -9,7 +9,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.dto.ActualizarDatosCuentaRequest;
-import com.taxiuap.backend.identity.dto.ConfirmarDatosCuentaRequest;
 import com.taxiuap.backend.identity.dto.UsuarioResponse;
 import com.taxiuap.backend.identity.service.DatosCuentaService;
 import com.taxiuap.backend.shared.response.ApiResponse;
@@ -18,8 +17,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Mi perfil de la app: cambio de correo y telefono (y licencia en blanco del conductor) en dos
- * pasos, con un codigo enviado al correo actual.
+ * Mi perfil de la app: cambio de correo y telefono (y licencia en blanco del conductor) confirmado
+ * con la contrasena, aviso de credenciales y guia de inicio.
  */
 @RestController
 @RequestMapping("/api/cuenta")
@@ -28,16 +27,18 @@ public class DatosCuentaController {
 
     private final DatosCuentaService datosCuentaService;
 
-    @PostMapping("/datos/codigo")
-    public ResponseEntity<ApiResponse<String>> pedirCodigo(@Valid @RequestBody ActualizarDatosCuentaRequest request) {
-        String correo = datosCuentaService.solicitarCambio(UsuarioActual.idUsuario(), request);
-        return ResponseEntity.ok(ApiResponse.exito("Codigo enviado a " + correo, correo));
+    /** Cambia correo y telefono (y la licencia en blanco del conductor), confirmado con la contrasena. */
+    @PutMapping("/datos")
+    public ResponseEntity<ApiResponse<UsuarioResponse>> actualizar(@Valid @RequestBody ActualizarDatosCuentaRequest request) {
+        UsuarioResponse usuario = datosCuentaService.actualizar(UsuarioActual.idUsuario(), request);
+        return ResponseEntity.ok(ApiResponse.exito("Datos actualizados", usuario));
     }
 
-    @PutMapping("/datos")
-    public ResponseEntity<ApiResponse<UsuarioResponse>> confirmar(@Valid @RequestBody ConfirmarDatosCuentaRequest request) {
-        UsuarioResponse usuario = datosCuentaService.confirmarCambio(UsuarioActual.idUsuario(), request);
-        return ResponseEntity.ok(ApiResponse.exito("Datos actualizados", usuario));
+    /** La persona ya vio el aviso "Tus credenciales llegaron a tu correo". */
+    @PostMapping("/aviso-credenciales")
+    public ResponseEntity<ApiResponse<Void>> avisoCredencialesVisto() {
+        datosCuentaService.marcarAvisoCredencialesVisto(UsuarioActual.idUsuario());
+        return ResponseEntity.ok(ApiResponse.exito("Aviso marcado como visto", null));
     }
 
     /** Guia de inicio terminada o saltada. */

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -7,8 +9,11 @@ import 'comun/verificar_carnet.dart';
 import 'core/api_excepcion.dart';
 import 'core/chat.dart';
 import 'core/cliente_api.dart';
+import 'core/conexion.dart';
 import 'core/config.dart';
 import 'core/navegador.dart';
+import 'core/preferencias_aviso.dart';
+import 'core/push.dart';
 import 'core/sesion.dart';
 import 'core/tema.dart';
 import 'modulos/conductor/inicio/pantalla_inicio.dart';
@@ -16,11 +21,16 @@ import 'modulos/login/panel_admin.dart';
 import 'modulos/login/pantalla_login.dart';
 import 'modulos/pasajero/inicio/pantalla_inicio.dart';
 import 'modulos/registro/formulario_conductor.dart';
+import 'widgets/aviso_conexion.dart';
 import 'widgets/requiere_gps.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setSystemUIOverlayStyle(BarraSistema.sobreAzul);
+  unawaited(Conexion.iniciar());
+  await PreferenciasAviso.cargar();
+  // Notificaciones push (FCM): antes de runApp para recibir avisos con la app cerrada.
+  await Push.preparar();
   final sesion = Sesion();
   await sesion.cargar();
   final api = ClienteApi(sesion);
@@ -38,23 +48,28 @@ Future<void> main() async {
 }
 
 /// Lo que trae la URL al volver de Google.
-typedef VueltaGoogle = ({String? error, String? codigoRegistro});
+typedef VueltaGoogle = ({String? error, String? codigoRegistro, String? codigoPasajero});
 
 /// Al volver de Google la URL trae ?google=codigo (sesion lista: se canjea aqui),
-/// ?google_registro=codigo (conductor nuevo: falta el formulario) o ?google_error=mensaje.
+/// ?google_registro=codigo (conductor nuevo: falta el formulario), ?google_pasajero=codigo (pasajero
+/// nuevo: falta verificar su carnet; nada se guardo todavia) o ?google_error=mensaje.
 Future<VueltaGoogle> _vueltaDeGoogle(Sesion sesion) async {
   final parametros = Navegador.parametros;
-  if (parametros.isEmpty) return (error: null, codigoRegistro: null);
+  if (parametros.isEmpty) return (error: null, codigoRegistro: null, codigoPasajero: null);
   Navegador.limpiarParametros();
   final codigo = parametros['google'];
   if (codigo != null) {
     try {
       await sesion.canjearGoogle(codigo);
     } on ApiExcepcion catch (e) {
-      return (error: e.mensaje, codigoRegistro: null);
+      return (error: e.mensaje, codigoRegistro: null, codigoPasajero: null);
     }
   }
-  return (error: parametros['google_error'], codigoRegistro: parametros['google_registro']);
+  return (
+    error: parametros['google_error'],
+    codigoRegistro: parametros['google_registro'],
+    codigoPasajero: parametros['google_pasajero'],
+  );
 }
 
 /// Una sola app: segun la cuenta con que se inicia sesion muestra todo lo del pasajero o todo lo
@@ -71,6 +86,7 @@ class TaxiUap extends StatefulWidget {
 class _TaxiUapState extends State<TaxiUap> {
   late String? _error = widget.vuelta.error;
   late String? _codigoRegistro = widget.vuelta.codigoRegistro;
+  late String? _codigoPasajero = widget.vuelta.codigoPasajero;
 
   @override
   Widget build(BuildContext context) {
@@ -84,14 +100,15 @@ class _TaxiUapState extends State<TaxiUap> {
     if (rol != null) {
       _error = null;
       _codigoRegistro = null;
+      _codigoPasajero = null;
     }
     return MaterialApp(
-      title: 'TaxiUAP',
+      title: 'UNITAXI',
       debugShowCheckedModeBanner: false,
       theme: temaApp(),
       builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
         value: BarraSistema.sobreAzul,
-        child: child ?? const SizedBox.shrink(),
+        child: AvisoSinInternet(child: child ?? const SizedBox.shrink()),
       ),
       // La clave por rol reconstruye la pantalla al cambiar de modo.
       // Pasajero y conductor necesitan un correo (credenciales, restablecer la contrasena) y el GPS
@@ -111,6 +128,10 @@ class _TaxiUapState extends State<TaxiUap> {
         Config.rolPasajero => const RequiereGps(
           key: ValueKey(Config.rolPasajero),
           child: PantallaInicioPasajero(),
+        ),
+        _ when _codigoPasajero != null => PantallaVerificarCarnet(
+          codigoGoogle: _codigoPasajero,
+          onCancelar: () => setState(() => _codigoPasajero = null),
         ),
         _ when _codigoRegistro != null => PantallaFormularioConductor(
           codigoGoogle: _codigoRegistro,

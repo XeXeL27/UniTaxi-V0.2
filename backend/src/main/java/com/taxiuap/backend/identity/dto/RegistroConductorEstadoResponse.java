@@ -16,5 +16,7 @@ public record RegistroConductorEstadoResponse(
         String ci,
         String complementoCi,
         String telefono,
-        LocalDate fechaNacimiento) {
+        LocalDate fechaNacimiento,
+        /** Ya registro las fotos de su carnet: el formulario no las vuelve a pedir ni cambia el CI. */
+        boolean tieneCarnet) {
 }

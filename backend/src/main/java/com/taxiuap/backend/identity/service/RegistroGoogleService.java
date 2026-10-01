@@ -4,12 +4,15 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Supplier;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.RolSistema;
+import com.taxiuap.backend.identity.dto.CarnetRequest;
+import com.taxiuap.backend.identity.dto.ReglasRegistro;
 import com.taxiuap.backend.identity.dto.PerfilGoogle;
 import com.taxiuap.backend.identity.dto.PerfilGoogleResponse;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
@@ -32,10 +35,14 @@ import lombok.RequiredArgsConstructor;
 /**
  * Ingreso y registro con Google. La persona se reconoce por su correo.
  *
- * Una cuenta creada con Google recibe una contrasena legible generada por el sistema: el pasajero
- * la recibe por correo al registrarse y el conductor recien cuando el admin lo aprueba
- * (CredencialesCorreoService). Si la persona ya tenia otra cuenta de la app, la nueva reutiliza su
- * nombre de usuario y su contrasena (regla 12: pasajero y conductor comparten credenciales).
+ * Una cuenta creada con Google recibe una contrasena legible generada por el sistema, que le llega
+ * por correo al registrarse (CredencialesCorreoService). Si la persona ya tenia otra cuenta de la app,
+ * la nueva reutiliza su nombre de usuario y su contrasena (regla 12: pasajero y conductor comparten
+ * credenciales).
+ *
+ * Quien todavia no registro su carnet no queda guardado al elegir su cuenta de Google: recibe un
+ * codigo temporal (IngresoGoogleTemporal) y la persona, el carnet y la cuenta se crean juntos, en una
+ * sola transaccion, recien cuando confirma sus datos. Si cancela o algo falla no queda nada.
  */
 @Service
 @RequiredArgsConstructor
@@ -54,43 +61,82 @@ public class RegistroGoogleService {
     private final AutenticacionService autenticacionService;
     private final CredencialesCorreoService credencialesCorreoService;
     private final CarnetService carnetService;
+    private final LicenciaService licenciaService;
 
     /**
      * Boton "Continuar con Google" del login: entra con la cuenta que ya tenga (pasajero antes que
-     * conductor; desde Mas cambia de modo). Sin cuentas de la app se registra como pasajero.
+     * conductor; desde Mas cambia de modo). Sin cuentas de la app sigue como pasajero ([pasajero]).
      */
-    public TokenResponse ingresar(PerfilGoogle perfil, byte[] foto) {
+    public Optional<TokenResponse> ingresar(PerfilGoogle perfil, Supplier<byte[]> foto) {
         Optional<Persona> existente = personaActiva(perfil);
         if (existente.isPresent()) {
             Persona persona = existente.get();
             for (RolSistema rol : ROLES_APP) {
                 Optional<Usuario> cuenta = cuentaActiva(persona, rol);
-                if (cuenta.isPresent()) return autenticacionService.tokensDe(cuenta.get());
+                if (cuenta.isPresent()) return Optional.of(autenticacionService.tokensDe(cuenta.get()));
             }
             if (!cuentasActivas(persona).isEmpty()) {
                 throw new NegocioException("Esta cuenta es de administrador: ingresa con tu usuario y contraseña");
             }
         }
-        return registrarPasajero(perfil, foto);
+        return pasajero(perfil, foto);
     }
 
-    /** Registro de pasajero: si ya lo es, simplemente entra. */
-    public TokenResponse registrarPasajero(PerfilGoogle perfil, byte[] foto) {
-        Persona persona = personaActiva(perfil).orElseGet(() -> nuevaPersona(perfil));
-        Optional<Usuario> cuenta = cuentaActiva(persona, RolSistema.PASAJERO);
-        if (cuenta.isPresent()) return autenticacionService.tokensDe(cuenta.get());
+    /**
+     * Pasajero con Google: si ya lo es, entra; si la persona ya registro su carnet (por ejemplo, es
+     * conductor) se le crea la cuenta de pasajero. Si no, vacio: no se guarda nada hasta que confirme
+     * su carnet ([registrarPasajeroConCarnet]).
+     */
+    public Optional<TokenResponse> pasajero(PerfilGoogle perfil, Supplier<byte[]> foto) {
+        Optional<Persona> existente = personaActiva(perfil);
+        if (existente.isPresent()) {
+            Persona persona = existente.get();
+            // Un pasajero de antes que no registro su carnet tambien entra: la app se lo pide.
+            Optional<Usuario> cuenta = cuentaActiva(persona, RolSistema.PASAJERO);
+            if (cuenta.isPresent()) return Optional.of(autenticacionService.tokensDe(cuenta.get()));
+            if (!sinCarnet(persona)) return Optional.of(crearPasajero(persona, foto.get()));
+        }
+        return Optional.empty();
+    }
 
+    /**
+     * Termina el registro de pasajero con Google: con las fotos y los datos del carnet que la persona
+     * confirmo se crean (o completan) la persona, el carnet y la cuenta, todo junto. Las credenciales
+     * salen por correo despues de confirmar la transaccion; si algo falla no queda nada guardado.
+     */
+    public TokenResponse registrarPasajeroConCarnet(PerfilGoogle perfil, CarnetRequest datos, MultipartFile anverso,
+            MultipartFile reverso, Supplier<byte[]> foto) {
+        CarnetService.FotosCarnet fotos = carnetService.validar(anverso, reverso);
+        carnetService.verificarLectura(fotos, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                datos.nombres(), datos.apellidos());
+        Optional<Persona> existente = personaActiva(perfil);
+        if (existente.isPresent() && cuentaActiva(existente.get(), RolSistema.PASAJERO).isPresent()) {
+            throw new ConflictoException("Ya tienes una cuenta de pasajero: ingresa con Google desde el inicio");
+        }
+        Persona persona;
+        if (existente.isPresent()) {
+            persona = existente.get();
+            carnetService.actualizarDatos(persona, datos);
+        } else {
+            // El nombre es el del carnet; el de Google (puede ser un apodo) solo si no llego.
+            persona = gestionPersonaService.registrarEntidad(new PersonaRequest(datos.ci().trim(),
+                    vacioANull(datos.complementoCi()),
+                    ReglasRegistro.nombreOActual(datos.nombres(), perfil.nombres()),
+                    ReglasRegistro.nombreOActual(datos.apellidos(), perfil.apellidos()),
+                    datos.fechaNacimiento(), perfil.correo(), null));
+            persona.setIngresoGoogle(true);
+        }
+        carnetService.guardar(persona, fotos);
+        return crearPasajero(persona, foto.get());
+    }
+
+    /** Cuenta de pasajero de una persona con su carnet ya registrado, y su correo de bienvenida. */
+    private TokenResponse crearPasajero(Persona persona, byte[] foto) {
         CuentaNueva nueva = crearCuenta(persona, RolSistema.PASAJERO);
         Usuario usuario = nueva.usuario();
         cuentaUsuarioService.crearPasajero(usuario);
         if (foto != null) fotoPerfilService.guardarImagen(usuario, foto);
-        if (sinCarnet(persona)) {
-            // Las credenciales llegan recien cuando registra su carnet (CarnetService): hasta entonces
-            // la contrasena generada queda sin entregar.
-            if (nueva.contrasena() != null) usuario.setContrasenaGenerada(true);
-        } else {
-            enviarBienvenida(persona, nueva);
-        }
+        enviarBienvenida(persona, nueva);
         return autenticacionService.tokensDe(usuario);
     }
 
@@ -127,45 +173,60 @@ public class RegistroGoogleService {
 
     /**
      * Registro de conductor con los datos de Google y el formulario. Queda PENDIENTE hasta que el
-     * admin lo apruebe, con la moto y los PDF en revision.
+     * admin lo apruebe, con la moto y los PDF en revision, salvo que la app haya verificado su
+     * licencia contra el carnet: entonces queda APROBADO.
      */
     public TokenResponse registrarConductor(PerfilGoogle perfil, RegistroConductorGoogleRequest datos,
             Map<String, MultipartFile> archivos) {
+        Optional<Persona> existente = personaActiva(perfil);
+        if (existente.isPresent() && cuentaActiva(existente.get(), RolSistema.CONDUCTOR).isPresent()) {
+            throw new ConflictoException("Ya tienes una cuenta de conductor: ingresa con Google desde el inicio");
+        }
+        // Se valida todo antes de crear nada. Si la persona ya registro su carnet no se pide de nuevo.
         Map<TipoDocumento, MultipartFile> documentos = registroMotoConductorService.validar(datos.conductor(), archivos, false);
         List<byte[]> qrs = qrPagoConductorService.validarDelRegistro(archivos);
-        CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(archivos);
+        CarnetService.FotosCarnet carnet = carnetService.validarDelRegistro(existente.orElse(null), archivos);
+        LicenciaService.FotosLicencia licencia = licenciaService.validarDelRegistro(archivos);
+        String ci = carnet == null ? existente.get().getCi() : datos.ci();
+        String complemento = carnet == null ? existente.get().getComplementoCi() : datos.complementoCi();
+        carnetService.verificarLectura(carnet, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
+                datos.nombres(), datos.apellidos());
+        licenciaService.validarDatosRegistro(datos.conductor(), licencia, ci, complemento);
 
-        Optional<Persona> existente = personaActiva(perfil);
         Persona persona;
         if (existente.isPresent()) {
             persona = existente.get();
-            if (cuentaActiva(persona, RolSistema.CONDUCTOR).isPresent()) {
-                throw new ConflictoException("Ya tienes una cuenta de conductor: ingresa con Google desde el inicio");
-            }
-            completarDatos(persona, datos);
+            completarDatos(persona, datos, carnet == null);
         } else {
+            // El nombre es el del carnet; el de Google (puede ser un apodo) solo si no llego.
             persona = gestionPersonaService.registrarEntidad(new PersonaRequest(datos.ci(), datos.complementoCi(),
-                    perfil.nombres(), perfil.apellidos(), datos.fechaNacimiento(), perfil.correo(), datos.telefono()));
+                    ReglasRegistro.nombreOActual(datos.nombres(), perfil.nombres()),
+                    ReglasRegistro.nombreOActual(datos.apellidos(), perfil.apellidos()),
+                    datos.fechaNacimiento(), perfil.correo(), datos.telefono()));
             persona.setIngresoGoogle(true);
         }
-        carnetService.guardar(persona, carnet);
+        if (carnet != null) {
+            carnetService.guardar(persona, carnet);
+        }
 
         CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);
         Usuario usuario = nueva.usuario();
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
+        licenciaService.guardar(conductor, licencia, datos.conductor().vencimientoLicencia());
         qrPagoConductorService.guardarDelRegistro(conductor, qrs);
-        entregarCredencialesConductor(persona, usuario, nueva);
+        boolean aprobado = licenciaService.aprobarSiVerificada(conductor, licencia);
+        entregarCredencialesConductor(persona, usuario, nueva, aprobado);
         return autenticacionService.tokensDe(entradaDe(persona, usuario));
     }
 
     /**
      * Con el registro (y el carnet) guardado le llegan sus credenciales y el aviso de que su cuenta de
-     * conductor esta en revision. Si reutilizo las de una cuenta de pasajero que nunca las recibio, se
+     * conductor esta en revision (o ya aprobada). Si reutilizo las de una cuenta de pasajero que nunca las recibio, se
      * generan unas nuevas para las dos cuentas.
      */
-    private void entregarCredencialesConductor(Persona persona, Usuario usuario, CuentaNueva nueva) {
+    private void entregarCredencialesConductor(Persona persona, Usuario usuario, CuentaNueva nueva, boolean aprobado) {
         String contrasena = nueva.contrasena();
         if (contrasena == null && Boolean.TRUE.equals(usuario.getContrasenaGenerada())) {
             contrasena = CredencialesCorreoService.contrasenaLegible();
@@ -173,7 +234,11 @@ public class RegistroGoogleService {
         if (contrasena != null) {
             credencialesCorreoService.aplicarEnCuentasDeApp(persona, contrasena, false);
         }
-        credencialesCorreoService.conductorEnRevision(usuario, contrasena);
+        credencialesCorreoService.conductorRegistrado(usuario, contrasena, "la misma de tu cuenta de pasajero", aprobado);
+    }
+
+    private static String vacioANull(String valor) {
+        return valor == null || valor.isBlank() ? null : valor.trim().toUpperCase(Locale.ROOT);
     }
 
     private static boolean sinCarnet(Persona persona) {
@@ -192,14 +257,6 @@ public class RegistroGoogleService {
             throw new NegocioException("La cuenta de " + perfil.correo() + " no esta activa");
         }
         persona.ifPresent(p -> p.setIngresoGoogle(true));
-        return persona;
-    }
-
-    private Persona nuevaPersona(PerfilGoogle perfil) {
-        // Google no da CI ni telefono: el CI sale de la foto del carnet que la app pide al entrar.
-        Persona persona = gestionPersonaService.registrarEntidad(new PersonaRequest(null, null, perfil.nombres(),
-                perfil.apellidos(), null, perfil.correo(), null));
-        persona.setIngresoGoogle(true);
         return persona;
     }
 
@@ -261,13 +318,14 @@ public class RegistroGoogleService {
      * registro de conductor. El formulario llega precargado con lo que ya se sabia, asi que manda lo
      * que la persona confirmo.
      */
-    private void completarDatos(Persona persona, RegistroConductorGoogleRequest datos) {
+    /** Con el carnet ya registrado ([conservarCarnet]) el CI, el complemento y la fecha no cambian. */
+    private void completarDatos(Persona persona, RegistroConductorGoogleRequest datos, boolean conservarCarnet) {
         gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(
-                datos.ci(),
-                datos.complementoCi(),
-                persona.getNombres(),
-                persona.getApellidos(),
-                datos.fechaNacimiento(),
+                conservarCarnet ? persona.getCi() : datos.ci(),
+                conservarCarnet ? persona.getComplementoCi() : datos.complementoCi(),
+                conservarCarnet ? persona.getNombres() : ReglasRegistro.nombreOActual(datos.nombres(), persona.getNombres()),
+                conservarCarnet ? persona.getApellidos() : ReglasRegistro.nombreOActual(datos.apellidos(), persona.getApellidos()),
+                conservarCarnet ? persona.getFechaNacimiento() : datos.fechaNacimiento(),
                 persona.getCorreo(),
                 datos.telefono()));
     }
@@ -277,10 +335,14 @@ public class RegistroGoogleService {
     public PerfilGoogleResponse perfilParaRegistro(PerfilGoogle perfil) {
         Optional<Persona> persona = personaRepository.findByCorreo(perfil.correo())
                 .filter(p -> p.getEstadoPersona() == EstadoRegistro.A);
-        return new PerfilGoogleResponse(perfil.correo(), perfil.nombres(), perfil.apellidos(),
+        // Si ya estaba registrada se usa su nombre (con el que se compara la licencia).
+        return new PerfilGoogleResponse(perfil.correo(),
+                persona.map(Persona::getNombres).orElse(perfil.nombres()),
+                persona.map(Persona::getApellidos).orElse(perfil.apellidos()),
                 persona.map(Persona::getCi).orElse(null),
                 persona.map(Persona::getComplementoCi).orElse(null),
                 persona.map(Persona::getTelefono).orElse(null),
-                persona.map(Persona::getFechaNacimiento).orElse(null));
+                persona.map(Persona::getFechaNacimiento).orElse(null),
+                persona.map(carnetService::tieneCarnet).orElse(false));
     }
 }

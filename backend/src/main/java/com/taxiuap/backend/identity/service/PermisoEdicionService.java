@@ -25,8 +25,8 @@ import com.taxiuap.backend.vehicle.repository.DocumentoConductorRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Permisos que el administrador le da a un conductor para actualizar sus datos o el PDF de
- * documentos puntuales. Sin permiso vigente el conductor solo puede ver su informacion.
+ * Permisos que el administrador le da a un conductor para actualizar sus datos, el PDF de
+ * documentos puntuales o las fotos de su carnet o su licencia. Sin permiso vigente el conductor solo puede ver su informacion.
  *
  * Cada permiso se cierra cuando el conductor hace ese cambio o, aunque no lo haga, al vencer
  * (taxiuap.permisos.minutos-edicion, una hora por defecto).
@@ -65,7 +65,7 @@ public class PermisoEdicionService {
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Conductor", idConductor));
         List<Long> documentos = request.documentos() == null ? List.of()
                 : List.copyOf(new LinkedHashSet<>(request.documentos()));
-        if (!request.datos() && documentos.isEmpty()) {
+        if (!request.datos() && documentos.isEmpty() && !request.carnet() && !request.licencia()) {
             throw new NegocioException("Elija al menos una cosa que el conductor pueda actualizar");
         }
         revocar(idConductor);
@@ -74,6 +74,12 @@ public class PermisoEdicionService {
         LocalDateTime vence = ahora.plusMinutes(minutosEdicion);
         if (request.datos()) {
             permisoRepository.save(nuevo(conductor, admin, TipoPermisoEdicion.DATOS, null, ahora, vence));
+        }
+        if (request.carnet()) {
+            permisoRepository.save(nuevo(conductor, admin, TipoPermisoEdicion.CARNET, null, ahora, vence));
+        }
+        if (request.licencia()) {
+            permisoRepository.save(nuevo(conductor, admin, TipoPermisoEdicion.LICENCIA, null, ahora, vence));
         }
         for (Long idDocumento : documentos) {
             DocumentoConductor documento = documentoConductorRepository.findById(idDocumento)
@@ -110,9 +116,12 @@ public class PermisoEdicionService {
                 .filter(p -> tipo != TipoPermisoEdicion.DOCUMENTO
                         || (p.getDocumento() != null && p.getDocumento().getId().equals(idDocumento)))
                 .findFirst()
-                .orElseThrow(() -> new NegocioException(tipo == TipoPermisoEdicion.DATOS
-                        ? "No tiene permiso para actualizar sus datos. Pida al administrador que lo habilite."
-                        : "No tiene permiso para reemplazar este documento. Pida al administrador que lo habilite."));
+                .orElseThrow(() -> new NegocioException(switch (tipo) {
+                    case DATOS -> "No tiene permiso para actualizar sus datos. Pida al administrador que lo habilite.";
+                    case CARNET -> "No tiene permiso para cambiar las fotos de su carnet. Pida al administrador que lo habilite.";
+                    case LICENCIA -> "No tiene permiso para cambiar las fotos de su licencia. Pida al administrador que lo habilite.";
+                    case DOCUMENTO -> "No tiene permiso para reemplazar este documento. Pida al administrador que lo habilite.";
+                }));
         permiso.setUsadoEn(ahora);
     }
 

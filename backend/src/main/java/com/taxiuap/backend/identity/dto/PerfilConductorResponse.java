@@ -30,5 +30,10 @@ public record PerfilConductorResponse(
         LocalDateTime fechaAprobacion,
         BigDecimal saldoBilletera,
         Long idUsuario,
-        List<TipoDocumento> documentosFaltantes) {
+        List<TipoDocumento> documentosFaltantes,
+        /** Vencimiento leido de la licencia. */
+        LocalDate licenciaVencimiento,
+        /** Tiene las fotos del carnet y de la licencia (Mis documentos las muestra). */
+        boolean tieneFotosCarnet,
+        boolean tieneFotosLicencia) {
 }

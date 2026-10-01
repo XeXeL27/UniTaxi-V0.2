@@ -39,6 +39,7 @@ import com.taxiuap.backend.identity.dto.IngresoGoogleMovilResponse;
 import com.taxiuap.backend.identity.dto.PerfilGoogle;
 import com.taxiuap.backend.identity.dto.PerfilGoogleResponse;
 import com.taxiuap.backend.identity.dto.RegistroConductorGoogleRequest;
+import com.taxiuap.backend.identity.dto.RegistroPasajeroGoogleRequest;
 import com.taxiuap.backend.identity.dto.TokenResponse;
 import com.taxiuap.backend.identity.enums.ModoIngresoGoogle;
 import com.taxiuap.backend.identity.service.IngresoGoogleTemporal;
@@ -58,7 +59,8 @@ import lombok.RequiredArgsConstructor;
  * 1. La app abre GET /api/auth/google?modo=...&volver=... y el navegador va a Google.
  * 2. Google vuelve a /api/auth/google/callback; se canjea el codigo por el perfil de la persona.
  * 3. Se redirige a la app (volver) con ?google=codigo (sesion lista, se recoge con POST
- *    /api/auth/google/canje), ?google_registro=codigo (conductor nuevo: falta el formulario) o
+ *    /api/auth/google/canje), ?google_registro=codigo (conductor nuevo: falta el formulario),
+ *    ?google_pasajero=codigo (pasajero nuevo: falta confirmar su carnet; no se guardo nada) o
  *    ?google_error=mensaje. Los JWT nunca viajan en la URL.
  */
 @RestController
@@ -143,8 +145,11 @@ public class GoogleAuthController {
 
         try {
             IngresoGoogleMovilResponse resultado = resolver(perfilDe(codigoGoogle), pedido.modo());
-            return resultado.sesion() != null
-                    ? volverCon(pedido.volver(), "google", temporal.guardarCanje(resultado.sesion()))
+            if (resultado.sesion() != null) {
+                return volverCon(pedido.volver(), "google", temporal.guardarCanje(resultado.sesion()));
+            }
+            return resultado.codigoRegistroPasajero() != null
+                    ? volverCon(pedido.volver(), "google_pasajero", resultado.codigoRegistroPasajero())
                     : volverCon(pedido.volver(), "google_registro", resultado.codigoRegistro());
         } catch (NegocioException | ConflictoException e) {
             return volverCon(pedido.volver(), "google_error", e.getMessage());
@@ -182,8 +187,10 @@ public class GoogleAuthController {
             throw new CredencialesInvalidasException("Google no reconocio el ingreso: vuelve a intentarlo");
         }
         IngresoGoogleMovilResponse resultado = resolver(perfil, datos.modo());
-        return ResponseEntity.ok(ApiResponse.exito(
-                resultado.sesion() != null ? "Sesion iniciada con Google" : "Completa tus datos de conductor", resultado));
+        String mensaje = resultado.sesion() != null ? "Sesion iniciada con Google"
+                : resultado.codigoRegistroPasajero() != null ? "Verifica tu carnet para terminar el registro"
+                : "Completa tus datos de conductor";
+        return ResponseEntity.ok(ApiResponse.exito(mensaje, resultado));
     }
 
     /** La app recoge la sesion con el codigo de la URL de vuelta (una sola vez, 2 minutos). */
@@ -212,25 +219,48 @@ public class GoogleAuthController {
         PerfilGoogle perfil = perfilRegistroVigente(datos.codigo());
         TokenResponse tokens = registroGoogleService.registrarConductor(perfil, datos, archivos);
         temporal.terminarRegistro(datos.codigo());
-        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro enviado a revision", tokens));
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro de conductor recibido", tokens));
+    }
+
+    /**
+     * Termina el registro de pasajero con Google: "datos" (JSON con el codigo y lo leido del carnet) y
+     * las fotos "anverso" y "reverso". Recien aqui se guarda la persona, el carnet y la cuenta, y salen
+     * las credenciales por correo.
+     */
+    @PostMapping(value = "/registro/pasajero/google", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<TokenResponse>> registrarPasajero(
+            @Valid @RequestPart("datos") RegistroPasajeroGoogleRequest datos,
+            @RequestPart("anverso") MultipartFile anverso,
+            @RequestPart("reverso") MultipartFile reverso) {
+        PerfilGoogle perfil = perfilRegistroVigente(datos.codigo());
+        TokenResponse tokens = registroGoogleService.registrarPasajeroConCarnet(perfil, datos.carnet(), anverso, reverso,
+                () -> foto(perfil));
+        temporal.terminarRegistro(datos.codigo());
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro completado", tokens));
     }
 
     // ------------------------------------------------------------------ Google
 
     /**
-     * Lo mismo para la web y el APK: INGRESO entra con la cuenta que tenga (o la registra como
-     * pasajero), PASAJERO registra, CONDUCTOR entra si ya es conductor o da el codigo del formulario.
+     * Lo mismo para la web y el APK: INGRESO entra con la cuenta que tenga, PASAJERO entra o registra,
+     * CONDUCTOR entra si ya es conductor o da el codigo del formulario. Un pasajero nuevo sin carnet
+     * recibe un codigo: nada se guarda hasta que confirme su carnet.
      */
     private IngresoGoogleMovilResponse resolver(PerfilGoogle perfil, ModoIngresoGoogle modo) {
         return switch (modo) {
-            case INGRESO -> IngresoGoogleMovilResponse.sesion(registroGoogleService.ingresar(perfil, foto(perfil)));
-            case PASAJERO -> IngresoGoogleMovilResponse.sesion(registroGoogleService.registrarPasajero(perfil, foto(perfil)));
+            case INGRESO -> registroGoogleService.ingresar(perfil, () -> foto(perfil))
+                    .map(IngresoGoogleMovilResponse::sesion)
+                    .orElseGet(() -> IngresoGoogleMovilResponse.registroPasajero(temporal.guardarRegistro(perfil)));
+            case PASAJERO -> registroGoogleService.pasajero(perfil, () -> foto(perfil))
+                    .map(IngresoGoogleMovilResponse::sesion)
+                    .orElseGet(() -> IngresoGoogleMovilResponse.registroPasajero(temporal.guardarRegistro(perfil)));
             // Conductor sin aprobar que tambien es pasajero: entra como pasajero con un aviso.
             case CONDUCTOR -> registroGoogleService.conductorExistente(perfil)
                     .map(tokens -> new IngresoGoogleMovilResponse(tokens, null,
                             "CONDUCTOR".equals(tokens.usuario().rol()) ? null
-                                    : "Tu registro de conductor todavia esta en revision. Por ahora entras como pasajero."))
-                    .orElseGet(() -> new IngresoGoogleMovilResponse(null, temporal.guardarRegistro(perfil), null));
+                                    : "Tu registro de conductor todavia esta en revision. Por ahora entras como pasajero.",
+                            null))
+                    .orElseGet(() -> new IngresoGoogleMovilResponse(null, temporal.guardarRegistro(perfil), null, null));
         };
     }
 

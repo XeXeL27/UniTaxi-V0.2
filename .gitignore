@@ -33,3 +33,9 @@ backend/out/
 # Sistema
 .DS_Store
 *.log
+
+# Firebase: configuracion de la app y llaves de cuenta de servicio (repo publico)
+**/google-services.json
+*firebase*adminsdk*.json
+# Carpeta de llaves privadas (cuenta de servicio de Firebase): nunca al repositorio
+taxiuap-secretos/

@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../core/api_excepcion.dart';
 import '../core/config.dart';
 import '../core/huella.dart';
+import '../core/preferencias_aviso.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/dialogos.dart';
@@ -14,6 +15,7 @@ import '../widgets/foto_perfil.dart';
 import '../widgets/notificaciones.dart';
 import '../widgets/pagina_seccion.dart';
 import 'cambiar_contrasena.dart';
+import 'configuracion_avisos.dart';
 import 'textos_legales.dart';
 
 const _naranja = Color(0xFFE67E22);
@@ -104,7 +106,7 @@ class _PantallaMasState extends State<PantallaMas> {
       await mostrarExito(
         context,
         titulo: 'Huella activada',
-        mensaje: 'La próxima vez puedes ingresar a TaxiUAP con tu huella.',
+        mensaje: 'La próxima vez puedes ingresar a UNITAXI con tu huella.',
       );
     }
   }
@@ -186,6 +188,23 @@ class _PantallaMasState extends State<PantallaMas> {
               color: ColoresApp.rojo,
               onTap: widget.onCambiarModo,
             ),
+          ValueListenableBuilder<bool>(
+            valueListenable: PreferenciasAviso.sonido,
+            builder: (context, sonido, _) => ValueListenableBuilder<bool>(
+              valueListenable: PreferenciasAviso.vibracion,
+              builder: (context, vibracion, _) => TarjetaOpcion(
+                icono: FontAwesomeIcons.gear,
+                titulo: 'Sonido y vibración',
+                detalle: switch ((sonido, vibracion)) {
+                  (true, true) => 'Avisos con sonido y vibración',
+                  (true, false) => 'Avisos solo con sonido',
+                  (false, true) => 'Avisos solo con vibración',
+                  (false, false) => 'Avisos sin sonido ni vibración',
+                },
+                onTap: () => abrirConfiguracionAvisos(context),
+              ),
+            ),
+          ),
           TarjetaOpcion(
             icono: FontAwesomeIcons.shieldHalved,
             titulo: 'Políticas de privacidad',
@@ -195,7 +214,7 @@ class _PantallaMasState extends State<PantallaMas> {
           TarjetaOpcion(
             icono: FontAwesomeIcons.fileLines,
             titulo: 'Términos y condiciones',
-            detalle: 'Consulta las reglas de uso de TaxiUAP',
+            detalle: 'Consulta las reglas de uso de UNITAXI',
             onTap: () => _abrir(const PantallaTextoLegal(titulo: 'Términos y condiciones', secciones: terminosCondiciones)),
           ),
           TarjetaOpcion(
@@ -229,7 +248,7 @@ class _PantallaMasState extends State<PantallaMas> {
           ),
           const SizedBox(height: 14),
           const Text(
-            'Versión de TaxiUAP: ${Config.version}',
+            'Versión de UNITAXI: ${Config.version}',
             textAlign: TextAlign.center,
             style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
           ),

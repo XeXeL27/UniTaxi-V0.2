@@ -6,6 +6,7 @@ import '../../core/google_movil.dart';
 import '../../core/navegador.dart';
 import '../../core/sesion.dart';
 import '../../widgets/dialogos.dart';
+import '../../comun/verificar_carnet.dart';
 import 'formulario_conductor.dart';
 
 /// Se puede ingresar con Google: en el navegador por redireccion y en el APK con el selector nativo.
@@ -15,7 +16,8 @@ bool get googleDisponible => Navegador.puedeUsarGoogle || GoogleMovil.disponible
 ///
 /// En el navegador va a la pantalla de Google (la vuelta la atiende main.dart). En el APK elige la
 /// cuenta ahi mismo: si la sesion queda iniciada la app cambia sola de pantalla; si es un conductor
-/// nuevo se abre el formulario de conductor en un modal. [alCargar] marca el boton como ocupado.
+/// nuevo se abre el formulario de conductor en un modal y si es un pasajero nuevo, la verificacion de
+/// su carnet (nada queda guardado hasta que confirme). [alCargar] marca el boton como ocupado.
 Future<void> continuarConGoogle(BuildContext context, String modo, {ValueChanged<bool>? alCargar}) async {
   if (!GoogleMovil.disponible) {
     Navegador.ir(Sesion.urlGoogle(modo));
@@ -24,13 +26,22 @@ Future<void> continuarConGoogle(BuildContext context, String modo, {ValueChanged
   final sesion = context.read<Sesion>();
   alCargar?.call(true);
   try {
-    final codigo = await sesion.ingresarConGoogleMovil(
+    final registro = await sesion.ingresarConGoogleMovil(
       modo,
       antesDeEntrar: (aviso) async {
         if (context.mounted) await mostrarExito(context, titulo: 'Registro en revisión', mensaje: aviso);
       },
     );
-    if (codigo != null && context.mounted) await abrirFormularioConductor(context, codigoGoogle: codigo);
+    if (registro == null || !context.mounted) return;
+    alCargar?.call(false);
+    if (registro.pasajero) {
+      await Navigator.of(context).push(MaterialPageRoute<void>(
+        fullscreenDialog: true,
+        builder: (_) => PantallaVerificarCarnet(codigoGoogle: registro.codigo),
+      ));
+    } else {
+      await abrirFormularioConductor(context, codigoGoogle: registro.codigo);
+    }
   } on GoogleCancelado {
     // Cerro el selector: no pasa nada.
   } on ApiExcepcion catch (e) {

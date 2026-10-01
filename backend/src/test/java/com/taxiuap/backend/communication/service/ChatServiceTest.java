@@ -105,7 +105,7 @@ class ChatServiceTest {
 
         assertEquals("Estoy llegando", guardado.mensaje().contenido());
         assertEquals(ID_CONDUCTOR, guardado.idUsuarioReceptor());
-        assertEquals("Ana Lopez", guardado.mensaje().nombreEmisor());
+        assertEquals("ANA LOPEZ", guardado.mensaje().nombreEmisor());
         assertEquals(ID_PASAJERO, guardado.mensaje().idUsuarioEmisor());
         assertFalse(guardado.mensaje().leido());
 
@@ -121,7 +121,7 @@ class ChatServiceTest {
                 chatService.enviar(ID_CONDUCTOR, new MensajeEnvioRequest(ID_VIAJE, "Donde esta?"));
 
         assertEquals(ID_PASAJERO, guardado.idUsuarioReceptor());
-        assertEquals("Carlos Perez", guardado.mensaje().nombreEmisor());
+        assertEquals("CARLOS PEREZ", guardado.mensaje().nombreEmisor());
     }
 
     @Test

@@ -35,7 +35,7 @@ public class CorreoService {
     @Value("${spring.mail.username:}")
     private String remitente;
 
-    @Value("${taxiuap.correo.remitente-nombre:Unitaxi}")
+    @Value("${taxiuap.correo.remitente-nombre:UNITAXI}")
     private String nombreRemitente;
 
     public void enviar(String para, String asunto, String cuerpo) {

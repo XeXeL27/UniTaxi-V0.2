@@ -49,7 +49,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 if (estado != EstadoRegistro.A) {
                     request.setAttribute(ATRIBUTO_MOTIVO, estado == EstadoRegistro.S
                             ? AutenticacionService.MENSAJE_CUENTA_SUSPENDIDA
-                            : "Tu cuenta fue eliminada. Comunicate con la administracion de TaxiUAP");
+                            : "Tu cuenta fue eliminada. Comunicate con la administracion de UNITAXI");
                     SecurityContextHolder.clearContext();
                     chain.doFilter(request, response);
                     return;

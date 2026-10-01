@@ -12,6 +12,8 @@ void abrirPanelAdmin() => web.window.location.assign('${Config.apiUrl}/admin/');
 
 void ir(String url) => web.window.location.assign(url);
 
+void recargar() => web.window.location.reload();
+
 String get direccionActual => '${Uri.base.origin}${Uri.base.path}';
 
 void limpiarParametros() {

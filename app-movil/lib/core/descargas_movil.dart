@@ -8,6 +8,6 @@ Future<String> guardarImagen(Uint8List bytes, String nombreArchivo) async {
       throw Exception('Sin permiso para guardar en la galeria');
     }
   }
-  await Gal.putImageBytes(bytes, album: 'TaxiUAP', name: nombreArchivo.replaceAll('.png', ''));
+  await Gal.putImageBytes(bytes, album: 'UNITAXI', name: nombreArchivo.replaceAll('.png', ''));
   return 'Imagen guardada en la galeria';
 }

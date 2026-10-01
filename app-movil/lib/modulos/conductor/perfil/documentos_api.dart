@@ -5,11 +5,9 @@ import 'package:http_parser/http_parser.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
 
-/// Documentos que pide el registro de conductor: si falta alguno se puede subir desde Mis
-/// documentos. Sin los obligatorios la app queda bloqueada.
+/// PDF que el conductor puede agregar si no lo envio al registrarse. El carnet y la licencia van
+/// como fotos (ver fotos_documento.dart).
 const documentosPedidos = <({String tipo, String nombre, bool obligatorio})>[
-  (tipo: 'CI', nombre: 'Carnet de identidad', obligatorio: true),
-  (tipo: 'LICENCIA', nombre: 'Licencia de conducir', obligatorio: true),
   (tipo: 'SOAT', nombre: 'SOAT de la moto', obligatorio: false),
 ];
 
@@ -56,6 +54,8 @@ class PermisoVigente {
   );
 
   bool get esDatos => tipo == 'DATOS';
+  bool get esCarnet => tipo == 'CARNET';
+  bool get esLicencia => tipo == 'LICENCIA';
 }
 
 /// Documentos, permisos y edicion de datos del conductor.
@@ -68,14 +68,35 @@ class DocumentosApi {
 
   Future<Uint8List?> pdf(int id) => cliente.bytes('/api/conductor/documentos/$id/archivo');
 
-  Future<void> reemplazarPdf(int id, Uint8List bytes, String nombre) => cliente.enviarArchivo(
+  /// Reemplaza el PDF con permiso del administrador, confirmando con la contrasena.
+  Future<void> reemplazarPdf(int id, Uint8List bytes, String nombre, String contrasena) => cliente.enviarArchivo(
     'PUT',
     '/api/conductor/documentos/$id/archivo',
     'archivo',
     bytes,
     nombre,
     MediaType('application', 'pdf'),
+    campos: {'password': contrasena},
   );
+
+  /// Foto del carnet o de la licencia ("anverso" o "reverso").
+  Future<Uint8List?> fotoCarnet(String lado) => cliente.bytes('/api/conductor/carnet/$lado');
+
+  Future<Uint8List?> fotoLicencia(String lado) => cliente.bytes('/api/conductor/licencia/$lado');
+
+  /// Nuevas fotos del carnet (con permiso CARNET) y lo leido de ellas.
+  Future<void> cambiarCarnet(Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso) =>
+      _fotos('PUT', '/api/conductor/carnet', datos, anverso, reverso);
+
+  /// Nuevas fotos de la licencia (con permiso LICENCIA) y lo leido de ellas.
+  Future<void> cambiarLicencia(Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso) =>
+      _fotos('PUT', '/api/conductor/licencia', datos, anverso, reverso);
+
+  Future<void> _fotos(String metodo, String ruta, Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso) =>
+      cliente.enviarFormulario(ruta, datos, [
+        (campo: 'anverso', bytes: anverso, nombre: 'anverso.jpg', tipo: MediaType('image', 'jpeg')),
+        (campo: 'reverso', bytes: reverso, nombre: 'reverso.jpg', tipo: MediaType('image', 'jpeg')),
+      ], metodo: metodo);
 
   /// Sube un documento que no envio al registrarse; solo se acepta si no tiene ninguno de ese tipo.
   Future<void> agregar(String tipo, Uint8List bytes, String nombre) => cliente.enviarArchivo(

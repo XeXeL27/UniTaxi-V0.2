@@ -4,9 +4,14 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/api_excepcion.dart';
+import '../../../core/aviso_viaje.dart';
 import '../../../core/chat.dart';
+import '../../../core/notificador.dart';
+import '../../../core/push.dart';
 import '../../../core/receptor_ubicacion.dart';
 import '../../../core/sesion.dart';
+import '../../../core/vibracion.dart';
 import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../comun/modelos_viaje.dart';
@@ -74,19 +79,51 @@ class FlujoPasajero extends ChangeNotifier {
     mapa.alMoverseGps = _alMoverseGps;
   }
 
+  /// true mientras se reintenta recuperar el viaje sin conexion (el panel lo dice).
+  bool recuperandoSinRed = false;
+
   Future<void> iniciar() async {
     unawaited(mapa.iniciarGps());
-    try {
-      precio = await api.precio();
-    } catch (_) {
-      // Sin precio se muestra "a calcular"; no impide usar la app.
-    }
+    // Lo primero es recuperar lo que estaba en curso; el precio llega en paralelo.
+    unawaited(_cargarPrecio());
     await _recuperar();
   }
 
-  /// Al abrir la app se retoma lo que estaba en curso: viaje, solicitud o calificacion pendiente.
-  Future<void> _recuperar() async {
+  Future<void> _cargarPrecio() async {
     try {
+      precio = await api.precio();
+      _avisar();
+    } catch (_) {
+      // Sin precio se muestra "a calcular"; no impide usar la app.
+    }
+  }
+
+  /// Al abrir la app se retoma lo que estaba en curso: viaje, solicitud o calificacion pendiente.
+  /// Sin conexion (o con el servidor caido) se reintenta cada 3 segundos sin salir de "cargando":
+  /// asi un viaje en curso nunca se pierde por internet lento.
+  Future<void> _recuperar() async {
+    while (!_cerrado) {
+      try {
+        await _recuperarUnaVez();
+        recuperandoSinRed = false;
+        return;
+      } on ApiExcepcion catch (e) {
+        // Un error del servidor con respuesta (4xx) no se arregla reintentando.
+        final codigo = e.codigo;
+        if (codigo != null && codigo < 500) break;
+      } catch (_) {
+        // Sin respuesta: se reintenta.
+      }
+      recuperandoSinRed = true;
+      _avisar();
+      await Future<void>.delayed(const Duration(seconds: 3));
+    }
+    recuperandoSinRed = false;
+    if (!_cerrado) _entrarEligiendo();
+  }
+
+  Future<void> _recuperarUnaVez() async {
+    {
       final enCurso = await api.viajeEnCurso();
       if (enCurso != null) return _entrarViaje(enCurso);
       final activa = (await api.misSolicitudes()).where((s) => s.activa).firstOrNull;
@@ -113,8 +150,6 @@ class FlujoPasajero extends ChangeNotifier {
         _avisar();
         return;
       }
-    } catch (_) {
-      // Si falla la consulta se empieza desde cero.
     }
     _entrarEligiendo();
   }
@@ -215,6 +250,8 @@ class FlujoPasajero extends ChangeNotifier {
 
   /// Crea la solicitud de viaje con A y B.
   Future<void> solicitar() async {
+    // Mientras se recupera el viaje en curso no se puede pedir otro.
+    if (etapa != EtapaPasajero.eligiendo) return;
     final a = mapa.a;
     final b = mapa.b;
     if (a == null || b == null) return;
@@ -241,7 +278,19 @@ class FlujoPasajero extends ChangeNotifier {
 
   // ---------------------------------------------------------------- buscando conductor
 
+  /// Avisos ya dados (por viaje): cada uno suena una sola vez aunque la consulta se repita.
+  final Set<int> _avisados = {};
+
+  /// [evento]: 1 viaje aceptado, 2 conductor llego (el mismo codigo que el push del backend).
+  void _avisarUnaVez(int idViaje, int evento, String titulo, String cuerpo) {
+    final id = idNotificacionViaje(idViaje, evento);
+    if (!_avisados.add(id)) return;
+    unawaited(AvisoViaje.avisar(titulo: titulo, cuerpo: cuerpo, idNotificacion: id));
+  }
+
   void _entrarBuscando(Solicitud nueva) {
+    // Con la app minimizada el aviso sale como notificacion: se pide el permiso (Android 13+).
+    unawaited(Notificador.iniciar());
     solicitud = nueva;
     etapa = EtapaPasajero.buscando;
     mapa.aSigueGps = false;
@@ -258,7 +307,12 @@ class FlujoPasajero extends ChangeNotifier {
     solicitud = nueva;
     if (nueva.situacion == 'ACEPTADA') {
       final asignado = await api.viajeEnCurso();
-      if (asignado != null) _entrarViaje(asignado);
+      if (asignado != null) {
+        // Un conductor acepto el viaje: sonido y vibracion corta (una vez por viaje).
+        _avisarUnaVez(asignado.id, 1, 'Tu viaje fue aceptado',
+            '${asignado.primerNombreConductor} va en camino a recogerte.');
+        _entrarViaje(asignado);
+      }
     } else if (!nueva.activa) {
       aviso = 'Tu solicitud ya no está activa. Puedes pedir otro taxi.';
       _entrarEligiendo();
@@ -339,8 +393,15 @@ class FlujoPasajero extends ChangeNotifier {
     _revisarCambioPago(actual, nuevo);
     viaje = nuevo;
 
-    // Si cambio la situacion, actualizar el punto de referencia del seguimiento.
+    // Si cambio la situacion, actualizar el punto de referencia del seguimiento. El conductor que
+    // llega al punto de partida se avisa (vibracion y, minimizada, notificacion); el fin del viaje, solo con vibracion.
     if (nuevo.situacion != actual.situacion) {
+      if (nuevo.situacion == SituacionViaje.llego) {
+        _avisarUnaVez(nuevo.id, 2, 'Tu conductor llegó',
+            '${nuevo.primerNombreConductor} te espera en el punto de partida.');
+      } else if (nuevo.situacion == SituacionViaje.completado) {
+        unawaited(Vibracion.corta());
+      }
       final referencia = nuevo.situacion == SituacionViaje.enCurso ? nuevo.destino : nuevo.origen;
       if (referencia != null) {
         mapa.cambiarPuntoReferenciaConductor(referencia);
@@ -517,12 +578,26 @@ class FlujoPasajero extends ChangeNotifier {
   }
 
   void _avisar() {
-    if (!_cerrado) notifyListeners();
+    if (_cerrado) return;
+    _revisarSeguimiento();
+    notifyListeners();
+  }
+
+  /// Buscando taxi o en viaje: la notificacion fija "atento a tu viaje" mantiene viva la app
+  /// minimizada (Android la congela si no) para que lleguen el sonido y los avisos.
+  void _revisarSeguimiento() {
+    final activo = etapa == EtapaPasajero.buscando || etapa == EtapaPasajero.enViaje;
+    if (activo) {
+      unawaited(Notificador.seguirViaje('Atento a tu viaje: te avisaremos cuando el conductor acepte y cuando llegue.'));
+    } else {
+      unawaited(Notificador.dejarDeSeguir());
+    }
   }
 
   @override
   void dispose() {
     _cerrado = true;
+    unawaited(Notificador.dejarDeSeguir());
     _detenerSondeo();
     _detenerSeguimientoConductor();
     mapa.alMoverseGps = null;

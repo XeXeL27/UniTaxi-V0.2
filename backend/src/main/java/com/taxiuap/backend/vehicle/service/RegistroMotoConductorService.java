@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.taxiuap.backend.identity.dto.DatosConductorRequest;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.service.CarnetService;
+import com.taxiuap.backend.identity.service.LicenciaService;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
@@ -47,9 +48,11 @@ public class RegistroMotoConductorService {
      */
     public static final Set<TipoDocumento> DOCUMENTOS_OBLIGATORIOS = EnumSet.of(TipoDocumento.CI, TipoDocumento.LICENCIA);
 
-    /** Documentos que pide el formulario de la app: los obligatorios y el SOAT opcional. */
-    public static final Set<TipoDocumento> DOCUMENTOS_PEDIDOS =
-            EnumSet.of(TipoDocumento.CI, TipoDocumento.LICENCIA, TipoDocumento.SOAT);
+    /**
+     * PDF que pide la app: solo el SOAT, opcional. El carnet y la licencia van como fotos (CarnetService
+     * y LicenciaService).
+     */
+    public static final Set<TipoDocumento> DOCUMENTOS_PEDIDOS = EnumSet.of(TipoDocumento.SOAT);
 
     /** Documentos que corresponden al vehiculo y no a la persona. */
     public static final Set<TipoDocumento> DOCUMENTOS_DEL_VEHICULO =
@@ -80,9 +83,10 @@ public class RegistroMotoConductorService {
             DatosConductorRequest datos, Map<String, MultipartFile> archivos, boolean exigirObligatorios) {
         Map<TipoDocumento, MultipartFile> documentos = new EnumMap<>(TipoDocumento.class);
         archivos.forEach((clave, archivo) -> {
-            if (QrPagoConductorService.esParteQr(clave) || CarnetService.esParteCarnet(clave)) {
-                // Los QR de cobro opcionales (QR1..QR3) los valida QrPagoConductorService y las fotos
-                // del carnet del registro con Google, CarnetService.
+            if (QrPagoConductorService.esParteQr(clave) || CarnetService.esParteCarnet(clave)
+                    || LicenciaService.esParteLicencia(clave)) {
+                // Los QR de cobro opcionales (QR1..QR3) los valida QrPagoConductorService, las fotos
+                // del carnet CarnetService y las de la licencia LicenciaService.
                 return;
             }
             TipoDocumento tipo;

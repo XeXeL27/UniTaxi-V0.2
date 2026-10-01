@@ -16,13 +16,13 @@ import jakarta.validation.constraints.Size;
  * registro se acepta igual y la app queda bloqueada hasta que los suba (Mis documentos).
  */
 public record RegistroConductorRequest(
-        @NotBlank @Size(max = 30) String ci,
-        @Size(max = 10) String complementoCi,
+        @NotBlank @Pattern(regexp = ReglasRegistro.PATRON_CI, message = ReglasRegistro.MENSAJE_CI) String ci,
+        @Pattern(regexp = ReglasRegistro.PATRON_COMPLEMENTO, message = ReglasRegistro.MENSAJE_COMPLEMENTO) String complementoCi,
         @NotBlank @Size(max = 100) String nombres,
         @NotBlank @Size(max = 100) String apellidos,
         @Past LocalDate fechaNacimiento,
         @NotBlank @Email @Size(max = 150) String correo,
-        @NotBlank @Size(max = 20) String telefono,
+        @NotBlank @Pattern(regexp = ReglasRegistro.PATRON_CELULAR, message = ReglasRegistro.MENSAJE_CELULAR) String telefono,
         @NotBlank @Pattern(regexp = NombreUsuario.PATRON, message = NombreUsuario.MENSAJE) String nombreUsuario,
         @NotBlank @Size(min = 8, max = 72) String password,
         @Valid @NotNull DatosConductorRequest conductor) {

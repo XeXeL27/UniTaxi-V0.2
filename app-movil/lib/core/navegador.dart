@@ -16,6 +16,9 @@ class Navegador {
   /// Va a [url] en esta misma pestana (la pantalla de Google).
   static void ir(String url) => plataforma.ir(url);
 
+  /// Vuelve a cargar la pagina (solo web).
+  static void recargar() => plataforma.recargar();
+
   /// Direccion de esta pagina sin parametros: a donde Google debe devolver al usuario.
   static String get direccionActual => plataforma.direccionActual;
 
