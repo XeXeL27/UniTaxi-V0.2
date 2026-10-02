@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | 📚 | Pausa documentada de implementación DELIVERY en Task 3; Tasks 1 y 2 revisadas, Task 3 implementada pendiente de re-review |
 | 2026-10-02 | Arreglo | Correcciones del reviewer para Task 3 DELIVERY: tipo MOTO explícito, flujo focal y bloqueo de aceptación |
 | 2026-10-02 | Nuevo | Flujo backend de solicitudes y aceptación DELIVERY (Task 3) |
 | 2026-10-02 | Arreglo | Correcciones directas de Task 2: OSRM sin fallback y validación de rutas |
@@ -17,6 +18,26 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-02
+
+### 📚 Documentación · Pausa de implementación DELIVERY en Task 3
+
+- **Módulo / área:** backend DELIVERY (`trip`, `vehicle`, `pricing`) y SDD.
+- **Descripción:** Se detuvo la implementación por solicitud del usuario después de
+  completar el implementer de Task 3 y antes de su re-review. El trabajo queda
+  documentado para continuar sin repetir contexto.
+- **Estado:** Tasks 1 y 2 están implementadas y aprobadas por reviewer. Task 3 tiene
+  los commits `662de56` y `cee202b`; el segundo corrige los hallazgos del reviewer,
+  pero todavía falta ejecutar la re-review. Tasks 4 a 8 no comenzaron.
+- **Cambios clave ya implementados:** modelo `DatosEntrega` y categoría DELIVERY;
+  precios OSRM sin fallback a línea recta; límite de adelanto del repartidor; creación,
+  visibilidad, filtrado, republicación y aceptación DELIVERY; validación explícita
+  MOTO y bloqueo pesimista del conductor.
+- **Archivos afectados:** `docs/superpowers/plans/2026-10-02-delivery-implementation-plan.md`,
+  `docs/CHANGELOG.md`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/progress.md`.
+- **Verificación:** commits `6bad27a`, `f4d1213`, `2f308bf`, `964cf19`, `662de56` y
+  `cee202b`; `compileJava` y suites focalizadas reportadas como correctas. La suite
+  backend completa continúa condicionada por la configuración/credenciales locales
+  de PostgreSQL.
 
 ### ✨ Nuevo · Correcciones reviewer Task 3 DELIVERY
 
