@@ -5,6 +5,10 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | 📚 | DELIVERY: spec rediseñada y consolidada con precio, códigos, compra, límites, estados, cancelaciones y resolución administrativa |
+| 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
+| 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
+| 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 | 2026-09-30 | 🎨 | Botones del mapa: capas y ubicación sobre el panel (sin taparlo) y brújula en la esquina superior |
 | 2026-09-30 | 🐛 | Chat en memoria: se restaura @Transactional y desaparece el LazyInitializationException |
 | 2026-09-30 | 🐛 | Chat en memoria y en modal flotante: se arregla la autenticación del WebSocket y los mensajes sí se ven |
@@ -26,6 +30,84 @@
 - **Fuente de verdad:** este archivo se mantiene al día al finalizar cada tarea.
 
 ---
+
+## 2026-10-02
+
+### 📚 Documentación · Spec DELIVERY rediseñada y consolidada
+
+- **Módulo / área:** docs (`docs/superpowers/specs/`)
+- **Descripción:** Se consolidaron las respuestas de la sesión en un diseño completo
+  para DELIVERY, eliminando ambigüedades de precio, recorrido, compra, códigos,
+  límites del repartidor, estados, cancelaciones y resolución de incidentes.
+- **Cambios clave:** ENCOMIENDA fija precio A -> B al crear y usa códigos separados
+  de recogida y entrega; COMPRA_Y_ENTREGA muestra estimado desde el GPS del repartidor
+  y fija comercio -> B al confirmar la compra; el repartidor configura su límite de
+  adelanto; no se aceptan diferencias de precio sin confirmación; se reutilizan estados
+  de viaje con `estado_entrega`; cancelaciones tempranas no compensan ni repúblican
+  después de tener el pedido; fallos exigen foto, motivo y reporte; el admin registra la
+  resolución fuera de la app, sin pasarela de pagos; comisión inicial DELIVERY de 0%.
+- **Archivos afectados:** docs/superpowers/specs/2026-10-02-delivery-design.md,
+  docs/CHANGELOG.md
+- **Verificación:** lectura completa del spec; `git diff --check --
+  docs/superpowers/specs/2026-10-02-delivery-design.md` sin errores.
+
+### 📚 Documentación · Spec del módulo DELIVERY: cancelaciones decididas
+
+- **Módulo / área:** docs (`docs/superpowers/specs/`)
+- **Descripción:** Se revisó junto con el usuario el spec del módulo DELIVERY (que
+  estaba con secciones corruptas y cancelaciones PENDIENTE-DECISION). Se discutieron y
+  decidieron las reglas de cancelación y se reescribió/limpió el documento completo.
+- **Cambios clave:** decisiones de la sección 6: (1) cliente bloqueado de cancelar
+  cuando el repartidor ya tiene el pedido en mano ("Ya tengo el pedido" ->
+  `estado_entrega = EN_MANO`); (2) repartidor con el pedido en mano solo puede usar
+  "No se pudo entregar" con foto + motivo obligatorios, viaje CANCELADO, sin
+  república de la solicitud; (3) código de entrega de 6 dígitos solo para ENCOMIENDA;
+  (4) todo "No se pudo entregar" crea un reporte automático PENDIENTE para el admin
+  (foto, motivo, costo_producto_real, dirección B, teléfono) que resuelve devolución/
+  pago/pérdida fuera de la app, porque en fase 1 no hay pasarela de pagos y el dinero
+  es directo. Además se agregó al spec el enum `estado_entrega`
+  (PENDIENTE_COMPRA/EN_MANO/ENTREGADO/NO_ENTREGADO) como campo de datos_entrega y
+  `foto_falla_url`/`motivo_falla`. El spec ya cancela la ambigüedad previa y sirve de
+  base para el plan de implementación.
+- **Archivos afectados:** docs/superpowers/specs/2026-10-02-delivery-design.md,
+  docs/CHANGELOG.md
+- **Verificación:** lectura del documento final en pantalla (texto completo, sin
+  secciones corruptas; tabla de cancelaciones y fuera de alcance coherentes con lo
+  decidido).
+
+### 📚 Documentación · Spec del módulo Fletes
+
+- **Módulo / área:** docs (`docs/superpowers/specs/`)
+- **Descripción:** Se diseñó con el usuario el módulo de fletes (decisión: Opción A en
+  todo: categoría FLETE sobre vehículos CAMIONETA/CAMION, flujo solicitud-oferta-viaje
+  reutilizado, datos_flete 1-1 con solicitud_viaje, chat efímero con banner y fotos por
+  REST). Se dejó la spec escrita para poder retomar el diseño y el plan de
+  implementación en una sesión futura sin repetir conversaciones.
+- **Archivos afectados:** `docs/superpowers/specs/2026-10-02-fletes-design.md`
+- **Verificación:** revisión de la spec (sin "TBD", coherente con el diseño discutido);
+  el usuario falta por dar el visto bueno explícito al archivo.
+
+### 🔧 Config · Puesta en marcha local del backend
+
+- **Módulo / área:** backend (configuración) y raíz del monorepo (`.env`)
+- **Descripción:** El proyecto no arrancaba: faltaba `application-xexel.properties` (solo
+  existía el `.example`, por lo que no había datasource) y el `.env` tenía pegadas
+  propiedades de Spring (`spring.mail.*`) que ahí no tienen efecto, porque el `.env` solo
+  define variables de entorno (las carga `bootRun` en `backend/build.gradle`).
+- **Cambios clave:**
+  - Se corrigió `.env`: solo variables (`TAXIUAP_DB_PASSWORD`,
+    `MAIL_HOST/MAIL_PORT/MAIL_USUARIO/MAIL_PASSWORD/MAIL_REMITENTE`, Google,
+    Firebase, Gemini); las líneas `spring.mail.*` se quitaron.
+  - Se creó `application-xexel.properties` (gitignored; no versionar): datasource
+    5436/taxiuap, JWT por defecto del `application.properties`, CORS 5173, admin inicial,
+    SMTP Google con los valores del `.env`, seed habilitado.
+  - La contraseña real de la BD es la del contenedor `taxiuap-db` ya en ejecución
+    (proyecto UniTaxi-V0.2, cuyo directorio fue borrado pero el contenedor sigue vivo).
+- **Archivos afectados:** `.env`, `backend/src/main/resources/application-xexel.properties`,
+  `docs/CHANGELOG.md`.
+- **Verificación:** `./gradlew bootRun` arrancó en 8080 ("Started TaxiuapApplication");
+  `GET /api/publico/instituciones` devolvió HTTP 200 con las 3 instituciones; la BD
+  conserva los datos (16 personas, 29 viajes).
 
 ## 2026-09-30
 
