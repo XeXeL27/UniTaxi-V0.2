@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | Arreglo | Correcciones del reviewer para Task 1 DELIVERY |
 | 2026-10-02 | Nuevo | Modelo backend y catálogo DELIVERY (Task 1) |
 | 2026-10-02 | 📚 | DELIVERY: spec rediseñada y consolidada con precio, códigos, compra, límites, estados, cancelaciones y resolución administrativa |
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
@@ -33,6 +34,14 @@
 ---
 
 ## 2026-10-02
+
+### Arreglo · Correcciones del reviewer para Task 1 DELIVERY
+
+- **Módulo / área:** backend (`vehicle`, `identity`, `trip`, `seed`)
+- **Descripción:** Se cerraron las brechas de validación y persistencia detectadas en la revisión del modelo DELIVERY.
+- **Cambios clave:** DELIVERY queda bloqueado para tipos no MOTO en creación/actualización de vehículos y alta de moto; el límite de adelanto es obligatorio y no negativo; COMPRA_Y_ENTREGA exige costo estimado positivo en request y entidad; se agregó prueba JPA real de relación 1-1 y FK única; se corrigió el contador del seeder.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/vehicle/service/VehiculoService.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/service/RegistroMotoConductorService.java`, `backend/src/main/java/com/taxiuap/backend/identity/entity/Conductor.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/DatosEntregaRequest.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedCatalogos.java`, pruebas DELIVERY y reporte Task 1
+- **Verificación:** `TAXIUAP_DB_PASSWORD='<12346578>' ./gradlew test --tests '*Entrega*'`; `./gradlew compileJava`; `TAXIUAP_DB_PASSWORD='<12346578>' ./gradlew test`.
 
 ### Nuevo · Modelo backend y catálogo DELIVERY
 

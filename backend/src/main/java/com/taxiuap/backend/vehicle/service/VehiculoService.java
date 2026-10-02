@@ -128,6 +128,10 @@ public class VehiculoService {
                 || !categoriaServicio.getTipoVehiculo().getId().equals(tipoVehiculo.getId())) {
             throw new NegocioException("La categoria de servicio no corresponde al tipo de vehiculo");
         }
+        if ("DELIVERY".equalsIgnoreCase(categoriaServicio.getNombre())
+                && !"MOTO".equalsIgnoreCase(tipoVehiculo.getCodigo())) {
+            throw new NegocioException("La categoria DELIVERY solo puede asociarse a una MOTO");
+        }
     }
 
     private VehiculoResponse aRespuesta(Vehiculo vehiculo) {

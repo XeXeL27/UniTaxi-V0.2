@@ -110,7 +110,7 @@ class SeedCatalogos {
 
         log.info("Catalogos sembrados: {} instituciones, {} carreras UAP, {} tipos de vehiculo, "
                         + "{} categorias de servicio, {} etiquetas de calificacion, {} zonas",
-                3, carrerasUap.size(), 3, 3, etiquetas.size(), zonas.size());
+                3, carrerasUap.size(), 3, 4, etiquetas.size(), zonas.size());
 
         return new CatalogosSembrados(universidad, uap, carrerasUap, sedan, moto, van,
                 sedanEstandar, sedanEjecutivo, motoCategoria, deliveryCategoria, zonas, etiquetas);

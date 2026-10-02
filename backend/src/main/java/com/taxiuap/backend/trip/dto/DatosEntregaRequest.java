@@ -5,6 +5,7 @@ import java.math.BigDecimal;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -20,4 +21,13 @@ public record DatosEntregaRequest(
         @Size(max = 30) String telefonoReceptor,
         @Size(max = 500) String fotoPaqueteUrl,
         Boolean aceptaPoliticaArticulos) {
+
+    @AssertTrue(message = "La compra requiere un costo estimado mayor que cero")
+    public boolean isCostoEstimadoValido() {
+        if (tipoEnvio == TipoEnvio.COMPRA_Y_ENTREGA) {
+            return costoProductoEstimado != null && costoProductoEstimado.signum() > 0;
+        }
+        return tipoEnvio != TipoEnvio.ENCOMIENDA
+                || costoProductoEstimado == null || costoProductoEstimado.signum() == 0;
+    }
 }

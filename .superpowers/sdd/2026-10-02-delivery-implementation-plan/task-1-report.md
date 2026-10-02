@@ -77,3 +77,39 @@ Resultado: 67 pruebas ejecutadas, 1 fallo en `TaxiuapApplicationTests.contextLoa
 
 - La suite completa no queda verde hasta corregir las credenciales locales de PostgreSQL fuera de esta tarea; las pruebas focalizadas y la compilación Java sí pasan.
 - La persistencia contra una base real no pudo verificarse por ese mismo bloqueo ambiental.
+
+## Fix Report · Reviewer
+
+### Cambios
+
+- `VehiculoService` ahora rechaza DELIVERY cuando el tipo persistido no es MOTO, además de validar la correspondencia categoría-tipo.
+- `RegistroMotoConductorService` protege también la ruta de persistencia de alta de vehículo frente a una categoría DELIVERY incompatible.
+- `Conductor.limiteAdelantoCompra` es obligatorio, no negativo y `NOT NULL` en el mapeo.
+- `DatosEntregaRequest` aplica la misma regla condicional que la entidad: COMPRA_Y_ENTREGA exige costo estimado estrictamente mayor que cero; ENCOMIENDA no acepta costo positivo.
+- Se corrigió el contador del log del seeder de categorías de servicio: 4.
+- Se agregaron pruebas de rechazo DELIVERY no-MOTO, validación del límite, validación del request y persistencia JPA de la relación 1-1 con FK única.
+
+### Archivos
+
+- `backend/src/main/java/com/taxiuap/backend/vehicle/service/VehiculoService.java`
+- `backend/src/main/java/com/taxiuap/backend/vehicle/service/RegistroMotoConductorService.java`
+- `backend/src/main/java/com/taxiuap/backend/identity/entity/Conductor.java`
+- `backend/src/main/java/com/taxiuap/backend/trip/dto/DatosEntregaRequest.java`
+- `backend/src/main/java/com/taxiuap/backend/seed/SeedCatalogos.java`
+- `backend/src/test/java/com/taxiuap/backend/vehicle/service/VehiculoEntregaTest.java`
+- `backend/src/test/java/com/taxiuap/backend/identity/entity/ConductorEntregaTest.java`
+- `backend/src/test/java/com/taxiuap/backend/trip/dto/DatosEntregaRequestTest.java`
+- `backend/src/test/java/com/taxiuap/backend/trip/repository/DatosEntregaPersistenciaTest.java`
+
+### Verificación
+
+- RED: `./gradlew test --tests '*Entrega*'` falló en las pruebas nuevas por reglas ausentes y en la prueba JPA por credenciales no suministradas.
+- GREEN focalizado: `./gradlew test --tests 'com.taxiuap.backend.trip.entity.DatosEntregaTest' --tests 'com.taxiuap.backend.trip.dto.DatosEntregaDtoTest' --tests 'com.taxiuap.backend.trip.dto.DatosEntregaRequestTest' --tests 'com.taxiuap.backend.vehicle.entity.CategoriaServicioEntregaTest' --tests 'com.taxiuap.backend.vehicle.service.VehiculoEntregaTest' --tests 'com.taxiuap.backend.identity.entity.ConductorEntregaTest'` terminó `BUILD SUCCESSFUL`.
+- Persistencia real: `TAXIUAP_DB_PASSWORD='<12346578>' ./gradlew test --tests 'com.taxiuap.backend.trip.repository.DatosEntregaPersistenciaTest'` terminó `BUILD SUCCESSFUL`.
+- Focalizado completo: `TAXIUAP_DB_PASSWORD='<12346578>' ./gradlew test --tests '*Entrega*'` terminó `BUILD SUCCESSFUL`.
+- Compilación: `./gradlew compileJava` terminó `BUILD SUCCESSFUL`.
+- Suite backend: `TAXIUAP_DB_PASSWORD='<12346578>' ./gradlew test` terminó `BUILD SUCCESSFUL`.
+
+### Preocupaciones
+
+- La prueba JPA requiere que el entorno proporcione `TAXIUAP_DB_PASSWORD`; no se modificó `application.properties`.

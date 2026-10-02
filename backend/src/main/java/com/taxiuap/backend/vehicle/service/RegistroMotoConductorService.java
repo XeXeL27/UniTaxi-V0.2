@@ -117,6 +117,9 @@ public class RegistroMotoConductorService {
                 .findByTipoVehiculoIdAndEstadoCategoriaServicio(moto.getId(), EstadoRegistro.A).stream()
                 .findFirst()
                 .orElseThrow(() -> new NegocioException("No hay categoria de servicio activa para MOTO"));
+        if ("DELIVERY".equalsIgnoreCase(categoria.getNombre()) && !categoria.esDeliveryCompatible()) {
+            throw new NegocioException("La categoria DELIVERY solo puede asociarse a una MOTO");
+        }
 
         Vehiculo vehiculo = new Vehiculo();
         vehiculo.setConductor(conductor);
