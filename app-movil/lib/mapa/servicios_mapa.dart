@@ -39,7 +39,6 @@ class Ruta {
 
 /// Servicios externos del mapa: rutas (OSRM), direccion de un punto (Nominatim) y GPS.
 class ServiciosMapa {
-  static const _servidorRutas = 'https://router.project-osrm.org';
   static const _servidorDirecciones = 'https://nominatim.openstreetmap.org';
 
   /// Velocidad supuesta en ciudad para estimar el tiempo de la ruta aproximada (km/h).
@@ -48,7 +47,7 @@ class ServiciosMapa {
   /// Ruta por calles entre [a] y [b]. Si el servicio no responde devuelve la linea recta.
   static Future<Ruta> calcularRuta(LatLng a, LatLng b) async {
     final url = Uri.parse(
-      '$_servidorRutas/route/v1/driving/${a.longitude},${a.latitude};${b.longitude},${b.latitude}'
+      '${Config.osrmUrl}/route/v1/driving/${a.longitude},${a.latitude};${b.longitude},${b.latitude}'
       '?overview=full&geometries=geojson',
     );
     try {

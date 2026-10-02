@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | Nuevo | Precio DELIVERY por OSRM y límite de adelanto del repartidor (Task 2) |
 | 2026-10-02 | Arreglo | Correcciones del reviewer para Task 1 DELIVERY |
 | 2026-10-02 | Nuevo | Modelo backend y catálogo DELIVERY (Task 1) |
 | 2026-10-02 | 📚 | DELIVERY: spec rediseñada y consolidada con precio, códigos, compra, límites, estados, cancelaciones y resolución administrativa |
@@ -24,6 +25,16 @@
 | 2026-09-29 | 🎨 | Tarjeta flotante de distancia/ETA del conductor debajo de la cabecera (solo pasajero) |
 | 2026-09-29 | ✨ | Seguimiento en vivo del conductor: distancia y ETA al pasajero durante recogida y viaje |
 | 2026-09-29 | ✨ | Favoritos como segunda pestaña de Historial en la app del pasajero |
+
+## 2026-10-02
+
+### ✨ Nuevo · Precio DELIVERY por OSRM y límite de adelanto
+
+- **Módulo / área:** backend (`pricing`, `identity`) y app móvil (`core`, `mapa`)
+- **Descripción:** se implementó el cálculo de precios DELIVERY por rutas de calles y la configuración editable del límite que el repartidor adelanta para compras.
+- **Cambios clave:** cliente OSRM con timeout y respuesta tipada; precios A-B, GPS-B y comercio-B; fallo de OSRM sin respaldo en línea recta; comisión DELIVERY configurable con valor inicial 0% solo sobre el servicio; filtro reutilizable por límite de adelanto; URL de OSRM configurable en la app.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/dto/RutaResponse.java`, `backend/src/main/java/com/taxiuap/backend/pricing/dto/DesglosePrecioDelivery.java`, `backend/src/main/java/com/taxiuap/backend/pricing/service/ClienteRutas.java`, `backend/src/main/java/com/taxiuap/backend/pricing/service/ClienteOsrm.java`, `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioDeliveryService.java`, `backend/src/main/java/com/taxiuap/backend/identity/dto/ActualizarPerfilConductorRequest.java`, `backend/src/main/java/com/taxiuap/backend/identity/service/PerfilConductorService.java`, `backend/src/main/resources/application-xexel.properties`, `backend/src/main/resources/application-xexel.properties.example`, `app-movil/lib/core/config.dart`, `app-movil/lib/mapa/servicios_mapa.dart`, pruebas focalizadas.
+- **Verificación:** `./gradlew test --tests 'com.taxiuap.backend.pricing.service.*'`, `./gradlew compileJava`; `./gradlew test` ejecutó 77 pruebas y quedó bloqueado por 2 fallos de autenticación/configuración PostgreSQL local.
 
 ## Convenciones
 

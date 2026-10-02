@@ -64,6 +64,9 @@ public class PerfilConductorService {
         conductor.setNumeroLicencia(request.numeroLicencia());
         conductor.setCategoriaLicencia(request.categoriaLicencia() == null || request.categoriaLicencia().isBlank()
                 ? null : request.categoriaLicencia().trim().toUpperCase());
+        if (request.limiteAdelantoCompra() != null) {
+            conductor.setLimiteAdelantoCompra(request.limiteAdelantoCompra().setScale(2, java.math.RoundingMode.HALF_UP));
+        }
 
         return aRespuesta(conductor);
     }
