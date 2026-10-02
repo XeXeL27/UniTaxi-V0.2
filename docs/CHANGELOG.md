@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | Arreglo | Correcciones directas de Task 2: OSRM sin fallback y validación de rutas |
 | 2026-10-02 | Nuevo | Precio DELIVERY por OSRM y límite de adelanto del repartidor (Task 2) |
 | 2026-10-02 | Arreglo | Correcciones del reviewer para Task 1 DELIVERY |
 | 2026-10-02 | Nuevo | Modelo backend y catálogo DELIVERY (Task 1) |
@@ -27,6 +28,14 @@
 | 2026-09-29 | ✨ | Favoritos como segunda pestaña de Historial en la app del pasajero |
 
 ## 2026-10-02
+
+### 🐛 Arreglo · OSRM bloquea operaciones sin ruta válida
+
+- **Módulo / área:** app móvil y backend (`pricing`, `mapa`)
+- **Descripción:** se eliminó el fallback móvil a línea recta cuando OSRM falla y se validaron distancia, duración y geometría antes de usar una ruta.
+- **Cambios clave:** `RutaNoDisponibleException` en el móvil, validación de `RutaResponse` y pruebas de respuestas OSRM negativas.
+- **Archivos afectados:** `app-movil/lib/mapa/servicios_mapa.dart`, `backend/src/main/java/com/taxiuap/backend/pricing/dto/RutaResponse.java`, `backend/src/test/java/com/taxiuap/backend/pricing/service/ClienteOsrmTest.java`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-2-report.md`.
+- **Verificación:** `./gradlew test --tests 'com.taxiuap.backend.pricing.service.*'`, `./gradlew compileJava`, `flutter test` (70 pruebas Dart).
 
 ### ✨ Nuevo · Precio DELIVERY por OSRM y límite de adelanto
 

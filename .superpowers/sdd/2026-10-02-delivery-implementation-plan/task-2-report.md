@@ -68,3 +68,47 @@ Resultado: 77 pruebas ejecutadas, 2 fallos en `TaxiuapApplicationTests.contextLo
 ## Preocupaciones
 
 - La suite completa requiere las credenciales locales de PostgreSQL disponibles en el entorno; las pruebas focalizadas y `compileJava` pasan.
+
+## Fix Report · Hallazgos directos de Task 2
+
+### Cambios
+
+- `ServiciosMapa.calcularRuta` ya no genera una línea recta ni una duración aproximada cuando OSRM falla; propaga `RutaNoDisponibleException` y bloquea la operación.
+- El cliente móvil valida que distancia, duración y geometría de OSRM sean utilizables antes de crear una `Ruta`.
+- `RutaResponse` valida que distancia y duración sean no nulas y no negativas; `ClienteOsrm` propaga el fallo como `NegocioException`.
+- No se implementaron listado real de solicitudes ni snapshot de precio; quedan para Task 3 y Task 4.
+
+### Tests y comandos
+
+#### RED
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.pricing.service.ClienteOsrmTest'
+```
+
+Resultado: 2 pruebas nuevas fallaron porque el cliente aceptaba distancia y duración negativas de OSRM.
+
+El primer `flutter test` posterior al cambio falló en compilación porque la rama HTTP no-200 podía salir de `calcularRuta` sin retorno; se corrigió haciendo que esa rama también lance `RutaNoDisponibleException`.
+
+#### GREEN
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.pricing.service.*'
+./gradlew compileJava
+flutter test
+```
+
+Salida verificada: `BUILD SUCCESSFUL` en los dos comandos Gradle, `All tests passed!` en Flutter y 70 pruebas Dart ejecutadas.
+
+### Archivos del fix
+
+- `backend/src/main/java/com/taxiuap/backend/pricing/dto/RutaResponse.java`
+- `app-movil/lib/mapa/servicios_mapa.dart`
+- `backend/src/test/java/com/taxiuap/backend/pricing/service/ClienteOsrmTest.java`
+- `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-2-report.md`
+- `docs/CHANGELOG.md`
+
+### Verificación final
+
+- Se mantuvo sin cambios `backend/src/main/resources/application.properties`.
+- No se modificaron `main`, el listado real de solicitudes ni el snapshot de precio.
