@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -98,7 +97,7 @@ class _TarjetaTotal extends StatelessWidget {
                 height: 48,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(8)),
-                child: FaIcon(item.icono, color: Colors.white, size: 20),
+                child: Icon(item.icono, color: Colors.white, size: 20),
               ),
               const SizedBox(width: 16),
               Expanded(

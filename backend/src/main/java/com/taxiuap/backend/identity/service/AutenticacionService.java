@@ -106,7 +106,7 @@ public class AutenticacionService {
         Usuario usuario = cuentaUsuarioService.crearUsuario(persona, RolSistema.CONDUCTOR, nombreUsuario,
                 cuentaUsuarioService.codificar(datos.password()));
         carnetService.guardar(persona, carnet);
-        boolean observado = carnetService.revisar(persona, pidioRevision);
+        boolean observado = carnetService.revisar(persona, pidioRevision, datos.aceptoTerminos());
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);

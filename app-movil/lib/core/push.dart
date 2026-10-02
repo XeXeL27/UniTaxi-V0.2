@@ -102,6 +102,7 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
     '${datos['cuerpo'] ?? ''}',
     id: idNotificacionViaje(idViaje, evento),
     pedirPermiso: false,
+    sonidoPropio: evento == 1,
   );
 }
 

@@ -225,6 +225,41 @@ public class AlmacenamientoArchivos {
         return nueva;
     }
 
+    /**
+     * Eliminacion permanente de una persona: borra su carpeta personas/&lt;id&gt;_&lt;ci&gt; completa cuando
+     * la transaccion se confirma (si se deshace, los archivos quedan). Solo dentro de personas/.
+     */
+    public void borrarCarpetaPersonaAlConfirmar(Persona persona) {
+        Path personas = raiz().resolve("personas").normalize();
+        Path carpeta = raiz().resolve(carpetaPersona(persona)).normalize();
+        if (!carpeta.startsWith(personas) || carpeta.equals(personas) || !Files.isDirectory(carpeta)) {
+            return;
+        }
+        Runnable borrar = () -> {
+            try (var rutas = Files.walk(carpeta)) {
+                rutas.sorted(java.util.Comparator.reverseOrder()).forEach(ruta -> {
+                    try {
+                        Files.deleteIfExists(ruta);
+                    } catch (IOException e) {
+                        // Un archivo que no se pudo borrar queda suelto; la BD ya no lo usa.
+                    }
+                });
+            } catch (IOException | RuntimeException e) {
+                // Idem: la carpeta queda, sin registros que la usen.
+            }
+        };
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    borrar.run();
+                }
+            });
+        } else {
+            borrar.run();
+        }
+    }
+
     private void borrarAlConfirmar(String rutaRelativa) {
         Runnable borrar = () -> {
             try {

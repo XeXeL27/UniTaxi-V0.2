@@ -95,6 +95,10 @@ class UsuarioAdmin {
   /// A (activa) o S (suspendida).
   final String estado;
 
+  /// HABILITADO, PENDIENTE (conductor en revision), OBSERVADO (carnet en revision), RECHAZADO o
+  /// SUSPENDIDO: la columna Situacion y su filtro.
+  final String situacion;
+
   UsuarioAdmin({
     required this.idUsuario,
     required this.idPersona,
@@ -107,12 +111,10 @@ class UsuarioAdmin {
     required this.rol,
     this.fechaRegistro,
     this.estado = 'A',
+    this.situacion = 'HABILITADO',
   });
 
   bool get suspendida => estado == 'S';
-
-  /// Texto de la columna Situacion (con su insignia de color).
-  String get situacion => suspendida ? 'SUSPENDIDO' : 'ACTIVO';
 
   factory UsuarioAdmin.desdeJson(Map<String, dynamic> json) => UsuarioAdmin(
     idUsuario: Formato.leerEntero(json['idUsuario'])!,
@@ -126,6 +128,162 @@ class UsuarioAdmin {
     rol: json['rol'] as String? ?? '',
     fechaRegistro: Formato.leerFecha(json['fechaRegistro']),
     estado: json['estado'] as String? ?? 'A',
+    situacion: json['situacion'] as String? ?? ((json['estado'] as String?) == 'S' ? 'SUSPENDIDO' : 'HABILITADO'),
+  );
+}
+
+/// UsuarioDetalleAdminResponse: todo lo de la cuenta para el modal Editar de Usuarios.
+class UsuarioDetalle {
+  final int idUsuario;
+  final int idPersona;
+  final String nombreUsuario;
+  final String rol;
+  final String situacion;
+  final String? ci;
+  final String? complementoCi;
+  final String nombres;
+  final String apellidos;
+  final DateTime? fechaNacimiento;
+  final String? correo;
+  final String? telefono;
+  final bool carnetAnverso;
+  final bool carnetReverso;
+  final DateTime? fechaAceptaTerminos;
+
+  /// null si la persona no tiene cuenta de conductor.
+  final int? idConductor;
+  final String? numeroLicencia;
+  final String? categoriaLicencia;
+  final DateTime? vencimientoLicencia;
+  final bool licenciaAnverso;
+  final bool licenciaReverso;
+
+  UsuarioDetalle({
+    required this.idUsuario,
+    required this.idPersona,
+    required this.nombreUsuario,
+    required this.rol,
+    required this.situacion,
+    this.ci,
+    this.complementoCi,
+    required this.nombres,
+    required this.apellidos,
+    this.fechaNacimiento,
+    this.correo,
+    this.telefono,
+    this.carnetAnverso = false,
+    this.carnetReverso = false,
+    this.fechaAceptaTerminos,
+    this.idConductor,
+    this.numeroLicencia,
+    this.categoriaLicencia,
+    this.vencimientoLicencia,
+    this.licenciaAnverso = false,
+    this.licenciaReverso = false,
+  });
+
+  String get nombreCompleto => '$nombres $apellidos'.trim();
+
+  factory UsuarioDetalle.desdeJson(Map<String, dynamic> json) => UsuarioDetalle(
+    idUsuario: Formato.leerEntero(json['idUsuario'])!,
+    idPersona: Formato.leerEntero(json['idPersona'])!,
+    nombreUsuario: json['nombreUsuario'] as String? ?? '',
+    rol: json['rol'] as String? ?? '',
+    situacion: json['situacion'] as String? ?? '',
+    ci: json['ci'] as String?,
+    complementoCi: json['complementoCi'] as String?,
+    nombres: json['nombres'] as String? ?? '',
+    apellidos: json['apellidos'] as String? ?? '',
+    fechaNacimiento: Formato.leerFecha(json['fechaNacimiento']),
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
+    carnetAnverso: json['carnetAnverso'] == true,
+    carnetReverso: json['carnetReverso'] == true,
+    fechaAceptaTerminos: Formato.leerFecha(json['fechaAceptaTerminos']),
+    idConductor: Formato.leerEntero(json['idConductor']),
+    numeroLicencia: json['numeroLicencia'] as String?,
+    categoriaLicencia: json['categoriaLicencia'] as String?,
+    vencimientoLicencia: Formato.leerFecha(json['vencimientoLicencia']),
+    licenciaAnverso: json['licenciaAnverso'] == true,
+    licenciaReverso: json['licenciaReverso'] == true,
+  );
+}
+
+/// Fila de Personas > Eliminacion permanente.
+class PersonaEliminable {
+  final int idPersona;
+  final String nombres;
+  final String apellidos;
+  final String? ci;
+  final String? correo;
+  final String? telefono;
+  final String cuentas;
+
+  /// ACTIVA o ELIMINADA (borrado logico previo).
+  final String estado;
+  final DateTime? registrado;
+
+  PersonaEliminable({
+    required this.idPersona,
+    required this.nombres,
+    required this.apellidos,
+    this.ci,
+    this.correo,
+    this.telefono,
+    required this.cuentas,
+    required this.estado,
+    this.registrado,
+  });
+
+  String get nombreCompleto => '$nombres $apellidos'.trim();
+
+  factory PersonaEliminable.desdeJson(Map<String, dynamic> json) => PersonaEliminable(
+    idPersona: Formato.leerEntero(json['idPersona'])!,
+    nombres: json['nombres'] as String? ?? '',
+    apellidos: json['apellidos'] as String? ?? '',
+    ci: json['ci'] as String?,
+    correo: json['correo'] as String?,
+    telefono: json['telefono'] as String?,
+    cuentas: json['cuentas'] as String? ?? '',
+    estado: json['estado'] as String? ?? '',
+    registrado: Formato.leerFecha(json['registrado']),
+  );
+}
+
+/// Lo que se borra al eliminar una persona de forma permanente, y si hoy se puede.
+class ResumenEliminacion {
+  final int idPersona;
+  final String nombreCompleto;
+  final String? correo;
+  final List<(String, int)> seElimina;
+  final int viajesConservados;
+  final int calificacionesConservadas;
+  final String? bloqueo;
+  final String confirmacion;
+
+  ResumenEliminacion({
+    required this.idPersona,
+    required this.nombreCompleto,
+    this.correo,
+    required this.seElimina,
+    required this.viajesConservados,
+    required this.calificacionesConservadas,
+    this.bloqueo,
+    required this.confirmacion,
+  });
+
+  factory ResumenEliminacion.desdeJson(Map<String, dynamic> json) => ResumenEliminacion(
+    idPersona: Formato.leerEntero(json['idPersona'])!,
+    nombreCompleto: json['nombreCompleto'] as String? ?? '',
+    correo: json['correo'] as String?,
+    seElimina: [
+      for (final e in (json['seElimina'] as List<dynamic>? ?? []))
+        ((e as Map<String, dynamic>)['concepto'] as String? ?? '', Formato.leerEntero(e['cantidad']) ?? 0),
+    ],
+    viajesConservados: Formato.leerEntero(json['viajesConservados']) ?? 0,
+    calificacionesConservadas: Formato.leerEntero(json['calificacionesConservadas']) ?? 0,
+    bloqueo: json['bloqueo'] as String?,
+    confirmacion: json['confirmacion'] as String? ?? '',
   );
 }
 

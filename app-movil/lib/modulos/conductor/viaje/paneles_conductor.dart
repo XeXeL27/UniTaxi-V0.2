@@ -387,7 +387,7 @@ class PanelViajeConductor extends StatelessWidget {
           const SizedBox(height: 8),
           const _Mensaje(
             icono: FontAwesomeIcons.triangleExclamation,
-            texto: 'No tienes QR registrado. Agrégalo en Más > Mis QR de cobro o cambia el cobro a efectivo.',
+            texto: 'No tienes QR registrado. Agrégalo en Perfil > Mis QR de cobro o cambia el cobro a efectivo.',
             color: ColoresApp.rojo,
           ),
         ],
@@ -501,12 +501,12 @@ class _EnRevision extends StatelessWidget {
     final (titulo, texto, color) = switch (situacion) {
       _ when faltantes.isNotEmpty => (
         'Faltan documentos',
-        'Para usar la app sube el PDF de tu ${faltantes.map(_nombreDocumento).join(' y ')}. Puedes hacerlo en Más > Mis documentos.',
+        'Para usar la app sube el PDF de tu ${faltantes.map(_nombreDocumento).join(' y ')}. Puedes hacerlo en Perfil > Mis documentos.',
         ColoresApp.rojo,
       ),
       'RECHAZADO' => (
         'Registro rechazado',
-        'La administración rechazó tu registro. Revisa tus documentos en Más > Mis documentos o comunícate con UNITAXI.',
+        'La administración rechazó tu registro. Revisa tus documentos en Perfil > Mis documentos o comunícate con UNITAXI.',
         ColoresApp.rojo,
       ),
       'SUSPENDIDO' => (

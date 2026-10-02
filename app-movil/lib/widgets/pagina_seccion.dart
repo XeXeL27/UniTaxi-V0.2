@@ -1,5 +1,5 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/tema.dart';
 import 'barra_inferior.dart';
@@ -94,15 +94,18 @@ class PaginaSeccion extends StatelessWidget {
   }
 }
 
-/// Tarjeta blanca de una opcion de la pantalla Mas: icono en circulo de color, titulo, detalle y
-/// a la derecha una flecha o un control (interruptor).
+/// Tarjeta blanca de una opcion de la pantalla Perfil, estilo Ajustes de iOS: icono blanco en un
+/// cuadro redondeado de color, titulo, detalle y a la derecha una flecha o un control (interruptor).
 class TarjetaOpcion extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String titulo;
   final String detalle;
   final Color color;
   final VoidCallback? onTap;
   final Widget? derecha;
+
+  /// Accion que saca de la cuenta (cerrar sesion): el titulo va en rojo, como en iOS.
+  final bool destructiva;
 
   const TarjetaOpcion({
     super.key,
@@ -112,47 +115,55 @@ class TarjetaOpcion extends StatelessWidget {
     this.color = ColoresApp.azul,
     this.onTap,
     this.derecha,
+    this.destructiva = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Material(
         color: ColoresApp.blanco,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(22),
         elevation: 0,
         child: InkWell(
           onTap: onTap,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(22),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(14, 14, 12, 14),
+            padding: const EdgeInsets.fromLTRB(14, 13, 12, 13),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(color: ColoresApp.borde),
-              boxShadow: const [BoxShadow(color: Color(0x0D0A2342), blurRadius: 10, offset: Offset(0, 3))],
+              borderRadius: BorderRadius.circular(22),
+              boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 14, offset: Offset(0, 4))],
             ),
             child: Row(
               children: [
                 Container(
-                  width: 50,
-                  height: 50,
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: Center(child: FaIcon(icono, color: color, size: 20)),
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(11)),
+                  child: Center(child: Icon(icono, color: ColoresApp.blanco, size: 22)),
                 ),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(titulo, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
-                      const SizedBox(height: 3),
-                      Text(detalle, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5, height: 1.3)),
+                      Text(
+                        titulo,
+                        style: TextStyle(
+                          color: destructiva ? ColoresApp.rojo : ColoresApp.tinta,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: -0.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(detalle, style: const TextStyle(color: Color(0xFF8E8E93), fontSize: 13.5, height: 1.3)),
                     ],
                   ),
                 ),
                 const SizedBox(width: 8),
-                derecha ?? const FaIcon(FontAwesomeIcons.chevronRight, color: ColoresApp.textoSuave, size: 15),
+                derecha ?? const Icon(CupertinoIcons.chevron_forward, color: Color(0xFFC4C4C7), size: 20),
               ],
             ),
           ),

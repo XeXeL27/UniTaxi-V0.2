@@ -98,7 +98,7 @@ public class RegistroConductorPasajeroService {
         boolean observado = false;
         if (carnet != null) {
             carnetService.guardar(persona, carnet);
-            observado = carnetService.revisar(persona, pidioRevision);
+            observado = carnetService.revisar(persona, pidioRevision, datos.aceptoTerminos());
         }
         Usuario usuario = cuentaUsuarioService.crearUsuario(persona, RolSistema.CONDUCTOR,
                 pasajero.getNombreUsuario(), pasajero.getPasswordHash());

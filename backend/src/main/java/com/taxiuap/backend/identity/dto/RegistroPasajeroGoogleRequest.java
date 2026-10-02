@@ -20,9 +20,11 @@ public record RegistroPasajeroGoogleRequest(
         @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String nombres,
         @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String apellidos,
         /** true: la persona indico que sus datos se leyeron mal; un administrador los revisa (OBSERVADO). */
-        Boolean observado) {
+        Boolean observado,
+        /** true: marco que acepta los terminos y condiciones (obligatorio al enviar el carnet). */
+        Boolean aceptaTerminos) {
 
     public CarnetRequest carnet() {
-        return new CarnetRequest(ci, complementoCi, fechaNacimiento, nombres, apellidos, null, observado);
+        return new CarnetRequest(ci, complementoCi, fechaNacimiento, nombres, apellidos, null, observado, aceptaTerminos);
     }
 }

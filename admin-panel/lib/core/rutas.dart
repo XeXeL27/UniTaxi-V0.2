@@ -9,6 +9,7 @@ import '../modulos/inicio/pantalla_inicio.dart';
 import '../modulos/mapa/pantalla_mapa.dart';
 import '../modulos/mapa/pantalla_zonas.dart';
 import '../modulos/personas/pantalla_carnets_observados.dart';
+import '../modulos/personas/pantalla_eliminacion_permanente.dart';
 import '../modulos/personas/pantalla_conductores.dart';
 import '../modulos/personas/pantalla_pasajeros.dart';
 import '../modulos/personas/pantalla_personas.dart';
@@ -43,6 +44,10 @@ GoRouter crearRutas(Sesion sesion) {
           GoRoute(
             path: Menu.carnetsObservados.ruta,
             pageBuilder: (_, _) => pagina(const PantallaCarnetsObservados()),
+          ),
+          GoRoute(
+            path: Menu.eliminacionPermanente.ruta,
+            pageBuilder: (_, _) => pagina(const PantallaEliminacionPermanente()),
           ),
           GoRoute(path: Menu.zonas.ruta, pageBuilder: (_, _) => pagina(const PantallaZonas())),
           GoRoute(path: Menu.mapa.ruta, pageBuilder: (_, _) => pagina(const PantallaMapa())),

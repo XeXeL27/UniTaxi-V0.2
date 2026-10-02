@@ -35,6 +35,14 @@ public class SecuenciasInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
+        ajustar();
+    }
+
+    /**
+     * Ajusta todas las secuencias al maximo id actual. Tambien la usa la eliminacion permanente de
+     * personas. Los ids 0 o negativos (registro "USUARIO ELIMINADO") no cuentan.
+     */
+    public void ajustar() {
         List<Map<String, Object>> claves = jdbcTemplate.queryForList("""
                 select tc.table_name as tabla, kcu.column_name as columna,
                        pg_get_serial_sequence(quote_ident(tc.table_name), kcu.column_name) as secuencia
@@ -51,9 +59,9 @@ public class SecuenciasInitializer implements ApplicationRunner {
             String columna = (String) clave.get("columna");
             try {
                 Long maximo = jdbcTemplate.queryForObject(
-                        "select max(\"" + columna + "\") from \"" + tabla + "\"", Long.class);
+                        "select max(\"" + columna + "\") from \"" + tabla + "\" where \"" + columna + "\" > 0", Long.class);
                 Long ultimo = jdbcTemplate.queryForObject("select last_value from " + secuencia, Long.class);
-                if (maximo == null) {
+                if (maximo == null || maximo < 1) {
                     jdbcTemplate.queryForObject("select setval(?, 1, false)", Long.class, secuencia);
                 } else if (!maximo.equals(ultimo)) {
                     jdbcTemplate.queryForObject("select setval(?, ?, true)", Long.class, secuencia, maximo);

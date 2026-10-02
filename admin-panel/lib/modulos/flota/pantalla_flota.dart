@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -18,13 +18,13 @@ import 'posiciones_animadas.dart';
 
 /// Filtro de la barra superior del mapa. Desconectados incluye a los que se quedaron sin senal.
 enum FiltroFlota {
-  todos('Todos', FontAwesomeIcons.layerGroup),
-  disponibles('Disponibles', FontAwesomeIcons.circleCheck),
-  ocupados('Ocupados', FontAwesomeIcons.route),
-  desconectados('Desconectados', FontAwesomeIcons.powerOff);
+  todos('Todos', Iconos.layerGroup),
+  disponibles('Disponibles', Iconos.circleCheck),
+  ocupados('Ocupados', Iconos.route),
+  desconectados('Desconectados', Iconos.powerOff);
 
   final String etiqueta;
-  final FaIconData icono;
+  final IconData icono;
 
   const FiltroFlota(this.etiqueta, this.icono);
 }
@@ -291,8 +291,8 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
             ],
           ),
           child: Center(
-            child: FaIcon(
-              siguiendo ? FontAwesomeIcons.crosshairs : FontAwesomeIcons.motorcycle,
+            child: Icon(
+              siguiendo ? Iconos.crosshairs : Iconos.motorcycle,
               size: 17,
               color: ColoresApp.superficie,
             ),
@@ -356,7 +356,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
                     color: _colorDe(conductor).withValues(alpha: 0.14),
                     shape: BoxShape.circle,
                   ),
-                  child: Center(child: FaIcon(FontAwesomeIcons.motorcycle, color: _colorDe(conductor), size: 20)),
+                  child: Center(child: Icon(Iconos.motorcycle, color: _colorDe(conductor), size: 20)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -379,10 +379,10 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
               ],
             ),
             const SizedBox(height: 18),
-            _dato(FontAwesomeIcons.circleInfo, 'Disponibilidad', _etiquetaDisponibilidad(conductor)),
-            _dato(FontAwesomeIcons.locationDot, 'Ultima posicion', _textoPosicion(conductor)),
-            _dato(FontAwesomeIcons.clock, 'Ultimo reporte', _textoAntiguedad(conductor)),
-            _dato(FontAwesomeIcons.gaugeHigh, 'Velocidad', _textoVelocidad(conductor)),
+            _dato(Iconos.circleInfo, 'Disponibilidad', _etiquetaDisponibilidad(conductor)),
+            _dato(Iconos.locationDot, 'Ultima posicion', _textoPosicion(conductor)),
+            _dato(Iconos.clock, 'Ultimo reporte', _textoAntiguedad(conductor)),
+            _dato(Iconos.gaugeHigh, 'Velocidad', _textoVelocidad(conductor)),
             const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
@@ -401,10 +401,10 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
                           borderRadius: BorderRadius.circular(RadiosApp.campo),
                         ),
                       ),
-                      icon: FaIcon(
+                      icon: Icon(
                         _siguiendoId == conductor.idConductor
-                            ? FontAwesomeIcons.xmark
-                            : FontAwesomeIcons.crosshairs,
+                            ? Iconos.xmark
+                            : Iconos.crosshairs,
                         size: 15,
                       ),                      label: Text(_siguiendoId == conductor.idConductor ? 'Dejar de seguir' : 'Seguir'),
                     )
@@ -424,13 +424,13 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
     _controlador.move(punto, 15.5);
   }
 
-  Widget _dato(FaIconData icono, String etiqueta, String valor) {
+  Widget _dato(IconData icono, String etiqueta, String valor) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          FaIcon(icono, color: ColoresApp.azulClaro, size: 15),
+          Icon(icono, color: ColoresApp.azulClaro, size: 15),
           const SizedBox(width: 12),
           SizedBox(
             width: 130,
@@ -502,13 +502,13 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const FaIcon(FontAwesomeIcons.triangleExclamation, color: ColoresApp.rojo, size: 28),
+              const Icon(Iconos.triangleExclamation, color: ColoresApp.rojo, size: 28),
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.texto)),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: _cargar,
-                icon: const FaIcon(FontAwesomeIcons.rotateRight, size: 16),
+                icon: const Icon(Iconos.rotateRight, size: 16),
                 label: const Text('Reintentar'),
               ),
             ],
@@ -566,7 +566,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
               backgroundColor: ColoresApp.azul,
               foregroundColor: ColoresApp.superficie,
               tooltip: 'Dejar de seguir',
-              child: const FaIcon(FontAwesomeIcons.xmark, size: 16),
+              child: const Icon(Iconos.xmark, size: 16),
             ),
           ),
         const Positioned(right: 8, bottom: 6, child: _Credito()),
@@ -576,10 +576,10 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
 
   Widget _barraEstado() {
     final(color, texto, icono) = switch (_estadoWs) {
-      EstadoWs.conectado => (ColoresApp.exito, 'En vivo', FontAwesomeIcons.circle),
-      EstadoWs.conectando => (ColoresApp.textoSuave, 'Conectando', FontAwesomeIcons.arrowsRotate),
-      EstadoWs.reconectando => (ColoresApp.rojo, 'Reconectando', FontAwesomeIcons.arrowsRotate),
-      EstadoWs.desconectado => (ColoresApp.textoSuave, 'Sin conexión', FontAwesomeIcons.plugCircleXmark),
+      EstadoWs.conectado => (ColoresApp.exito, 'En vivo', Iconos.circle),
+      EstadoWs.conectando => (ColoresApp.textoSuave, 'Conectando', Iconos.arrowsRotate),
+      EstadoWs.reconectando => (ColoresApp.rojo, 'Reconectando', Iconos.arrowsRotate),
+      EstadoWs.desconectado => (ColoresApp.textoSuave, 'Sin conexión', Iconos.plugCircleXmark),
     };
 
     return Container(
@@ -596,7 +596,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FaIcon(icono, color: color, size: 11),
+              Icon(icono, color: color, size: 11),
               const SizedBox(width: 8),
               Text(
                 texto,
@@ -608,7 +608,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const FaIcon(FontAwesomeIcons.motorcycle, color: ColoresApp.azul, size: 15),
+              const Icon(Iconos.motorcycle, color: ColoresApp.azul, size: 15),
               const SizedBox(width: 8),
               Text(
                 'Conductores',
@@ -672,7 +672,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                FaIcon(filtro.icono, size: 15, color: activo ? ColoresApp.superficie : color),
+                Icon(filtro.icono, size: 15, color: activo ? ColoresApp.superficie : color),
                 if (conTexto) ...[
                   const SizedBox(width: 8),
                   Text(

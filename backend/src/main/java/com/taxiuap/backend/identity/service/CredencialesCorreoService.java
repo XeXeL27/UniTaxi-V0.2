@@ -36,7 +36,7 @@ public class CredencialesCorreoService {
     private static final SecureRandom AZAR = new SecureRandom();
 
     private static final String FIRMA = "\n\nSaludos,\nEquipo UNITAXI";
-    private static final String CAMBIAR = "Puedes cambiar tu contraseña cuando quieras en la app, en Más > Cambiar contraseña.";
+    private static final String CAMBIAR = "Puedes cambiar tu contraseña cuando quieras en la app, en Perfil > Cambiar contraseña.";
 
     private final UsuarioRepository usuarioRepository;
     private final CuentaUsuarioService cuentaUsuarioService;
@@ -150,6 +150,33 @@ public class CredencialesCorreoService {
                 + enlace("CONDUCTOR")
                 + FIRMA;
         correoService.enviar(persona.getCorreo(), "Tu cuenta de conductor fue aprobada", cuerpo);
+    }
+
+    /**
+     * El administrador vuelve a enviar los datos de acceso (la persona perdio el correo o se cambio su
+     * correo). Las contrasenas estan cifradas y no se pueden recuperar: se genera una nueva, que vale
+     * para todas sus cuentas de la app (pasajero y conductor) o solo para la de administrador.
+     */
+    public void reenviar(Usuario usuario) {
+        Persona persona = usuario.getPersona();
+        String contrasena = contrasenaLegible();
+        if (esCuentaDeApp(usuario)) {
+            aplicarEnCuentasDeApp(persona, contrasena, false);
+            marcarAviso(persona);
+        } else {
+            usuario.setPasswordHash(cuentaUsuarioService.codificar(contrasena));
+            usuario.setContrasenaGenerada(false);
+            usuarioRepository.save(usuario);
+        }
+        String cuerpo = saludo(persona)
+                + "La administración de UNITAXI te envía nuevamente tus datos de acceso:\n\n"
+                + "Usuario: " + usuario.getNombreUsuario() + "\n"
+                + "Contraseña: " + contrasena + "\n\n"
+                + "Por seguridad generamos una contraseña nueva: la anterior ya no sirve. "
+                + (esCuentaDeApp(usuario) ? CAMBIAR : "")
+                + enlace(usuario.getRol().getCodigo())
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Tus datos de acceso a UNITAXI", cuerpo);
     }
 
     /**

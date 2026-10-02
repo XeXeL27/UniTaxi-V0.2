@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../core/iconos.dart';
 
 import '../core/api_excepcion.dart';
 import '../core/tema.dart';
@@ -11,7 +11,7 @@ import '../core/tema.dart';
 /// cierra devolviendo su resultado (o true si no devuelve nada).
 class ModalFormulario extends StatefulWidget {
   final String titulo;
-  final FaIconData icono;
+  final IconData icono;
   final GlobalKey<FormState> claveFormulario;
   final List<Widget> campos;
   final Future<Object?> Function() alGuardar;
@@ -72,7 +72,7 @@ class _ModalFormularioState extends State<ModalFormulario> {
           ),
           child: Row(
             children: [
-              FaIcon(widget.icono, color: ColoresApp.azul, size: 18),
+              Icon(widget.icono, color: ColoresApp.azul, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -83,7 +83,7 @@ class _ModalFormularioState extends State<ModalFormulario> {
               IconButton(
                 tooltip: 'Cerrar',
                 onPressed: _guardando ? null : () => Navigator.of(context).pop(false),
-                icon: const FaIcon(FontAwesomeIcons.xmark, size: 18),
+                icon: const Icon(Iconos.xmark, size: 18),
               ),
             ],
           ),
@@ -124,7 +124,7 @@ class _ModalFormularioState extends State<ModalFormulario> {
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : const FaIcon(FontAwesomeIcons.floppyDisk, size: 14),
+                    : const Icon(Iconos.floppyDisk, size: 14),
                 label: Text(widget.textoGuardar),
               ),
             ],

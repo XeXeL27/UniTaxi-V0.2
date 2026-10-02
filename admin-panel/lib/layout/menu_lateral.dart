@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../core/iconos.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/menu.dart';
@@ -39,7 +39,7 @@ class MenuLateral extends StatelessWidget {
               child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  FaIcon(FontAwesomeIcons.taxi, color: Colors.white, size: 20),
+                  Icon(Iconos.taxi, color: Colors.white, size: 20),
                   SizedBox(width: 10),
                   Text(
                     'TAXIUAP ADMIN',
@@ -80,7 +80,7 @@ class MenuLateral extends StatelessWidget {
         tilePadding: const EdgeInsets.only(left: 24, right: 16),
         leading: SizedBox(
           width: 22,
-          child: Center(child: FaIcon(grupo.icono, color: Colors.white, size: 16)),
+          child: Center(child: Icon(grupo.icono, color: Colors.white, size: 16)),
         ),
         title: Text(
           grupo.titulo,
@@ -128,7 +128,7 @@ class _OpcionMenu extends StatelessWidget {
             children: [
               SizedBox(
                 width: 22,
-                child: Center(child: FaIcon(item.icono, color: Colors.white, size: 15)),
+                child: Center(child: Icon(item.icono, color: Colors.white, size: 15)),
               ),
               const SizedBox(width: 12),
               Expanded(

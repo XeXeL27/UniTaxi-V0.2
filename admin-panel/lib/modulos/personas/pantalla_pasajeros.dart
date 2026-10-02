@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cliente_api.dart';
@@ -23,7 +23,7 @@ class PantallaPasajeros extends StatelessWidget {
     final expedienteApi = ExpedienteApi(context.read<ClienteApi>());
     return ListadoRemoto<PasajeroAdmin>(
       titulo: 'Pasajeros',
-      icono: FontAwesomeIcons.userCheck,
+      icono: Iconos.userCheck,
       nombreArchivo: 'pasajeros',
       cargar: api.listarPasajeros,
       alVer: (pasajero, recargar) =>

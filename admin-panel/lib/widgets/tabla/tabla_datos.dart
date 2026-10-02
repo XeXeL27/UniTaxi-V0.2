@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../core/formato.dart';
 import '../../core/tema.dart';
@@ -22,7 +21,7 @@ import 'iconos_tabla.dart';
 /// columna de acciones siempre queda visible.
 class TablaDatos<T> extends StatefulWidget {
   final String titulo;
-  final FaIconData icono;
+  final IconData icono;
   final List<ColumnaTabla<T>> columnas;
   final List<T> filas;
   final bool cargando;
@@ -266,7 +265,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            FaIcon(widget.icono, color: ColoresApp.azul, size: 20),
+            Icon(widget.icono, color: ColoresApp.azul, size: 20),
             const SizedBox(width: 10),
             Text(
               widget.titulo,
@@ -794,7 +793,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
               ),
               child: Row(
                 children: [
-                  FaIcon(widget.icono, color: ColoresApp.azul, size: 18),
+                  Icon(widget.icono, color: ColoresApp.azul, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(

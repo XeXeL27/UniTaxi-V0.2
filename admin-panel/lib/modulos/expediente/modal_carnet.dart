@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
@@ -16,7 +16,7 @@ Future<void> mostrarCarnet(BuildContext context, {required ExpedienteApi api, re
   return mostrarFotosDocumento(
     context,
     titulo: 'Carnet de $nombre',
-    icono: FontAwesomeIcons.idCard,
+    icono: Iconos.idCard,
     documento: 'carnet',
     cargar: (lado) => api.carnet(idUsuario, lado),
     cambiar: (lado, archivo) => api.cambiarCarnet(
@@ -32,7 +32,7 @@ Future<void> mostrarCarnet(BuildContext context, {required ExpedienteApi api, re
 Future<void> mostrarFotosDocumento(
   BuildContext context, {
   required String titulo,
-  required FaIconData icono,
+  required IconData icono,
   required String documento,
   required Future<Uint8List> Function(String lado) cargar,
   Future<void> Function(String lado, ArchivoSubida archivo)? cambiar,
@@ -56,7 +56,7 @@ class BotonVerCarnet extends StatelessWidget {
     return TextButton.icon(
       onPressed: () => mostrarCarnet(context, api: api, idUsuario: idUsuario, nombre: nombre),
       style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
-      icon: const FaIcon(FontAwesomeIcons.idCard, size: 14),
+      icon: const Icon(Iconos.idCard, size: 14),
       label: const Text('Ver carnet', style: TextStyle(fontWeight: FontWeight.w600)),
     );
   }
@@ -64,7 +64,7 @@ class BotonVerCarnet extends StatelessWidget {
 
 class _ModalCarnet extends StatelessWidget {
   final String titulo;
-  final FaIconData icono;
+  final IconData icono;
   final String documento;
   final Future<Uint8List> Function(String lado) cargar;
   final Future<void> Function(String lado, ArchivoSubida archivo)? cambiar;
@@ -92,7 +92,7 @@ class _ModalCarnet extends StatelessWidget {
           decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
           child: Row(
             children: [
-              FaIcon(icono, color: ColoresApp.rojo, size: 18),
+              Icon(icono, color: ColoresApp.rojo, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -104,7 +104,7 @@ class _ModalCarnet extends StatelessWidget {
               IconButton(
                 tooltip: 'Cerrar',
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const FaIcon(FontAwesomeIcons.xmark, size: 18),
+                icon: const Icon(Iconos.xmark, size: 18),
               ),
             ],
           ),
@@ -209,13 +209,13 @@ class _LadoState extends State<_Lado> {
                       onPressed: _subiendo ? null : _cambiar,
                       icon: _subiendo
                           ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const FaIcon(FontAwesomeIcons.camera, size: 14),
+                          : const Icon(Iconos.camera, size: 14),
                       label: const Text('Cambiar foto'),
                     ),
                   IconButton(
                     tooltip: 'Descargar',
                     onPressed: bytes == null ? null : () => descargarArchivo(bytes, widget.nombreDescarga, 'image/jpeg'),
-                    icon: const FaIcon(FontAwesomeIcons.download, size: 16, color: ColoresApp.azul),
+                    icon: const Icon(Iconos.download, size: 16, color: ColoresApp.azul),
                   ),
                 ],
               ),
@@ -257,13 +257,13 @@ class BotonVerLicencia extends StatelessWidget {
       onPressed: () => mostrarFotosDocumento(
         context,
         titulo: 'Licencia de $nombre',
-        icono: FontAwesomeIcons.solidIdBadge,
+        icono: Iconos.solidIdBadge,
         documento: 'licencia',
         cargar: (lado) => api.licencia(idConductor, lado),
         cambiar: (lado, archivo) => api.cambiarFotoLicencia(idConductor, lado, archivo),
       ),
       style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
-      icon: const FaIcon(FontAwesomeIcons.solidIdBadge, size: 14),
+      icon: const Icon(Iconos.solidIdBadge, size: 14),
       label: const Text('Ver licencia', style: TextStyle(fontWeight: FontWeight.w600)),
     );
   }

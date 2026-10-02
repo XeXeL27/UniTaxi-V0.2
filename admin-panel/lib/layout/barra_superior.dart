@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../core/menu.dart';
@@ -34,7 +34,7 @@ class BarraSuperior extends StatelessWidget {
           IconButton(
             tooltip: menuVisible ? 'Ocultar menú' : 'Mostrar menú',
             onPressed: alAlternarMenu,
-            icon: const FaIcon(FontAwesomeIcons.bars, color: ColoresApp.azul, size: 20),
+            icon: const Icon(Iconos.bars, color: ColoresApp.azul, size: 20),
           ),
           const SizedBox(width: 4),
           Expanded(
@@ -73,11 +73,11 @@ class BarraSuperior extends StatelessWidget {
               ? IconButton(
                   tooltip: 'Cerrar sesion',
                   onPressed: sesion.cerrar,
-                  icon: const FaIcon(FontAwesomeIcons.powerOff, color: ColoresApp.rojo, size: 18),
+                  icon: const Icon(Iconos.powerOff, color: ColoresApp.rojo, size: 18),
                 )
               : TextButton.icon(
                   onPressed: sesion.cerrar,
-                  icon: const FaIcon(FontAwesomeIcons.powerOff, color: ColoresApp.rojo, size: 16),
+                  icon: const Icon(Iconos.powerOff, color: ColoresApp.rojo, size: 16),
                   label: const Text(
                     'Cerrar sesión',
                     style: TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.bold),

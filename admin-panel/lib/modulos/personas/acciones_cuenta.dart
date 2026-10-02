@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 
 import '../../core/tema.dart';
 import '../../widgets/flujos_crud.dart';
@@ -29,8 +29,8 @@ Widget botonSuspenderCuenta(
       mensajeExito: suspendida ? 'Se habilitó $cuenta.' : 'Se suspendió $cuenta.',
       alTerminar: recargar,
     ),
-    icon: FaIcon(
-      suspendida ? FontAwesomeIcons.userCheck : FontAwesomeIcons.userSlash,
+    icon: Icon(
+      suspendida ? Iconos.userCheck : Iconos.userSlash,
       size: 16,
       color: suspendida ? ColoresApp.exito : const Color(0xFFFD7E14),
     ),
@@ -53,6 +53,6 @@ Widget botonEliminarCuenta(
       mensajeEliminado: 'Se eliminó $cuenta.',
       alTerminar: recargar,
     ),
-    icon: const FaIcon(FontAwesomeIcons.trashCan, size: 16, color: ColoresApp.rojo),
+    icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
   );
 }

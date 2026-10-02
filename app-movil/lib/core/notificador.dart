@@ -1,10 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../comun/modelos_viaje.dart';
 import 'formato.dart';
 import 'preferencias_aviso.dart';
-import 'sonido.dart';
+import 'vibracion.dart';
 
 /// Notificaciones del telefono (y del navegador) para el conductor: avisan que llego una solicitud
 /// de viaje nueva. Salen de la consulta periodica de la lista, asi que llegan con la app abierta o
@@ -27,8 +29,8 @@ class Notificador {
   static AndroidNotificationDetails _canalSolicitudes() {
     final sufijo = _sufijo();
     return AndroidNotificationDetails(
-      // Con sonido y vibracion se conserva el canal que ya existia.
-      sufijo == 'sv' ? 'solicitudes_viaje' : 'solicitudes_viaje_${sufijo.isEmpty ? 'mudo' : sufijo}',
+      // v2: los canales anteriores no tenian patron de vibracion y en algunos telefonos no vibraban.
+      'solicitudes_viaje_v2_${sufijo.isEmpty ? 'mudo' : sufijo}',
       'Solicitudes de viaje',
       channelDescription: 'Aviso cuando un pasajero pide un taxi',
       importance: Importance.max,
@@ -37,24 +39,25 @@ class Notificador {
       visibility: NotificationVisibility.public,
       playSound: PreferenciasAviso.sonido.value,
       enableVibration: PreferenciasAviso.vibracion.value,
+      vibrationPattern: PreferenciasAviso.vibracion.value ? _vibracionCorta : null,
     );
   }
 
-  /// Aviso del viaje del pasajero, una sola vez: con el sonido de la app (res/raw/viaje_aceptado) si
-  /// [Sonido.activo]; si no, con el sonido de notificacion del telefono. Cada variante tiene su canal
-  /// ("tel" = sonido del telefono) porque el sonido de un canal no cambia despues de creado.
-  static AndroidNotificationDetails _canalViaje() {
+  /// Aviso del viaje del pasajero, una sola vez. [sonidoPropio] (viaje aceptado): con el sonido de la
+  /// app (res/raw/viaje_aceptado); si no, con el sonido de notificacion del telefono. Cada variante
+  /// tiene su canal ("tel" = sonido del telefono) porque el sonido de un canal no cambia despues de creado.
+  static AndroidNotificationDetails _canalViaje(bool sonidoPropio) {
     final sufijo = _sufijo();
     return AndroidNotificationDetails(
-      'aviso_viaje_${Sonido.activo ? '' : 'tel_'}${sufijo.isEmpty ? 'mudo' : sufijo}',
-      'Avisos del viaje',
-      channelDescription: 'Cuando el conductor acepta tu viaje y cuando llega',
+      'aviso_viaje_${sonidoPropio ? '' : 'tel_'}${sufijo.isEmpty ? 'mudo' : sufijo}',
+      sonidoPropio ? 'Viaje aceptado' : 'Avisos del viaje',
+      channelDescription: sonidoPropio ? 'Cuando un conductor acepta tu viaje' : 'Cuando el conductor llega y otros avisos',
       importance: Importance.max,
       priority: Priority.high,
       category: AndroidNotificationCategory.status,
       visibility: NotificationVisibility.public,
       playSound: PreferenciasAviso.sonido.value,
-      sound: Sonido.activo ? const RawResourceAndroidNotificationSound('viaje_aceptado') : null,
+      sound: sonidoPropio ? const RawResourceAndroidNotificationSound('viaje_aceptado') : null,
       enableVibration: PreferenciasAviso.vibracion.value,
       vibrationPattern: PreferenciasAviso.vibracion.value ? _vibracionCorta : null,
       onlyAlertOnce: true,
@@ -103,6 +106,9 @@ class Notificador {
   /// cuantas son. Reemplaza a la anterior (mismo id) para no amontonarlas.
   static Future<void> solicitudesNuevas(List<Solicitud> nuevas) async {
     if (nuevas.isEmpty) return;
+    // Vibra directo (como notificacion, ver MainActivity) aunque la app este a la vista: ahi Android
+    // a veces no hace vibrar la notificacion. Si tambien vibra el canal, se pisan y se siente una vez.
+    unawaited(Vibracion.corta());
     await iniciar();
     if (!_listo) return;
     final una = nuevas.length == 1 ? nuevas.first : null;
@@ -127,7 +133,13 @@ class Notificador {
   ///
   /// [id] es el mismo para la app y para el push de un mismo aviso: si los dos llegan, el segundo
   /// solo actualiza la notificacion (onlyAlertOnce) y no vuelve a sonar.
-  static Future<void> avisoViaje(String titulo, String cuerpo, {required int id, bool pedirPermiso = true}) async {
+  static Future<void> avisoViaje(
+    String titulo,
+    String cuerpo, {
+    required int id,
+    bool pedirPermiso = true,
+    bool sonidoPropio = false,
+  }) async {
     await iniciar(pedirPermiso: pedirPermiso);
     if (!_listo) return;
     try {
@@ -135,7 +147,7 @@ class Notificador {
         id: id,
         title: titulo,
         body: cuerpo,
-        notificationDetails: NotificationDetails(android: _canalViaje(), web: const WebNotificationDetails()),
+        notificationDetails: NotificationDetails(android: _canalViaje(sonidoPropio), web: const WebNotificationDetails()),
       );
     } catch (e) {
       debugPrint('No se pudo mostrar el aviso del viaje: $e');

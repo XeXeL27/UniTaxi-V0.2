@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
@@ -113,7 +113,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                         children: [
                           const Padding(
                             padding: EdgeInsets.only(top: 2),
-                            child: FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                            child: Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                           ),
                           const SizedBox(width: 10),
                           Expanded(
@@ -136,7 +136,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                       labelText: 'Usuario, correo o teléfono',
                       prefixIcon: Padding(
                         padding: _ajusteIconoLogin,
-                        child: FaIcon(FontAwesomeIcons.user, size: 16),
+                        child: Icon(Iconos.user, size: 16),
                       ),
                     ),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingrese su usuario' : null,
@@ -151,12 +151,12 @@ class _PantallaLoginState extends State<PantallaLogin> {
                       labelText: 'Contraseña',
                       prefixIcon: const Padding(
                         padding: _ajusteIconoLogin,
-                        child: FaIcon(FontAwesomeIcons.lock, size: 16),
+                        child: Icon(Iconos.lock, size: 16),
                       ),
                       suffixIcon: IconButton(
                         tooltip: _ocultarPassword ? 'Mostrar contraseña' : 'Ocultar contraseña',
                         onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
-                        icon: FaIcon(_ocultarPassword ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash, size: 16),
+                        icon: Icon(_ocultarPassword ? Iconos.eye : Iconos.eyeSlash, size: 16),
                       ),
                     ),
                     validator: (v) => (v == null || v.isEmpty) ? 'Ingrese su contraseña' : null,
@@ -170,7 +170,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                             height: 16,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const FaIcon(FontAwesomeIcons.rightToBracket, size: 16),
+                        : const Icon(Iconos.rightToBracket, size: 16),
                     label: const Text('Iniciar sesión'),
                   ),
                   const SizedBox(height: 24),
@@ -179,7 +179,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                       Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
                       Padding(
                         padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 12),
+                        child: Icon(Iconos.lock, color: ColoresApp.textoSuave, size: 12),
                       ),
                       Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
                     ],
@@ -259,7 +259,7 @@ class _PanelMarca extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: const Center(child: FaIcon(FontAwesomeIcons.taxi, color: Colors.white, size: 28)),
+                    child: const Center(child: Icon(Iconos.taxi, color: Colors.white, size: 28)),
                   ),
                 ),
                 SizedBox(height: compacta ? 14 : 26),

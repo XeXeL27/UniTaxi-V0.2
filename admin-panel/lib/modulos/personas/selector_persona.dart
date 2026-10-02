@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 
 import 'modelos.dart';
 
@@ -61,7 +61,7 @@ class SelectorPersona extends StatelessWidget {
               errorText: estado.errorText,
               prefixIcon: const Padding(
                 padding: EdgeInsets.all(12),
-                child: FaIcon(FontAwesomeIcons.magnifyingGlass, size: 14),
+                child: Icon(Iconos.magnifyingGlass, size: 14),
               ),
             ),
             onChanged: (_) {

@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -5,7 +7,9 @@ import '../core/tema.dart';
 
 /// Opcion de la barra inferior.
 class ItemBarra {
-  final FaIconData icono;
+  /// Icono de linea (opcion inactiva) y relleno (activa), como la barra de pestanas de iOS.
+  final IconData icono;
+  final IconData iconoActivo;
   final String texto;
 
   /// Numero en rojo sobre el icono (por ejemplo solicitudes nuevas); null o 0 no se muestra.
@@ -14,10 +18,11 @@ class ItemBarra {
   /// Clave del boton, para ubicarlo en pantalla (guia de inicio).
   final Key? clave;
 
-  const ItemBarra(this.icono, this.texto, {this.insignia, this.clave});
+  const ItemBarra(this.icono, this.iconoActivo, this.texto, {this.insignia, this.clave});
 }
 
-/// Barra inferior flotante (blanca, esquinas redondeadas) con las secciones de la app.
+/// Barra inferior flotante estilo iOS 26: capsula blanca translucida con desenfoque del fondo y la
+/// opcion activa en azul marino sobre una pastilla clara.
 ///
 /// Con [botonCentral] deja un hueco en medio y el boton sobresale por encima de la barra, como el
 /// boton de pedir taxi del pasajero o el de conectarse del conductor. Se espera un numero par de
@@ -29,7 +34,7 @@ class BarraInferior extends StatelessWidget {
   final Widget? botonCentral;
 
   /// Alto de la barra sin el margen inferior del telefono.
-  static const double alto = 74;
+  static const double alto = 70;
 
   /// Espacio que ocupa la barra desde el borde inferior: lo que el contenido debe dejar libre.
   static double espacio(BuildContext context) => alto + 14 + MediaQuery.paddingOf(context).bottom;
@@ -42,6 +47,7 @@ class BarraInferior extends StatelessWidget {
   Widget build(BuildContext context) {
     final abajo = MediaQuery.paddingOf(context).bottom;
     final mitad = botonCentral == null ? items.length : items.length ~/ 2;
+    final radio = BorderRadius.circular(alto / 2);
     return Padding(
       padding: EdgeInsets.fromLTRB(14, 0, 14, 10 + abajo),
       child: Center(
@@ -52,27 +58,40 @@ class BarraInferior extends StatelessWidget {
             clipBehavior: Clip.none,
             alignment: Alignment.topCenter,
             children: [
-              Container(
-                height: alto,
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              DecoratedBox(
                 decoration: BoxDecoration(
-                  color: ColoresApp.blanco,
-                  borderRadius: BorderRadius.circular(26),
-                  border: Border.all(color: ColoresApp.borde.withValues(alpha: 0.6)),
-                  boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 18, offset: Offset(0, 6))],
+                  borderRadius: radio,
+                  boxShadow: const [BoxShadow(color: Color(0x24000000), blurRadius: 24, offset: Offset(0, 8))],
                 ),
-                // Con boton central cada lado ocupa la misma mitad, asi el hueco queda al centro
-                // aunque la cantidad de items sea impar (pasajero: 1 a la izquierda y 2 a la derecha).
-                child: Row(
-                  children: botonCentral == null
-                      ? [for (var i = 0; i < items.length; i++) Expanded(child: _opcion(i))]
-                      : [
-                          Expanded(child: Row(children: [for (var i = 0; i < mitad; i++) Expanded(child: _opcion(i))])),
-                          const SizedBox(width: 92),
-                          Expanded(
-                            child: Row(children: [for (var i = mitad; i < items.length; i++) Expanded(child: _opcion(i))]),
-                          ),
-                        ],
+                child: ClipRRect(
+                  borderRadius: radio,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                    child: Container(
+                      height: alto,
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: ColoresApp.blanco.withValues(alpha: 0.86),
+                        borderRadius: radio,
+                        border: Border.all(color: const Color(0x14000000), width: 0.6),
+                      ),
+                      // Con boton central cada lado ocupa la misma mitad, asi el hueco queda al centro
+                      // aunque la cantidad de items sea impar (pasajero: 1 a la izquierda y 2 a la derecha).
+                      child: Row(
+                        children: botonCentral == null
+                            ? [for (var i = 0; i < items.length; i++) Expanded(child: _opcion(i))]
+                            : [
+                                Expanded(child: Row(children: [for (var i = 0; i < mitad; i++) Expanded(child: _opcion(i))])),
+                                const SizedBox(width: 92),
+                                Expanded(
+                                  child: Row(
+                                    children: [for (var i = mitad; i < items.length; i++) Expanded(child: _opcion(i))],
+                                  ),
+                                ),
+                              ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
               if (botonCentral != null) Positioned(top: -30, child: botonCentral!),
@@ -85,7 +104,7 @@ class BarraInferior extends StatelessWidget {
 }
 
 /// Gris de los iconos y textos de la barra que no estan activos.
-const _inactivo = Color(0xFF8A8A8A);
+const _inactivo = Color(0xFF8E8E93);
 
 class _Opcion extends StatelessWidget {
   final ItemBarra item;
@@ -97,31 +116,32 @@ class _Opcion extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final insignia = item.insignia ?? 0;
+    final color = activo ? ColoresApp.azul : _inactivo;
     return Semantics(
       selected: activo,
       button: true,
       label: item.texto,
-      child: InkWell(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           curve: Curves.easeOut,
           margin: const EdgeInsets.symmetric(horizontal: 2),
-          decoration: BoxDecoration(borderRadius: BorderRadius.circular(18)),
+          decoration: BoxDecoration(
+            color: activo ? ColoresApp.azul.withValues(alpha: 0.09) : const Color(0x00000000),
+            borderRadius: BorderRadius.circular(29),
+          ),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Stack(
                 clipBehavior: Clip.none,
                 children: [
-                  // Estilo Uber: solo el icono, negro el activo y gris los demas.
                   SizedBox(
                     width: 34,
-                    height: 28,
-                    child: Center(
-                      child: FaIcon(item.icono, size: 19, color: activo ? ColoresApp.tinta : _inactivo),
-                    ),
+                    height: 27,
+                    child: Center(child: Icon(activo ? item.iconoActivo : item.icono, size: 25, color: color)),
                   ),
                   if (insignia > 0)
                     Positioned(
@@ -144,15 +164,16 @@ class _Opcion extends StatelessWidget {
                     ),
                 ],
               ),
-              const SizedBox(height: 4),
+              const SizedBox(height: 3),
               Text(
                 item.texto,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 11,
+                  letterSpacing: -0.1,
                   fontWeight: activo ? FontWeight.w700 : FontWeight.w500,
-                  color: activo ? ColoresApp.tinta : _inactivo,
+                  color: color,
                 ),
               ),
             ],

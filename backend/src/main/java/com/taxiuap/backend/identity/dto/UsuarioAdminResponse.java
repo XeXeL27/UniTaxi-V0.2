@@ -15,5 +15,7 @@ public record UsuarioAdminResponse(
         String rol,
         LocalDateTime fechaRegistro,
         /** A (activa) o S (suspendida). */
-        String estado) {
+        String estado,
+        /** HABILITADO, PENDIENTE (conductor en revision), OBSERVADO (carnet en revision), RECHAZADO o SUSPENDIDO. */
+        String situacion) {
 }

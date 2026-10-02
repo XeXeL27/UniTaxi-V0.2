@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
@@ -14,14 +14,14 @@ import 'selector_persona.dart';
 
 /// Tipo de cuenta que el administrador habilita (TipoRegistroUsuario del backend).
 enum TipoRegistro {
-  pasajero('PASAJERO', 'Pasajero', FontAwesomeIcons.userCheck),
-  conductor('CONDUCTOR', 'Conductor', FontAwesomeIcons.motorcycle),
-  ambos('AMBOS', 'Pasajero y conductor', FontAwesomeIcons.users),
-  admin('ADMIN', 'Administrador', FontAwesomeIcons.userShield);
+  pasajero('PASAJERO', 'Pasajero', Iconos.userCheck),
+  conductor('CONDUCTOR', 'Conductor', Iconos.motorcycle),
+  ambos('AMBOS', 'Pasajero y conductor', Iconos.users),
+  admin('ADMIN', 'Administrador', Iconos.userShield);
 
   final String codigo;
   final String etiqueta;
-  final FaIconData icono;
+  final IconData icono;
 
   const TipoRegistro(this.codigo, this.etiqueta, this.icono);
 
@@ -195,7 +195,7 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
     final tipo = _tipo;
     return ModalFormulario(
       titulo: widget.titulo,
-      icono: FontAwesomeIcons.userPlus,
+      icono: Iconos.userPlus,
       claveFormulario: _claveFormulario,
       alGuardar: _guardar,
       textoGuardar: 'Habilitar',
@@ -237,7 +237,7 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
                 ChoiceChip(
                   selected: opcion == tipo,
                   onSelected: (_) => setState(() => _tipo = opcion),
-                  avatar: FaIcon(opcion.icono, size: 14, color: opcion == tipo ? Colors.white : ColoresApp.azul),
+                  avatar: Icon(opcion.icono, size: 14, color: opcion == tipo ? Colors.white : ColoresApp.azul),
                   label: Text(opcion.etiqueta),
                   showCheckmark: false,
                   selectedColor: ColoresApp.azul,
@@ -292,7 +292,7 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
               : 'Mínimo 8 caracteres',
           suffixIcon: IconButton(
             onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
-            icon: FaIcon(_ocultarPassword ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash, size: 16),
+            icon: Icon(_ocultarPassword ? Iconos.eye : Iconos.eyeSlash, size: 16),
           ),
         ),
         validator: (v) => (v == null || v.length < 8) ? 'Mínimo 8 caracteres' : null,
@@ -449,7 +449,7 @@ class _DatoPersona extends StatelessWidget {
       decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(6)),
       child: Row(
         children: [
-          const FaIcon(FontAwesomeIcons.idCard, color: ColoresApp.azul, size: 18),
+          const Icon(Iconos.idCard, color: ColoresApp.azul, size: 18),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -524,7 +524,7 @@ class _SelectorDocumento extends StatelessWidget {
       decoration: InputDecoration(labelText: etiqueta, errorText: error),
       child: Row(
         children: [
-          FaIcon(FontAwesomeIcons.filePdf, size: 18, color: archivo == null ? Colors.black26 : ColoresApp.rojo),
+          Icon(Iconos.filePdf, size: 18, color: archivo == null ? Colors.black26 : ColoresApp.rojo),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
@@ -534,7 +534,7 @@ class _SelectorDocumento extends StatelessWidget {
             ),
           ),
           if (archivo != null)
-            IconButton(tooltip: 'Quitar', onPressed: alQuitar, icon: const FaIcon(FontAwesomeIcons.xmark, size: 14)),
+            IconButton(tooltip: 'Quitar', onPressed: alQuitar, icon: const Icon(Iconos.xmark, size: 14)),
           TextButton(onPressed: alElegir, child: Text(archivo == null ? 'Elegir PDF' : 'Cambiar')),
         ],
       ),

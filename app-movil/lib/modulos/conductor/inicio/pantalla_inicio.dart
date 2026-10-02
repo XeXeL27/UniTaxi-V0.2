@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
@@ -331,7 +332,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       ),
       PasoGuia(
         clave: _guiaHistorial,
-        titulo: 'Historial',
+        titulo: 'Actividad',
         texto: 'Tus viajes completados de este mes y del anterior.',
       ),
       PasoGuia(
@@ -341,8 +342,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       ),
       PasoGuia(
         clave: _guiaMas,
-        titulo: 'Más opciones',
-        texto: 'Tu perfil, tus documentos, tus QR de cobro, contraseña, huella y cerrar sesión.',
+        titulo: 'Perfil',
+        texto: 'Tus datos, tus documentos, tus QR de cobro, contraseña, huella y cerrar sesión.',
       ),
     ]);
   }
@@ -537,10 +538,20 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   indice: _seccion,
                   onCambiar: _irA,
                   items: [
-                    ItemBarra(FontAwesomeIcons.house, 'Inicio', insignia: pendientes),
-                    ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial', clave: _guiaHistorial),
-                    ItemBarra(FontAwesomeIcons.solidComments, 'Opiniones', clave: _guiaOpiniones),
-                    ItemBarra(FontAwesomeIcons.ellipsis, 'Más', clave: _guiaMas),
+                    ItemBarra(CupertinoIcons.house, CupertinoIcons.house_fill, 'Inicio', insignia: pendientes),
+                    ItemBarra(CupertinoIcons.square_list, CupertinoIcons.square_list_fill, 'Actividad', clave: _guiaHistorial),
+                    ItemBarra(
+                      CupertinoIcons.chat_bubble_2,
+                      CupertinoIcons.chat_bubble_2_fill,
+                      'Opiniones',
+                      clave: _guiaOpiniones,
+                    ),
+                    ItemBarra(
+                      CupertinoIcons.person_crop_circle,
+                      CupertinoIcons.person_crop_circle_fill,
+                      'Perfil',
+                      clave: _guiaMas,
+                    ),
                   ],
                   botonCentral: conViaje
                       ? null

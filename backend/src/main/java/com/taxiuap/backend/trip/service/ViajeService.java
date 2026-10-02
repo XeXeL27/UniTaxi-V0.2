@@ -239,7 +239,7 @@ public class ViajeService {
             throw new NegocioException("El pasajero no pidio cambiar el metodo de pago");
         }
         if (aceptar) {
-            validarQrDelConductor(viaje, viaje.getMetodoPagoPedido(), "Primero agregue su QR en Mas > Mis QR de cobro");
+            validarQrDelConductor(viaje, viaje.getMetodoPagoPedido(), "Primero agregue su QR en Perfil > Mis QR de cobro");
             viaje.setMetodoPago(viaje.getMetodoPagoPedido());
         }
         viaje.setMetodoPagoPedido(null);
@@ -252,7 +252,7 @@ public class ViajeService {
         Viaje viaje = obtenerViajeDelConductor(idViaje);
         validarViajeActivo(viaje);
         MetodoPago nuevo = metodoPagoPermitido(metodoPago);
-        validarQrDelConductor(viaje, nuevo, "Primero agregue su QR en Mas > Mis QR de cobro");
+        validarQrDelConductor(viaje, nuevo, "Primero agregue su QR en Perfil > Mis QR de cobro");
         viaje.setMetodoPago(nuevo);
         viaje.setMetodoPagoPedido(null);
         return guardarYNotificar(viaje);

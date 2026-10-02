@@ -24,9 +24,15 @@ public record RegistroConductorPasajeroRequest(
         @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String apellidos,
         @Valid @NotNull DatosConductorRequest conductor,
         /** true: la persona indico que sus datos se leyeron mal; un administrador los revisa (OBSERVADO). */
-        Boolean observado) {
+        Boolean observado,
+        /** true: marco que acepta los terminos y condiciones (obligatorio al enviar el carnet). */
+        Boolean aceptaTerminos) {
 
     public boolean esObservado() {
         return Boolean.TRUE.equals(observado);
+    }
+
+    public boolean aceptoTerminos() {
+        return Boolean.TRUE.equals(aceptaTerminos);
     }
 }

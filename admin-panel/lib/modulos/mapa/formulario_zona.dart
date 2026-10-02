@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../core/tema.dart';
@@ -58,7 +58,7 @@ class _FormularioZonaState extends State<FormularioZona> {
   Widget build(BuildContext context) {
     return ModalFormulario(
       titulo: widget.zona == null ? 'Nueva zona' : 'Editar zona',
-      icono: FontAwesomeIcons.drawPolygon,
+      icono: Iconos.drawPolygon,
       claveFormulario: _claveFormulario,
       campos: [
         TextFormField(
@@ -95,12 +95,12 @@ class _FormularioZonaState extends State<FormularioZona> {
                     ),
                     TextButton.icon(
                       onPressed: _puntos.isEmpty ? null : () => _alCambiarPoligono(_puntos.sublist(0, _puntos.length - 1)),
-                      icon: const FaIcon(FontAwesomeIcons.rotateLeft, size: 12),
+                      icon: const Icon(Iconos.rotateLeft, size: 12),
                       label: const Text('Deshacer'),
                     ),
                     TextButton.icon(
                       onPressed: _puntos.isEmpty ? null : () => _alCambiarPoligono(const []),
-                      icon: const FaIcon(FontAwesomeIcons.eraser, size: 12),
+                      icon: const Icon(Iconos.eraser, size: 12),
                       label: const Text('Limpiar'),
                     ),
                   ],

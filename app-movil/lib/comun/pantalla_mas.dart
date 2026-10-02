@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons, CupertinoSwitch;
 import 'package:provider/provider.dart';
 
 import '../core/api_excepcion.dart';
@@ -18,10 +18,14 @@ import 'cambiar_contrasena.dart';
 import 'configuracion_avisos.dart';
 import 'textos_legales.dart';
 
-const _naranja = Color(0xFFE67E22);
-const _verde = Color(0xFF1E8449);
+// Colores de los iconos, como los de Ajustes de iOS.
+const _naranja = Color(0xFFFF9500);
+const _verde = Color(0xFF34C759);
+const _gris = Color(0xFF8E8E93);
+const _morado = Color(0xFF5856D6);
+const _celeste = Color(0xFF007AFF);
 
-/// Seccion "Mas" de la barra inferior, la misma para pasajero y conductor: datos del perfil,
+/// Seccion "Perfil" de la barra inferior, la misma para pasajero y conductor: datos del perfil,
 /// textos legales, contrasena, huella, cambio de modo y cerrar sesion.
 class PantallaMas extends StatefulWidget {
   final Uint8List? foto;
@@ -145,36 +149,38 @@ class _PantallaMasState extends State<PantallaMas> {
     final usuario = sesion.usuario;
     final esConductor = usuario?.esConductor ?? false;
     return PaginaSeccion(
-      titulo: 'Más opciones',
-      subtitulo: 'Configuración y datos de tu perfil',
+      titulo: 'Perfil',
+      subtitulo: 'Tu cuenta, configuración y seguridad',
       constructor: (context, relleno) => ListView(
         padding: relleno,
         children: [
           _TarjetaPerfil(usuario: usuario, foto: widget.foto, rol: esConductor ? 'Conductor' : 'Pasajero'),
           const SizedBox(height: 16),
           TarjetaOpcion(
-            icono: FontAwesomeIcons.user,
+            icono: CupertinoIcons.person_fill,
             titulo: 'Datos personales',
             detalle: 'Ver y editar la información de tu cuenta',
             onTap: widget.onDatosPersonales,
           ),
           if (widget.onDocumentos != null)
             TarjetaOpcion(
-              icono: FontAwesomeIcons.folderOpen,
+              icono: CupertinoIcons.folder_fill,
+              color: _celeste,
               titulo: 'Mis documentos',
               detalle: 'Tus PDF y el estado de su revisión',
               onTap: widget.onDocumentos,
             ),
           if (widget.onMisQr != null)
             TarjetaOpcion(
-              icono: FontAwesomeIcons.qrcode,
+              icono: CupertinoIcons.qrcode,
+              color: _morado,
               titulo: 'Mis QR de cobro',
               detalle: 'El QR de tu banca móvil para cobrar (hasta 3)',
               onTap: widget.onMisQr,
             ),
           if (widget.registroConductor != null)
             TarjetaOpcion(
-              icono: FontAwesomeIcons.motorcycle,
+              icono: Icons.two_wheeler_rounded,
               titulo: widget.registroConductor!.$1,
               detalle: widget.registroConductor!.$2,
               color: ColoresApp.azul,
@@ -182,7 +188,7 @@ class _PantallaMasState extends State<PantallaMas> {
             ),
           if (widget.onCambiarModo != null)
             TarjetaOpcion(
-              icono: esConductor ? FontAwesomeIcons.personWalking : FontAwesomeIcons.motorcycle,
+              icono: CupertinoIcons.arrow_2_squarepath,
               titulo: esConductor ? 'Cambiar a modo pasajero' : 'Cambiar a modo conductor',
               detalle: esConductor ? 'Pide un taxi con tu cuenta de pasajero' : 'Recibe solicitudes de viaje',
               color: ColoresApp.rojo,
@@ -193,7 +199,8 @@ class _PantallaMasState extends State<PantallaMas> {
             builder: (context, sonido, _) => ValueListenableBuilder<bool>(
               valueListenable: PreferenciasAviso.vibracion,
               builder: (context, vibracion, _) => TarjetaOpcion(
-                icono: FontAwesomeIcons.gear,
+                icono: CupertinoIcons.bell_fill,
+                color: ColoresApp.rojo,
                 titulo: 'Sonido y vibración',
                 detalle: switch ((sonido, vibracion)) {
                   (true, true) => 'Avisos con sonido y vibración',
@@ -206,19 +213,21 @@ class _PantallaMasState extends State<PantallaMas> {
             ),
           ),
           TarjetaOpcion(
-            icono: FontAwesomeIcons.shieldHalved,
+            icono: CupertinoIcons.lock_shield_fill,
+            color: _gris,
             titulo: 'Políticas de privacidad',
             detalle: 'Consulta cómo protegemos tus datos',
             onTap: () => _abrir(const PantallaTextoLegal(titulo: 'Políticas de privacidad', secciones: politicasPrivacidad)),
           ),
           TarjetaOpcion(
-            icono: FontAwesomeIcons.fileLines,
+            icono: CupertinoIcons.doc_text_fill,
+            color: _gris,
             titulo: 'Términos y condiciones',
             detalle: 'Consulta las reglas de uso de UNITAXI',
             onTap: () => _abrir(const PantallaTextoLegal(titulo: 'Términos y condiciones', secciones: terminosCondiciones)),
           ),
           TarjetaOpcion(
-            icono: FontAwesomeIcons.lock,
+            icono: CupertinoIcons.lock_fill,
             titulo: 'Cambiar contraseña',
             detalle: 'Actualiza tu contraseña de acceso',
             color: _naranja,
@@ -226,24 +235,25 @@ class _PantallaMasState extends State<PantallaMas> {
           ),
           if (Huella.soportada)
             TarjetaOpcion(
-              icono: FontAwesomeIcons.fingerprint,
+              icono: Icons.fingerprint_rounded,
               titulo: 'Ingreso con huella',
               detalle: _huellaDisponible == false
                   ? 'Configura huella o Face ID en el dispositivo para activar esta opción.'
                   : 'Ingresa a la app sin escribir tu contraseña.',
               color: _verde,
               onTap: _huellaDisponible == true ? () => _cambiarHuella(!_huellaActiva) : null,
-              derecha: Switch(
+              derecha: CupertinoSwitch(
                 value: _huellaActiva,
                 activeTrackColor: _verde,
                 onChanged: _huellaDisponible == true ? _cambiarHuella : null,
               ),
             ),
           TarjetaOpcion(
-            icono: FontAwesomeIcons.rightFromBracket,
+            icono: CupertinoIcons.square_arrow_right,
             titulo: 'Cerrar sesión',
             detalle: 'Salir de tu cuenta de forma segura',
             color: ColoresApp.rojo,
+            destructiva: true,
             onTap: widget.onCerrarSesion,
           ),
           const SizedBox(height: 14),

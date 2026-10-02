@@ -23,6 +23,10 @@ import org.springframework.http.CacheControl;
 import org.springframework.http.MediaType;
 import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.identity.service.FotoPerfilService;
+import com.taxiuap.backend.identity.service.EdicionUsuarioAdminService;
+import com.taxiuap.backend.identity.dto.EdicionUsuarioAdminRequest;
+import com.taxiuap.backend.identity.dto.UsuarioDetalleAdminResponse;
+import org.springframework.web.bind.annotation.PostMapping;
 
 import com.taxiuap.backend.identity.dto.CambiarEstadoUsuarioRequest;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
@@ -38,6 +42,7 @@ public class UsuarioAdminController {
     private final GestionUsuarioService gestionUsuarioService;
     private final FotoPerfilService fotoPerfilService;
     private final CarnetService carnetService;
+    private final EdicionUsuarioAdminService edicionUsuarioAdminService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<UsuarioAdminResponse>>> listar() {
@@ -85,5 +90,34 @@ public class UsuarioAdminController {
             @RequestPart(value = "reverso", required = false) MultipartFile reverso) {
         carnetService.reemplazarPorAdmin(id, anverso, reverso);
         return ResponseEntity.ok(ApiResponse.exito("Fotos del carnet actualizadas", null));
+    }
+
+    /** Todos los datos de la cuenta y de la persona para el modal Editar (incluida la licencia del conductor). */
+    @GetMapping("/{id}/detalle")
+    public ResponseEntity<ApiResponse<UsuarioDetalleAdminResponse>> detalle(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito(edicionUsuarioAdminService.detalle(id)));
+    }
+
+    /**
+     * Edita todo junto. Multipart: "datos" (JSON) y, opcionales, "carnetAnverso", "carnetReverso",
+     * "licenciaAnverso" y "licenciaReverso".
+     */
+    @PutMapping(value = "/{id}/datos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<UsuarioDetalleAdminResponse>> actualizar(
+            @PathVariable Long id,
+            @Valid @RequestPart("datos") EdicionUsuarioAdminRequest datos,
+            @RequestPart(value = "carnetAnverso", required = false) MultipartFile carnetAnverso,
+            @RequestPart(value = "carnetReverso", required = false) MultipartFile carnetReverso,
+            @RequestPart(value = "licenciaAnverso", required = false) MultipartFile licenciaAnverso,
+            @RequestPart(value = "licenciaReverso", required = false) MultipartFile licenciaReverso) {
+        return ResponseEntity.ok(ApiResponse.exito("Usuario actualizado", edicionUsuarioAdminService.actualizar(
+                id, datos, carnetAnverso, carnetReverso, licenciaAnverso, licenciaReverso)));
+    }
+
+    /** Genera una contrasena nueva y la envia con el usuario al correo actual de la persona. */
+    @PostMapping("/{id}/credenciales")
+    public ResponseEntity<ApiResponse<Void>> reenviarCredenciales(@PathVariable Long id) {
+        edicionUsuarioAdminService.reenviarCredenciales(id);
+        return ResponseEntity.ok(ApiResponse.exito("Credenciales enviadas al correo", null));
     }
 }

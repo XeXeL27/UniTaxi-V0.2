@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 
 import '../../core/formato.dart';
 import '../../core/tema.dart';
@@ -30,10 +30,10 @@ class ExpedientePasajero extends StatelessWidget {
         titulo: perfil.nombreCompleto,
         subtitulo: 'Pasajero  |  usuario ${pasajero.nombreUsuario}',
         pestanas: const [
-          (FontAwesomeIcons.idCard, 'Datos'),
-          (FontAwesomeIcons.solidStar, 'Favoritos'),
-          (FontAwesomeIcons.route, 'Viajes'),
-          (FontAwesomeIcons.solidComments, 'Calificaciones dadas'),
+          (Iconos.idCard, 'Datos'),
+          (Iconos.solidStar, 'Favoritos'),
+          (Iconos.route, 'Viajes'),
+          (Iconos.solidComments, 'Calificaciones dadas'),
         ],
         vistas: [
           ListView(
@@ -41,7 +41,7 @@ class ExpedientePasajero extends StatelessWidget {
             children: [
               SeccionExpediente(
                 titulo: 'Datos personales',
-                icono: FontAwesomeIcons.user,
+                icono: Iconos.user,
                 accion: BotonVerCarnet(api: api, idUsuario: perfil.idUsuario, nombre: perfil.nombreCompleto),
                 child: DatosEnGrilla([
                   ('Nombres', perfil.nombres),
@@ -139,7 +139,7 @@ class _Favoritos extends StatelessWidget {
                               shape: BoxShape.circle,
                               border: Border.all(color: Colors.white, width: 3),
                             ),
-                            child: const FaIcon(FontAwesomeIcons.solidStar, color: Colors.white, size: 13),
+                            child: const Icon(Iconos.solidStar, color: Colors.white, size: 13),
                           ),
                         ),
                       ),
@@ -159,7 +159,7 @@ class _Favoritos extends StatelessWidget {
             ),
             child: Row(
               children: [
-                const FaIcon(FontAwesomeIcons.locationDot, color: ColoresApp.rojo, size: 18),
+                const Icon(Iconos.locationDot, color: ColoresApp.rojo, size: 18),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(

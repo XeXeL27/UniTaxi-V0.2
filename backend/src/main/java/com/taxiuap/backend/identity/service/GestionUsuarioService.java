@@ -16,6 +16,8 @@ import com.taxiuap.backend.identity.entity.Administrador;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
+import com.taxiuap.backend.identity.enums.SituacionAprobacion;
+import com.taxiuap.backend.identity.enums.SituacionCarnet;
 import com.taxiuap.backend.identity.repository.AdministradorRepository;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
@@ -149,7 +151,7 @@ public class GestionUsuarioService {
         return aRespuesta(usuario);
     }
 
-    private Usuario buscarNoEliminado(Long idUsuario) {
+    public Usuario buscarNoEliminado(Long idUsuario) {
         return usuarioRepository.findById(idUsuario)
                 .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", idUsuario));
@@ -212,6 +214,27 @@ public class GestionUsuarioService {
                 persona.getTelefono(),
                 usuario.getRol().getCodigo(),
                 usuario.getFechaRegistro(),
-                usuario.getEstadoUsuario().name());
+                usuario.getEstadoUsuario().name(),
+                situacion(usuario));
+    }
+
+    /**
+     * Situacion de la cuenta para el filtro del panel: SUSPENDIDO (cuenta en S o conductor suspendido),
+     * OBSERVADO (carnet esperando revision), PENDIENTE / RECHAZADO (conductor sin aprobar) o HABILITADO.
+     */
+    public String situacion(Usuario usuario) {
+        if (usuario.getEstadoUsuario() == EstadoRegistro.S) return "SUSPENDIDO";
+        if (usuario.getPersona().getSituacionCarnet() == SituacionCarnet.OBSERVADO) return "OBSERVADO";
+        if (RolSistema.CONDUCTOR.getCodigo().equals(usuario.getRol().getCodigo())) {
+            SituacionAprobacion aprobacion = conductorRepository.findByUsuarioId(usuario.getId())
+                    .map(Conductor::getSituacionAprobacion).orElse(SituacionAprobacion.PENDIENTE);
+            return switch (aprobacion) {
+                case APROBADO -> "HABILITADO";
+                case PENDIENTE -> "PENDIENTE";
+                case RECHAZADO -> "RECHAZADO";
+                case SUSPENDIDO -> "SUSPENDIDO";
+            };
+        }
+        return "HABILITADO";
     }
 }

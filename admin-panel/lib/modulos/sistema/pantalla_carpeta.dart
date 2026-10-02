@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
@@ -78,7 +78,7 @@ class _PantallaCarpetaState extends State<PantallaCarpeta> {
                       children: [
                         const Row(
                           children: [
-                            FaIcon(FontAwesomeIcons.folderOpen, color: ColoresApp.rojo, size: 20),
+                            Icon(Iconos.folderOpen, color: ColoresApp.rojo, size: 20),
                             SizedBox(width: 12),
                             Text(
                               'Carpeta de archivos',
@@ -132,7 +132,7 @@ class _PantallaCarpetaState extends State<PantallaCarpeta> {
                                   height: 14,
                                   child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                                 )
-                              : const FaIcon(FontAwesomeIcons.folderTree, size: 14),
+                              : const Icon(Iconos.folderTree, size: 14),
                           label: Text(_moviendo ? 'Moviendo archivos...' : 'Cambiar carpeta'),
                         ),
                       ],
@@ -224,7 +224,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
               decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
               child: Row(
                 children: [
-                  const FaIcon(FontAwesomeIcons.folderTree, color: ColoresApp.azul, size: 18),
+                  const Icon(Iconos.folderTree, color: ColoresApp.azul, size: 18),
                   const SizedBox(width: 10),
                   const Expanded(
                     child: Text(
@@ -235,7 +235,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
                   IconButton(
                     tooltip: 'Cerrar',
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const FaIcon(FontAwesomeIcons.xmark, size: 18),
+                    icon: const Icon(Iconos.xmark, size: 18),
                   ),
                 ],
               ),
@@ -247,7 +247,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
                   IconButton(
                     tooltip: 'Subir un nivel',
                     onPressed: listado?.padre == null || _cargando ? null : () => _ir(listado!.padre),
-                    icon: const FaIcon(FontAwesomeIcons.arrowUp, size: 16),
+                    icon: const Icon(Iconos.arrowUp, size: 16),
                   ),
                   Expanded(
                     child: Text(
@@ -258,7 +258,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
                   ),
                   TextButton.icon(
                     onPressed: listado == null || _cargando ? null : _nuevaCarpeta,
-                    icon: const FaIcon(FontAwesomeIcons.folderPlus, size: 14),
+                    icon: const Icon(Iconos.folderPlus, size: 14),
                     label: const Text('Nueva carpeta'),
                   ),
                 ],
@@ -279,7 +279,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
                       children: [
                         for (final (nombre, ruta) in listado.carpetas)
                           ListTile(
-                            leading: const FaIcon(FontAwesomeIcons.solidFolder, color: Color(0xFFF5A623), size: 20),
+                            leading: const Icon(Iconos.solidFolder, color: Color(0xFFF5A623), size: 20),
                             title: Text(nombre),
                             onTap: _cargando ? null : () => _ir(ruta),
                           ),
@@ -307,7 +307,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
                     onPressed: listado == null || !listado.escribible || _cargando
                         ? null
                         : () => Navigator.of(context).pop(listado.ruta),
-                    icon: const FaIcon(FontAwesomeIcons.check, size: 14),
+                    icon: const Icon(Iconos.check, size: 14),
                     label: const Text('Usar esta carpeta'),
                   ),
                 ],

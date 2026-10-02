@@ -89,8 +89,15 @@ public class CarnetService {
      * nombre no parece real (NombresPermitidos); si no, VERIFICADO. Mientras este observado no usa la
      * app ni recibe sus credenciales: las recibe cuando un administrador lo aprueba
      * (RevisionCarnetService). Devuelve true si quedo observado.
+     *
+     * Antes de enviar el carnet la persona debe aceptar los terminos y condiciones ([aceptaTerminos]);
+     * queda la fecha en persona.fecha_acepta_terminos.
      */
-    public boolean revisar(Persona persona, boolean pedido) {
+    public boolean revisar(Persona persona, boolean pedido, boolean aceptaTerminos) {
+        if (!aceptaTerminos) {
+            throw new NegocioException("Debes aceptar los términos y condiciones para continuar");
+        }
+        persona.setFechaAceptaTerminos(LocalDateTime.now());
         String motivo = pedido ? MOTIVO_PEDIDO : NombresPermitidos.problema(persona.getNombres(), persona.getApellidos());
         if (motivo == null) {
             persona.setSituacionCarnet(SituacionCarnet.VERIFICADO);
@@ -117,7 +124,7 @@ public class CarnetService {
         Persona persona = usuario.getPersona();
         actualizarDatos(persona, datos);
         guardar(persona, fotos);
-        if (!revisar(persona, datos.esObservado())) entregarCredenciales(usuario);
+        if (!revisar(persona, datos.esObservado(), datos.aceptoTerminos())) entregarCredenciales(usuario);
         return UsuarioResponse.de(usuario);
     }
 

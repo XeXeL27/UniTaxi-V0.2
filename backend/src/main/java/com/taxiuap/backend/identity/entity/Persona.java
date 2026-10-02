@@ -87,6 +87,10 @@ public class Persona extends EntidadAuditable {
     @Column(name = "fecha_observacion")
     private LocalDateTime fechaObservacion;
 
+    /** Cuando acepto los terminos y condiciones al enviar su carnet (registro o verificacion). */
+    @Column(name = "fecha_acepta_terminos")
+    private LocalDateTime fechaAceptaTerminos;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_persona", length = 20, nullable = false)
     private EstadoRegistro estadoPersona = EstadoRegistro.A;

@@ -2,7 +2,7 @@ import 'dart:js_interop';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../core/iconos.dart';
 import 'package:web/web.dart' as web;
 
 import '../core/tema.dart';
@@ -83,7 +83,7 @@ class _VisorPdfState extends State<_VisorPdf> {
               decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
               child: Row(
                 children: [
-                  const FaIcon(FontAwesomeIcons.filePdf, color: ColoresApp.rojo, size: 18),
+                  const Icon(Iconos.filePdf, color: ColoresApp.rojo, size: 18),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -97,17 +97,17 @@ class _VisorPdfState extends State<_VisorPdf> {
                     onPressed: _bytes == null
                         ? null
                         : () => descargarArchivo(_bytes!, widget.nombreDescarga, 'application/pdf'),
-                    icon: const FaIcon(FontAwesomeIcons.download, size: 16),
+                    icon: const Icon(Iconos.download, size: 16),
                   ),
                   IconButton(
                     tooltip: 'Abrir en otra pestaña',
                     onPressed: _bytes == null ? null : () => abrirPdf(_bytes!),
-                    icon: const FaIcon(FontAwesomeIcons.upRightFromSquare, size: 16),
+                    icon: const Icon(Iconos.upRightFromSquare, size: 16),
                   ),
                   IconButton(
                     tooltip: 'Cerrar',
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const FaIcon(FontAwesomeIcons.xmark, size: 18),
+                    icon: const Icon(Iconos.xmark, size: 18),
                   ),
                 ],
               ),

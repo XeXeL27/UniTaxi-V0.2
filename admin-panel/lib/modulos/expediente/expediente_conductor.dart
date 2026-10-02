@@ -1,7 +1,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/formato.dart';
@@ -52,12 +52,12 @@ class ExpedienteConductor extends StatelessWidget {
         subtitulo: 'Conductor  |  usuario ${conductor.nombreUsuario}',
         situacion: perfil.situacionAprobacion,
         pestanas: const [
-          (FontAwesomeIcons.idCard, 'Datos'),
-          (FontAwesomeIcons.filePdf, 'Documentos'),
-          (FontAwesomeIcons.qrcode, 'QR de cobro'),
-          (FontAwesomeIcons.route, 'Viajes'),
-          (FontAwesomeIcons.solidStar, 'Calificaciones'),
-          (FontAwesomeIcons.userPen, 'Permisos'),
+          (Iconos.idCard, 'Datos'),
+          (Iconos.filePdf, 'Documentos'),
+          (Iconos.qrcode, 'QR de cobro'),
+          (Iconos.route, 'Viajes'),
+          (Iconos.solidStar, 'Calificaciones'),
+          (Iconos.userPen, 'Permisos'),
         ],
         vistas: [
           _Datos(api: api, perfil: perfil, idConductor: id, nombreUsuario: conductor.nombreUsuario, alCambiar: recargar),
@@ -211,12 +211,12 @@ class _TarjetaQrState extends State<_TarjetaQr> {
                   IconButton(
                     tooltip: 'Descargar',
                     onPressed: bytes == null ? null : () => descargarArchivo(bytes, widget.nombreDescarga, 'image/png'),
-                    icon: const FaIcon(FontAwesomeIcons.download, size: 16, color: ColoresApp.azul),
+                    icon: const Icon(Iconos.download, size: 16, color: ColoresApp.azul),
                   ),
                   IconButton(
                     tooltip: 'Eliminar',
                     onPressed: widget.onEliminar,
-                    icon: const FaIcon(FontAwesomeIcons.trashCan, size: 16, color: ColoresApp.rojo),
+                    icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
                   ),
                 ],
               ),
@@ -275,7 +275,7 @@ class _Datos extends StatelessWidget {
       children: [
         SeccionExpediente(
           titulo: 'Datos personales',
-          icono: FontAwesomeIcons.user,
+          icono: Iconos.user,
           accion: BotonVerCarnet(api: api, idUsuario: perfil.idUsuario, nombre: perfil.nombreCompleto),
           child: DatosEnGrilla([
             ('Nombres', perfil.nombres),
@@ -290,14 +290,14 @@ class _Datos extends StatelessWidget {
         ),
         SeccionExpediente(
           titulo: 'Conductor',
-          icono: FontAwesomeIcons.idBadge,
+          icono: Iconos.idBadge,
           accion: Wrap(
             children: [
               BotonVerLicencia(api: api, idConductor: idConductor, nombre: perfil.nombreCompleto),
               TextButton.icon(
                 onPressed: () => _editarLicencia(context),
                 style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
-                icon: const FaIcon(FontAwesomeIcons.penToSquare, size: 14),
+                icon: const Icon(Iconos.penToSquare, size: 14),
                 label: const Text('Editar licencia', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
@@ -315,7 +315,7 @@ class _Datos extends StatelessWidget {
         ),
         SeccionExpediente(
           titulo: 'Vehículo',
-          icono: FontAwesomeIcons.motorcycle,
+          icono: Iconos.motorcycle,
           child: Carga<List<VehiculoExpediente>>(
             cargar: () => api.vehiculos(idConductor),
             builder: (vehiculos, _) => vehiculos.isEmpty
@@ -400,7 +400,7 @@ class _Documentos extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    const FaIcon(FontAwesomeIcons.filePdf, color: ColoresApp.rojo, size: 24),
+                    const Icon(Iconos.filePdf, color: ColoresApp.rojo, size: 24),
                     const SizedBox(width: 14),
                     Expanded(
                       child: Column(
@@ -424,7 +424,7 @@ class _Documentos extends StatelessWidget {
                         cargar: () => api.pdf(d.id),
                         nombreDescarga: '${d.tipoDocumento.toLowerCase()}_${conductor.nombreUsuario}.pdf',
                       ),
-                      icon: const FaIcon(FontAwesomeIcons.eye, size: 16, color: ColoresApp.azul),
+                      icon: const Icon(Iconos.eye, size: 16, color: ColoresApp.azul),
                     ),
                     IconButton(
                       tooltip: 'Revisar (aprobar o rechazar)',
@@ -435,7 +435,7 @@ class _Documentos extends StatelessWidget {
                         mensajeExito: 'Se guardó la revisión de ${_nombre(d)}.',
                         alTerminar: recargarTodo,
                       ),
-                      icon: const FaIcon(FontAwesomeIcons.clipboardCheck, size: 16, color: ColoresApp.exito),
+                      icon: const Icon(Iconos.clipboardCheck, size: 16, color: ColoresApp.exito),
                     ),
                     IconButton(
                       tooltip: 'Editar datos',
@@ -446,12 +446,12 @@ class _Documentos extends StatelessWidget {
                         mensajeExito: 'Se actualizaron los datos del documento.',
                         alTerminar: recargarTodo,
                       ),
-                      icon: const FaIcon(FontAwesomeIcons.penToSquare, size: 16, color: Color(0xFFFD7E14)),
+                      icon: const Icon(Iconos.penToSquare, size: 16, color: Color(0xFFFD7E14)),
                     ),
                     IconButton(
                       tooltip: 'Reemplazar PDF',
                       onPressed: () => _reemplazar(context, d, recargarTodo),
-                      icon: const FaIcon(FontAwesomeIcons.fileArrowUp, size: 16, color: ColoresApp.azulClaro),
+                      icon: const Icon(Iconos.fileArrowUp, size: 16, color: ColoresApp.azulClaro),
                     ),
                     IconButton(
                       tooltip: 'Eliminar',
@@ -462,7 +462,7 @@ class _Documentos extends StatelessWidget {
                         mensajeEliminado: 'Se eliminó el documento ${_nombre(d)}.',
                         alTerminar: recargarTodo,
                       ),
-                      icon: const FaIcon(FontAwesomeIcons.trashCan, size: 16, color: ColoresApp.rojo),
+                      icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
                     ),
                   ],
                 ),
@@ -493,7 +493,7 @@ class _FormularioDocumentoState extends State<_FormularioDocumento> {
   Widget build(BuildContext context) {
     return ModalFormulario(
       titulo: 'Datos del documento',
-      icono: FontAwesomeIcons.filePdf,
+      icono: Iconos.filePdf,
       claveFormulario: _clave,
       textoGuardar: 'Guardar cambios',
       alGuardar: () async {
@@ -536,7 +536,7 @@ class _FormularioRevisionState extends State<_FormularioRevision> {
   Widget build(BuildContext context) {
     return ModalFormulario(
       titulo: 'Revisión del documento',
-      icono: FontAwesomeIcons.clipboardCheck,
+      icono: Iconos.clipboardCheck,
       claveFormulario: _clave,
       textoGuardar: 'Guardar revisión',
       alGuardar: () async {
@@ -654,7 +654,7 @@ class _PermisosState extends State<_Permisos> {
       children: [
         SeccionExpediente(
           titulo: 'Permisos vigentes',
-          icono: FontAwesomeIcons.unlockKeyhole,
+          icono: Iconos.unlockKeyhole,
           child: Carga<List<PermisoEdicion>>(
             cargar: () => widget.api.permisos(_id),
             builder: (permisos, _) => permisos.isEmpty
@@ -670,7 +670,7 @@ class _PermisosState extends State<_Permisos> {
                           padding: const EdgeInsets.only(bottom: 6),
                           child: Row(
                             children: [
-                              const FaIcon(FontAwesomeIcons.circleCheck, size: 14, color: ColoresApp.exito),
+                              const Icon(Iconos.circleCheck, size: 14, color: ColoresApp.exito),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(
@@ -692,7 +692,7 @@ class _PermisosState extends State<_Permisos> {
                         child: OutlinedButton.icon(
                           onPressed: _revocar,
                           style: OutlinedButton.styleFrom(foregroundColor: ColoresApp.rojo),
-                          icon: const FaIcon(FontAwesomeIcons.lock, size: 14),
+                          icon: const Icon(Iconos.lock, size: 14),
                           label: const Text('Quitar permisos'),
                         ),
                       ),
@@ -702,7 +702,7 @@ class _PermisosState extends State<_Permisos> {
         ),
         SeccionExpediente(
           titulo: 'Dar permiso por una hora',
-          icono: FontAwesomeIcons.userPen,
+          icono: Iconos.userPen,
           child: Carga<List<DocumentoConductor>>(
             cargar: () => widget.personasApi.documentosConductor(_id),
             builder: (documentos, _) => Column(
@@ -746,7 +746,7 @@ class _PermisosState extends State<_Permisos> {
                     onPressed: _guardando || (!_datos && !_carnet && !_licencia && _documentos.isEmpty)
                         ? null
                         : () => _otorgar(documentos),
-                    icon: const FaIcon(FontAwesomeIcons.unlock, size: 14),
+                    icon: const Icon(Iconos.unlock, size: 14),
                     label: const Text('Dar permiso por 1 hora'),
                   ),
                 ),
@@ -792,7 +792,7 @@ class _FormularioLicenciaState extends State<_FormularioLicencia> {
   Widget build(BuildContext context) {
     return ModalFormulario(
       titulo: 'Editar licencia',
-      icono: FontAwesomeIcons.solidIdBadge,
+      icono: Iconos.solidIdBadge,
       claveFormulario: _clave,
       campos: [
         TextFormField(

@@ -8,9 +8,9 @@ class InsigniaEstado extends StatelessWidget {
 
   const InsigniaEstado(this.valor, {super.key});
 
-  static const _exito = {'ACTIVO', 'APROBADO', 'APROBADA', 'COMPLETADO', 'RESUELTO', 'ATENDIDA', 'ACEPTADA'};
-  static const _alerta = {'PENDIENTE', 'EN_REVISION', 'CON_OFERTAS', 'EN_CURSO'};
-  static const _peligro = {'INACTIVO', 'RECHAZADO', 'RECHAZADA', 'SUSPENDIDO', 'CANCELADO', 'CANCELADA', 'VENCIDA'};
+  static const _exito = {'ACTIVO', 'ACTIVA', 'HABILITADO', 'APROBADO', 'APROBADA', 'COMPLETADO', 'RESUELTO', 'ATENDIDA', 'ACEPTADA'};
+  static const _alerta = {'PENDIENTE', 'OBSERVADO', 'EN_REVISION', 'CON_OFERTAS', 'EN_CURSO'};
+  static const _peligro = {'INACTIVO', 'ELIMINADA', 'RECHAZADO', 'RECHAZADA', 'SUSPENDIDO', 'CANCELADO', 'CANCELADA', 'VENCIDA'};
 
   @override
   Widget build(BuildContext context) {

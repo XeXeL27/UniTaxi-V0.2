@@ -27,9 +27,15 @@ public record RegistroConductorRequest(
         @NotBlank @Size(min = 8, max = 72) String password,
         @Valid @NotNull DatosConductorRequest conductor,
         /** true: la persona indico que sus datos se leyeron mal; un administrador los revisa (OBSERVADO). */
-        Boolean observado) {
+        Boolean observado,
+        /** true: marco que acepta los terminos y condiciones (obligatorio al enviar el carnet). */
+        Boolean aceptaTerminos) {
 
     public boolean esObservado() {
         return Boolean.TRUE.equals(observado);
+    }
+
+    public boolean aceptoTerminos() {
+        return Boolean.TRUE.equals(aceptaTerminos);
     }
 }

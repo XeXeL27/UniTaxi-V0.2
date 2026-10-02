@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -45,7 +46,7 @@ import '../viaje/viaje_api.dart';
 import '../viaje/vista_calificacion.dart';
 import 'buscador_destino.dart';
 
-/// Vista principal del pasajero, con la barra inferior Inicio / Historial / Mas.
+/// Vista principal del pasajero, con la barra inferior Inicio / Actividad / Perfil.
 ///
 /// Inicio: mapa con su ubicacion GPS como partida (al entrar se centra en ella), el buscador de
 /// destino, los mototaxis libres moviendose y el boton del centro para pedir el taxi.
@@ -217,13 +218,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       ),
       PasoGuia(
         clave: _guiaHistorial,
-        titulo: 'Historial',
+        titulo: 'Actividad',
         texto: 'Tus viajes anteriores y tus lugares favoritos para pedir más rápido.',
       ),
       PasoGuia(
         clave: _guiaMas,
-        titulo: 'Más opciones',
-        texto: 'Tu perfil, cambiar la contraseña, ingreso con huella y cerrar sesión.',
+        titulo: 'Perfil',
+        texto: 'Tus datos, cambiar la contraseña, ingreso con huella y cerrar sesión.',
       ),
     ]);
   }
@@ -706,9 +707,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                 indice: _seccion,
                 onCambiar: _irA,
                 items: [
-                  const ItemBarra(FontAwesomeIcons.house, 'Inicio'),
-                  ItemBarra(FontAwesomeIcons.clockRotateLeft, 'Historial', clave: _guiaHistorial),
-                  ItemBarra(FontAwesomeIcons.ellipsis, 'Más', clave: _guiaMas),
+                  const ItemBarra(CupertinoIcons.house, CupertinoIcons.house_fill, 'Inicio'),
+                  ItemBarra(CupertinoIcons.square_list, CupertinoIcons.square_list_fill, 'Actividad', clave: _guiaHistorial),
+                  ItemBarra(
+                    CupertinoIcons.person_crop_circle,
+                    CupertinoIcons.person_crop_circle_fill,
+                    'Perfil',
+                    clave: _guiaMas,
+                  ),
                 ],
                 botonCentral: _seccion == _seccionInicio
                     ? BotonCentral(

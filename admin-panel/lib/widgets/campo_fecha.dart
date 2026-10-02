@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../core/iconos.dart';
 
 import '../core/formato.dart';
 
@@ -36,10 +36,10 @@ class CampoFecha extends FormField<DateTime> {
                  labelText: etiqueta,
                  errorText: estado.errorText,
                  suffixIcon: estado.value == null
-                     ? const Padding(padding: EdgeInsets.all(12), child: FaIcon(FontAwesomeIcons.calendar, size: 16))
+                     ? const Padding(padding: EdgeInsets.all(12), child: Icon(Iconos.calendar, size: 16))
                      : IconButton(
                          tooltip: 'Quitar fecha',
-                         icon: const FaIcon(FontAwesomeIcons.xmark, size: 16),
+                         icon: const Icon(Iconos.xmark, size: 16),
                          onPressed: () {
                            estado.didChange(null);
                            alCambiar?.call(null);

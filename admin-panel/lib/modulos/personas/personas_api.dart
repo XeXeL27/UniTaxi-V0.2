@@ -29,6 +29,29 @@ class PersonasApi {
   Future<void> cambiarEstadoUsuario(int id, {required bool suspender}) =>
       _api.put('/api/admin/usuarios/$id/estado', {'estado': suspender ? 'S' : 'A'});
 
+  Future<UsuarioDetalle> detalleUsuario(int id) async =>
+      UsuarioDetalle.desdeJson(await _api.get('/api/admin/usuarios/$id/detalle') as Map<String, dynamic>);
+
+  /// Edicion completa: datos de la persona, usuario, licencia y, si vienen, fotos del carnet y de la
+  /// licencia (partes carnetAnverso, carnetReverso, licenciaAnverso, licenciaReverso).
+  Future<void> actualizarUsuario(int id, Map<String, dynamic> datos, Map<String, ArchivoSubida> fotos) =>
+      _api.enviarMultipart('PUT', '/api/admin/usuarios/$id/datos', datos: datos, archivos: fotos);
+
+  /// Genera una contrasena nueva y la envia con el usuario al correo actual de la persona.
+  Future<void> reenviarCredenciales(int id) => _api.post('/api/admin/usuarios/$id/credenciales', {});
+
+  Future<List<PersonaEliminable>> listarEliminables() =>
+      _api.lista('/api/admin/eliminacion-permanente', PersonaEliminable.desdeJson);
+
+  Future<ResumenEliminacion> resumenEliminacion(int idPersona) async => ResumenEliminacion.desdeJson(
+    await _api.get('/api/admin/eliminacion-permanente/$idPersona') as Map<String, dynamic>,
+  );
+
+  /// Borrado fisico: [confirmacion] es el correo (o el CI) que escribio el administrador.
+  Future<void> eliminarPermanente(int idPersona, String confirmacion) => _api.delete(
+    '/api/admin/eliminacion-permanente/$idPersona?confirmacion=${Uri.encodeQueryComponent(confirmacion)}',
+  );
+
   Future<List<PasajeroAdmin>> listarPasajeros() => _api.lista('/api/admin/pasajeros', PasajeroAdmin.desdeJson);
 
   Future<List<ConductorAdmin>> listarConductores() => _api.lista('/api/admin/conductores', ConductorAdmin.desdeJson);

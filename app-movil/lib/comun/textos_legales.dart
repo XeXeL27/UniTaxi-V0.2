@@ -41,37 +41,80 @@ const List<SeccionLegal> politicasPrivacidad = [
   ),
 ];
 
-/// Texto de ejemplo de los terminos y condiciones. Reemplazar por el texto aprobado.
+/// Terminos y condiciones de prueba (2026-10-02): UNITAXI como servicio de mototaxi pensado para los
+/// estudiantes de la Universidad Amazonica de Pando. Reemplazar por el texto aprobado. Se muestran en
+/// Perfil > Terminos y condiciones y en el modal que se acepta al registrarse (aceptar_terminos.dart).
 const List<SeccionLegal> terminosCondiciones = [
   (
-    titulo: 'Uso del servicio',
+    titulo: 'Qué es UNITAXI',
     texto:
-        'UNITAXI conecta pasajeros con conductores habilitados por la administración. Las cuentas son '
-        'personales: no compartas tu usuario ni tu contraseña.',
+        'UNITAXI es una aplicación de prueba que conecta a pasajeros con conductores de mototaxi en la ciudad de '
+        'Cobija, Pando. Está pensada principalmente para estudiantes, docentes y personal de la Universidad '
+        'Amazónica de Pando (UAP), aunque cualquier persona registrada puede usarla. UNITAXI no es una empresa de '
+        'transporte: los viajes los realizan conductores independientes habilitados por la administración.',
+  ),
+  (
+    titulo: 'Tu cuenta y tus datos',
+    texto:
+        'Para registrarte debes tener al menos 16 años y verificar tu identidad con las fotos de tu carnet de '
+        'identidad. Los datos que confirmas (nombre, número de carnet y fecha de nacimiento) deben ser verdaderos '
+        'y tuyos. Tu cuenta es personal: no compartas tu usuario ni tu contraseña. Si los datos leídos de tu '
+        'carnet están mal puedes enviarlos a revisión (Observado); un administrador los corregirá con tus fotos.',
+  ),
+  (
+    titulo: 'Credenciales de acceso',
+    texto:
+        'Al aceptar estos términos te enviaremos tu usuario y tu contraseña al correo con el que te registraste. '
+        'Si tus datos quedaron en revisión, las recibirás cuando la administración los apruebe. Puedes cambiar tu '
+        'contraseña en Perfil > Cambiar contraseña.',
+  ),
+  (
+    titulo: 'Seguridad en el viaje',
+    texto:
+        'El conductor debe llevar casco para él y un casco para el pasajero, respetar las normas de tránsito y '
+        'los límites de velocidad, y no llevar más de un pasajero. El pasajero debe usar el casco durante todo el '
+        'viaje, ir sentado y sujetarse bien. Antes de subir, comprueba que la placa y la moto coincidan con las de '
+        'la app.',
   ),
   (
     titulo: 'Precio y pago',
     texto:
-        'El precio del viaje se muestra antes de pedirlo y se paga al conductor al llegar al destino, en '
-        'efectivo o con el QR de su banca móvil. Solo el conductor puede cambiar el método de pago.',
+        'El precio se muestra antes de pedir el viaje. Se paga directamente al conductor al llegar al destino, en '
+        'efectivo o con el QR de su banca móvil. El descuento para estudiantes de la UAP, cuando esté disponible, '
+        'se aplica solo con la matrícula vigente verificada por la administración.',
   ),
   (
-    titulo: 'Cancelaciones',
+    titulo: 'Cancelaciones y conducta',
     texto:
-        'El pasajero puede cancelar una solicitud mientras busca conductor y el viaje antes de que '
-        'comience. Las cancelaciones repetidas pueden llevar a la suspensión de la cuenta.',
+        'Puedes cancelar mientras se busca conductor o antes de iniciar el viaje. Las cancelaciones repetidas, '
+        'el trato ofensivo, el acoso, viajar bajo efectos del alcohol o dañar la moto pueden llevar a la '
+        'suspensión o eliminación de la cuenta.',
   ),
   (
     titulo: 'Conductores',
     texto:
-        'Los conductores deben mantener vigentes y aprobados sus documentos, y respetar las normas de '
-        'tránsito y el trato respetuoso con los pasajeros.',
+        'Para conducir en UNITAXI se necesita licencia de categoría M vigente, carnet de identidad y los datos de '
+        'la moto. La administración puede pedir otros documentos (SOAT, RUAT) y suspender a quien no los tenga '
+        'vigentes o reciba quejas graves.',
   ),
   (
-    titulo: 'Calificaciones',
+    titulo: 'Calificaciones y comentarios',
     texto:
-        'Al terminar un viaje el pasajero puede calificar al conductor. Los comentarios ofensivos se '
-        'pueden quitar.',
+        'Al terminar un viaje puedes calificar al conductor. Los comentarios deben ser respetuosos; la '
+        'administración puede quitar los que sean ofensivos.',
+  ),
+  (
+    titulo: 'Privacidad',
+    texto:
+        'Usamos tu ubicación solo mientras pides o realizas un viaje. Las fotos de tu carnet y de tu licencia se '
+        'leen con Gemini (inteligencia artificial de Google) al momento de registrarte y quedan guardadas en el '
+        'servidor de UNITAXI, donde solo las ve la administración. Más detalles en Políticas de privacidad.',
+  ),
+  (
+    titulo: 'Versión de prueba',
+    texto:
+        'Esta es una versión de prueba de UNITAXI: el servicio puede cambiar o interrumpirse y estos términos se '
+        'pueden actualizar. Si sigues usando la app después de un cambio, aceptas los términos nuevos.',
   ),
 ];
 

@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
@@ -37,7 +37,7 @@ class MarcoExpediente extends StatelessWidget {
   final String titulo;
   final String subtitulo;
   final String? situacion;
-  final List<(FaIconData, String)> pestanas;
+  final List<(IconData, String)> pestanas;
   final List<Widget> vistas;
 
   const MarcoExpediente({
@@ -84,7 +84,7 @@ class MarcoExpediente extends StatelessWidget {
                     IconButton(
                       tooltip: 'Cerrar',
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const FaIcon(FontAwesomeIcons.xmark, color: Colors.white, size: 18),
+                      icon: const Icon(Iconos.xmark, color: Colors.white, size: 18),
                     ),
                   ],
                 ),
@@ -102,7 +102,7 @@ class MarcoExpediente extends StatelessWidget {
                       Tab(
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
-                          children: [FaIcon(icono, size: 14, color: Colors.white70), const SizedBox(width: 8), Text(texto)],
+                          children: [Icon(icono, size: 14, color: Colors.white70), const SizedBox(width: 8), Text(texto)],
                         ),
                       ),
                   ],
@@ -163,7 +163,7 @@ class _CargaState<T> extends State<Carga<T>> {
 /// Tarjeta blanca con titulo para agrupar datos.
 class SeccionExpediente extends StatelessWidget {
   final String titulo;
-  final FaIconData icono;
+  final IconData icono;
   final Widget child;
   final Widget? accion;
 
@@ -184,7 +184,7 @@ class SeccionExpediente extends StatelessWidget {
         children: [
           Row(
             children: [
-              FaIcon(icono, size: 15, color: ColoresApp.rojo),
+              Icon(icono, size: 15, color: ColoresApp.rojo),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.azul)),
@@ -333,7 +333,7 @@ class ListaViajes extends StatelessWidget {
                 const SizedBox(width: 10),
                 OutlinedButton.icon(
                   onPressed: viaje.origen == null || viaje.destino == null ? null : () => mostrarRutaViaje(context, viaje),
-                  icon: const FaIcon(FontAwesomeIcons.route, size: 14),
+                  icon: const Icon(Iconos.route, size: 14),
                   label: const Text('Ver ruta'),
                 ),
               ],
@@ -439,7 +439,7 @@ class _MapaViajeState extends State<_MapaViaje> {
           decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
           child: Row(
             children: [
-              const FaIcon(FontAwesomeIcons.route, color: ColoresApp.azul, size: 16),
+              const Icon(Iconos.route, color: ColoresApp.azul, size: 16),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -450,7 +450,7 @@ class _MapaViajeState extends State<_MapaViaje> {
               IconButton(
                 tooltip: 'Cerrar',
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const FaIcon(FontAwesomeIcons.xmark, size: 18),
+                icon: const Icon(Iconos.xmark, size: 18),
               ),
             ],
           ),
@@ -531,8 +531,8 @@ class Estrellas extends StatelessWidget {
         for (var i = 1; i <= 5; i++)
           Padding(
             padding: const EdgeInsets.only(right: 2),
-            child: FaIcon(
-              valor >= i ? FontAwesomeIcons.solidStar : valor >= i - 0.5 ? FontAwesomeIcons.starHalfStroke : FontAwesomeIcons.star,
+            child: Icon(
+              valor >= i ? Iconos.solidStar : valor >= i - 0.5 ? Iconos.starHalfStroke : Iconos.star,
               color: const Color(0xFFF5A623),
               size: tamano,
             ),
@@ -663,12 +663,12 @@ class ListaCalificaciones extends StatelessWidget {
                   IconButton(
                     tooltip: 'Quitar solo el comentario',
                     onPressed: () => _quitarComentario(context, c),
-                    icon: const FaIcon(FontAwesomeIcons.commentSlash, size: 16, color: Color(0xFFFD7E14)),
+                    icon: const Icon(Iconos.commentSlash, size: 16, color: Color(0xFFFD7E14)),
                   ),
                 IconButton(
                   tooltip: 'Eliminar calificación',
                   onPressed: () => _eliminar(context, c),
-                  icon: const FaIcon(FontAwesomeIcons.trashCan, size: 16, color: ColoresApp.rojo),
+                  icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
                 ),
               ],
             ),

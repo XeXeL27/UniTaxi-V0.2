@@ -308,7 +308,8 @@ class FlujoPasajero extends ChangeNotifier {
   void _avisarUnaVez(int idViaje, int evento, String titulo, String cuerpo) {
     final id = idNotificacionViaje(idViaje, evento);
     if (!_avisados.add(id)) return;
-    unawaited(AvisoViaje.avisar(titulo: titulo, cuerpo: cuerpo, idNotificacion: id));
+    // Solo el viaje aceptado suena (assets/sonidos); el resto vibra.
+    unawaited(AvisoViaje.avisar(titulo: titulo, cuerpo: cuerpo, idNotificacion: id, conSonido: evento == 1));
   }
 
   void _entrarBuscando(Solicitud nueva) {

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cliente_api.dart';
@@ -24,7 +24,7 @@ class PantallaPersonas extends StatelessWidget {
 
     return ListadoRemoto<Persona>(
       titulo: 'Personas',
-      icono: FontAwesomeIcons.idCard,
+      icono: Iconos.idCard,
       nombreArchivo: 'personas',
       cargar: api.listarPersonas,
       columnas: [
@@ -52,7 +52,7 @@ class PantallaPersonas extends StatelessWidget {
             mensajeExito: (resultado) => 'Se registró a ${(resultado as Persona).nombreCompleto}.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.userPlus, size: 14),
+          icon: const Icon(Iconos.userPlus, size: 14),
           label: const Text('Agregar persona'),
         ),
       ],
@@ -68,7 +68,7 @@ class PantallaPersonas extends StatelessWidget {
                   mensajeExito: (resultado) => (resultado as UsuarioHabilitado).mensaje,
                   alTerminar: recargar,
                 ),
-          icon: const FaIcon(FontAwesomeIcons.userGear, size: 16, color: Color(0xFF198754)),
+          icon: const Icon(Iconos.userGear, size: 16, color: Color(0xFF198754)),
         ),
         IconButton(
           tooltip: 'Editar',
@@ -79,7 +79,7 @@ class PantallaPersonas extends StatelessWidget {
             mensajeExito: 'Se actualizaron los datos de ${persona.nombreCompleto}.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.penToSquare, size: 16, color: ColoresApp.azul),
+          icon: const Icon(Iconos.penToSquare, size: 16, color: ColoresApp.azul),
         ),
         IconButton(
           tooltip: 'Eliminar',
@@ -90,7 +90,7 @@ class PantallaPersonas extends StatelessWidget {
             mensajeEliminado: 'Se eliminó el registro de ${persona.nombreCompleto}.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.trashCan, size: 16, color: ColoresApp.rojo),
+          icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
         ),
       ],
     );
@@ -157,7 +157,7 @@ class _FormularioPersonaState extends State<FormularioPersona> {
     final editando = widget.persona != null;
     return ModalFormulario(
       titulo: editando ? 'Editar persona' : 'Registrar persona',
-      icono: editando ? FontAwesomeIcons.penToSquare : FontAwesomeIcons.userPlus,
+      icono: editando ? Iconos.penToSquare : Iconos.userPlus,
       claveFormulario: _claveFormulario,
       alGuardar: _guardar,
       textoGuardar: editando ? 'Realizar cambios' : 'Guardar',

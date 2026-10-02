@@ -13,6 +13,7 @@ import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
 import '../widgets/formatos.dart';
+import 'aceptar_terminos.dart';
 import 'selector_carnet.dart';
 
 /// Quien entro con Google y todavia no tiene CI registra su carnet antes de usar la app: fotos del
@@ -190,6 +191,8 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       _reiniciar('Vuelve a tomar las fotos del anverso y del reverso de tu carnet.');
       return;
     }
+    // Sin aceptar los terminos no se envia nada (ni salen las credenciales); las fotos quedan.
+    if (!await aceptarTerminos(context) || !mounted) return;
     setState(() {
       _enviando = true;
       _error = null;
@@ -204,6 +207,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       'fechaNacimiento': '${n.year}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}',
       // Observado: la administracion revisa los datos antes de entregar las credenciales.
       'observado': respuesta == RespuestaCarnet.observado,
+      'aceptaTerminos': true,
     };
     try {
       if (_registro) {

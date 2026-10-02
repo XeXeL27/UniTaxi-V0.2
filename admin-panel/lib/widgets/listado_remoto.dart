@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/api_excepcion.dart';
 import 'tabla/columna_tabla.dart';
@@ -8,7 +7,7 @@ import 'tabla/tabla_datos.dart';
 /// [TablaDatos] que carga sus filas desde el backend y se puede recargar despues de guardar.
 class ListadoRemoto<T> extends StatefulWidget {
   final String titulo;
-  final FaIconData icono;
+  final IconData icono;
   final String nombreArchivo;
   final Future<List<T>> Function() cargar;
   final List<ColumnaTabla<T>> columnas;

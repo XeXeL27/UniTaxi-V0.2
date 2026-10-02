@@ -130,7 +130,7 @@ public class RegistroGoogleService {
             persona.setIngresoGoogle(true);
         }
         carnetService.guardar(persona, fotos);
-        boolean observado = carnetService.revisar(persona, datos.esObservado());
+        boolean observado = carnetService.revisar(persona, datos.esObservado(), datos.aceptoTerminos());
         return crearPasajero(persona, foto.get(), !observado);
     }
 
@@ -226,7 +226,7 @@ public class RegistroGoogleService {
         boolean observado = false;
         if (carnet != null) {
             carnetService.guardar(persona, carnet);
-            observado = carnetService.revisar(persona, pidioRevision);
+            observado = carnetService.revisar(persona, pidioRevision, datos.aceptoTerminos());
         }
 
         CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);

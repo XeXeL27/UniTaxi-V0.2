@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/cliente_api.dart';
@@ -20,7 +20,7 @@ class PantallaZonas extends StatelessWidget {
     final api = MapaApi(context.read<ClienteApi>());
     return ListadoRemoto<Zona>(
       titulo: 'Zonas de servicio',
-      icono: FontAwesomeIcons.drawPolygon,
+      icono: Iconos.drawPolygon,
       nombreArchivo: 'zonas',
       cargar: api.listarZonas,
       columnas: [
@@ -39,7 +39,7 @@ class PantallaZonas extends StatelessWidget {
             mensajeExito: (resultado) => 'Se registró la zona ${(resultado as Zona).nombre}.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.plus, size: 14),
+          icon: const Icon(Iconos.plus, size: 14),
           label: const Text('Agregar zona'),
         ),
       ],
@@ -53,7 +53,7 @@ class PantallaZonas extends StatelessWidget {
             mensajeExito: 'Se actualizaron los datos de ${zona.nombre}.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.penToSquare, size: 16, color: ColoresApp.azul),
+          icon: const Icon(Iconos.penToSquare, size: 16, color: ColoresApp.azul),
         ),
         IconButton(
           tooltip: 'Eliminar',
@@ -64,7 +64,7 @@ class PantallaZonas extends StatelessWidget {
             mensajeEliminado: 'Se eliminó la zona ${zona.nombre}.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.trashCan, size: 16, color: ColoresApp.rojo),
+          icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
         ),
       ],
     );

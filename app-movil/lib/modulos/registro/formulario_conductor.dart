@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:provider/provider.dart';
 
+import '../../comun/aceptar_terminos.dart';
 import '../../comun/qr_pago.dart';
 import '../../comun/selector_carnet.dart';
 import '../../core/api_excepcion.dart';
@@ -518,6 +519,8 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       return;
     }
     setState(() => _licenciaConfirmada = true);
+    // Al final, los terminos y condiciones: sin aceptarlos no se envia el registro (las fotos quedan).
+    if (!await aceptarTerminos(context) || !mounted) return;
     setState(() {
       _enviando = true;
       _error = null;
@@ -551,6 +554,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       'apellidos': _texto('apellidos'),
       // Observado: la administracion revisa los datos del carnet antes de entregar las credenciales.
       'observado': observado,
+      'aceptaTerminos': true,
       if (_conGoogle) 'codigo': widget.codigoGoogle,
       if (!_datosConocidos) ...{
         'correo': _texto('correo'),
@@ -1041,7 +1045,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                     children: [
                       const Text(
                         'La imagen del QR de tu banca móvil, hasta 3. Los pasajeros que paguen por QR lo verán. '
-                        'Puedes agregarlos o cambiarlos después en Más > Mis QR de cobro.',
+                        'Puedes agregarlos o cambiarlos después en Perfil > Mis QR de cobro.',
                         style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
                       ),
                       const SizedBox(height: 12),

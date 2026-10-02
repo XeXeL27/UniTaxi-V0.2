@@ -7,8 +7,8 @@ import '../core/tema.dart';
 import '../core/vibracion.dart';
 
 /// Mas > Sonido y vibracion: dos interruptores separados. Vale para toda la app en este telefono.
-/// Mientras el sonido propio esta apagado ([Sonido.activo]) el sonido solo aplica a las
-/// notificaciones con la app minimizada (sonido del telefono); con la app abierta solo vibra.
+/// El sonido de la app suena solo cuando aceptan el viaje; los demas avisos vibran y, minimizada,
+/// usan el sonido de notificacion del telefono.
 Future<void> abrirConfiguracionAvisos(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -54,11 +54,7 @@ class _ConfiguracionAvisos extends StatelessWidget {
                 secondary: FaIcon(activo ? FontAwesomeIcons.volumeHigh : FontAwesomeIcons.volumeXmark,
                     color: ColoresApp.tinta, size: 18),
                 title: const Text('Sonido', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(activo
-                    ? Sonido.activo
-                          ? 'Suena una vez en cada aviso'
-                          : 'Suena la notificación cuando la app está minimizada'
-                    : 'Los avisos no suenan'),
+                subtitle: Text(activo ? 'Suena una vez cuando un conductor acepta tu viaje' : 'Los avisos no suenan'),
               ),
             ),
             ValueListenableBuilder<bool>(

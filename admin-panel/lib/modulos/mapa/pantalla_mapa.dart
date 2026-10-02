@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -105,13 +105,13 @@ class _PantallaMapaState extends State<PantallaMapa> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const FaIcon(FontAwesomeIcons.triangleExclamation, color: ColoresApp.rojo, size: 28),
+              const Icon(Iconos.triangleExclamation, color: ColoresApp.rojo, size: 28),
               const SizedBox(height: 12),
               Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.texto)),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: _cargar,
-                icon: const FaIcon(FontAwesomeIcons.rotateRight, size: 16),
+                icon: const Icon(Iconos.rotateRight, size: 16),
                 label: const Text('Reintentar'),
               ),
             ],
@@ -195,7 +195,7 @@ class _PantallaMapaState extends State<PantallaMapa> {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const FaIcon(FontAwesomeIcons.locationDot, color: ColoresApp.rojo, size: 13),
+          const Icon(Iconos.locationDot, color: ColoresApp.rojo, size: 13),
           const SizedBox(width: 7),
           Flexible(
             child: Text(
@@ -225,7 +225,7 @@ class _PantallaMapaState extends State<PantallaMapa> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const FaIcon(FontAwesomeIcons.mapLocationDot, color: ColoresApp.azul, size: 16),
+              const Icon(Iconos.mapLocationDot, color: ColoresApp.azul, size: 16),
               const SizedBox(width: 8),
               Text(
                 'Zonas de servicio',

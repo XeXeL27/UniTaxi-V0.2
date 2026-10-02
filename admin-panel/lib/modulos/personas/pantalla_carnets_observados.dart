@@ -1,7 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
@@ -31,7 +31,7 @@ class PantallaCarnetsObservados extends StatelessWidget {
     final expedienteApi = ExpedienteApi(context.read<ClienteApi>());
     return ListadoRemoto<CarnetObservado>(
       titulo: 'Carnets observados',
-      icono: FontAwesomeIcons.idCardClip,
+      icono: Iconos.idCardClip,
       nombreArchivo: 'carnets_observados',
       cargar: api.listarCarnetsObservados,
       columnas: [
@@ -47,12 +47,12 @@ class PantallaCarnetsObservados extends StatelessWidget {
         IconButton(
           tooltip: 'Revisar y aprobar',
           onPressed: () => _revisar(context, api, expedienteApi, carnet, recargar),
-          icon: const FaIcon(FontAwesomeIcons.userCheck, size: 16, color: ColoresApp.exito),
+          icon: const Icon(Iconos.userCheck, size: 16, color: ColoresApp.exito),
         ),
         IconButton(
           tooltip: 'Rechazar',
           onPressed: () => _rechazar(context, api, carnet, recargar),
-          icon: const FaIcon(FontAwesomeIcons.userXmark, size: 16, color: ColoresApp.rojo),
+          icon: const Icon(Iconos.userXmark, size: 16, color: ColoresApp.rojo),
         ),
       ],
     );
@@ -150,7 +150,7 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
     final hoy = DateTime.now();
     return ModalFormulario(
       titulo: 'Revisar carnet observado',
-      icono: FontAwesomeIcons.idCardClip,
+      icono: Iconos.idCardClip,
       claveFormulario: _claveFormulario,
       alGuardar: _guardar,
       textoGuardar: 'Aprobar y enviar credenciales',
@@ -390,7 +390,7 @@ class _FormularioRechazoState extends State<_FormularioRechazo> {
   Widget build(BuildContext context) {
     return ModalFormulario(
       titulo: 'Rechazar a ${widget.carnet.nombreCompleto}',
-      icono: FontAwesomeIcons.userXmark,
+      icono: Iconos.userXmark,
       claveFormulario: _claveFormulario,
       textoGuardar: 'Rechazar',
       alGuardar: () async {

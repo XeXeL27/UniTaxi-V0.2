@@ -128,7 +128,7 @@ class PantallaHistorialState extends State<PantallaHistorial> {
   Widget build(BuildContext context) {
     final conPestanas = widget.pestanaFavoritos != null;
     return PaginaSeccion(
-      titulo: 'Historial',
+      titulo: 'Actividad',
       subtitulo: conPestanas
           ? 'Tus viajes y tus lugares'
           : widget.esConductor
@@ -139,7 +139,7 @@ class PantallaHistorialState extends State<PantallaHistorial> {
         children: [
           if (conPestanas) ...[
             SelectorPestanas(
-              titulos: const ['Historial', 'Favoritos'],
+              titulos: const ['Viajes', 'Favoritos'],
               indice: _pestana,
               onCambiar: (i) {
                 setState(() => _pestana = i);

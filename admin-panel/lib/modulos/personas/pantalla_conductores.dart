@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
@@ -42,7 +42,7 @@ class PantallaConductores extends StatelessWidget {
 
     return ListadoRemoto<ConductorAdmin>(
       titulo: 'Conductores',
-      icono: FontAwesomeIcons.carSide,
+      icono: Iconos.carSide,
       nombreArchivo: 'conductores',
       cargar: api.listarConductores,
       columnas: [
@@ -69,8 +69,8 @@ class PantallaConductores extends StatelessWidget {
             child: TextButton.icon(
               onPressed: c.cantidadDocumentos == 0 ? null : () => verDocumentos(c),
               style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
-              icon: FaIcon(
-                FontAwesomeIcons.filePdf,
+              icon: Icon(
+                Iconos.filePdf,
                 size: 16,
                 color: c.cantidadDocumentos == 0 ? Colors.black26 : ColoresApp.rojo,
               ),
@@ -96,7 +96,7 @@ class PantallaConductores extends StatelessWidget {
             mensajeExito: (resultado) => '${(resultado as UsuarioHabilitado).mensaje} Queda pendiente de aprobación.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.motorcycle, size: 14),
+          icon: const Icon(Iconos.motorcycle, size: 14),
           label: const Text('Agregar conductor'),
         ),
       ],
@@ -110,7 +110,7 @@ class PantallaConductores extends StatelessWidget {
             mensajeExito: 'Se actualizó la situación de ${conductor.nombreCompleto}.',
             alTerminar: recargar,
           ),
-          icon: const FaIcon(FontAwesomeIcons.userCheck, size: 16, color: Color(0xFF198754)),
+          icon: const Icon(Iconos.userCheck, size: 16, color: Color(0xFF198754)),
         ),
         // La suspension del conductor es su situacion (arriba); eliminar da de baja su cuenta.
         if (conductor.idUsuario != null)
@@ -152,7 +152,7 @@ class _FormularioSituacionConductorState extends State<FormularioSituacionConduc
     final c = widget.conductor;
     return ModalFormulario(
       titulo: 'Situación del conductor',
-      icono: FontAwesomeIcons.userCheck,
+      icono: Iconos.userCheck,
       claveFormulario: _claveFormulario,
       textoGuardar: 'Realizar cambios',
       alGuardar: () async {
@@ -248,7 +248,7 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
           ),
           child: Row(
             children: [
-              const FaIcon(FontAwesomeIcons.folderOpen, color: ColoresApp.azul, size: 18),
+              const Icon(Iconos.folderOpen, color: ColoresApp.azul, size: 18),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -259,7 +259,7 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
               IconButton(
                 tooltip: 'Cerrar',
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const FaIcon(FontAwesomeIcons.xmark, size: 18),
+                icon: const Icon(Iconos.xmark, size: 18),
               ),
             ],
           ),
@@ -316,7 +316,7 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const FaIcon(FontAwesomeIcons.filePdf, color: ColoresApp.rojo, size: 22),
+              const Icon(Iconos.filePdf, color: ColoresApp.rojo, size: 22),
               const SizedBox(width: 12),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -349,12 +349,12 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
               if (cargando) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
               TextButton.icon(
                 onPressed: cargando ? null : () => _abrir(documento, descargar: false),
-                icon: const FaIcon(FontAwesomeIcons.eye, size: 14),
+                icon: const Icon(Iconos.eye, size: 14),
                 label: const Text('Ver'),
               ),
               TextButton.icon(
                 onPressed: cargando ? null : () => _abrir(documento, descargar: true),
-                icon: const FaIcon(FontAwesomeIcons.download, size: 14),
+                icon: const Icon(Iconos.download, size: 14),
                 label: const Text('Descargar'),
               ),
             ],
