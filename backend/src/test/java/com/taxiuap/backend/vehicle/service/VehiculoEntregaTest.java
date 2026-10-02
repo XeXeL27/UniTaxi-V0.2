@@ -17,6 +17,7 @@ import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.vehicle.dto.VehiculoRequest;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
 import com.taxiuap.backend.vehicle.entity.TipoVehiculo;
+import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.CategoriaServicioRepository;
 import com.taxiuap.backend.vehicle.repository.TipoVehiculoRepository;
 import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
@@ -51,6 +52,21 @@ class VehiculoEntregaTest {
 
         assertThrows(NegocioException.class, () -> service.crear(10L,
                 new VehiculoRequest("ABC123", "Honda", "CB", "Rojo", 2020, 1, 2)));
+    }
+
+    @Test
+    void vehiculoDeliveryExigeTipoMotoYCategoriaDelivery() {
+        TipoVehiculo sedan = tipo(1, "SEDAN");
+        TipoVehiculo moto = tipo(2, "MOTO");
+        CategoriaServicio delivery = categoria(3, "DELIVERY", moto);
+        Vehiculo vehiculo = new Vehiculo();
+        vehiculo.setTipoVehiculo(sedan);
+        vehiculo.setCategoriaServicio(delivery);
+
+        org.junit.jupiter.api.Assertions.assertFalse(vehiculo.esMotoDelivery());
+
+        vehiculo.setTipoVehiculo(moto);
+        org.junit.jupiter.api.Assertions.assertTrue(vehiculo.esMotoDelivery());
     }
 
     private static TipoVehiculo tipo(int id, String codigo) {

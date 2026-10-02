@@ -284,7 +284,7 @@ public class OfertaViajeService {
         if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return;
         boolean tieneMotoDelivery = vehiculoRepository.findByConductorId(conductor.getId()).stream()
                 .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
-                .anyMatch(v -> v.getCategoriaServicio() != null && v.getCategoriaServicio().esDeliveryCompatible());
+                .anyMatch(Vehiculo::esMotoDelivery);
         if (!tieneMotoDelivery) {
             throw new NegocioException("Solo una moto DELIVERY puede aceptar esta solicitud");
         }

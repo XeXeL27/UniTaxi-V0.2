@@ -42,6 +42,7 @@ import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
+import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.CategoriaServicioRepository;
 import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 import com.taxiuap.backend.vehicle.service.DocumentoConductorService;
@@ -123,8 +124,7 @@ public class SolicitudViajeService {
 
         solicitud = solicitudViajeRepository.save(solicitud);
         if (request.datosEntrega() != null) {
-            datosEntregaRepository.save(crearDatosEntrega(solicitud, request.datosEntrega()));
-            solicitud.setDatosEntrega(datosEntregaRepository.findBySolicitudId(solicitud.getId()).orElse(null));
+            solicitud.setDatosEntrega(datosEntregaRepository.save(crearDatosEntrega(solicitud, request.datosEntrega())));
         }
         SolicitudViajeResponse creada = aResponse(solicitud);
         viajeEventPublisher.publicarSolicitudNueva(creada.sinNombreDestino());
@@ -257,7 +257,7 @@ public class SolicitudViajeService {
     boolean tieneMotoDelivery(Long idConductor) {
         return vehiculoRepository.findByConductorId(idConductor).stream()
                 .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
-                .anyMatch(v -> v.getCategoriaServicio() != null && v.getCategoriaServicio().esDeliveryCompatible());
+                .anyMatch(Vehiculo::esMotoDelivery);
     }
 
     private static String codigo() {

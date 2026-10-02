@@ -52,3 +52,32 @@ Resultado: ambos comandos terminaron con `BUILD SUCCESSFUL`.
 
 - `./gradlew test --tests '*Entrega*' --tests '*Delivery*'` incluye `DatosEntregaPersistenciaTest`, que no pudo levantar el contexto JPA por `Hibernate DialectFactory`; el fallo es de infraestructura/configuración de base de datos, no de una aserción del Task 3.
 - La fijación de precio por calles y las transiciones operativas de compra quedan para las tareas previstas en el plan.
+
+## Fix report del reviewer
+
+### Correcciones
+
+- `Vehiculo.esMotoDelivery()` ahora exige simultáneamente tipo físico `MOTO` y categoría `DELIVERY`.
+- El listado de solicitudes, la creación de ofertas y la aceptación directa reutilizan esa validación; se mantiene el rechazo por conductor no aprobado y por límite de adelanto insuficiente.
+- Se conserva el bloqueo `PESSIMISTIC_WRITE` de `ConductorRepository.bloquear()` en ambos caminos de aceptación para serializar dos intentos concurrentes del mismo conductor antes de comprobar viajes activos.
+- Se añadieron pruebas focales de creación, visibilidad/límite, republicación, tipo físico y bloqueo de aceptación.
+- No se agregaron transiciones de códigos operativos, compra, entrega ni cancelación avanzada de Task 4.
+
+### Verificación del fix
+
+RED del tipo físico:
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.vehicle.service.VehiculoEntregaTest'
+```
+
+Salida: fallo de compilación esperado porque `Vehiculo.esMotoDelivery()` no existía.
+
+GREEN del tipo físico y flujo:
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.vehicle.service.VehiculoEntregaTest'
+./gradlew test --tests 'com.taxiuap.backend.trip.service.SolicitudViajeDeliveryFlowTest' --tests 'com.taxiuap.backend.trip.service.ViajeDeliveryRepublicacionTest' --tests 'com.taxiuap.backend.identity.repository.ConductorRepositoryLockTest' --tests 'com.taxiuap.backend.vehicle.service.VehiculoEntregaTest'
+```
+
+Salida: ambos comandos terminaron con `BUILD SUCCESSFUL`.

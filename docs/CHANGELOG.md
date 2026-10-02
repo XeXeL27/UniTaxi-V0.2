@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | Arreglo | Correcciones del reviewer para Task 3 DELIVERY: tipo MOTO explícito, flujo focal y bloqueo de aceptación |
 | 2026-10-02 | Nuevo | Flujo backend de solicitudes y aceptación DELIVERY (Task 3) |
 | 2026-10-02 | Arreglo | Correcciones directas de Task 2: OSRM sin fallback y validación de rutas |
 | 2026-10-02 | Nuevo | Precio DELIVERY por OSRM y límite de adelanto del repartidor (Task 2) |
@@ -16,6 +17,14 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-02
+
+### ✨ Nuevo · Correcciones reviewer Task 3 DELIVERY
+
+- **Módulo / área:** backend (`trip`, `vehicle`, `identity`)
+- **Descripción:** se corrigió la validación de vehículos DELIVERY y se amplió la cobertura del flujo de solicitud, visibilidad, republicación y serialización de aceptación.
+- **Cambios clave:** validación explícita de tipo `MOTO`; pruebas de ENCOMIENDA, COMPRA_Y_ENTREGA, límite insuficiente, republicación y bloqueo pesimista del conductor.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/vehicle/entity/Vehiculo.java`, servicios `trip`, pruebas de flujo DELIVERY y `ConductorRepositoryLockTest`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
+- **Verificación:** `./gradlew compileJava`; suite focalizada Task 3 con `BUILD SUCCESSFUL`.
 
 ### ✨ Nuevo · Flujo backend de solicitudes y aceptación DELIVERY
 
