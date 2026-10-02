@@ -16,5 +16,6 @@ public record OfertaViajeResponse(
         BigDecimal precioOfertado,
         Integer tiempoLlegadaMin,
         SituacionOferta situacionOferta,
-        LocalDateTime fechaOferta) {
+        LocalDateTime fechaOferta,
+        DatosEntregaResponse datosEntrega) {
 }

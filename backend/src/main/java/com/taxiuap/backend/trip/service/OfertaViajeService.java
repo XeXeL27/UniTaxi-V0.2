@@ -18,11 +18,13 @@ import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.trip.dto.OfertaViajeRequest;
 import com.taxiuap.backend.trip.dto.OfertaViajeResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.dto.DatosEntregaResponse;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
+import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
@@ -59,6 +61,7 @@ public class OfertaViajeService {
 
         SolicitudViaje solicitud = solicitudViajeRepository.findById(idSolicitud)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud));
+        validarCompatibilidad(conductor, solicitud);
         if (solicitud.getSituacionSolicitud() != SituacionSolicitud.PENDIENTE
                 && solicitud.getSituacionSolicitud() != SituacionSolicitud.CON_OFERTAS) {
             throw new NegocioException("La solicitud ya no admite ofertas");
@@ -192,6 +195,9 @@ public class OfertaViajeService {
         if (!solicitudViajeRepository.existsById(idSolicitud)) {
             throw RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud);
         }
+        SolicitudViaje disponible = solicitudViajeRepository.findById(idSolicitud)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud));
+        validarCompatibilidad(conductor, disponible);
         Long idConductor = conductor.getId();
         // El conductor que cancelo este pedido no lo puede volver a tomar: queda para otro.
         if (ofertaViajeRepository.existsBySolicitudIdAndConductorIdAndSituacionOferta(
@@ -257,6 +263,9 @@ public class OfertaViajeService {
                                 + conductor.getUsuario().getPersona().getApellidos()
                         : null;
 
+        boolean esPasajero = oferta.getSolicitud() != null && oferta.getSolicitud().getPasajero() != null
+                && UsuarioActual.obtener().map(u -> u.idUsuario().equals(
+                        oferta.getSolicitud().getPasajero().getUsuario().getId())).orElse(false);
         return new OfertaViajeResponse(
                 oferta.getId(),
                 oferta.getSolicitud() != null ? oferta.getSolicitud().getId() : null,
@@ -267,6 +276,25 @@ public class OfertaViajeService {
                 oferta.getPrecioOfertado(),
                 oferta.getTiempoLlegadaMin(),
                 oferta.getSituacionOferta(),
-                oferta.getFechaOferta());
+                oferta.getFechaOferta(),
+                DatosEntregaResponse.desde(oferta.getSolicitud().getDatosEntrega(), esPasajero));
+    }
+
+    private void validarCompatibilidad(Conductor conductor, SolicitudViaje solicitud) {
+        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return;
+        boolean tieneMotoDelivery = vehiculoRepository.findByConductorId(conductor.getId()).stream()
+                .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
+                .anyMatch(v -> v.getCategoriaServicio() != null && v.getCategoriaServicio().esDeliveryCompatible());
+        if (!tieneMotoDelivery) {
+            throw new NegocioException("Solo una moto DELIVERY puede aceptar esta solicitud");
+        }
+        if (solicitud.getDatosEntrega() != null
+                && solicitud.getDatosEntrega().getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA
+                && (conductor.getLimiteAdelantoCompra() == null
+                        || solicitud.getDatosEntrega().getCostoProductoEstimado() == null
+                        || solicitud.getDatosEntrega().getCostoProductoEstimado()
+                                .compareTo(conductor.getLimiteAdelantoCompra()) > 0)) {
+            throw new NegocioException("El costo estimado supera el limite de adelanto del repartidor");
+        }
     }
 }

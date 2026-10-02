@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | Nuevo | Flujo backend de solicitudes y aceptación DELIVERY (Task 3) |
 | 2026-10-02 | Arreglo | Correcciones directas de Task 2: OSRM sin fallback y validación de rutas |
 | 2026-10-02 | Nuevo | Precio DELIVERY por OSRM y límite de adelanto del repartidor (Task 2) |
 | 2026-10-02 | Arreglo | Correcciones del reviewer para Task 1 DELIVERY |
@@ -13,6 +14,16 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-02
+
+### ✨ Nuevo · Flujo backend de solicitudes y aceptación DELIVERY
+
+- **Módulo / área:** backend (`trip`)
+- **Descripción:** se integró la creación, visibilidad y aceptación de solicitudes DELIVERY para ENCOMIENDA y COMPRA_Y_ENTREGA.
+- **Cambios clave:** códigos independientes para encomiendas; compra sin precio definitivo inicial; filtro por moto DELIVERY, aprobación y límite de adelanto; datos de entrega en respuestas y republicación con reinicio de datos operativos.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/service/SolicitudViajeService.java`, `OfertaViajeService.java`, `ViajeService.java`, DTOs de `trip`, `backend/src/test/java/com/taxiuap/backend/trip/dto/DatosEntregaResponseDeliveryTest.java`.
+- **Verificación:** `./gradlew compileJava`; tests focalizados DELIVERY y DTO (`BUILD SUCCESSFUL`).
 | 2026-09-30 | 🎨 | Botones del mapa: capas y ubicación sobre el panel (sin taparlo) y brújula en la esquina superior |
 | 2026-09-30 | 🐛 | Chat en memoria: se restaura @Transactional y desaparece el LazyInitializationException |
 | 2026-09-30 | 🐛 | Chat en memoria y en modal flotante: se arregla la autenticación del WebSocket y los mensajes sí se ven |

@@ -41,8 +41,9 @@ public record ViajeResponse(
         boolean conductorTieneQr,
         /** true si al pasajero ya se le ofrecio calificar este viaje (no se vuelve a ofrecer). */
         boolean calificacionOfrecida,
-        /** Nombre del favorito elegido como destino: solo en las respuestas al pasajero (si no, null). */
-        String destinoNombre) {
+         /** Nombre del favorito elegido como destino: solo en las respuestas al pasajero (si no, null). */
+         String destinoNombre,
+         DatosEntregaResponse datosEntrega) {
 
     /** El mismo viaje sin el nombre del favorito, para el conductor. */
     public ViajeResponse sinNombreDestino() {
@@ -50,6 +51,7 @@ public record ViajeResponse(
                 placaVehiculo, marcaVehiculo, modeloVehiculo, colorVehiculo, calificacionConductor, origenWkt,
                 destinoWkt, origenDireccion, destinoDireccion, distanciaKm, duracionMin, precioOriginal,
                 montoDescuento, precioFinal, situacionViaje, canceladoPor, fechaInicio, fechaFin,
-                calificadoPorPasajero, metodoPago, metodoPagoPedido, conductorTieneQr, calificacionOfrecida, null);
+                calificadoPorPasajero, metodoPago, metodoPagoPedido, conductorTieneQr, calificacionOfrecida, null,
+                datosEntrega == null ? null : datosEntrega.paraConductor());
     }
 }

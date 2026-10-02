@@ -1,6 +1,7 @@
 package com.taxiuap.backend.trip.service;
 
 import java.math.BigDecimal;
+import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.List;
@@ -27,17 +28,22 @@ import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.trip.dto.DatosEntregaRequest;
 import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
 import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
+import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
+import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
+import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
 import com.taxiuap.backend.vehicle.repository.CategoriaServicioRepository;
+import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 import com.taxiuap.backend.vehicle.service.DocumentoConductorService;
 
 import lombok.RequiredArgsConstructor;
@@ -60,6 +66,8 @@ public class SolicitudViajeService {
     private final PasajeroRepository pasajeroRepository;
     private final ConductorRepository conductorRepository;
     private final CategoriaServicioRepository categoriaServicioRepository;
+    private final VehiculoRepository vehiculoRepository;
+    private final DatosEntregaRepository datosEntregaRepository;
     private final DocumentoConductorService documentoConductorService;
     private final ViajeEventPublisher viajeEventPublisher;
     private final ViajeService viajeService;
@@ -70,6 +78,7 @@ public class SolicitudViajeService {
 
     /** Categoria usada cuando la app no elige una: el taxi comun. */
     private static final String CATEGORIA_POR_DEFECTO = "ESTANDAR";
+    private static final SecureRandom ALEATORIO = new SecureRandom();
 
     @Transactional
     public SolicitudViajeResponse crear(SolicitudViajeRequest request) {
@@ -91,6 +100,7 @@ public class SolicitudViajeService {
         }
 
         CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
+        validarDatosEntrega(categoriaServicio, request.datosEntrega());
         // Con precio fijo, el precio lo pone la plataforma y no el pasajero.
         BigDecimal precioFijo = calculoPrecioService.precioFijo();
 
@@ -103,13 +113,20 @@ public class SolicitudViajeService {
         solicitud.setDestinoDireccion(request.destinoDireccion());
         solicitud.setDestinoNombrePasajero(request.destinoNombre() == null || request.destinoNombre().isBlank()
                 ? null : request.destinoNombre().trim());
-        solicitud.setPrecioSugerido(precioFijo != null ? precioFijo : request.precioSugerido());
+        boolean esCompra = request.datosEntrega() != null
+                && request.datosEntrega().tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
+        solicitud.setPrecioSugerido(esCompra ? null : precioFijo != null ? precioFijo : request.precioSugerido());
         solicitud.setMetodoPago(metodoPagoPermitido(request.metodoPago()));
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         solicitud.setFechaSolicitud(LocalDateTime.now());
         solicitud.setEstadoSolViaje(EstadoRegistro.A);
 
-        SolicitudViajeResponse creada = aResponse(solicitudViajeRepository.save(solicitud));
+        solicitud = solicitudViajeRepository.save(solicitud);
+        if (request.datosEntrega() != null) {
+            datosEntregaRepository.save(crearDatosEntrega(solicitud, request.datosEntrega()));
+            solicitud.setDatosEntrega(datosEntregaRepository.findBySolicitudId(solicitud.getId()).orElse(null));
+        }
+        SolicitudViajeResponse creada = aResponse(solicitud);
         viajeEventPublisher.publicarSolicitudNueva(creada.sinNombreDestino());
         return creada;
     }
@@ -172,6 +189,7 @@ public class SolicitudViajeService {
                         s.getId(), conductor.getId(), SituacionOferta.RECHAZADA))
                 // Ni su propio pedido si la misma persona tambien es pasajero.
                 .filter(s -> !s.getPasajero().getUsuario().getPersona().getId().equals(idPersona))
+                .filter(s -> puedeVer(conductor, s))
                 // Las mas recientes primero.
                 .sorted(Comparator.comparing(SolicitudViaje::getFechaSolicitud,
                         Comparator.nullsLast(Comparator.reverseOrder())))
@@ -192,6 +210,58 @@ public class SolicitudViajeService {
             throw new NegocioException("La categoria de servicio no esta activa");
         }
         return categoriaServicio;
+    }
+
+    private void validarDatosEntrega(CategoriaServicio categoria, DatosEntregaRequest datos) {
+        boolean esDelivery = categoria.esDeliveryCompatible();
+        if (esDelivery != (datos != null)) {
+            throw new NegocioException(esDelivery
+                    ? "Una solicitud DELIVERY requiere datos de entrega"
+                    : "Los datos de entrega solo se permiten con la categoria DELIVERY");
+        }
+    }
+
+    private DatosEntrega crearDatosEntrega(SolicitudViaje solicitud, DatosEntregaRequest request) {
+        DatosEntrega datos = new DatosEntrega();
+        datos.setSolicitud(solicitud);
+        datos.setTipoEnvio(request.tipoEnvio());
+        datos.setDescripcion(request.descripcion());
+        datos.setCostoProductoEstimado(request.costoProductoEstimado());
+        datos.setNombreRemitente(request.nombreRemitente());
+        datos.setTelefonoRemitente(request.telefonoRemitente());
+        datos.setNombreReceptor(request.nombreReceptor());
+        datos.setTelefonoReceptor(request.telefonoReceptor());
+        datos.setFotoPaqueteUrl(request.fotoPaqueteUrl());
+        datos.setAceptaPoliticaArticulos(Boolean.TRUE.equals(request.aceptaPoliticaArticulos()));
+        if (request.tipoEnvio() == TipoEnvio.ENCOMIENDA) {
+            datos.setCodigoRecogida(codigo());
+            String entrega;
+            do {
+                entrega = codigo();
+            } while (entrega.equals(datos.getCodigoRecogida()));
+            datos.setCodigoEntrega(entrega);
+        }
+        return datos;
+    }
+
+    private boolean puedeVer(Conductor conductor, SolicitudViaje solicitud) {
+        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return true;
+        if (!tieneMotoDelivery(conductor.getId())) return false;
+        DatosEntrega datos = solicitud.getDatosEntrega();
+        return datos == null || datos.getTipoEnvio() != TipoEnvio.COMPRA_Y_ENTREGA
+                || (datos.getCostoProductoEstimado() != null
+                        && conductor.getLimiteAdelantoCompra() != null
+                        && datos.getCostoProductoEstimado().compareTo(conductor.getLimiteAdelantoCompra()) <= 0);
+    }
+
+    boolean tieneMotoDelivery(Long idConductor) {
+        return vehiculoRepository.findByConductorId(idConductor).stream()
+                .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
+                .anyMatch(v -> v.getCategoriaServicio() != null && v.getCategoriaServicio().esDeliveryCompatible());
+    }
+
+    private static String codigo() {
+        return String.format("%06d", ALEATORIO.nextInt(1_000_000));
     }
 
     private Pasajero buscarPasajero() {
@@ -239,6 +309,8 @@ public class SolicitudViajeService {
         int cantidadOfertas = ofertaViajeRepository.findBySolicitudIdAndSituacionOferta(
                 solicitud.getId(), SituacionOferta.PENDIENTE).size();
         BigDecimal precioFijo = calculoPrecioService.precioFijo();
+        boolean esCompra = solicitud.getDatosEntrega() != null
+                && solicitud.getDatosEntrega().getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
 
         return new SolicitudViajeResponse(
                 solicitud.getId(),
@@ -251,13 +323,15 @@ public class SolicitudViajeService {
                 solicitud.getOrigenDireccion(),
                 solicitud.getDestinoDireccion(),
                 // Con precio fijo se muestra el que se cobrara, aunque la solicitud se haya creado antes.
-                precioFijo != null ? precioFijo : solicitud.getPrecioSugerido(),
+                esCompra ? null : precioFijo != null ? precioFijo : solicitud.getPrecioSugerido(),
                 solicitud.getSituacionSolicitud(),
                 solicitud.getFechaSolicitud(),
                 cantidadOfertas,
                 solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO,
-                // El nombre del favorito solo se devuelve al propio pasajero.
-                esDelUsuarioActual(solicitud.getPasajero()) ? solicitud.getDestinoNombrePasajero() : null);
+                // El nombre del favorito y los codigos solo se devuelven al propio pasajero.
+                esDelUsuarioActual(solicitud.getPasajero()) ? solicitud.getDestinoNombrePasajero() : null,
+                com.taxiuap.backend.trip.dto.DatosEntregaResponse.desde(solicitud.getDatosEntrega(),
+                        esDelUsuarioActual(solicitud.getPasajero())));
     }
 
     private static boolean esDelUsuarioActual(Pasajero pasajero) {

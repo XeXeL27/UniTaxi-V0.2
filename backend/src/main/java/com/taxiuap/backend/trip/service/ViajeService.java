@@ -47,10 +47,12 @@ import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
 import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
+import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
@@ -91,6 +93,7 @@ public class ViajeService {
     private final CalificacionRepository calificacionRepository;
     private final QrPagoConductorService qrPagoConductorService;
     private final SolicitudViajeRepository solicitudViajeRepository;
+    private final DatosEntregaRepository datosEntregaRepository;
     private final OfertaViajeRepository ofertaViajeRepository;
     private final UbicacionConductorRepository ubicacionConductorRepository;
     private final NotificacionPushService notificacionPushService;
@@ -304,6 +307,11 @@ public class ViajeService {
         nueva.setFechaSolicitud(LocalDateTime.now());
         nueva.setEstadoSolViaje(EstadoRegistro.A);
         nueva = solicitudViajeRepository.save(nueva);
+
+        if (anterior.getDatosEntrega() != null) {
+            DatosEntrega datos = copiarDatosEntregaParaRepublicar(anterior.getDatosEntrega(), nueva);
+            nueva.setDatosEntrega(datosEntregaRepository.save(datos));
+        }
 
         OfertaViaje rechazo = new OfertaViaje();
         rechazo.setSolicitud(nueva);
@@ -535,6 +543,8 @@ public class ViajeService {
         Usuario usuarioConductor = viaje.getConductor().getUsuario();
         WKTWriter escritorWkt = new WKTWriter();
 
+        boolean esPasajero = UsuarioActual.obtener()
+                .map(u -> u.idUsuario().equals(usuarioPasajero.getId())).orElse(false);
         return new ViajeResponse(
                 viaje.getId(),
                 viaje.getSolicitud().getId(),
@@ -566,8 +576,27 @@ public class ViajeService {
                 qrPagoConductorService.tieneQr(viaje.getConductor().getId()),
                 Boolean.TRUE.equals(viaje.getCalificacionOfrecidaPasajero()),
                 // El nombre del favorito solo se devuelve al propio pasajero.
-                UsuarioActual.obtener().map(u -> u.idUsuario().equals(usuarioPasajero.getId())).orElse(false)
-                        ? viaje.getSolicitud().getDestinoNombrePasajero() : null);
+                esPasajero ? viaje.getSolicitud().getDestinoNombrePasajero() : null,
+                com.taxiuap.backend.trip.dto.DatosEntregaResponse.desde(viaje.getSolicitud().getDatosEntrega(),
+                        esPasajero));
+    }
+
+    private DatosEntrega copiarDatosEntregaParaRepublicar(DatosEntrega anterior, SolicitudViaje nueva) {
+        DatosEntrega datos = new DatosEntrega();
+        datos.setSolicitud(nueva);
+        datos.setTipoEnvio(anterior.getTipoEnvio());
+        datos.setDescripcion(anterior.getDescripcion());
+        datos.setCostoProductoEstimado(anterior.getCostoProductoEstimado());
+        datos.setNombreRemitente(anterior.getNombreRemitente());
+        datos.setTelefonoRemitente(anterior.getTelefonoRemitente());
+        datos.setNombreReceptor(anterior.getNombreReceptor());
+        datos.setTelefonoReceptor(anterior.getTelefonoReceptor());
+        datos.setCodigoRecogida(anterior.getCodigoRecogida());
+        datos.setCodigoEntrega(anterior.getCodigoEntrega());
+        datos.setFotoPaqueteUrl(anterior.getFotoPaqueteUrl());
+        datos.setAceptaPoliticaArticulos(anterior.getAceptaPoliticaArticulos());
+        datos.setEstadoEntrega(com.taxiuap.backend.trip.enums.EstadoEntrega.PENDIENTE_RECOGIDA);
+        return datos;
     }
 
     /**
