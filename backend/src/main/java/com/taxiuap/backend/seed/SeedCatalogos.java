@@ -52,6 +52,7 @@ class SeedCatalogos {
             CategoriaServicio sedanEstandar,
             CategoriaServicio sedanEjecutivo,
             CategoriaServicio motoCategoria,
+            CategoriaServicio deliveryCategoria,
             List<Zona> zonas,
             List<EtiquetaCalificacion> etiquetas) {
 
@@ -89,6 +90,7 @@ class SeedCatalogos {
         CategoriaServicio sedanEstandar = crearCategoriaServicio(sedan, "ESTANDAR");
         CategoriaServicio sedanEjecutivo = crearCategoriaServicio(sedan, "EJECUTIVO");
         CategoriaServicio motoCategoria = crearCategoriaServicio(moto, "MOTO");
+        CategoriaServicio deliveryCategoria = crearCategoriaServicio(moto, "DELIVERY");
 
         List<EtiquetaCalificacion> etiquetas = List.of(
                 crearEtiqueta("Conduccion segura", TipoEtiqueta.POSITIVA, AplicaA.CONDUCTOR),
@@ -111,7 +113,7 @@ class SeedCatalogos {
                 3, carrerasUap.size(), 3, 3, etiquetas.size(), zonas.size());
 
         return new CatalogosSembrados(universidad, uap, carrerasUap, sedan, moto, van,
-                sedanEstandar, sedanEjecutivo, motoCategoria, zonas, etiquetas);
+                sedanEstandar, sedanEjecutivo, motoCategoria, deliveryCategoria, zonas, etiquetas);
     }
 
     private TipoInstitucion crearTipoInstitucion(String codigo, String nombre) {

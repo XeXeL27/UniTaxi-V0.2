@@ -57,6 +57,10 @@ public class Conductor extends EntidadAuditable {
     @Column(name = "licencia_vencimiento")
     private LocalDate licenciaVencimiento;
 
+    /** Maximo que el repartidor acepta adelantar para pedidos de compra, en bolivianos. */
+    @Column(name = "limite_adelanto_compra", precision = 10, scale = 2)
+    private BigDecimal limiteAdelantoCompra = BigDecimal.ZERO;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "situacion_aprobacion", length = 20, nullable = false)
     private SituacionAprobacion situacionAprobacion = SituacionAprobacion.PENDIENTE;

@@ -102,6 +102,7 @@ public class PerfilConductorService {
                 List.of(),
                 conductor.getLicenciaVencimiento(),
                 almacenamientoArchivos.existe(persona.getCarnetAnversoUrl()),
-                almacenamientoArchivos.existe(conductor.getLicenciaAnversoUrl()));
+                almacenamientoArchivos.existe(conductor.getLicenciaAnversoUrl()),
+                conductor.getLimiteAdelantoCompra());
     }
 }

@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-02 | Nuevo | Modelo backend y catálogo DELIVERY (Task 1) |
 | 2026-10-02 | 📚 | DELIVERY: spec rediseñada y consolidada con precio, códigos, compra, límites, estados, cancelaciones y resolución administrativa |
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
@@ -32,6 +33,14 @@
 ---
 
 ## 2026-10-02
+
+### Nuevo · Modelo backend y catálogo DELIVERY
+
+- **Módulo / área:** backend (`trip`, `vehicle`, `identity`, `seed`)
+- **Descripción:** Se agregó el modelo persistente inicial para pedidos DELIVERY y la categoría exclusiva para motos.
+- **Cambios clave:** Se crearon `DatosEntrega`, `TipoEnvio`, `EstadoEntrega`, repositorio y DTOs; se relacionaron los datos 1-1 con `SolicitudViaje`; se agregaron validaciones de costos, códigos, evidencia y política de encomiendas; se agregó el límite de adelanto al conductor; el catálogo y seed incluyen `DELIVERY` y asignan una moto de prueba a esa categoría.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/`, `backend/src/main/java/com/taxiuap/backend/vehicle/`, `backend/src/main/java/com/taxiuap/backend/identity/`, `backend/src/main/java/com/taxiuap/backend/seed/`, `backend/src/test/java/com/taxiuap/backend/trip/`, `backend/src/test/java/com/taxiuap/backend/vehicle/`
+- **Verificación:** `./gradlew test --tests '*Entrega*'` pasa; `./gradlew compileJava` pasa; `./gradlew test` ejecuta 67 pruebas y falla solo `TaxiuapApplicationTests.contextLoads()` por credenciales locales de PostgreSQL.
 
 ### 📚 Documentación · Spec DELIVERY rediseñada y consolidada
 

@@ -41,4 +41,10 @@ public class CategoriaServicio extends EntidadAuditable {
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_cat_serv", length = 20)
     private EstadoRegistro estadoCategoriaServicio = EstadoRegistro.A;
+
+    public boolean esDeliveryCompatible() {
+        return "DELIVERY".equalsIgnoreCase(nombre)
+                && tipoVehiculo != null
+                && "MOTO".equalsIgnoreCase(tipoVehiculo.getCodigo());
+    }
 }

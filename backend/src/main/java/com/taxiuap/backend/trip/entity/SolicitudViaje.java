@@ -22,6 +22,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -78,6 +79,9 @@ public class SolicitudViaje extends EntidadAuditable {
     @Enumerated(EnumType.STRING)
     @Column(name = "metodo_pago", length = 20)
     private MetodoPago metodoPago;
+
+    @OneToOne(mappedBy = "solicitud", fetch = FetchType.LAZY)
+    private DatosEntrega datosEntrega;
 
     @Column(name = "fecha_solicitud")
     private LocalDateTime fechaSolicitud;
