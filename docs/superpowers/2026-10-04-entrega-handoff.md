@@ -66,6 +66,12 @@ Los Cerro y NO se hicieron. El subagente los reporto como hechos y no existian.
 Ademas, la prueba nueva de base debe probarse a si misma: romper a proposito la produccion (quitar
 `clearAutomatically` o volver el UPDATE incondicional), confirmar que falla, y restaurar.
 
+Un intento anterior de esta prueba quedo a medias y se **descarto**: `EntregaServiceRealDbIntegrationTest`
+tenia 4 de 6 pruebas en verde y fallaba al intentar pasar de `EN_CAMINO_RECOGIDA` a `ENTREGADO` sin
+pasar por `EN_MANO`. Confirma que el estado lo prohibe correctamente, o sea que era la prueba la que
+no recorria el camino completo, no un defecto de produccion. Queda como referencia para los nombres
+de las pruebas y la fixture que usaba, pero no se conservo nada de ella.
+
 ## Pendiente: bug diferido por decision del usuario
 
 **COMPRA_Y_ENTREGA no se puede entregar si el telefono guardado no es de 8 digitos pelados.**
