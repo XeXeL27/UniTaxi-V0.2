@@ -68,7 +68,7 @@ public class CalculoPrecioService {
     public CalculoPrecio calcular(SolicitudViaje solicitud, OfertaViaje oferta, Pasajero pasajero) {
         BigDecimal distanciaKm = calcularDistanciaKm(solicitud.getOrigen(), solicitud.getDestino());
         Integer duracionMin = calcularDuracionMin(distanciaKm);
-        Tarifa tarifa = buscarTarifaVigente(solicitud);
+        Tarifa tarifa = tarifaVigente(solicitud);
 
         BigDecimal precioOriginal = calcularPrecioOriginal(oferta, tarifa, distanciaKm, duracionMin);
         ResultadoDescuento descuento = calcularDescuento(pasajero, solicitud, precioOriginal);
@@ -117,10 +117,10 @@ public class CalculoPrecioService {
 
     /**
      * Tarifa vigente para la categoria de servicio de la solicitud. Se intenta primero con la
-     * zona activa cuyo poligono contiene el origen del viaje; si ninguna zona lo contiene (o no
-     * tiene tarifa vigente), se usa la primera tarifa vigente de la categoria sin importar zona.
+     * zona activa cuyo poligono contiene el origen; si no hay una, usa la primera tarifa vigente
+     * de la categoria. Se puede resolver sin calcular ni aplicar el precio generico.
      */
-    private Tarifa buscarTarifaVigente(SolicitudViaje solicitud) {
+    public Tarifa tarifaVigente(SolicitudViaje solicitud) {
         Integer idCategoriaServicio = solicitud.getCategoriaServicio().getId();
         LocalDate hoy = LocalDate.now();
 

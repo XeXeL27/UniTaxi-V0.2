@@ -29,6 +29,7 @@ import com.taxiuap.backend.location.dto.UbicacionConductorViajeResponse;
 import com.taxiuap.backend.location.entity.UbicacionConductor;
 import com.taxiuap.backend.location.repository.UbicacionConductorRepository;
 import com.taxiuap.backend.pricing.dto.CalculoPrecio;
+import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.entity.BilleteraConductor;
 import com.taxiuap.backend.pricing.entity.Comision;
 import com.taxiuap.backend.pricing.entity.Pago;
@@ -39,6 +40,7 @@ import com.taxiuap.backend.pricing.repository.ComisionRepository;
 import com.taxiuap.backend.pricing.repository.PagoRepository;
 import com.taxiuap.backend.rating.repository.CalificacionRepository;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
+import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
@@ -59,6 +61,7 @@ import com.taxiuap.backend.trip.enums.CanceladoPor;
 import com.taxiuap.backend.trip.enums.PeriodoHistorial;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
+import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.repository.ViajeRepository;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
@@ -88,6 +91,7 @@ public class ViajeService {
     private final ComisionRepository comisionRepository;
     private final BilleteraConductorRepository billeteraConductorRepository;
     private final CalculoPrecioService calculoPrecioService;
+    private final CalculoPrecioDeliveryService calculoPrecioDeliveryService;
     private final HistorialViajeService historialViajeService;
     private final SimpMessagingTemplate mensajeriaTemplate;
     private final CalificacionRepository calificacionRepository;
@@ -101,6 +105,9 @@ public class ViajeService {
     @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
 
+    @Value("${taxiuap.delivery.comision-porcentaje:0}")
+    private BigDecimal porcentajeComisionDelivery = BigDecimal.ZERO;
+
     /**
      * Crea el viaje a partir de una solicitud y su oferta aceptada. Se anota con propagacion
      * MANDATORY a proposito: este metodo solo debe correr dentro de la transaccion atomica de
@@ -110,13 +117,40 @@ public class ViajeService {
     @Transactional(propagation = Propagation.MANDATORY)
     public Viaje crearDesdeOferta(SolicitudViaje solicitud, OfertaViaje oferta) {
         Conductor conductor = oferta.getConductor();
+        boolean esDelivery = solicitud.getCategoriaServicio().esDeliveryCompatible();
         Vehiculo vehiculo = vehiculoRepository.findByConductorId(conductor.getId()).stream()
                 .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
+                .filter(v -> !esDelivery || v.esMotoDelivery())
                 .findFirst()
-                .orElseThrow(() -> new NegocioException("El conductor no tiene un vehiculo registrado"));
+                .orElseThrow(() -> new NegocioException(esDelivery
+                        ? "El conductor no tiene una moto DELIVERY activa"
+                        : "El conductor no tiene un vehiculo registrado"));
 
         Pasajero pasajero = solicitud.getPasajero();
-        CalculoPrecio calculo = calculoPrecioService.calcular(solicitud, oferta, pasajero);
+        CalculoPrecio calculo = esDelivery ? null : calculoPrecioService.calcular(solicitud, oferta, pasajero);
+        DesglosePrecioDelivery estimado = null;
+        BigDecimal precioDelivery = null;
+        if (esDelivery) {
+            DatosEntrega datos = solicitud.getDatosEntrega();
+            if (datos == null) {
+                throw new NegocioException("La solicitud DELIVERY no tiene datos de entrega");
+            }
+            if (datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA && datos.getCostoProductoReal() == null) {
+                UbicacionConductor ubicacion = ubicacionConductorRepository.findByConductorId(conductor.getId())
+                        .filter(u -> u.getEstadoUbicacionConductor() == EstadoRegistro.A)
+                        .filter(u -> u.getUbicacion() != null)
+                        .orElseThrow(() -> new NegocioException(
+                                "El repartidor debe reportar su ubicacion antes de aceptar una compra"));
+                estimado = calculoPrecioDeliveryService.estimarCompra(ubicacion.getUbicacion(), solicitud.getDestino());
+                precioDelivery = estimado.precioServicio();
+                solicitud.setPrecioSugerido(precioDelivery);
+            } else {
+                precioDelivery = solicitud.getPrecioSugerido();
+            }
+            if (precioDelivery == null) {
+                throw new NegocioException("La solicitud DELIVERY no tiene un precio de servicio calculado");
+            }
+        }
 
         Viaje viaje = new Viaje();
         viaje.setSolicitud(solicitud);
@@ -124,19 +158,28 @@ public class ViajeService {
         viaje.setConductor(conductor);
         viaje.setVehiculo(vehiculo);
         viaje.setCategoriaServicio(solicitud.getCategoriaServicio());
-        viaje.setTarifa(calculo.tarifa());
+        // DELIVERY conserva la FK requerida por viaje, pero no usa la tarifa generica para cobrar.
+        viaje.setTarifa(esDelivery ? calculoPrecioService.tarifaVigente(solicitud) : calculo.tarifa());
         viaje.setOrigen(solicitud.getOrigen());
         viaje.setDestino(solicitud.getDestino());
-        viaje.setDistanciaKm(calculo.distanciaKm());
-        viaje.setDuracionMin(calculo.duracionMin());
-        viaje.setPrecioOriginal(calculo.precioOriginal());
-        viaje.setMontoDescuento(calculo.montoDescuento());
-        viaje.setPrecioFinal(calculo.precioFinal());
+        if (esDelivery) {
+            viaje.setDistanciaKm(estimado == null ? null : estimado.distanciaKm());
+            viaje.setDuracionMin(estimado == null ? null : estimado.duracionMinutos());
+            viaje.setPrecioOriginal(precioDelivery);
+            viaje.setMontoDescuento(BigDecimal.ZERO.setScale(2));
+            viaje.setPrecioFinal(precioDelivery);
+        } else {
+            viaje.setDistanciaKm(calculo.distanciaKm());
+            viaje.setDuracionMin(calculo.duracionMin());
+            viaje.setPrecioOriginal(calculo.precioOriginal());
+            viaje.setMontoDescuento(calculo.montoDescuento());
+            viaje.setPrecioFinal(calculo.precioFinal());
+        }
         viaje.setSituacionViaje(SituacionViaje.CONFIRMADO);
         viaje.setMetodoPago(solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO);
 
         // Solo se deja constancia del estudiante y la regla cuando realmente hubo descuento.
-        if (calculo.montoDescuento().compareTo(BigDecimal.ZERO) > 0) {
+        if (!esDelivery && calculo.montoDescuento().compareTo(BigDecimal.ZERO) > 0) {
             viaje.setEstudiante(calculo.estudiante());
             viaje.setReglaDescuento(calculo.regla());
         }
@@ -566,6 +609,7 @@ public class ViajeService {
                 viaje.getPrecioOriginal(),
                 viaje.getMontoDescuento(),
                 viaje.getPrecioFinal(),
+                precioDeliveryEstimado(viaje),
                 viaje.getSituacionViaje(),
                 viaje.getCanceladoPor(),
                 viaje.getFechaInicio(),
@@ -579,6 +623,13 @@ public class ViajeService {
                 esPasajero ? viaje.getSolicitud().getDestinoNombrePasajero() : null,
                 com.taxiuap.backend.trip.dto.DatosEntregaResponse.desde(viaje.getSolicitud().getDatosEntrega(),
                         esPasajero));
+    }
+
+    private static boolean precioDeliveryEstimado(Viaje viaje) {
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        return viaje.getCategoriaServicio() != null && viaje.getCategoriaServicio().esDeliveryCompatible()
+                && datos != null && datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA
+                && datos.getCostoProductoReal() == null && viaje.getSolicitud().getPrecioSugerido() != null;
     }
 
     private DatosEntrega copiarDatosEntregaParaRepublicar(DatosEntrega anterior, SolicitudViaje nueva) {
@@ -616,13 +667,16 @@ public class ViajeService {
         pago.setFechaPago(ahora);
         pagoRepository.save(pago);
 
+        BigDecimal porcentajeAplicado = viaje.getCategoriaServicio() != null
+                && viaje.getCategoriaServicio().esDeliveryCompatible()
+                        ? porcentajeComisionDelivery : porcentajeComision;
         BigDecimal montoComision = viaje.getPrecioFinal()
-                .multiply(porcentajeComision)
+                .multiply(porcentajeAplicado)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
         Comision comision = new Comision();
         comision.setViaje(viaje);
-        comision.setPorcentaje(porcentajeComision);
+        comision.setPorcentaje(porcentajeAplicado);
         comision.setMonto(montoComision);
         comisionRepository.save(comision);
 

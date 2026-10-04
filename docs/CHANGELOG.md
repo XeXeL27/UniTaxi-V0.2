@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-04 | Arreglo | Task 3 DELIVERY: precio OSRM por snapshot, estimado marcado al asignar, moto compatible, tarifa de referencia y revalidación de aceptación |
 | 2026-10-02 | 📚 | Pausa documentada de implementación DELIVERY en Task 3; Tasks 1 y 2 revisadas, Task 3 implementada pendiente de re-review |
 | 2026-10-02 | Arreglo | Correcciones del reviewer para Task 3 DELIVERY: tipo MOTO explícito, flujo focal y bloqueo de aceptación |
 | 2026-10-02 | Nuevo | Flujo backend de solicitudes y aceptación DELIVERY (Task 3) |
@@ -16,6 +17,17 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-04
+
+### 🐛 Arreglo · Cierre de hallazgos de Task 3 DELIVERY
+
+- **Módulo / área:** backend (`trip`, `pricing`, `seed`).
+- **Descripción:** ENCOMIENDA ahora fija al crear el precio del servicio calculado por OSRM A -> B e ignora el precio enviado por el cliente. Un fallo de OSRM impide persistir la solicitud. COMPRA_Y_ENTREGA calcula al asignar el GPS actual del repartidor -> B, persiste el snapshot en `SolicitudViaje.precioSugerido` y expone `precioEstimado`; no se agregó ninguna columna ni se implementó la compra de Task 4.
+- **Cambios clave:** Las respuestas de solicitud, oferta y viaje usan el snapshot DELIVERY en lugar del precio fijo genérico; el viaje usa exclusivamente precios de `CalculoPrecioDeliveryService`, conserva una tarifa vigente solo como FK requerida y selecciona una moto DELIVERY activa. La aceptación por oferta vuelve a comprobar aprobación, vehículo compatible y límite de adelanto. La comisión DELIVERY usa la configuración propia (0% por defecto) y solo el precio del servicio.
+- **Seed:** nueva tarifa DELIVERY idempotente, leída de las propiedades `taxiuap.delivery.*`; se asegura también cuando el seeder normal omite la carga porque ya hay datos de prueba.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedOrquestador.java`, `SeedPrecios.java`, `SeedTarifaDelivery.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/SolicitudViajeResponse.java`, `ViajeResponse.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`, `SolicitudViajeService.java`, `ViajeService.java`; pruebas DELIVERY en `backend/src/test/java/com/taxiuap/backend/seed/` y `backend/src/test/java/com/taxiuap/backend/trip/service/`; `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
+- **Verificación:** RED observado antes de implementar: 15 pruebas, 8 fallos de comportamiento esperados. GREEN focalizado: 25 pruebas con `BUILD SUCCESSFUL`; `compileJava` y `compileTestJava` correctos. Suite completa: 102 pruebas, 3 fallos durante el arranque de contexto por `DataSourceBeanCreationException`; la prueba de aceptación con persistencia también queda bloqueada por la misma configuración de base de datos. No se declara cobertura ejecutada de concurrencia.
 
 ## 2026-10-02
 

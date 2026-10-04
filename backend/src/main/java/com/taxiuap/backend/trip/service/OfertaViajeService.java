@@ -73,7 +73,8 @@ public class OfertaViajeService {
         OfertaViaje oferta = new OfertaViaje();
         oferta.setSolicitud(solicitud);
         oferta.setConductor(conductor);
-        oferta.setPrecioOfertado(request.precioOfertado());
+        oferta.setPrecioOfertado(solicitud.getCategoriaServicio().esDeliveryCompatible()
+                ? solicitud.getPrecioSugerido() : request.precioOfertado());
         oferta.setTiempoLlegadaMin(request.tiempoLlegadaMin());
         oferta.setSituacionOferta(SituacionOferta.PENDIENTE);
         oferta.setFechaOferta(LocalDateTime.now());
@@ -136,10 +137,15 @@ public class OfertaViajeService {
                 || !solicitudSolicitada.getPasajero().getId().equals(pasajero.getId())) {
             throw RecursoNoEncontradoException.de("SolicitudViaje", solicitudSolicitada.getId());
         }
+        Conductor conductorOferta = ofertaSolicitada.getConductor();
+        if (!documentoConductorService.puedeOperar(conductorOferta.getId())) {
+            throw new NegocioException("El conductor no esta habilitado para recibir solicitudes");
+        }
+        validarCompatibilidad(conductorOferta, solicitudSolicitada);
         Long idSolicitud = solicitudSolicitada.getId();
         // El conductor de la oferta no puede quedar con dos viajes si dos pasajeros aceptan sus
         // ofertas a la vez: se bloquea su fila y se revisa.
-        Long idConductorOferta = ofertaSolicitada.getConductor().getId();
+        Long idConductorOferta = conductorOferta.getId();
         conductorRepository.bloquear(idConductorOferta);
         if (viajeService.conductorTieneViajeActivo(idConductorOferta)) {
             throw new ConflictoException("El conductor de esta oferta ya tomo otro viaje");
@@ -266,6 +272,9 @@ public class OfertaViajeService {
         boolean esPasajero = oferta.getSolicitud() != null && oferta.getSolicitud().getPasajero() != null
                 && UsuarioActual.obtener().map(u -> u.idUsuario().equals(
                         oferta.getSolicitud().getPasajero().getUsuario().getId())).orElse(false);
+        SolicitudViaje solicitud = oferta.getSolicitud();
+        boolean esDelivery = solicitud.getCategoriaServicio() != null
+                && solicitud.getCategoriaServicio().esDeliveryCompatible();
         return new OfertaViajeResponse(
                 oferta.getId(),
                 oferta.getSolicitud() != null ? oferta.getSolicitud().getId() : null,
@@ -273,11 +282,11 @@ public class OfertaViajeService {
                 nombreConductor,
                 conductor != null ? conductor.getCalificacionPromedio() : null,
                 conductor != null ? buscarPlacaVehiculo(conductor.getId()) : null,
-                oferta.getPrecioOfertado(),
+                esDelivery ? solicitud.getPrecioSugerido() : oferta.getPrecioOfertado(),
                 oferta.getTiempoLlegadaMin(),
                 oferta.getSituacionOferta(),
                 oferta.getFechaOferta(),
-                DatosEntregaResponse.desde(oferta.getSolicitud().getDatosEntrega(), esPasajero));
+                DatosEntregaResponse.desde(solicitud.getDatosEntrega(), esPasajero));
     }
 
     private void validarCompatibilidad(Conductor conductor, SolicitudViaje solicitud) {

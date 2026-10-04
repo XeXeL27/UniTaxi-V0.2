@@ -31,6 +31,7 @@ class SeedPrecios {
     private final TarifaRepository tarifaRepository;
     private final ReglaDescuentoEstudiantilRepository reglaDescuentoEstudiantilRepository;
     private final DescuentoRepository descuentoRepository;
+    private final SeedTarifaDelivery seedTarifaDelivery;
 
     /** Resultado de la siembra de precios, usado por el bloque de viajes historicos. */
     record PreciosSembrados(
@@ -57,6 +58,7 @@ class SeedPrecios {
 
         Tarifa tarifaMotoCentro = crearTarifa(catalogos.motoCategoria(), centro, "4.00", "1.80", "0.20");
         crearTarifa(catalogos.motoCategoria(), periferia, "4.50", "2.00", "0.25");
+        seedTarifaDelivery.asegurar(catalogos.deliveryCategoria(), centro);
 
         ReglaDescuentoEstudiantil regla = new ReglaDescuentoEstudiantil();
         regla.setTipoInstitucion(catalogos.universidad());
@@ -75,7 +77,7 @@ class SeedPrecios {
                 crearDescuento("PROMO2024", "Promocion de fin de anio 2024 (vencida)", "20.00", "10.00", 200,
                         LocalDate.now().minusMonths(8), LocalDate.now().minusDays(30)));
 
-        log.info("Precios sembrados: 6 tarifas, 1 regla de descuento estudiantil, {} cupones", descuentos.size());
+        log.info("Precios sembrados: 7 tarifas, 1 regla de descuento estudiantil, {} cupones", descuentos.size());
 
         return new PreciosSembrados(tarifaSedanEstandarCentro, tarifaSedanEjecutivoCentro, tarifaMotoCentro,
                 regla, descuentos);

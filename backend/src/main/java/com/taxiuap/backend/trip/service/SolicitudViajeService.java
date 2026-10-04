@@ -23,6 +23,7 @@ import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
+import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
@@ -73,6 +74,7 @@ public class SolicitudViajeService {
     private final ViajeEventPublisher viajeEventPublisher;
     private final ViajeService viajeService;
     private final CalculoPrecioService calculoPrecioService;
+    private final CalculoPrecioDeliveryService calculoPrecioDeliveryService;
 
     @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
@@ -102,21 +104,32 @@ public class SolicitudViajeService {
 
         CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
         validarDatosEntrega(categoriaServicio, request.datosEntrega());
-        // Con precio fijo, el precio lo pone la plataforma y no el pasajero.
-        BigDecimal precioFijo = calculoPrecioService.precioFijo();
+        Point origen = convertirAPunto(request.origenWkt());
+        Point destino = convertirAPunto(request.destinoWkt());
+        boolean esDelivery = categoriaServicio.esDeliveryCompatible();
+        boolean esCompra = request.datosEntrega() != null
+                && request.datosEntrega().tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
+        BigDecimal precioSolicitud;
+        if (esDelivery) {
+            // El precio de ENCOMIENDA queda fijado sobre A -> B; en compra lo estima el repartidor al aceptar.
+            precioSolicitud = esCompra ? null
+                    : calculoPrecioDeliveryService.calcularEncomienda(origen, destino).precioServicio();
+        } else {
+            // En los servicios existentes se mantiene el precio fijo/configurado.
+            BigDecimal precioFijo = calculoPrecioService.precioFijo();
+            precioSolicitud = precioFijo != null ? precioFijo : request.precioSugerido();
+        }
 
         SolicitudViaje solicitud = new SolicitudViaje();
         solicitud.setPasajero(pasajero);
         solicitud.setCategoriaServicio(categoriaServicio);
-        solicitud.setOrigen(convertirAPunto(request.origenWkt()));
-        solicitud.setDestino(convertirAPunto(request.destinoWkt()));
+        solicitud.setOrigen(origen);
+        solicitud.setDestino(destino);
         solicitud.setOrigenDireccion(request.origenDireccion());
         solicitud.setDestinoDireccion(request.destinoDireccion());
         solicitud.setDestinoNombrePasajero(request.destinoNombre() == null || request.destinoNombre().isBlank()
                 ? null : request.destinoNombre().trim());
-        boolean esCompra = request.datosEntrega() != null
-                && request.datosEntrega().tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
-        solicitud.setPrecioSugerido(esCompra ? null : precioFijo != null ? precioFijo : request.precioSugerido());
+        solicitud.setPrecioSugerido(precioSolicitud);
         solicitud.setMetodoPago(metodoPagoPermitido(request.metodoPago()));
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         solicitud.setFechaSolicitud(LocalDateTime.now());
@@ -308,9 +321,19 @@ public class SolicitudViajeService {
         String destinoWkt = solicitud.getDestino() != null ? new WKTWriter().write(solicitud.getDestino()) : null;
         int cantidadOfertas = ofertaViajeRepository.findBySolicitudIdAndSituacionOferta(
                 solicitud.getId(), SituacionOferta.PENDIENTE).size();
-        BigDecimal precioFijo = calculoPrecioService.precioFijo();
+        boolean esDelivery = solicitud.getCategoriaServicio() != null
+                && solicitud.getCategoriaServicio().esDeliveryCompatible();
         boolean esCompra = solicitud.getDatosEntrega() != null
                 && solicitud.getDatosEntrega().getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
+        boolean precioEstimado = esDelivery && esCompra && solicitud.getPrecioSugerido() != null
+                && solicitud.getDatosEntrega().getCostoProductoReal() == null;
+        BigDecimal precioMostrado;
+        if (esDelivery) {
+            precioMostrado = solicitud.getPrecioSugerido();
+        } else {
+            BigDecimal precioFijo = calculoPrecioService.precioFijo();
+            precioMostrado = precioFijo != null ? precioFijo : solicitud.getPrecioSugerido();
+        }
 
         return new SolicitudViajeResponse(
                 solicitud.getId(),
@@ -322,8 +345,8 @@ public class SolicitudViajeService {
                 destinoWkt,
                 solicitud.getOrigenDireccion(),
                 solicitud.getDestinoDireccion(),
-                // Con precio fijo se muestra el que se cobrara, aunque la solicitud se haya creado antes.
-                esCompra ? null : precioFijo != null ? precioFijo : solicitud.getPrecioSugerido(),
+                precioMostrado,
+                precioEstimado,
                 solicitud.getSituacionSolicitud(),
                 solicitud.getFechaSolicitud(),
                 cantidadOfertas,
