@@ -10,16 +10,24 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.trip.dto.CambioMetodoPagoRequest;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
+import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
+import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
+import com.taxiuap.backend.trip.dto.ProponerCompraRequest;
+import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
+import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
 import com.taxiuap.backend.trip.dto.RespuestaCambioPagoRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.enums.PeriodoHistorial;
+import com.taxiuap.backend.trip.service.EntregaService;
 import com.taxiuap.backend.trip.service.ViajeService;
 
 import jakarta.validation.Valid;
@@ -32,6 +40,7 @@ import lombok.RequiredArgsConstructor;
 public class ViajeConductorController {
 
     private final ViajeService viajeService;
+    private final EntregaService entregaService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ViajeResponse>>> listar() {
@@ -89,6 +98,67 @@ public class ViajeConductorController {
             @PathVariable Long id, @Valid @RequestBody CambioMetodoPagoRequest request) {
         return ResponseEntity.ok(ApiResponse.exito("Metodo de pago actualizado",
                 viajeService.cambiarMetodoPago(id, request.metodoPago())));
+    }
+
+    // ------------------------------------------------ acciones propias de DELIVERY
+    // En un viaje DELIVERY, iniciar y finalizar estan bloqueados a proposito: el pedido avanza con
+    // estas acciones, que son las unicas que conocen los codigos, la compra y el pago del producto.
+
+    /** ENCOMIENDA: el repartidor llego a A y valida el codigo que le dicta el remitente. */
+    @PostMapping("/{id}/entrega/validar-recogida")
+    public ResponseEntity<ApiResponse<ViajeResponse>> validarRecogida(
+            @PathVariable Long id, @Valid @RequestBody ValidarCodigoEntregaRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Recogida validada", entregaService.validarRecogida(id, request)));
+    }
+
+    /** COMPRA_Y_ENTREGA: propone donde comprar. El cliente tiene que confirmarlo antes de comprar. */
+    @PostMapping("/{id}/entrega/proponer-compra")
+    public ResponseEntity<ApiResponse<ViajeResponse>> proponerCompra(
+            @PathVariable Long id, @Valid @RequestBody ProponerCompraRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Compra propuesta", entregaService.proponerCompra(id, request)));
+    }
+
+    /** COMPRA_Y_ENTREGA: registra la compra ya hecha. El comprobante es opcional. */
+    @PostMapping("/{id}/entrega/registrar-compra")
+    public ResponseEntity<ApiResponse<ViajeResponse>> registrarCompra(
+            @PathVariable Long id,
+            @Valid @RequestPart("compra") RegistrarCompraRequest request,
+            @RequestPart(value = "comprobante", required = false) MultipartFile comprobante) {
+        return ResponseEntity.ok(ApiResponse.exito("Compra registrada",
+                entregaService.registrarCompra(id, request, comprobante)));
+    }
+
+    /** Pago directo recibido del cliente: producto mas servicio. */
+    @PostMapping("/{id}/entrega/confirmar-pago")
+    public ResponseEntity<ApiResponse<ViajeResponse>> confirmarPago(
+            @PathVariable Long id, @Valid @RequestBody ConfirmarPagoEntregaRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Pago confirmado", entregaService.confirmarPago(id, request)));
+    }
+
+    /** ENCOMIENDA: en B, el receptor dicta el codigo de entrega. */
+    @PostMapping("/{id}/entrega/validar-entrega")
+    public ResponseEntity<ApiResponse<ViajeResponse>> validarEntrega(
+            @PathVariable Long id, @Valid @RequestBody ValidarCodigoEntregaRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Entrega completada",
+                entregaService.entregarConCodigo(id, request)));
+    }
+
+    /** COMPRA_Y_ENTREGA: en B se identifica al receptor, que siempre es el cliente del pedido. */
+    @PostMapping("/{id}/entrega/identificar-receptor")
+    public ResponseEntity<ApiResponse<ViajeResponse>> identificarReceptor(
+            @PathVariable Long id, @Valid @RequestBody IdentificarReceptorRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Entrega completada",
+                entregaService.entregarConReceptor(id, request)));
+    }
+
+    /** No se pudo entregar: exige foto y motivo, cancela el viaje y no republica el pedido. */
+    @PostMapping("/{id}/entrega/no-se-pudo-entregar")
+    public ResponseEntity<ApiResponse<ViajeResponse>> noSePudoEntregar(
+            @PathVariable Long id,
+            @RequestParam("motivo") String motivo,
+            @RequestPart("foto") MultipartFile foto) {
+        return ResponseEntity.ok(ApiResponse.exito("Falla de entrega registrada",
+                entregaService.noSePudoEntregar(id, motivo, foto)));
     }
 
     /** Acepta o rechaza el cambio de metodo de pago que pidio el pasajero. */

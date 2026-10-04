@@ -118,6 +118,24 @@ public class DatosEntrega extends EntidadAuditable {
     @Column(name = "motivo_falla", length = 500)
     private String motivoFalla;
 
+    // El "default false" en la definicion permite que ddl-auto=update agregue la columna tambien
+    // en bases que ya tienen pedidos: sin el, no se puede anadir NOT NULL a una tabla con filas.
+    @Column(name = "compra_confirmada_por_cliente", nullable = false,
+            columnDefinition = "boolean default false not null")
+    private Boolean compraConfirmadaPorCliente = false;
+
+    @Column(name = "costo_producto_confirmado", precision = 10, scale = 2)
+    @DecimalMin(value = "0.00")
+    private BigDecimal costoProductoConfirmado;
+
+    @Column(name = "pago_confirmado", nullable = false,
+            columnDefinition = "boolean default false not null")
+    private Boolean pagoConfirmado = false;
+
+    @Column(name = "monto_pago_recibido", precision = 10, scale = 2)
+    @DecimalMin(value = "0.00")
+    private BigDecimal montoPagoRecibido;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_entrega", length = 30, nullable = false)
     @NotNull
@@ -156,5 +174,45 @@ public class DatosEntrega extends EntidadAuditable {
         }
         return fotoFallaUrl != null && !fotoFallaUrl.isBlank()
                 && motivoFalla != null && !motivoFalla.isBlank();
+    }
+
+    /**
+     * Regla 1: el repartidor nunca compra por su cuenta. En COMPRA_Y_ENTREGA el pedido solo pasa a
+     * estar en sus manos (o se entrega) si el cliente confirmo antes el comercio y el monto.
+     */
+    @AssertTrue(message = "Una compra no puede estar en manos del repartidor sin la confirmacion del cliente")
+    public boolean isCompraConfirmadaParaTenerElPedido() {
+        if (!requiereCompra()) {
+            return true;
+        }
+        return Boolean.TRUE.equals(compraConfirmadaPorCliente);
+    }
+
+    /** El punto de compra real es lo que fija el precio del servicio, asi que va con el pedido en mano. */
+    @AssertTrue(message = "Una compra en manos del repartidor necesita el punto de compra real")
+    public boolean isPuntoDeCompraRegistrado() {
+        return !requiereCompra() || puntoCompra != null;
+    }
+
+    /** Sin el costo real del producto no se puede calcular el total a cobrar ni resolver un incidente. */
+    @AssertTrue(message = "Una compra en manos del repartidor necesita el costo real del producto")
+    public boolean isCostoRealRegistradoAntesDeEntregar() {
+        return !requiereCompra() || costoProductoReal != null && costoProductoReal.signum() > 0;
+    }
+
+    /** Regla 3: nada se entrega hasta que el repartidor confirme el pago recibido. */
+    @AssertTrue(message = "No se puede marcar como entregado sin el pago confirmado")
+    public boolean isPagoConfirmadoParaEntregar() {
+        return estadoEntrega != EstadoEntrega.ENTREGADO || Boolean.TRUE.equals(pagoConfirmado);
+    }
+
+    /**
+     * Los datos de compra solo son obligatorios a partir de EN_MANO: mientras el repartidor va hacia
+     * el comercio todavia puede proponer y el cliente confirmar. NO_ENTREGADO tambien los exige, y las
+     * validaciones lo cubren porque solo se alcanza desde EN_MANO.
+     */
+    private boolean requiereCompra() {
+        return tipoEnvio == TipoEnvio.COMPRA_Y_ENTREGA
+                && (estadoEntrega == EstadoEntrega.EN_MANO || estadoEntrega == EstadoEntrega.ENTREGADO);
     }
 }

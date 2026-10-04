@@ -7,12 +7,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
-import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.geom.PrecisionModel;
-import org.locationtech.jts.io.ParseException;
-import org.locationtech.jts.io.WKTReader;
 import org.locationtech.jts.io.WKTWriter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -59,10 +54,6 @@ import lombok.RequiredArgsConstructor;
 @Transactional(readOnly = true)
 public class SolicitudViajeService {
 
-    private static final int SRID_WGS84 = 4326;
-    private static final GeometryFactory FABRICA_GEOMETRIA =
-            new GeometryFactory(new PrecisionModel(), SRID_WGS84);
-
     private final SolicitudViajeRepository solicitudViajeRepository;
     private final OfertaViajeRepository ofertaViajeRepository;
     private final PasajeroRepository pasajeroRepository;
@@ -104,8 +95,8 @@ public class SolicitudViajeService {
 
         CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
         validarDatosEntrega(categoriaServicio, request.datosEntrega());
-        Point origen = convertirAPunto(request.origenWkt());
-        Point destino = convertirAPunto(request.destinoWkt());
+        Point origen = PuntoDesdeWkt.convertir(request.origenWkt());
+        Point destino = PuntoDesdeWkt.convertir(request.destinoWkt());
         boolean esDelivery = categoriaServicio.esDeliveryCompatible();
         boolean esCompra = request.datosEntrega() != null
                 && request.datosEntrega().tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
@@ -294,18 +285,6 @@ public class SolicitudViajeService {
             throw RecursoNoEncontradoException.de("SolicitudViaje", id);
         }
         return solicitud;
-    }
-
-    private Point convertirAPunto(String wkt) {
-        try {
-            Geometry geometria = new WKTReader(FABRICA_GEOMETRIA).read(wkt);
-            if (!(geometria instanceof Point punto)) {
-                throw new NegocioException("La ubicacion no es un WKT valido de tipo POINT");
-            }
-            return punto;
-        } catch (ParseException excepcion) {
-            throw new NegocioException("La ubicacion no es un WKT valido de tipo POINT");
-        }
     }
 
     private SolicitudViajeResponse aResponse(SolicitudViaje solicitud) {

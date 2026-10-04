@@ -335,7 +335,9 @@ class ViajeDeliveryPricingTest {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new JwtUser(20L, "repartidor", "CONDUCTOR"), null));
 
-        viajeService.finalizar(500L, new FinalizarViajeRequest(null));
+        // El viaje DELIVERY no se cierra con finalizar (esa via esta reservada al taxi): se cierra
+        // desde la entrega, que es la que exige el pago confirmado antes de completar.
+        viajeService.finalizarDesdeEntrega(500L, new FinalizarViajeRequest(null));
 
         ArgumentCaptor<com.taxiuap.backend.pricing.entity.Pago> pago =
                 ArgumentCaptor.forClass(com.taxiuap.backend.pricing.entity.Pago.class);

@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-04 | Nuevo | Task 4 DELIVERY: transiciones de pedido, validación atómica de códigos, compra confirmada por el cliente, pago directo, entrega y falla de entrega |
 | 2026-10-04 | Arreglo | Task 3 fix round 2 DELIVERY: tarifa técnica zona nula on-demand, defaults MOTO, placa compatible y catálogo de tarifas seguro |
 | 2026-10-04 | Arreglo | Task 3 DELIVERY: precio OSRM por snapshot, estimado marcado al asignar, moto compatible, tarifa de referencia y revalidación de aceptación |
 | 2026-10-02 | 📚 | Pausa documentada de implementación DELIVERY en Task 3; Tasks 1 y 2 revisadas, Task 3 implementada pendiente de re-review |
@@ -20,6 +21,18 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-04
+
+### 🆕 Nuevo · Task 4: transiciones, códigos, compra, entrega y cancelación DELIVERY
+
+- **Módulo / área:** backend (`trip`, `shared/archivo`), dominio DELIVERY.
+- **Descripción:** `DatosEntrega.estado_entrega` dejó de ser decorativo. Cada transición tiene su acción y su condición: aceptar el pedido lleva la solicitud a `EN_CAMINO_RECOGIDA`, el código de recogida o la compra confirmada llevan el pedido a `EN_MANO` con el viaje en `EN_CURSO`, el código de entrega o la identidad del receptor con el pago confirmado lo llevan a `ENTREGADO` con el viaje `COMPLETADO`, y "No se pudo entregar" deja `NO_ENTREGADO` con foto y motivo, cancela y no republica.
+- **Validación atómica:** los códigos se comparan en la base de datos con UPDATE condicionales de estado y código (`avanzarSiCodigoRecogidaCoincide`, `avanzarSiCodigoEntregaCoincide`, `avanzarSiEstadoPermitido`, `registrarFallaSiEstadoPermitido`), nunca leyendo y guardando. Una doble pulsación o dos pantallas simultáneas hacen que solo una gane. La falla escribe estado y evidencia en la misma sentencia para que no exista un `NO_ENTREGADO` sin foto ni motivo.
+- **Compra y pago:** el repartidor propone el comercio y el monto, el cliente lo confirma, y solo entonces se compra. Si el costo real supera al confirmado hay que volver a proponer y volver a confirmar; el recorrido hasta el comercio no se cobra y el precio del servicio se recalcula desde el comercio hasta el destino. El repartidor registra el pago directo (producto + servicio) y el servidor exige que el monto sea exactamente el total a cobrar. El comprobante de compra y la foto de falla son archivos opcionales y obligatorios respectivamente, guardados en la carpeta de entrega del repartidor.
+- **Cancelaciones:** con el pedido `EN_MANO` ni el cliente ni el repartidor pueden cancelar: hay que reportar la falla. La cancelación temprana del repartidor republica conservando códigos y comercio propuesto, pero limpiando lo que el repartidor hizo; la del cliente no cobra ni compensa nada. `iniciar` y `finalizar` genéricos rechazan los viajes DELIVERY.
+- **Cambios clave:** columnas nuevas `compra_confirmada_por_cliente`, `costo_producto_confirmado`, `pago_confirmado` y `monto_pago_recibido` (creadas por `ddl-auto=update`, sin SQL ni Flyway); invariantes `@AssertTrue` en `DatosEntrega`; `DatosEntregaResponse` expone al repartidor el comercio, los montos y los puntos en WKT, y sigue sin exponerle los códigos; `PuntoDesdeWkt` evita duplicar el parseo de coordenadas; endpoints de entrega en `ViajeConductorController` y `ViajePasajeroController`.
+- **Pruebas:** 52 pruebas nuevas (baseline 107 → 159). RED observado en cada slice; las pruebas contra PostgreSQL real encontraron dos bugs de producción que las unitarias no veían (un `@Enumerated` sobre un `Boolean` y columnas `NOT NULL` sin default que `ddl-auto=update` no podía agregar). Suite completa: **159 pruebas, 0 fallos, 0 errores, 0 omitidas**.
+- **Fuera de alcance:** la creación del `Reporte` del incidente de falla de entrega es Task 5.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/service/EntregaService.java`, `PuntoDesdeWkt.java`, `ViajeService.java`, `SolicitudViajeService.java`, `trip/repository/DatosEntregaRepository.java`, `trip/entity/DatosEntrega.java`, `trip/dto/` (cinco requests nuevos y `DatosEntregaResponse`), `controller/conductor/ViajeConductorController.java`, `controller/pasajero/ViajePasajeroController.java`, `shared/archivo/AlmacenamientoArchivos.java`; pruebas en `trip/service`, `trip/entity`, `trip/dto` y `trip/repository`; `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-4-report.md`.
 
 ### 🐛 Arreglo · Cierre de hallazgos de Task 3 DELIVERY
 

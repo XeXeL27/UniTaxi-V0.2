@@ -58,6 +58,7 @@ import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
+import com.taxiuap.backend.trip.enums.EstadoEntrega;
 import com.taxiuap.backend.trip.enums.PeriodoHistorial;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
@@ -82,6 +83,15 @@ public class ViajeService {
     /** Situaciones finales de un viaje: ya no hay nada activo que mostrar como "en curso". */
     private static final List<SituacionViaje> ESTADOS_FINALES =
             List.of(SituacionViaje.COMPLETADO, SituacionViaje.CANCELADO);
+
+    /**
+     * Un viaje DELIVERY no avanza con las acciones genericas de taxi: el pedido en mano exige el
+     * codigo de recogida validado o la compra registrada, y completarlo exige el codigo de entrega
+     * y el pago confirmado. Por eso iniciar/finalizar rechazan estos viajes y las acciones reales
+     * viven en EntregaService.
+     */
+    private static final String MENSAJE_ENTREGA =
+            "Un viaje DELIVERY avanza con las acciones de entrega (recogida, compra, pago y entrega)";
 
     private final ViajeRepository viajeRepository;
     private final PasajeroRepository pasajeroRepository;
@@ -177,6 +187,13 @@ public class ViajeService {
         }
         viaje.setSituacionViaje(SituacionViaje.CONFIRMADO);
         viaje.setMetodoPago(solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO);
+        if (esDelivery) {
+            // Al aceptar el pedido el repartidor coordina la recogida o la compra: el pedido deja de
+            // estar PENDIENTE_RECOGIDA (diseno de DELIVERY, seccion de transiciones).
+            DatosEntrega datos = solicitud.getDatosEntrega();
+            datos.setEstadoEntrega(EstadoEntrega.EN_CAMINO_RECOGIDA);
+            datosEntregaRepository.save(datos);
+        }
 
         // Solo se deja constancia del estudiante y la regla cuando realmente hubo descuento.
         if (!esDelivery && calculo.montoDescuento().compareTo(BigDecimal.ZERO) > 0) {
@@ -227,7 +244,43 @@ public class ViajeService {
     @Transactional
     public ViajeResponse iniciar(Long idViaje) {
         Viaje viaje = obtenerViajeDelConductor(idViaje);
+        rechazarAccionesGenericasEnDelivery(viaje);
         validarTransicion(viaje, SituacionViaje.CONDUCTOR_LLEGO, SituacionViaje.EN_CURSO);
+        viaje.setFechaInicio(LocalDateTime.now());
+        viaje = viajeRepository.save(viaje);
+        return registrarYNotificar(viaje);
+    }
+
+    /**
+     * DELIVERY: el pedido paso a EN_MANO (codigo de recogida validado o compra registrada) y el
+     * viaje pasa a EN_CURSO. A diferencia de {@link #iniciar}, no exige haber pulsed "llego": el
+     * repartidor puede validar la recogida en A o registrar la compra desde que el viaje esta
+     * confirmado. El precio definitivo solo se toca en COMPRA_Y_ENTREGA, donde el servicio se cobra
+     * desde el punto de compra real; en ENCOMIENDA llega null y se conserva el precio fijo de A -> B.
+     */
+    @Transactional
+    public ViajeResponse registrarPedidoEnMano(Long idViaje, DesglosePrecioDelivery precioDesdeCompra) {
+        Viaje viaje = obtenerViajeDelConductor(idViaje);
+        if (!esDelivery(viaje)) {
+            throw new NegocioException("Esta accion es solo para viajes DELIVERY");
+        }
+        if (viaje.getSituacionViaje() == SituacionViaje.EN_CURSO
+                || ESTADOS_FINALES.contains(viaje.getSituacionViaje())) {
+            throw new NegocioException("Transicion de estado no permitida: " + viaje.getSituacionViaje()
+                    + " -> " + SituacionViaje.EN_CURSO);
+        }
+        if (precioDesdeCompra != null) {
+            // El trayecto del repartidor hasta el comercio no se cobra: el servicio se mide desde el
+            // punto de compra real hasta el destino, y a partir de aqui el precio ya no cambia.
+            SolicitudViaje solicitud = viaje.getSolicitud();
+            solicitud.setPrecioSugerido(precioDesdeCompra.precioServicio());
+            viaje.setPrecioOriginal(precioDesdeCompra.precioServicio());
+            viaje.setPrecioFinal(precioDesdeCompra.precioServicio());
+            viaje.setMontoDescuento(BigDecimal.ZERO.setScale(2));
+            viaje.setDistanciaKm(precioDesdeCompra.distanciaKm());
+            viaje.setDuracionMin(precioDesdeCompra.duracionMinutos());
+        }
+        viaje.setSituacionViaje(SituacionViaje.EN_CURSO);
         viaje.setFechaInicio(LocalDateTime.now());
         viaje = viajeRepository.save(viaje);
         return registrarYNotificar(viaje);
@@ -236,6 +289,25 @@ public class ViajeService {
     @Transactional
     public ViajeResponse finalizar(Long idViaje, FinalizarViajeRequest request) {
         Viaje viaje = obtenerViajeDelConductor(idViaje);
+        rechazarAccionesGenericasEnDelivery(viaje);
+        return completar(viaje, request);
+    }
+
+    /**
+     * DELIVERY: el repartidor ya entrego (codigo de entrega validado o receptor identificado) y
+     * confirmo el pago, asi que el viaje se completa por la misma via que un taxi, incluida la
+     * comision: la plataforma cobra solo el precio del servicio, nunca el producto.
+     */
+    @Transactional
+    public ViajeResponse finalizarDesdeEntrega(Long idViaje, FinalizarViajeRequest request) {
+        Viaje viaje = obtenerViajeDelConductor(idViaje);
+        if (!esDelivery(viaje)) {
+            throw new NegocioException("Esta accion es solo para viajes DELIVERY");
+        }
+        return completar(viaje, request);
+    }
+
+    private ViajeResponse completar(Viaje viaje, FinalizarViajeRequest request) {
         validarTransicion(viaje, SituacionViaje.EN_CURSO, SituacionViaje.COMPLETADO);
         viaje.setFechaFin(LocalDateTime.now());
         // La solicitud que origino el viaje queda cerrada como FINALIZADA (entidad administrada:
@@ -309,7 +381,10 @@ public class ViajeService {
         Long idUsuario = UsuarioActual.idUsuario();
         Viaje viaje = obtenerViaje(idViaje);
         CanceladoPor canceladoPor = resolverCancelador(viaje, idUsuario);
-
+        // Con el pedido en mano ya no hay cancelacion libre: el repartidor debe usar "No se pudo
+        // entregar", que ademas deja evidencia y abre el reporte del incidente. Se comprueba antes que
+        // el estado del viaje para explicar siempre la causa real.
+        rechazarCancelacionConPedidoEnMano(viaje);
         boolean sePuedeCancelar = viaje.getSituacionViaje() == SituacionViaje.CONFIRMADO
                 || viaje.getSituacionViaje() == SituacionViaje.CONDUCTOR_EN_CAMINO
                 || viaje.getSituacionViaje() == SituacionViaje.CONDUCTOR_LLEGO;
@@ -326,6 +401,47 @@ public class ViajeService {
         }
 
         return registrarYNotificar(viaje);
+    }
+
+    /**
+     * DELIVERY: el repartidor no pudo entregar (receptor ausente, receptor que no paga o cualquier
+     * otro impedimento). El pedido quedo en NO_ENTREGADO y el viaje se cancela SIN republicar: no es
+     * una cancelacion temprana, es un incidente que el administrador resuelve con el reporte, asi que
+     * otro repartidor no debe tomar el mismo pedido. El costo real del producto ya pagado se conserva
+     * en datos_entrega.
+     */
+    @Transactional
+    public ViajeResponse cancelarFallaEntrega(Long idViaje) {
+        Viaje viaje = obtenerViajeDelConductor(idViaje);
+        if (!esDelivery(viaje)) {
+            throw new NegocioException("Esta accion es solo para viajes DELIVERY");
+        }
+        if (ESTADOS_FINALES.contains(viaje.getSituacionViaje())) {
+            throw new NegocioException("El viaje ya termino");
+        }
+        viaje.setSituacionViaje(SituacionViaje.CANCELADO);
+        viaje.setCanceladoPor(CanceladoPor.CONDUCTOR);
+        viaje.getSolicitud().setSituacionSolicitud(SituacionSolicitud.CANCELADA);
+        viaje = viajeRepository.save(viaje);
+        return registrarYNotificar(viaje);
+    }
+
+    private void rechazarCancelacionConPedidoEnMano(Viaje viaje) {
+        DatosEntrega datos = esDelivery(viaje) ? viaje.getSolicitud().getDatosEntrega() : null;
+        if (datos != null && datos.getEstadoEntrega() == EstadoEntrega.EN_MANO) {
+            throw new NegocioException(
+                    "El pedido ya esta en manos del repartidor: ya no se puede cancelar, usa la accion de falla de entrega");
+        }
+    }
+
+    private static boolean esDelivery(Viaje viaje) {
+        return viaje.getCategoriaServicio() != null && viaje.getCategoriaServicio().esDeliveryCompatible();
+    }
+
+    private void rechazarAccionesGenericasEnDelivery(Viaje viaje) {
+        if (esDelivery(viaje)) {
+            throw new NegocioException(MENSAJE_ENTREGA);
+        }
     }
 
     /**
@@ -646,7 +762,22 @@ public class ViajeService {
         datos.setCodigoEntrega(anterior.getCodigoEntrega());
         datos.setFotoPaqueteUrl(anterior.getFotoPaqueteUrl());
         datos.setAceptaPoliticaArticulos(anterior.getAceptaPoliticaArticulos());
-        datos.setEstadoEntrega(com.taxiuap.backend.trip.enums.EstadoEntrega.PENDIENTE_RECOGIDA);
+        datos.setEstadoEntrega(EstadoEntrega.PENDIENTE_RECOGIDA);
+        // El comercio propuesto se conserva como referencia, pero nada de lo que hizo el repartidor
+        // que cancelo: ni confirmacion del cliente, ni compra, ni costo real, ni fotos ni pago.
+        datos.setPuntoCompraPropuesto(anterior.getPuntoCompraPropuesto());
+        datos.setDetalleCompraPropuesto(anterior.getDetalleCompraPropuesto());
+        datos.setCompraConfirmadaPorCliente(false);
+        datos.setCostoProductoConfirmado(null);
+        datos.setCostoProductoReal(null);
+        datos.setPuntoCompra(null);
+        datos.setDetalleCompra(null);
+        datos.setFotoComprobanteUrl(null);
+        datos.setObservacionCompra(null);
+        datos.setPagoConfirmado(false);
+        datos.setMontoPagoRecibido(null);
+        datos.setFotoFallaUrl(null);
+        datos.setMotivoFalla(null);
         return datos;
     }
 
@@ -784,11 +915,25 @@ public class ViajeService {
         viajeRepository.save(viaje);
     }
 
-    private Viaje obtenerViajeDelConductor(Long idViaje) {
+    /**
+     * Viaje del conductor autenticado: si el viaje no es suyo se responde como no encontrado para
+     * no revelar que existe. Lo reutiliza EntregaService para las acciones de entrega.
+     */
+    public Viaje obtenerViajeDelConductor(Long idViaje) {
         Conductor conductor = conductorRepository.findByUsuarioId(UsuarioActual.idUsuario())
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Viaje", idViaje));
         Viaje viaje = obtenerViaje(idViaje);
         if (!viaje.getConductor().getId().equals(conductor.getId())) {
+            throw RecursoNoEncontradoException.de("Viaje", idViaje);
+        }
+        return viaje;
+    }
+
+    /** Viaje del pasajero autenticado, con la misma proteccion que {@link #obtenerViajeDelConductor}. */
+    public Viaje obtenerViajeDelPasajero(Long idViaje) {
+        Pasajero pasajero = obtenerPasajeroActual();
+        Viaje viaje = obtenerViaje(idViaje);
+        if (!viaje.getPasajero().getId().equals(pasajero.getId())) {
             throw RecursoNoEncontradoException.de("Viaje", idViaje);
         }
         return viaje;
