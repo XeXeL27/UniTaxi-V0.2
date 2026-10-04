@@ -276,3 +276,64 @@ Salida observada: `BUILD SUCCESSFUL`.
 - Si ya existe tarifa vigente aplicable se reutiliza. La referencia de zona nula solo se inserta al no existir una vigente en la categoría DELIVERY; queda marcada por `zona=null` y se usa la tarifa administrada con zona antes de ella.
 - La creación de la categoría después del arranque queda cubierta en la prueba de aceptación preparada; el runner de inicio puede estar deshabilitado o no encontrar Centro sin impedir la aceptación.
 - No se inició Docker, no se ejecutaron tests DB, no se modificó `main`, no hubo push ni trabajo de Task 4.
+
+## Round 3: verificacion contra PostgreSQL (commit `a1dc95f`)
+
+Docker estaba disponible y se ejecutaron las pruebas con el perfil `appu`
+(`SPRING_PROFILES_ACTIVE=appu`, credenciales de `backend/src/main/resources/application-appu.properties`).
+No se creo ni modifico ningun archivo de configuracion.
+
+### Fallos encontrados y causa
+
+Las dos pruebas de base de datos fallaron en su primera ejecucion, ambas por datos de
+seed, no por logica de DELIVERY:
+
+- `OfertaViajeDeliveryPersistenciaTest:72` — buscaba una moto DELIVERY activa del seed con
+  `orElseThrow`, mensaje "El seed debe incluir una moto DELIVERY activa".
+- `SolicitudViajeConcurrenteDeliveryTest:98` — buscaba un pasajero del seed con
+  `orElseThrow`, mensaje "El seed debe incluir un pasajero".
+- `DatosEntregaPersistenciaTest:36` — tomaba `solicitudViajeRepository.findAll()` sin filtro y en
+  una base de desarrollo esa solicitud ya tiene `datos_entrega`; viola el uno a uno
+  (`duplicate key value violates unique constraint`).
+
+Un perfil de desarrollo siembra solo una parte del catalogo, asi que una prueba contra
+PostgreSQL no puede asumir que el seed dejo un pasajero ni una moto DELIVERY.
+
+### Correccion
+
+- Nuevo helper `backend/src/test/java/com/taxiuap/backend/testsupport/DatosPruebaDelivery.java`
+  que crea sus propios datos con valores unicos (sufijo UUID para correo, usuario y placa):
+  `tipoMoto()` (busca o crea el catalogo MOTO), `categoriaDelivery()`, `crearPasajero()`,
+  `crearConductorAprobado()`, `crearMotoDelivery(categoria)` y
+  `crearSolicitud(categoria, pasajero, precioSugerido)` con origen y destino, que son NOT NULL.
+- `OfertaViajeDeliveryPersistenciaTest` y `SolicitudViajeConcurrenteDeliveryTest` usan el helper.
+- `DatosEntregaPersistenciaTest` deja de tomar una solicitud existente.
+- `SolicitudViajeConcurrenteDeliveryTest.limpiarSolicitud` corrige el orden: primero borra
+  `datos_entrega` y la solicitud, y solo despues la categoria. Antes la borraba primero y
+  PostgreSQL rechazaba el borrado por la FK de `solicitud_viaje`. Esto tambien cierra el
+  hallazgo menor de la re-revision sobre datos que quedaban en la base.
+
+### Evidencia
+
+Focalizado, con perfil `appu`:
+
+    SPRING_PROFILES_ACTIVE=appu ./gradlew test --rerun-tasks \
+      --tests 'com.taxiuap.backend.trip.service.OfertaViajeDeliveryPersistenciaTest' \
+      --tests 'com.taxiuap.backend.trip.repository.SolicitudViajeConcurrenteDeliveryTest' \
+      --console=plain
+    BUILD SUCCESSFUL in 40s
+
+Suite completa, con perfil `appu`:
+
+    SPRING_PROFILES_ACTIVE=appu ./gradlew test --console=plain
+    BUILD SUCCESSFUL in 36s
+    tests=107 failures=0 errors=0 skipped=0 classes=28
+
+Esto verifica con PostgreSQL real que:
+
+- la aceptacion DELIVERY persiste el viaje `CONFIRMADO` con moto DELIVERY, tarifa tecnica de
+  zona nula con base `4.00`, precio final `17.50` y la respuesta al repartidor sin codigos;
+- la tarifa tecnica se resuelve aunque la categoria DELIVERY se cree despues del arranque;
+- dos transacciones concurrentes producen exactamente un UPDATE de 1 fila y otro de 0, y la
+  solicitud queda `ACEPTADA`;
+- `datos_entrega` es uno a uno con `solicitud_viaje`.
