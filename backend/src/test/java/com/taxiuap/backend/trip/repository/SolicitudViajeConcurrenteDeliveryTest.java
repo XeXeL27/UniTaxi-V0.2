@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.math.BigDecimal;
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -12,18 +11,20 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
-import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.identity.repository.PersonaRepository;
+import com.taxiuap.backend.identity.repository.RolRepository;
+import com.taxiuap.backend.identity.repository.UsuarioRepository;
+import com.taxiuap.backend.testsupport.DatosPruebaDelivery;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
@@ -32,18 +33,36 @@ import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
 import com.taxiuap.backend.vehicle.repository.CategoriaServicioRepository;
 import com.taxiuap.backend.vehicle.repository.TipoVehiculoRepository;
+import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 
+/**
+ * Dos transacciones reales que compiten por la misma solicitud DELIVERY: la fila la serializa
+ * PostgreSQL y solo una gana el UPDATE condicional de aceptacion.
+ */
 @SpringBootTest
 class SolicitudViajeConcurrenteDeliveryTest {
 
-    private static final GeometryFactory GEOMETRIA = new GeometryFactory(new PrecisionModel(), 4326);
-
     @Autowired private SolicitudViajeRepository solicitudRepository;
     @Autowired private DatosEntregaRepository datosEntregaRepository;
-    @Autowired private PasajeroRepository pasajeroRepository;
     @Autowired private CategoriaServicioRepository categoriaServicioRepository;
+    @Autowired private PersonaRepository personaRepository;
+    @Autowired private UsuarioRepository usuarioRepository;
+    @Autowired private RolRepository rolRepository;
+    @Autowired private PasajeroRepository pasajeroRepository;
+    @Autowired private ConductorRepository conductorRepository;
+    @Autowired private VehiculoRepository vehiculoRepository;
     @Autowired private TipoVehiculoRepository tipoVehiculoRepository;
     @Autowired private PlatformTransactionManager transactionManager;
+    @Autowired private PasswordEncoder passwordEncoder;
+
+    private DatosPruebaDelivery datos;
+
+    @BeforeEach
+    void prepararDatos() {
+        datos = new DatosPruebaDelivery(personaRepository, usuarioRepository, rolRepository, pasajeroRepository,
+                conductorRepository, vehiculoRepository, tipoVehiculoRepository, categoriaServicioRepository,
+                solicitudRepository, passwordEncoder);
+    }
 
     @Test
     void dosTransaccionesConcurrentesSoloAceptanUnaSolicitudDelivery() throws Exception {
@@ -69,10 +88,7 @@ class SolicitudViajeConcurrenteDeliveryTest {
         } finally {
             inicio.countDown();
             ejecutor.shutdownNow();
-            transaccion.executeWithoutResult(status -> {
-                datosEntregaRepository.findBySolicitudId(idSolicitud).ifPresent(datosEntregaRepository::delete);
-                solicitudRepository.deleteById(idSolicitud);
-            });
+            transaccion.executeWithoutResult(status -> limpiarSolicitud(idSolicitud));
         }
     }
 
@@ -94,42 +110,35 @@ class SolicitudViajeConcurrenteDeliveryTest {
     }
 
     private Long crearSolicitudDelivery() {
-        var pasajero = pasajeroRepository.findAll().stream().findFirst()
-                .orElseThrow(() -> new AssertionError("El seed debe incluir un pasajero"));
-        var tipoMoto = tipoVehiculoRepository.findAll().stream()
-                .filter(tipo -> "MOTO".equalsIgnoreCase(tipo.getCodigo()))
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("El catalogo debe incluir MOTO"));
-        CategoriaServicio delivery = new CategoriaServicio();
-        delivery.setTipoVehiculo(tipoMoto);
-        delivery.setNombre("DELIVERY");
-        delivery = categoriaServicioRepository.saveAndFlush(delivery);
+        CategoriaServicio delivery = datos.categoriaDelivery();
+        SolicitudViaje solicitud = datos.crearSolicitud(delivery, datos.crearPasajero(),
+                new BigDecimal("17.50"));
 
-        SolicitudViaje solicitud = new SolicitudViaje();
-        solicitud.setPasajero(pasajero);
-        solicitud.setCategoriaServicio(delivery);
-        solicitud.setOrigen(punto(-68.75, -11.02));
-        solicitud.setDestino(punto(-68.74, -11.03));
-        solicitud.setPrecioSugerido(new BigDecimal("17.50"));
-        solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
-        solicitud.setFechaSolicitud(LocalDateTime.now());
-        solicitud.setEstadoSolViaje(EstadoRegistro.A);
-        solicitud = solicitudRepository.saveAndFlush(solicitud);
-
-        DatosEntrega datos = new DatosEntrega();
-        datos.setSolicitud(solicitud);
-        datos.setTipoEnvio(TipoEnvio.ENCOMIENDA);
-        datos.setDescripcion("Paquete concurrente de prueba");
-        datos.setCostoProductoEstimado(BigDecimal.ZERO);
-        datos.setCodigoRecogida("123456");
-        datos.setCodigoEntrega("654321");
-        datos.setAceptaPoliticaArticulos(true);
-        datos.setEstadoEntrega(EstadoEntrega.PENDIENTE_RECOGIDA);
-        datosEntregaRepository.saveAndFlush(datos);
+        DatosEntrega datosEntrega = new DatosEntrega();
+        datosEntrega.setSolicitud(solicitud);
+        datosEntrega.setTipoEnvio(TipoEnvio.ENCOMIENDA);
+        datosEntrega.setDescripcion("Paquete concurrente de prueba");
+        datosEntrega.setCostoProductoEstimado(BigDecimal.ZERO);
+        datosEntrega.setCodigoRecogida("123456");
+        datosEntrega.setCodigoEntrega("654321");
+        datosEntrega.setAceptaPoliticaArticulos(true);
+        datosEntrega.setEstadoEntrega(EstadoEntrega.PENDIENTE_RECOGIDA);
+        datosEntregaRepository.saveAndFlush(datosEntrega);
         return solicitud.getId();
     }
 
-    private Point punto(double longitud, double latitud) {
-        return GEOMETRIA.createPoint(new Coordinate(longitud, latitud));
+    /**
+     * Esta prueba no es @Transactional (necesita transacciones reales y separadas), asi que sus
+     * datos quedan en la base: se borran al terminar para no acumular solicitudes ni categorias.
+     */
+    private void limpiarSolicitud(Long idSolicitud) {
+        solicitudRepository.findById(idSolicitud).ifPresent(solicitud -> {
+            Integer idCategoria = solicitud.getCategoriaServicio().getId();
+            datosEntregaRepository.findBySolicitudId(idSolicitud).ifPresent(datosEntregaRepository::delete);
+            solicitudRepository.delete(solicitud);
+            solicitudRepository.flush();
+            // La categoria se borra al final: la solicitud todavia la referenciaba.
+            categoriaServicioRepository.findById(idCategoria).ifPresent(categoriaServicioRepository::delete);
+        });
     }
 }
