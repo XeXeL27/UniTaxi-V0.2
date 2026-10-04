@@ -84,4 +84,21 @@ public interface DatosEntregaRepository extends JpaRepository<DatosEntrega, Long
             @Param("nuevo") EstadoEntrega nuevo,
             @Param("motivo") String motivo,
             @Param("foto") String foto);
+
+    /**
+     * Confirma el pago solo si el pedido sigue en estado EN_MANO y no estaba ya pagado. El monto
+     * recibido se guarda exactamente para evitar que una escritura posterior borre lo que se registro.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update datos_entrega d
+               set pago_confirmado = true,
+                   monto_pago_recibido = :monto
+             where d.id_datos_entrega = :id
+               and d.estado_entrega = :#{#estado.name()}
+               and (d.pago_confirmado is false or d.pago_confirmado is null)
+            """, nativeQuery = true)
+    int confirmarPagoSiEnMano(@Param("id") Long id,
+            @Param("estado") EstadoEntrega estado,
+            @Param("monto") java.math.BigDecimal monto);
 }

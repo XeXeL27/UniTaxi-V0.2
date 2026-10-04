@@ -46,5 +46,8 @@ class DatosEntregaDtoTest {
         assertEquals("COMPRA_Y_ENTREGA", node.get("tipoEnvio").asText());
         assertEquals(25.00, node.get("costoProductoEstimado").asDouble());
         assertEquals("PENDIENTE_RECOGIDA", node.get("estadoEntrega").asText());
+        assertEquals(25.00, node.get("costoProductoConfirmado").asDouble());
+        assertEquals(false, node.get("compraConfirmadaPorCliente").asBoolean());
+        assertEquals(false, node.get("pagoConfirmado").asBoolean());
     }
 }

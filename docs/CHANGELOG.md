@@ -640,3 +640,17 @@
   - `app-movil/test/lugares_frecuentes_test.dart` (nuevo, 14 pruebas)
 - **Verificación:** `flutter analyze` sin incidencias; `flutter test` 14/14;
   `dart format --line-length 120` sobre los archivos del cambio.
+
+## [Ronda corrección Task 4] — 2026-10-04
+
+### Cambios en backend
+- `trip/entity/DatosEntrega`: añadido `@Size(max=500)` a `motivoFalla` (coherente con columna `length=500`).
+- `trip/repository/DatosEntregaRepository`: nuevo método `confirmarPagoSiEnMano` con UPDATE condicional nativo y `clearAutomatically/flushAutomatically` para evitar escritura completa que borre evidencia en transiciones concurrentes.
+- `trip/service/EntregaService`: `confirmarPago` utiliza UPDATE condicional; si no actualiza filas, distingue entre estado cambiado y pago ya confirmado.
+- Tests: `DatosEntregaTest` añade `rechazaMotivoDeFallaMuyLargo()`; `DatosEntregaDtoTest` amplía aserciones; `EntregaServiceRecogidaEntregaTest` ajustado para nuevo flujo.
+
+### Decisión sobre pago parcial
+- Según `docs/superpowers/specs/2026-10-02-delivery-design.md`, el flujo exige pago **total** (producto+servicio) y validación exacta. No se implementa registro de pago parcial/no pago; queda como pregunta abierta para revisión futura.
+
+### Verificación
+- Suite completa con perfil `appu`: `tests=160 failures=0 errors=0 skipped=0` (1 test añadido). BUILD SUCCESSFUL.

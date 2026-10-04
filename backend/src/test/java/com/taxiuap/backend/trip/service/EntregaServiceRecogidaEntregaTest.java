@@ -219,12 +219,12 @@ class EntregaServiceRecogidaEntregaTest {
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
         when(viajeService.obtener(500L)).thenReturn(null);
 
+        when(datosEntregaRepository.confirmarPagoSiEnMano(eq(1L), eq(EstadoEntrega.EN_MANO), eq(new BigDecimal("17.50"))))
+                .thenReturn(1);
         entregaService.confirmarPago(500L, new ConfirmarPagoEntregaRequest(new BigDecimal("17.50"), null));
 
-        org.mockito.ArgumentCaptor<DatosEntrega> guardados = org.mockito.ArgumentCaptor.forClass(DatosEntrega.class);
-        verify(datosEntregaRepository).save(guardados.capture());
-        assertEquals(true, guardados.getValue().getPagoConfirmado());
-        assertEquals(new BigDecimal("17.50"), guardados.getValue().getMontoPagoRecibido());
+        verify(datosEntregaRepository).confirmarPagoSiEnMano(eq(1L), eq(EstadoEntrega.EN_MANO), eq(new BigDecimal("17.50")));
+        verify(datosEntregaRepository, org.mockito.Mockito.never()).save(any());
     }
 
     @Test

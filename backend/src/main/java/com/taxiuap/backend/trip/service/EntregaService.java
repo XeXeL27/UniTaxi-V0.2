@@ -213,9 +213,16 @@ public class EntregaService {
                     + ") no coincide con el total a cobrar " + total);
         }
 
-        datos.setPagoConfirmado(true);
-        datos.setMontoPagoRecibido(total);
-        datosEntregaRepository.save(datos);
+        int filas = datosEntregaRepository.confirmarPagoSiEnMano(datos.getId(), EstadoEntrega.EN_MANO, total);
+        if (filas == 0) {
+            EstadoEntrega actual = datosEntregaRepository.findById(datos.getId())
+                    .map(DatosEntrega::getEstadoEntrega)
+                    .orElse(null);
+            if (actual == null || actual != EstadoEntrega.EN_MANO) {
+                throw new NegocioException("Transicion de estado no permitida: " + actual + " -> ENTREGADO");
+            }
+            throw new NegocioException("El pago ya fue confirmado");
+        }
         if (request.metodoPago() != null) {
             viajeService.cambiarMetodoPago(idViaje, request.metodoPago());
         }

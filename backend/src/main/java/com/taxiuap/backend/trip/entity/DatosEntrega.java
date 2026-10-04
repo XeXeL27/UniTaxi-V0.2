@@ -116,6 +116,7 @@ public class DatosEntrega extends EntidadAuditable {
     private String fotoFallaUrl;
 
     @Column(name = "motivo_falla", length = 500)
+    @Size(max = 500)
     private String motivoFalla;
 
     // El "default false" en la definicion permite que ddl-auto=update agregue la columna tambien
