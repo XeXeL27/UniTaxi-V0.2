@@ -198,14 +198,26 @@ class OfertaViajeDeliveryAcceptanceTest {
     void respuestaDeOfertaDeliveryConservaElPrecioDeServicioDeLaSolicitud() {
         compra.getDatosEntrega().setTipoEnvio(TipoEnvio.ENCOMIENDA);
         compra.setPrecioSugerido(new BigDecimal("17.50"));
+        TipoVehiculo tipoMotoEstandar = new TipoVehiculo();
+        tipoMotoEstandar.setCodigo("MOTO");
+        CategoriaServicio categoriaMotoEstandar = new CategoriaServicio();
+        categoriaMotoEstandar.setId(8);
+        categoriaMotoEstandar.setNombre("MOTO");
+        categoriaMotoEstandar.setTipoVehiculo(tipoMotoEstandar);
+        Vehiculo motoEstandar = new Vehiculo();
+        motoEstandar.setEstadoVehiculo(EstadoRegistro.A);
+        motoEstandar.setTipoVehiculo(tipoMotoEstandar);
+        motoEstandar.setCategoriaServicio(categoriaMotoEstandar);
+        motoEstandar.setPlaca("STD-123");
         when(documentoService.puedeOperar(20L)).thenReturn(true);
         when(solicitudRepository.findById(30L)).thenReturn(Optional.of(compra));
-        when(vehiculoRepository.findByConductorId(20L)).thenReturn(List.of(motoDelivery));
+        when(vehiculoRepository.findByConductorId(20L)).thenReturn(List.of(motoEstandar, motoDelivery));
         when(ofertaRepository.save(any())).thenAnswer(invocacion -> invocacion.getArgument(0));
 
         var respuesta = service.ofertar(30L, new OfertaViajeRequest(new BigDecimal("99.00"), 5));
 
         assertEquals(new BigDecimal("17.50"), respuesta.precioOfertado());
+        assertEquals("DEL-123", respuesta.placaVehiculo());
     }
 
     @Test

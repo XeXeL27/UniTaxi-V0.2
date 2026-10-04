@@ -2,6 +2,8 @@ package com.taxiuap.backend.seed;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
@@ -34,7 +36,7 @@ class SeedPreciosDeliveryTest {
         delivery.setId(7);
         delivery.setNombre("DELIVERY");
         List<Tarifa> tarifasDeliveryGuardadas = new ArrayList<>();
-        when(tarifaRepository.findByCategoriaServicioIdAndZonaId(7, 1))
+        when(tarifaRepository.findByCategoriaServicioId(7))
                 .thenAnswer(invocacion -> new ArrayList<>(tarifasDeliveryGuardadas));
         when(tarifaRepository.save(any(Tarifa.class))).thenAnswer(invocacion -> {
             Tarifa tarifa = invocacion.getArgument(0);
@@ -63,5 +65,33 @@ class SeedPreciosDeliveryTest {
         Mockito.verify(tarifaRepository, Mockito.atLeastOnce()).save(tarifas.capture());
         assertTrue(tarifas.getAllValues().stream().anyMatch(tarifa -> tarifa.getCategoriaServicio() == delivery));
         org.junit.jupiter.api.Assertions.assertEquals(1, tarifasDeliveryGuardadas.size());
+        Tarifa deliveryTarifa = tarifasDeliveryGuardadas.get(0);
+        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("4.00"), deliveryTarifa.getTarifaBase());
+        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("1.80"), deliveryTarifa.getPrecioKm());
+        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("0.20"), deliveryTarifa.getPrecioMinuto());
+    }
+
+    @Test
+    void mantieneLaTarifaAdministradaDeDeliveryEnOtraZonaSinDuplicarEnCentro() {
+        TarifaRepository tarifaRepository = Mockito.mock(TarifaRepository.class);
+        CategoriaServicioRepository categoriaRepository = Mockito.mock(CategoriaServicioRepository.class);
+        ZonaRepository zonaRepository = Mockito.mock(ZonaRepository.class);
+        CategoriaServicio delivery = new CategoriaServicio();
+        delivery.setId(7);
+        delivery.setNombre("DELIVERY");
+        Zona periferia = new Zona();
+        periferia.setId(2);
+        Tarifa administrada = new Tarifa();
+        administrada.setCategoriaServicio(delivery);
+        administrada.setZona(periferia);
+        administrada.setVigenteDesde(java.time.LocalDate.now().minusMonths(1));
+        administrada.setEstadoTarifa(com.taxiuap.backend.shared.enums.EstadoRegistro.A);
+        when(tarifaRepository.findByCategoriaServicioId(7)).thenReturn(List.of(administrada));
+        SeedTarifaDelivery seeder = new SeedTarifaDelivery(categoriaRepository, zonaRepository, tarifaRepository);
+
+        Tarifa resultado = seeder.asegurar(delivery, new Zona());
+
+        assertTrue(resultado == administrada);
+        verify(tarifaRepository, never()).save(any(Tarifa.class));
     }
 }

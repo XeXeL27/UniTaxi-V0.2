@@ -35,14 +35,14 @@ public class SeedTarifaDelivery implements CommandLineRunner {
     @Value("${taxiuap.seed.habilitado:false}")
     private boolean seedHabilitado;
 
-    @Value("${taxiuap.delivery.tarifa-base:0.00}")
-    private BigDecimal tarifaBase = BigDecimal.ZERO;
+    @Value("${taxiuap.delivery.tarifa-base:4.00}")
+    private BigDecimal tarifaBase = new BigDecimal("4.00");
 
-    @Value("${taxiuap.delivery.precio-km:0.00}")
-    private BigDecimal precioKm = BigDecimal.ZERO;
+    @Value("${taxiuap.delivery.precio-km:1.80}")
+    private BigDecimal precioKm = new BigDecimal("1.80");
 
-    @Value("${taxiuap.delivery.precio-minuto:0.00}")
-    private BigDecimal precioMinuto = BigDecimal.ZERO;
+    @Value("${taxiuap.delivery.precio-minuto:0.20}")
+    private BigDecimal precioMinuto = new BigDecimal("0.20");
 
     @Override
     @Transactional
@@ -65,8 +65,7 @@ public class SeedTarifaDelivery implements CommandLineRunner {
     @Transactional
     public Tarifa asegurar(CategoriaServicio categoria, Zona zona) {
         LocalDate hoy = LocalDate.now();
-        Optional<Tarifa> vigente = tarifaRepository
-                .findByCategoriaServicioIdAndZonaId(categoria.getId(), zona.getId()).stream()
+        Optional<Tarifa> vigente = tarifaRepository.findByCategoriaServicioId(categoria.getId()).stream()
                 .filter(tarifa -> tarifa.getEstadoTarifa() == EstadoRegistro.A)
                 .filter(tarifa -> tarifa.getVigenteDesde() != null && !tarifa.getVigenteDesde().isAfter(hoy))
                 .filter(tarifa -> tarifa.getVigenteHasta() == null || !tarifa.getVigenteHasta().isBefore(hoy))

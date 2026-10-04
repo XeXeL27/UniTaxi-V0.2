@@ -74,12 +74,15 @@ class OfertaViajeDeliveryPersistenciaTest {
         assertEquals(SituacionAprobacion.APROBADO, conductor.getSituacionAprobacion());
         liberarViajeActivo(conductor);
 
+        CategoriaServicio delivery = new CategoriaServicio();
+        delivery.setNombre("DELIVERY");
+        delivery.setTipoVehiculo(motoDelivery.getTipoVehiculo());
+        delivery = categoriaServicioRepository.saveAndFlush(delivery);
+        motoDelivery.setCategoriaServicio(delivery);
+        vehiculoRepository.saveAndFlush(motoDelivery);
+
         Pasajero pasajero = pasajeroRepository.findAll().stream().findFirst()
                 .orElseThrow(() -> new AssertionError("El seed debe incluir un pasajero"));
-        CategoriaServicio delivery = categoriaServicioRepository.findAll().stream()
-                .filter(CategoriaServicio::esDeliveryCompatible)
-                .findFirst()
-                .orElseThrow(() -> new AssertionError("El catalogo debe incluir DELIVERY"));
 
         SolicitudViaje solicitud = new SolicitudViaje();
         solicitud.setPasajero(pasajero);
@@ -119,6 +122,8 @@ class OfertaViajeDeliveryPersistenciaTest {
         assertEquals(SituacionViaje.CONFIRMADO, viajePersistido.getSituacionViaje());
         assertTrue(viajePersistido.getVehiculo().esMotoDelivery());
         assertNotNull(viajePersistido.getTarifa());
+        assertNull(viajePersistido.getTarifa().getZona());
+        assertEquals(new BigDecimal("4.00"), viajePersistido.getTarifa().getTarifaBase());
         assertEquals(new BigDecimal("17.50"), viajePersistido.getPrecioFinal());
         assertEquals("654321", viajePersistido.getSolicitud().getDatosEntrega().getCodigoEntrega());
         assertNull(respuesta.datosEntrega().codigoRecogida());

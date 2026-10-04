@@ -180,3 +180,99 @@ Por tanto, la cobertura de aceptación con persistencia está escrita, pero no p
 
 - Se necesita proporcionar una configuración PostgreSQL de pruebas válida para ejecutar `OfertaViajeDeliveryPersistenciaTest`, verificar que el seeder añade la tarifa a una base ya inicializada y completar cobertura transaccional/concurrente. Hasta entonces esas partes permanecen sin evidencia de ejecución, aunque compilan.
 - La tarifa DELIVERY sembrada es una referencia técnica para la FK. Los importes expuestos al cliente proceden de OSRM vía `CalculoPrecioDeliveryService`; no se debe usar esa tarifa de referencia para facturar DELIVERY.
+
+## Fix round 2: lazy tariff guarantee and database test preparation (2026-10-04)
+
+### Hallazgos y cambios
+
+- La creación/aceptación del viaje DELIVERY ya no depende de `SeedTarifaDelivery.run()`. En el límite de persistencia, `CalculoPrecioService.tarifaVigente()` conserva primero tarifas vigentes de la zona de origen y tarifas administradas vigentes de la categoría; si no encuentra ninguna, crea y persiste una tarifa técnica vigente con `zona=null`. Las llamadas repetidas reutilizan la referencia existente.
+- Una tarifa administrativa con zona se prefiere a la referencia técnica zona nula, incluso si esta última aparece primero en el resultado del repositorio. `SeedTarifaDelivery` de arranque sigue siendo opcional y ya no agrega tarifa de Centro encima de otra tarifa vigente DELIVERY.
+- Los defaults de `CalculoPrecioDeliveryService`, la referencia técnica, el seeder y `application-xexel.properties.example` son configurables y coinciden con los de MOTO: base `4.00`, km `1.80`, minuto `0.20`.
+- La placa de una oferta DELIVERY ahora se toma de una moto activa que también tenga categoría DELIVERY; la respuesta de ofertas estándar conserva la selección original.
+- `TarifaService.listar()` no mezcla la referencia interna zona nula con el catálogo administrativo por zona, y `buscarPorId()` serializa la zona ausente como `null` en vez de fallar.
+- La prueba de persistencia fue ajustada para crear una categoría DELIVERY después del arranque y aceptar sin una tarifa previa, comprobando que el viaje usa una referencia zona nula mientras mantiene su precio de servicio.
+- `SolicitudViajeConcurrenteDeliveryTest` usa el repositorio real, dos transacciones `TransactionTemplate` en hilos separados y una barrera para competir por `aceptarSiDisponible`; comprueba una respuesta de 1 fila y otra de 0 filas y el estado persistido `ACEPTADA`.
+
+### Evidencia TDD
+
+#### RED
+
+Comando ejecutado después de escribir las pruebas y antes de agregar el fallback de tarifa, cambiar la selección de placa y configurar los defaults del servicio:
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.trip.service.ViajeDeliveryPricingTest.creaTarifaTecnicaSinZonaAlAceptarDeliveryCuandoNoHayTarifaVigente' --tests 'com.taxiuap.backend.trip.service.OfertaViajeDeliveryAcceptanceTest.respuestaDeOfertaDeliveryConservaElPrecioDeServicioDeLaSolicitud' --tests 'com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryDefaultsTest' --console=plain
+```
+
+Salida observada: `3 tests completed, 3 failed`, `BUILD FAILED`. El viaje falló por `NegocioException` sin tarifa, la oferta devolvió la placa estándar y el cálculo devolvió precio `0.00` en vez de `6.00` para una ruta de 1 km y 1 minuto.
+
+Para validar la tarifa del seeder, se añadió la aserción de valores `4.00/1.80/0.20`, se configuró temporalmente el seed como estaba antes (`0.00/0.00/0.00`) y se ejecutó:
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.seed.SeedPreciosDeliveryTest.siembraTarifaDeReferenciaParaCategoriaDelivery' --console=plain
+```
+
+Salida observada: `1 test completed, 1 failed` por tarifa base distinta del valor MOTO. Se restauraron los defaults configurables de MOTO.
+
+También se verificó el comportamiento idempotente del seeder frente a una tarifa administrada vigente en otra zona:
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.seed.SeedPreciosDeliveryTest.mantieneLaTarifaAdministradaDeDeliveryEnOtraZonaSinDuplicarEnCentro' --console=plain
+```
+
+RED observado: `1 test completed, 1 failed`; el seeder intentaba crear una tarifa de Centro en lugar de reutilizar la administrada.
+
+La respuesta administrativa ante la nueva tarifa técnica también se probó primero:
+
+```text
+./gradlew test --tests 'com.taxiuap.backend.pricing.service.TarifaServiceDeliveryReferenceTest' --console=plain
+```
+
+RED observado: `1 test completed, 1 failed` con `NullPointerException` al serializar `zona=null`.
+
+#### GREEN
+
+Comando focal ejecutado, solo con suites no-DB:
+
+```text
+./gradlew test --rerun-tasks --tests 'com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryDefaultsTest' --tests 'com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryServiceTest' --tests 'com.taxiuap.backend.pricing.service.TarifaServiceDeliveryReferenceTest' --tests 'com.taxiuap.backend.seed.SeedPreciosDeliveryTest' --tests 'com.taxiuap.backend.trip.service.ViajeDeliveryPricingTest' --tests 'com.taxiuap.backend.trip.service.OfertaViajeDeliveryAcceptanceTest' --tests 'com.taxiuap.backend.trip.service.SolicitudViajeDeliveryFlowTest' --tests 'com.taxiuap.backend.trip.service.ViajeDeliveryRepublicacionTest' --tests 'com.taxiuap.backend.trip.dto.DatosEntregaResponseDeliveryTest' --console=plain
+```
+
+Salida observada: `BUILD SUCCESSFUL`.
+
+Compilación de todos los tests (incluidos los DB-backed, sin ejecutarlos):
+
+```text
+./gradlew compileTestJava --rerun-tasks --console=plain
+```
+
+Salida observada: `BUILD SUCCESSFUL`.
+
+### Pruebas DB
+
+- **NOT RUN / PENDING DOCKER:** `OfertaViajeDeliveryPersistenciaTest` y `SolicitudViajeConcurrenteDeliveryTest`. Por instrucción, no se inició Docker y no se ejecutaron tests de base de datos en esta ronda. El test de concurrencia utiliza transacciones reales y el UPDATE condicional de PostgreSQL; no es Mockito ni reflexión.
+- Se notificará al usuario para iniciar Docker antes de ejecutar ambos tests. Hasta entonces no se afirma que persistencia ni concurrencia pasaron.
+
+### Archivos cambiados en este round
+
+- `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`
+- `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioDeliveryService.java`
+- `backend/src/main/java/com/taxiuap/backend/pricing/service/TarifaService.java`
+- `backend/src/main/java/com/taxiuap/backend/seed/SeedTarifaDelivery.java`
+- `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`
+- `backend/src/main/resources/application-xexel.properties.example`
+- `backend/src/test/java/com/taxiuap/backend/pricing/service/CalculoPrecioDeliveryDefaultsTest.java`
+- `backend/src/test/java/com/taxiuap/backend/pricing/service/TarifaServiceDeliveryReferenceTest.java`
+- `backend/src/test/java/com/taxiuap/backend/seed/SeedPreciosDeliveryTest.java`
+- `backend/src/test/java/com/taxiuap/backend/trip/repository/SolicitudViajeConcurrenteDeliveryTest.java`
+- `backend/src/test/java/com/taxiuap/backend/trip/service/OfertaViajeDeliveryAcceptanceTest.java`
+- `backend/src/test/java/com/taxiuap/backend/trip/service/OfertaViajeDeliveryPersistenciaTest.java`
+- `backend/src/test/java/com/taxiuap/backend/trip/service/ViajeDeliveryPricingTest.java`
+- `docs/CHANGELOG.md`
+- `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`
+
+### Auto-revisión y preocupaciones
+
+- No se alteró `Viaje.tarifa` ni la nulabilidad del FK. La tarifa técnica no determina el precio cobrado, la distancia del cliente ni la comisión; el servicio de rutas mantiene esos valores.
+- Si ya existe tarifa vigente aplicable se reutiliza. La referencia de zona nula solo se inserta al no existir una vigente en la categoría DELIVERY; queda marcada por `zona=null` y se usa la tarifa administrada con zona antes de ella.
+- La creación de la categoría después del arranque queda cubierta en la prueba de aceptación preparada; el runner de inicio puede estar deshabilitado o no encontrar Centro sin impedir la aceptación.
+- No se inició Docker, no se ejecutaron tests DB, no se modificó `main`, no hubo push ni trabajo de Task 4.

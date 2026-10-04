@@ -253,9 +253,10 @@ public class OfertaViajeService {
                 .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de conductor"));
     }
 
-    private String buscarPlacaVehiculo(Long idConductor) {
+    private String buscarPlacaVehiculo(Long idConductor, boolean esDelivery) {
         return vehiculoRepository.findByConductorId(idConductor).stream()
                 .filter(vehiculo -> vehiculo.getEstadoVehiculo() == EstadoRegistro.A)
+                .filter(vehiculo -> !esDelivery || vehiculo.esMotoDelivery())
                 .map(Vehiculo::getPlaca)
                 .findFirst()
                 .orElse(null);
@@ -281,7 +282,7 @@ public class OfertaViajeService {
                 conductor != null ? conductor.getId() : null,
                 nombreConductor,
                 conductor != null ? conductor.getCalificacionPromedio() : null,
-                conductor != null ? buscarPlacaVehiculo(conductor.getId()) : null,
+                conductor != null ? buscarPlacaVehiculo(conductor.getId(), esDelivery) : null,
                 esDelivery ? solicitud.getPrecioSugerido() : oferta.getPrecioOfertado(),
                 oferta.getTiempoLlegadaMin(),
                 oferta.getSituacionOferta(),

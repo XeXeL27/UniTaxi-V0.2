@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-04 | Arreglo | Task 3 fix round 2 DELIVERY: tarifa técnica zona nula on-demand, defaults MOTO, placa compatible y catálogo de tarifas seguro |
 | 2026-10-04 | Arreglo | Task 3 DELIVERY: precio OSRM por snapshot, estimado marcado al asignar, moto compatible, tarifa de referencia y revalidación de aceptación |
 | 2026-10-02 | 📚 | Pausa documentada de implementación DELIVERY en Task 3; Tasks 1 y 2 revisadas, Task 3 implementada pendiente de re-review |
 | 2026-10-02 | Arreglo | Correcciones del reviewer para Task 3 DELIVERY: tipo MOTO explícito, flujo focal y bloqueo de aceptación |
@@ -28,6 +29,14 @@
 - **Seed:** nueva tarifa DELIVERY idempotente, leída de las propiedades `taxiuap.delivery.*`; se asegura también cuando el seeder normal omite la carga porque ya hay datos de prueba.
 - **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedOrquestador.java`, `SeedPrecios.java`, `SeedTarifaDelivery.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/SolicitudViajeResponse.java`, `ViajeResponse.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`, `SolicitudViajeService.java`, `ViajeService.java`; pruebas DELIVERY en `backend/src/test/java/com/taxiuap/backend/seed/` y `backend/src/test/java/com/taxiuap/backend/trip/service/`; `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
 - **Verificación:** RED observado antes de implementar: 15 pruebas, 8 fallos de comportamiento esperados. GREEN focalizado: 25 pruebas con `BUILD SUCCESSFUL`; `compileJava` y `compileTestJava` correctos. Suite completa: 102 pruebas, 3 fallos durante el arranque de contexto por `DataSourceBeanCreationException`; la prueba de aceptación con persistencia también queda bloqueada por la misma configuración de base de datos. No se declara cobertura ejecutada de concurrencia.
+
+### 🐛 Arreglo · Fix round 2: tarifa de aceptación independiente del seeder
+
+- **Módulo / área:** backend (`pricing`, `trip`, `seed`).
+- **Descripción:** La aceptación DELIVERY ahora crea on-demand una tarifa vigente de referencia con `zona=null` si no hay tarifa vigente usable. Primero respeta la tarifa administrativa aplicable y después cualquier otra tarifa administrada vigente; la referencia técnica nunca determina el precio del cliente, que sigue siendo OSRM.
+- **Cambios clave:** el seeder de inicio queda como conveniencia; el flujo no depende de `seed.habilitado`, zona `Centro` ni de que la categoría existiera al arrancar. Los defaults configurables de base/km/minuto pasan a `4.00/1.80/0.20`, iguales a MOTO en `SeedPrecios`. La placa en la respuesta de oferta DELIVERY se selecciona entre motos DELIVERY activas. La referencia zona nula queda fuera del listado administrativo por zona y su respuesta por ID no falla.
+- **Pruebas:** RED observado para tarifa ausente, defaults cero y placa estándar incorrecta. GREEN focal no-DB: `BUILD SUCCESSFUL`. Se añadieron una prueba de aceptación persistida con categoría creada después del arranque y una prueba PostgreSQL concurrente de ganador único; ambas se compilaron pero quedaron **NOT RUN / BLOCKED** hasta que el usuario inicie Docker. No se inició Docker ni se intentó PostgreSQL.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`, `CalculoPrecioDeliveryService.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedTarifaDelivery.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`, `backend/src/main/resources/application-xexel.properties.example`, pruebas de `pricing`, `seed` y `trip`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
 
 ## 2026-10-02
 

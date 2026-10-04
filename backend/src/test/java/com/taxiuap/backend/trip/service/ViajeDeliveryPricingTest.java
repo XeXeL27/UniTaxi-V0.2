@@ -1,7 +1,10 @@
 package com.taxiuap.backend.trip.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -10,11 +13,13 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -43,6 +48,7 @@ import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.institution.service.EstudianteService;
 import com.taxiuap.backend.institution.service.MatriculaEstudianteService;
 import com.taxiuap.backend.location.entity.UbicacionConductor;
+import com.taxiuap.backend.location.entity.Zona;
 import com.taxiuap.backend.location.repository.UbicacionConductorRepository;
 import com.taxiuap.backend.location.repository.ZonaRepository;
 import com.taxiuap.backend.pricing.dto.CalculoPrecio;
@@ -131,6 +137,7 @@ class ViajeDeliveryPricingTest {
 
         tarifa = new Tarifa();
         tarifa.setCategoriaServicio(delivery);
+        tarifa.setZona(new Zona());
         tarifa.setTarifaBase(new BigDecimal("3.00"));
         tarifa.setPrecioKm(new BigDecimal("1.00"));
         tarifa.setPrecioMinuto(new BigDecimal("1.00"));
@@ -175,6 +182,15 @@ class ViajeDeliveryPricingTest {
     void encomiendaUsaElPrecioSnapshotYLaMotoDeliveryAunqueHayaUnaMotoEstandarPrimero() {
         SolicitudViaje solicitud = solicitud(TipoEnvio.ENCOMIENDA, new BigDecimal("17.50"));
         OfertaViaje oferta = oferta(solicitud);
+        Tarifa tecnica = new Tarifa();
+        tecnica.setCategoriaServicio(delivery);
+        tecnica.setTarifaBase(BigDecimal.ZERO);
+        tecnica.setPrecioKm(BigDecimal.ZERO);
+        tecnica.setPrecioMinuto(BigDecimal.ZERO);
+        tecnica.setTarifaMinima(BigDecimal.ZERO);
+        tecnica.setVigenteDesde(LocalDate.of(2020, 1, 1));
+        tecnica.setEstadoTarifa(EstadoRegistro.A);
+        when(tarifaRepository.findByCategoriaServicioId(7)).thenReturn(List.of(tecnica, tarifa));
         when(vehiculoRepository.findByConductorId(40L)).thenReturn(List.of(motoEstandar, motoDelivery));
         lenient().doReturn(new CalculoPrecio(new BigDecimal("5.00"), BigDecimal.ZERO, new BigDecimal("5.00"),
                 tarifa, null, null, new BigDecimal("1.00"), 4))
@@ -183,10 +199,37 @@ class ViajeDeliveryPricingTest {
         Viaje viaje = viajeService.crearDesdeOferta(solicitud, oferta);
 
         assertEquals(motoDelivery, viaje.getVehiculo());
+        assertEquals(tarifa, viaje.getTarifa());
         assertEquals(new BigDecimal("17.50"), viaje.getPrecioFinal());
         assertEquals(new BigDecimal("17.50"), viaje.getPrecioOriginal());
         assertEquals(new BigDecimal("0.00"), viaje.getMontoDescuento());
         verify(calculoPrecioService, never()).calcular(solicitud, oferta, pasajero);
+    }
+
+    @Test
+    void creaTarifaTecnicaSinZonaAlAceptarDeliveryCuandoNoHayTarifaVigente() {
+        SolicitudViaje solicitud = solicitud(TipoEnvio.ENCOMIENDA, new BigDecimal("17.50"));
+        OfertaViaje oferta = oferta(solicitud);
+        List<Tarifa> referencias = new ArrayList<>();
+        when(vehiculoRepository.findByConductorId(40L)).thenReturn(List.of(motoDelivery));
+        when(tarifaRepository.findByCategoriaServicioId(7))
+                .thenAnswer(invocacion -> new ArrayList<>(referencias));
+        when(tarifaRepository.save(any(Tarifa.class))).thenAnswer(invocacion -> {
+            Tarifa referencia = invocacion.getArgument(0);
+            referencias.add(referencia);
+            return referencia;
+        });
+
+        Viaje viaje = assertDoesNotThrow(() -> viajeService.crearDesdeOferta(solicitud, oferta));
+        Tarifa tarifaReutilizada = calculoPrecioService.tarifaVigente(solicitud);
+
+        assertNotNull(viaje.getTarifa());
+        assertSame(viaje.getTarifa(), tarifaReutilizada);
+        verify(tarifaRepository, times(1)).save(any(Tarifa.class));
+        assertNull(viaje.getTarifa().getZona());
+        assertEquals(new BigDecimal("4.00"), viaje.getTarifa().getTarifaBase());
+        assertEquals(new BigDecimal("1.80"), viaje.getTarifa().getPrecioKm());
+        assertEquals(new BigDecimal("0.20"), viaje.getTarifa().getPrecioMinuto());
     }
 
     @Test
