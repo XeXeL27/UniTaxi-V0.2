@@ -654,3 +654,15 @@
 
 ### Verificación
 - Suite completa con perfil `appu`: `tests=160 failures=0 errors=0 skipped=0` (1 test añadido). BUILD SUCCESSFUL.
+
+## [Sesion 2026-10-05] — sin cambios de codigo
+
+- Se cerro la pregunta abierta del pago parcial: **se mantiene el spec**, el repartidor
+  registra el total exacto y no hay campo de monto parcial. Si el cliente no paga todo, el
+  repartidor usa "No se pudo entregar" con foto y motivo.
+- Se documento en `docs/superpowers/2026-10-05-entrega-handoff.md` el estado de la fase 1 de
+  DELIVERY: Tasks 1-4 implementadas, cierre de Task 4 pendiente (los dos hallazgos
+  importantes siguen abiertos, no se alcanzo a despachar el implementador) y Task 5 en
+  adelante.
+- Se confirmo que el repartidor es el mismo `Conductor` con moto de categoria DELIVERY y su
+  campo `limite_adelanto_compra`, no un actor nuevo.
