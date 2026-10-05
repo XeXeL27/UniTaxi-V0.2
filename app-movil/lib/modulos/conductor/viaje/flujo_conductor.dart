@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
@@ -288,11 +289,14 @@ class FlujoConductor extends ChangeNotifier {
       return;
     }
     if (nuevo.metodoPagoPedido != null && nuevo.metodoPagoPedido != actual.metodoPagoPedido) pedidoPago = nuevo;
-    if (nuevo.situacion != actual.situacion) {
+    if (nuevo.situacion == SituacionViaje.completado) {
+      _aplicar(nuevo);
+    } else if (nuevo.situacion != actual.situacion) {
       _entrarViaje(nuevo);
     } else if (nuevo.metodoPago != actual.metodoPago ||
         nuevo.metodoPagoPedido != actual.metodoPagoPedido ||
-        nuevo.conductorTieneQr != actual.conductorTieneQr) {
+        nuevo.conductorTieneQr != actual.conductorTieneQr ||
+        nuevo.datosEntrega != null) {
       viaje = nuevo;
       _avisar();
     }
@@ -346,10 +350,52 @@ class FlujoConductor extends ChangeNotifier {
     _entrarLista();
   }
 
+  bool get esDelivery => viaje?.datosEntrega != null;
+
+  Future<void> validarRecogida(String codigo) => _accionDelivery((id) => api.validarRecogida(id, codigo));
+
+  Future<void> proponerCompra(LatLng punto, String detalle, double costo) =>
+      _accionDelivery((id) => api.proponerCompra(id, punto, detalle, costo));
+
+  Future<void> registrarCompra(LatLng punto, String detalle, double costo, String? observacion, Uint8List? comprobante) =>
+      _accionDelivery((id) => api.registrarCompra(id, punto, detalle, costo, observacion, comprobante));
+
+  Future<void> confirmarPago(double monto, String metodo) => _accionDelivery((id) => api.confirmarPago(id, monto, metodo));
+
+  Future<void> validarEntrega(String codigo) => _accionDelivery((id) => api.validarEntrega(id, codigo));
+
+  Future<void> identificarReceptor(String nombre, String telefono) =>
+      _accionDelivery((id) => api.identificarReceptor(id, nombre, telefono));
+
+  Future<void> noSePudoEntregar(String motivo, Uint8List foto) =>
+      _accionDelivery((id) => api.noSePudoEntregar(id, motivo, foto));
+
+  Future<void> paqueteNoCoincide(String motivo, Uint8List foto) =>
+      _accionDelivery((id) => api.paqueteNoCoincide(id, motivo, foto));
+
+  Future<void> _accionDelivery(Future<Viaje> Function(int id) accion) async {
+    final actual = viaje;
+    if (actual == null || !esDelivery || ocupado) return;
+    ocupado = true;
+    _avisar();
+    try {
+      _aplicar(await accion(actual.id));
+    } finally {
+      ocupado = false;
+      _avisar();
+    }
+  }
+
   void _aplicar(Viaje nuevo) {
     if (nuevo.situacion == SituacionViaje.completado) {
       chat?.cerrar();
       finalizado = nuevo;
+      _entrarLista();
+    } else if (nuevo.situacion == SituacionViaje.cancelado) {
+      chat?.cerrar();
+      aviso = nuevo.datosEntrega?.estadoEntrega == EstadoEntrega.noEntregado
+          ? 'La entrega fue reportada como no entregada.'
+          : 'El pedido fue reportado y cancelado.';
       _entrarLista();
     } else {
       _entrarViaje(nuevo);
@@ -360,7 +406,7 @@ class FlujoConductor extends ChangeNotifier {
   void _alMoverseGps(LatLng posicion) {
     final actual = viaje;
     if (etapa != EtapaConductor.enViaje || actual == null || _finalizandoSolo || ocupado) return;
-    if (actual.situacion != SituacionViaje.enCurso || actual.destino == null) return;
+    if (actual.datosEntrega != null || actual.situacion != SituacionViaje.enCurso || actual.destino == null) return;
     if (ServiciosMapa.metros(posicion, actual.destino!) > metrosLlegada) return;
     _finalizandoSolo = true;
     avanzar().catchError((_) {

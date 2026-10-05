@@ -1,6 +1,10 @@
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
 import '../../../comun/modelos_viaje.dart';
+import 'dart:typed_data';
+import 'package:http_parser/http_parser.dart';
+import 'package:latlong2/latlong.dart';
+import '../../../mapa/servicios_mapa.dart';
 
 /// Calificacion que un pasajero le dio al conductor.
 class CalificacionRecibida {
@@ -100,6 +104,35 @@ class ConductorApi {
 
   Future<CalificacionesRecibidas> calificaciones() async =>
       CalificacionesRecibidas.desdeJson(await cliente.get('/api/conductor/calificaciones') as Map<String, dynamic>);
+
+  Future<Viaje> validarRecogida(int id, String codigo) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/validar-recogida', {'codigo': codigo}));
+
+  Future<Viaje> proponerCompra(int id, LatLng punto, String detalle, double costo) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/proponer-compra', {
+        'puntoCompraWkt': wktDesdePunto(punto), 'detalleCompra': detalle.trim(), 'costoProducto': costo,
+      }));
+
+  Future<Viaje> registrarCompra(int id, LatLng punto, String detalle, double costo, String? observacion, Uint8List? comprobante) async =>
+      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/registrar-compra', 'compra', {
+        'puntoCompraWkt': wktDesdePunto(punto), 'detalleCompra': detalle.trim(), 'costoProducto': costo,
+        if (observacion != null && observacion.trim().isNotEmpty) 'observacionCompra': observacion.trim(),
+      }, [if (comprobante != null) (campo: 'comprobante', bytes: comprobante, nombre: 'comprobante.jpg', tipo: MediaType('image', 'jpeg'))]));
+
+  Future<Viaje> confirmarPago(int id, double monto, String metodoPago) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/confirmar-pago', {'montoRecibido': monto, 'metodoPago': metodoPago}));
+
+  Future<Viaje> validarEntrega(int id, String codigo) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/validar-entrega', {'codigo': codigo}));
+
+  Future<Viaje> identificarReceptor(int id, String nombre, String telefono) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/identificar-receptor', {'nombre': nombre, 'telefono': telefono}));
+
+  Future<Viaje> noSePudoEntregar(int id, String motivo, Uint8List foto) async =>
+      _viaje(await cliente.enviarArchivo('POST', '/api/conductor/viajes/$id/entrega/no-se-pudo-entregar', 'foto', foto, 'falla.jpg', MediaType('image', 'jpeg'), campos: {'motivo': motivo.trim()}));
+
+  Future<Viaje> paqueteNoCoincide(int id, String motivo, Uint8List foto) async =>
+      _viaje(await cliente.enviarArchivo('POST', '/api/conductor/viajes/$id/entrega/paquete-no-coincide', 'foto', foto, 'paquete.jpg', MediaType('image', 'jpeg'), campos: {'motivo': motivo.trim()}));
 
   Viaje _viaje(dynamic datos) => Viaje.desdeJson(datos as Map<String, dynamic>);
 }

@@ -96,6 +96,7 @@ class DatosEntrega {
   final String? puntoCompraWkt;
   final String? fotoPaqueteUrl;
   final String? fotoComprobanteUrl;
+  final String? observacionCompra;
   final String? fotoFallaUrl;
   final String? motivoFalla;
   final String estadoEntrega;
@@ -121,6 +122,7 @@ class DatosEntrega {
     this.puntoCompraWkt,
     this.fotoPaqueteUrl,
     this.fotoComprobanteUrl,
+    this.observacionCompra,
     this.fotoFallaUrl,
     this.motivoFalla,
     this.estadoEntrega = 'PENDIENTE_RECOGIDA',
@@ -147,6 +149,7 @@ class DatosEntrega {
         puntoCompraWkt: json['puntoCompraWkt'] as String?,
         fotoPaqueteUrl: json['fotoPaqueteUrl'] as String?,
         fotoComprobanteUrl: json['fotoComprobanteUrl'] as String?,
+        observacionCompra: json['observacionCompra'] as String?,
         fotoFallaUrl: json['fotoFallaUrl'] as String?,
         motivoFalla: json['motivoFalla'] as String?,
         estadoEntrega: json['estadoEntrega'] as String? ?? 'PENDIENTE_RECOGIDA',
@@ -156,6 +159,9 @@ class DatosEntrega {
   bool get muestraCancelacion => EstadoEntrega.puedeCancelar(estadoEntrega);
   bool get tieneReporte => (fotoFallaUrl?.trim().isNotEmpty ?? false) || (motivoFalla?.trim().isNotEmpty ?? false);
   String? get resumenReporte => motivoFalla?.trim().isEmpty ?? true ? null : motivoFalla!.trim();
+  String? get informacionReporte => tieneReporte
+      ? 'Incidente registrado; estado administrativo no disponible para el pasajero'
+      : null;
 }
 
 class EstadoEntrega {

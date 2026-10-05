@@ -631,7 +631,7 @@ class _ResumenEntrega extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
-                'Reporte: ${datos.resumenReporte ?? 'evidencia registrada'}',
+                '${datos.informacionReporte}: ${datos.resumenReporte ?? 'evidencia registrada'}',
                 style: const TextStyle(color: ColoresApp.rojo, fontSize: 12),
               ),
             ),
