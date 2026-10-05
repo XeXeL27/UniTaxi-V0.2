@@ -1,6 +1,7 @@
 package com.taxiuap.backend.trip.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
@@ -97,6 +98,11 @@ class EntregaServiceFallaTest {
 
         verify(datosEntregaRepository).registrarFallaSiEstadoPermitido(eq(1L), anyCollection(),
                 eq(EstadoEntrega.NO_ENTREGADO), eq("El receptor no estaba"), eq("personas/20_x/entrega/falla_1.jpg"));
+        org.mockito.ArgumentCaptor<Reporte> reporteCaptor = org.mockito.ArgumentCaptor.forClass(Reporte.class);
+        verify(reporteRepository).save(reporteCaptor.capture());
+        assertSame(viaje, reporteCaptor.getValue().getViaje());
+        assertSame(viaje.getSolicitud().getDatosEntrega(),
+                reporteCaptor.getValue().getViaje().getSolicitud().getDatosEntrega());
         verify(viajeService).cancelarFallaEntrega(500L);
     }
 
