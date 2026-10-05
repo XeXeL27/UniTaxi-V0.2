@@ -120,6 +120,25 @@ class EntregaServiceFallaTest {
     }
 
     @Test
+    void paqueteNoCoincideAsociaEvidenciaYRegistraAdvertencia() {
+        Viaje viaje = viajeEnMano(TipoEnvio.ENCOMIENDA);
+        viaje.getSolicitud().getDatosEntrega().setEstadoEntrega(EstadoEntrega.EN_CAMINO_RECOGIDA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.guardarConSello(any(), anyString(), eq("paquete_no_coincide"), eq("jpg")))
+                .thenReturn("personas/20_x/entrega/paquete.jpg");
+        when(datosEntregaRepository.save(any(DatosEntrega.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        entregaService.reportarPaqueteIncorrecto(500L, "No cabe en la moto", foto());
+
+        assertEquals("personas/20_x/entrega/paquete.jpg", viaje.getSolicitud().getDatosEntrega().getFotoFallaUrl());
+        verify(reporteRepository).save(org.mockito.ArgumentMatchers.argThat(reporte ->
+                "PAQUETE_NO_COINCIDE".equals(reporte.getMotivo())
+                        && SituacionReporte.PENDIENTE == reporte.getSituacionReporte()));
+        assertEquals(EstadoRegistro.A, viaje.getConductor().getEstadoConductor());
+    }
+
+    @Test
     void laFallaNoRepublicaElPedido() {
         Viaje viaje = viajeEnMano(TipoEnvio.COMPRA_Y_ENTREGA);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);

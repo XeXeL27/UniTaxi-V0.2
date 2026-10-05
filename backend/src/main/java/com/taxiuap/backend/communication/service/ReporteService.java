@@ -13,6 +13,7 @@ import com.taxiuap.backend.communication.repository.ReporteRepository;
 import com.taxiuap.backend.config.security.JwtUser;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
+import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 
 import lombok.RequiredArgsConstructor;
@@ -38,6 +39,13 @@ public class ReporteService {
     @Transactional
     public ReporteResponse resolver(Long id, ResolverReporteRequest request, JwtUser admin) {
         Reporte reporte = buscar(id);
+        if (reporte.getSituacionReporte() != com.taxiuap.backend.communication.enums.SituacionReporte.PENDIENTE) {
+            throw new NegocioException("El reporte ya fue resuelto y no se puede modificar");
+        }
+        if (request.situacion() != com.taxiuap.backend.communication.enums.SituacionReporte.RESUELTO
+                && request.situacion() != com.taxiuap.backend.communication.enums.SituacionReporte.CERRADO) {
+            throw new NegocioException("La resolución debe cerrar o resolver el reporte");
+        }
         Usuario usuario = usuarioRepository.findById(admin.idUsuario())
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Usuario", admin.idUsuario()));
         reporte.setTipoResolucion(request.tipoResolucion());

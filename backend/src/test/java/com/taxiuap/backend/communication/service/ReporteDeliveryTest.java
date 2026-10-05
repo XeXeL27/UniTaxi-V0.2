@@ -22,6 +22,7 @@ import com.taxiuap.backend.config.security.JwtUser;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 
@@ -70,5 +71,45 @@ class ReporteDeliveryTest {
                 () -> service.resolver(9L, new ResolverReporteRequest(
                         TipoResolucionReporte.OTRO, "", SituacionReporte.CERRADO),
                         new JwtUser(8L, "admin", "ADMIN")));
+    }
+
+    @Test
+    void resolverRechazaResultadoPendiente() {
+        Reporte reporte = reporteResuelto();
+        when(reporteRepository.findById(4L)).thenReturn(Optional.of(reporte));
+        ReporteService service = new ReporteService(reporteRepository, usuarioRepository);
+
+        org.junit.jupiter.api.Assertions.assertThrows(NegocioException.class,
+                () -> service.resolver(4L, new ResolverReporteRequest(
+                        TipoResolucionReporte.OTRO, "reabrir", SituacionReporte.PENDIENTE),
+                        new JwtUser(8L, "admin", "ADMIN")));
+    }
+
+    @Test
+    void resolverRechazaReporteYaCerrado() {
+        Reporte reporte = reporteResuelto();
+        reporte.setSituacionReporte(SituacionReporte.RESUELTO);
+        when(reporteRepository.findById(4L)).thenReturn(Optional.of(reporte));
+        ReporteService service = new ReporteService(reporteRepository, usuarioRepository);
+
+        org.junit.jupiter.api.Assertions.assertThrows(NegocioException.class,
+                () -> service.resolver(4L, new ResolverReporteRequest(
+                        TipoResolucionReporte.OTRO, "segunda", SituacionReporte.CERRADO),
+                        new JwtUser(8L, "admin", "ADMIN")));
+    }
+
+    private Reporte reporteResuelto() {
+        Reporte reporte = new Reporte();
+        reporte.setId(4L);
+        reporte.setSituacionReporte(SituacionReporte.PENDIENTE);
+        Usuario usuario = new Usuario();
+        usuario.setId(8L);
+        reporte.setUsuarioReporta(usuario);
+        com.taxiuap.backend.trip.entity.Viaje viaje = new com.taxiuap.backend.trip.entity.Viaje();
+        viaje.setId(55L);
+        com.taxiuap.backend.trip.entity.SolicitudViaje solicitud = new com.taxiuap.backend.trip.entity.SolicitudViaje();
+        viaje.setSolicitud(solicitud);
+        reporte.setViaje(viaje);
+        return reporte;
     }
 }

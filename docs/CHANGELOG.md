@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-05 | Arreglo | Task 5 DELIVERY: transición administrativa cerrada, evidencia y pruebas de permisos/persistencia añadidas |
 | 2026-10-05 | ✨ | Task 5 DELIVERY: reportes automáticos y resolución administrativa de incidentes |
 | 2026-10-04 | Nuevo | Task 4 DELIVERY: transiciones de pedido, validación atómica de códigos, compra confirmada por el cliente, pago directo, entrega y falla de entrega |
 | 2026-10-04 | Arreglo | Task 3 fix round 2 DELIVERY: tarifa técnica zona nula on-demand, defaults MOTO, placa compatible y catálogo de tarifas seguro |
