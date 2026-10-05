@@ -36,11 +36,12 @@ class Menu {
   static const mapa = ItemMenu('Mapa', Iconos.mapLocationDot, '/mapa');
   static const flota = ItemMenu('Conductores en vivo', Iconos.carSide, '/flota');
   static const carpetaArchivos = ItemMenu('Carpeta de archivos', Iconos.folderOpen, '/sistema/carpeta');
+  static const reportesEntrega = ItemMenu('Reportes de entrega', Iconos.triangleExclamation, '/reportes-entrega');
 
   static const grupos = [
     GrupoMenu('Personas', Iconos.users, [personas, usuarios, pasajeros, conductores, carnetsObservados, eliminacionPermanente]),
     GrupoMenu('Mapa', Iconos.map, [zonas, mapa, flota]),
-    GrupoMenu('Sistema', Iconos.gear, [carpetaArchivos]),
+    GrupoMenu('Sistema', Iconos.gear, [carpetaArchivos, reportesEntrega]),
   ];
 
   static List<ItemMenu> get todos => [inicio, for (final g in grupos) ...g.items];

@@ -5,6 +5,10 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-05 | ✨ | Task 8 DELIVERY: panel administrativo, evidencia y resolución de reportes |
+| 2026-10-05 | ✨ | Task 7 DELIVERY: flujo del repartidor en app móvil |
+| 2026-10-05 | Arreglo | Task 6 DELIVERY: correcciones de serialización, precios, reportes y responsive |
+| 2026-10-05 | ✨ | Task 6 DELIVERY: flujo de pasajero en app móvil |
 | 2026-10-05 | Arreglo | Task 5 DELIVERY: prueba completa de asociación del reporte de paquete no coincidente y su evidencia |
 | 2026-10-05 | Arreglo | Task 5 DELIVERY: cobertura completa de asociación de evidencia y matriz de permisos administrativos |
 | 2026-10-05 | Arreglo | Task 5 DELIVERY: transición administrativa cerrada, evidencia y pruebas de permisos/persistencia añadidas |
@@ -25,6 +29,38 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-05
+
+### ✨ Nuevo · Task 8 DELIVERY: panel administrativo y contratos de evidencia
+
+- **Módulo / área:** backend (`communication`, `trip`) y admin-panel (`reportes`, `expediente`).
+- **Descripción:** se completó la consulta administrativa de incidentes DELIVERY con evidencia operativa y resolución documentada, sin movimientos automáticos de dinero ni lectura del chat efímero.
+- **Cambios clave:** códigos de recogida y entrega de exactamente ocho dígitos aleatorios e independientes; contrato administrativo enriquecido con contacto, tipo de envío y evidencia; límite de adelanto visible en expedientes; menú, listado, filtros, detalle responsive, foto de falla y modal de resolución con tipos y observación.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/entity/DatosEntrega.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/ValidarCodigoEntregaRequest.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/SolicitudViajeService.java`, `backend/src/main/java/com/taxiuap/backend/communication/dto/ReporteResponse.java`, `backend/src/main/java/com/taxiuap/backend/communication/service/ReporteService.java`, `admin-panel/lib/core/menu.dart`, `admin-panel/lib/core/rutas.dart`, `admin-panel/lib/modulos/expediente/modelos.dart`, `admin-panel/lib/modulos/expediente/expediente_conductor.dart`, `admin-panel/lib/modulos/reportes/modelos.dart`, `admin-panel/lib/modulos/reportes/reportes_api.dart`, `admin-panel/lib/modulos/reportes/pantalla_reportes_entrega.dart`.
+- **Verificación:** revisión de código y diff; pruebas, análisis, builds y pruebas manuales quedaron diferidos por instrucción explícita de la tarea.
+
+### ✨ Nuevo · Flujo DELIVERY del repartidor
+
+- **Módulo / área:** app-movil (`conductor/viaje`).
+- **Descripción:** se añadieron acciones de recogida, coordinación de compra, registro de costo, pago, entrega y reportes con evidencia.
+- **Cambios clave:** códigos no expuestos en respuestas, validación visual de códigos de ocho dígitos, recibo opcional, advertencia por paquete no coincidente y regla visual de diez minutos/dos intentos.
+- **Archivos afectados:** `app-movil/lib/comun/modelos_viaje.dart`, `app-movil/lib/core/cliente_api.dart`, `app-movil/lib/modulos/conductor/viaje/acciones_delivery.dart`, `app-movil/lib/modulos/conductor/viaje/conductor_api.dart`, `app-movil/lib/modulos/conductor/viaje/flujo_conductor.dart`, `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`, `app-movil/lib/modulos/conductor/viaje/paneles_conductor.dart`, `app-movil/test/acciones_delivery_conductor_test.dart`.
+- **Verificación:** no se ejecutaron tests, análisis, build ni pruebas manuales por instrucción de la tarea.
+
+### 🐛 Arreglo · Correcciones de revisión Task 6 DELIVERY
+
+- **Módulo / área:** app-movil (`pasajero/viaje`), modelos y formulario responsive.
+- **Descripción:** se corrigieron hallazgos de revisión del flujo DELIVERY del pasajero.
+- **Cambios clave:** aceptación de prohibiciones en ambos tipos, etiquetas de precio fijo/estimado/definitivo, estado y evidencia de reporte disponibles, pantalla completa bajo 600 px.
+- **Archivos afectados:** `app-movil/lib/comun/modelos_viaje.dart`, `app-movil/lib/modulos/pasajero/viaje/formulario_entrega.dart`, `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`, `app-movil/test/entrega_test.dart`.
+- **Verificación:** `flutter test test/entrega_test.dart`, `flutter test`, `flutter analyze`, `flutter build web --no-tree-shake-icons`.
+
+### ✨ Nuevo · Task 6: flujo DELIVERY para pasajero
+
+- **Módulo / área:** app-movil (`pasajero/viaje`), modelos, API y paneles.
+- **Descripción:** selección de encomienda o compra y entrega, captura de datos y seguimiento del pedido.
+- **Cambios clave:** validación de remitente/receptor, descripción, monto estimado, política de artículos, estados, desglose y cancelación bloqueada en `EN_MANO`; categoría DELIVERY resuelta desde el catálogo público.
+- **Archivos afectados:** `app-movil/lib/comun/modelos_viaje.dart`, `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart`, `app-movil/lib/modulos/pasajero/viaje/formulario_entrega.dart`, `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`, `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`, `app-movil/lib/modulos/pasajero/viaje/viaje_api.dart`, `app-movil/test/entrega_test.dart`.
+- **Verificación:** `flutter test`, `flutter analyze`, `flutter build web --no-tree-shake-icons`.
 
 ### ✨ Nuevo · Task 5: reportes y administración de incidentes DELIVERY
 

@@ -311,6 +311,7 @@ class _Datos extends StatelessWidget {
             ('Calificación', perfil.calificacionPromedio?.toStringAsFixed(2).replaceAll('.', ',')),
             ('Calificaciones recibidas', '${perfil.totalCalificaciones ?? 0}'),
             ('Saldo de billetera', monedaBs(perfil.saldoBilletera)),
+            ('Límite de adelanto para compras', monedaBs(perfil.limiteAdelantoCompra)),
           ]),
         ),
         SeccionExpediente(

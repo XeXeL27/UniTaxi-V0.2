@@ -39,7 +39,8 @@ public class ReporteService {
     @Transactional
     public ReporteResponse resolver(Long id, ResolverReporteRequest request, JwtUser admin) {
         Reporte reporte = buscar(id);
-        if (reporte.getSituacionReporte() != com.taxiuap.backend.communication.enums.SituacionReporte.PENDIENTE) {
+        if (reporte.getSituacionReporte() != com.taxiuap.backend.communication.enums.SituacionReporte.PENDIENTE
+                && reporte.getSituacionReporte() != com.taxiuap.backend.communication.enums.SituacionReporte.EN_REVISION) {
             throw new NegocioException("El reporte ya fue resuelto y no se puede modificar");
         }
         if (request.situacion() != com.taxiuap.backend.communication.enums.SituacionReporte.RESUELTO

@@ -40,6 +40,7 @@ class PerfilExpediente {
   final DateTime? fechaAprobacion;
   final double? saldoBilletera;
   final DateTime? licenciaVencimiento;
+  final double? limiteAdelantoCompra;
 
   PerfilExpediente({
     required this.idUsuario,
@@ -59,6 +60,7 @@ class PerfilExpediente {
     this.fechaAprobacion,
     this.saldoBilletera,
     this.licenciaVencimiento,
+    this.limiteAdelantoCompra,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -83,6 +85,7 @@ class PerfilExpediente {
     licenciaVencimiento: Formato.leerFecha(json['licenciaVencimiento']),
     fechaAprobacion: Formato.leerFecha(json['fechaAprobacion']),
     saldoBilletera: Formato.leerDecimal(json['saldoBilletera']),
+    limiteAdelantoCompra: Formato.leerDecimal(json['limiteAdelantoCompra']),
   );
 }
 
