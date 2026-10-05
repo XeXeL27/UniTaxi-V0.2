@@ -15,6 +15,7 @@ import '../../../core/vibracion.dart';
 import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../comun/modelos_viaje.dart';
+import 'modo_servicio.dart';
 import 'viaje_api.dart';
 
 /// Etapas de la pantalla del pasajero.
@@ -56,10 +57,23 @@ class FlujoPasajero extends ChangeNotifier {
   /// Como pagara el proximo viaje (se elige antes de solicitar). Despues solo lo cambia el conductor.
   String metodoPago = MetodoPago.efectivo;
 
-  /// Si no es null, el siguiente pedido usa la categoria DELIVERY.
-  TipoEnvio? tipoEnvio;
+  /// Servicio elegido en la cabecera: viaje normal o envío de un paquete.
+  final ModoServicio modo = ModoServicio();
+
   DatosEntregaForm? datosEntregaForm;
+
+  /// Id de la categoría DELIVERY del catálogo. Se cachea y no se limpia en _entrarEligiendo: es un
+  /// id, no un estado del pedido, y conservarlo ahorra una consulta antes de cada pedido.
   int? idCategoriaDelivery;
+
+  /// Tipo de envío de lo que se está moviendo. Si ya hay solicitud o viaje manda el del servidor,
+  /// porque al abrir la app con un pedido en curso el pasajero nunca pasó por el selector; antes de
+  /// pedir, el que eligió el pasajero.
+  TipoEnvio? get tipoEnvio =>
+      solicitud?.datosEntrega?.tipoEnvio ?? viaje?.datosEntrega?.tipoEnvio ?? modo.tipo;
+
+  /// Servicio de lo que se está pidiendo ahora, para hablar de repartidor o de taxista.
+  ServicioActivo get servicio => servicioDe(tipoEnvio);
 
   /// El pasajero toco "Añadir lugar": el proximo toque en el mapa guarda ese punto.
   bool guardandoLugar = false;
@@ -169,6 +183,12 @@ class FlujoPasajero extends ChangeNotifier {
     viaje = null;
     llegandoDestino = false;
     guardandoLugar = false;
+
+    // El modo también arranca de cero: si no, tras un reparto el pasajero vuelve a elegir destino
+    // en modo entrega con los datos del pedido anterior cargados en silencio.
+    modo.limpiar();
+    datosEntregaForm = null;
+
     mapa.limpiar();
     mapa.aSigueGps = true;
     final gps = mapa.miUbicacion;
@@ -264,16 +284,29 @@ class FlujoPasajero extends ChangeNotifier {
 
   bool get puedeSolicitar =>
       etapa == EtapaPasajero.eligiendo && mapa.a != null && mapa.b != null && !mapa.calculandoRuta &&
-      (tipoEnvio == null || datosEntregaForm?.error == null);
+      !modo.faltaElegirTipo && (tipoEnvio == null || datosEntregaForm?.error == null);
 
-  void elegirTipoEnvio(TipoEnvio? tipo) {
-    tipoEnvio = tipo;
+  /// Toca el segmentado de servicio de la cabecera.
+  void cambiarServicio(ServicioActivo servicio) {
+    if (servicio == ServicioActivo.entrega) {
+      modo.tocarEntrega();
+    } else {
+      modo.volverAViaje();
+      datosEntregaForm = null;
+    }
+    _avisar();
+  }
+
+  /// Elige qué se manda y cierra el selector. Para volver a un viaje normal está el segmentado de la
+  /// cabecera, que llama a [cambiarServicio].
+  void elegirTipoEnvio(TipoEnvio tipo) {
+    modo.elegir(tipo);
     datosEntregaForm = null;
     _avisar();
   }
 
   void guardarDatosEntrega(DatosEntregaForm datos) {
-    tipoEnvio = datos.tipoEnvio;
+    modo.elegir(datos.tipoEnvio);
     datosEntregaForm = datos;
     _avisar();
   }

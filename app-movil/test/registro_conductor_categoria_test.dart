@@ -55,7 +55,7 @@ void main() {
       final categorias = categoriasMoto(_catalogo);
 
       expect(categoriaTaxi(categorias)!.texto, 'Mototaxi (pido pasajeros)');
-      expect(categoriaReparto(categorias)!.texto, 'Repartidor de entregas');
+      expect(categoriaReparto(categorias)!.texto, 'Repartidor de entregas (Delivery)');
     });
 
     test('sin categorias de reparto el conductor solo puede ser mototaxi', () {
