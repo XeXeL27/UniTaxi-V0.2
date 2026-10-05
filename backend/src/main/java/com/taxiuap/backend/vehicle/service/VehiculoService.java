@@ -97,6 +97,11 @@ public class VehiculoService {
      * Sin [idVehiculo] se cambia el unico vehiculo activo del conductor. Si tiene mas de uno, o
      * ninguno, hay que indicar cual con 422: un conductor puede tener varias motos y cambiar la
      * categoria de la que no es, por sorpresa, no corresponde.
+     *
+     * Un vehiculo eliminado logicamente no existe para este camino (404), tampoco cuando llega su
+     * id explicito: el listado del administrador si los muestra y el cambio no debe dar un exito
+     * falso sobre una fila que ya no manda. {@code buscarDelConductor} no cambia, porque la
+     * comparten {@link #actualizar} y {@link #eliminar}.
      */
     @Transactional
     public VehiculoResponse cambiarCategoriaServicio(Long idUsuario, Integer idVehiculo,
@@ -104,7 +109,7 @@ public class VehiculoService {
         Conductor conductor = buscarConductor(idUsuario);
         Vehiculo vehiculo = idVehiculo == null
                 ? buscarVehiculoActivo(conductor.getId())
-                : buscarDelConductor(idVehiculo.longValue(), conductor.getId());
+                : buscarActivoDelConductor(idVehiculo.longValue(), conductor.getId());
 
         vehiculo.setCategoriaServicio(resolverCategoriaServicio(vehiculo.getTipoVehiculo(), idCategoriaServicio));
         return aRespuesta(vehiculoRepository.save(vehiculo));
@@ -134,6 +139,20 @@ public class VehiculoService {
         Vehiculo vehiculo = vehiculoRepository.findById(id)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Vehiculo", id));
         if (vehiculo.getConductor() == null || !vehiculo.getConductor().getId().equals(idConductor)) {
+            throw RecursoNoEncontradoException.de("Vehiculo", id);
+        }
+        return vehiculo;
+    }
+
+    /**
+     * Un vehiculo del conductor que siga activo. Un vehiculo eliminado logicamente responde 404
+     * tambien cuando llega su id explicito, para que el cambio no caiga sobre una fila que ya no
+     * manda. {@link #buscarDelConductor} no cambia porque la comparten {@link #actualizar} y
+     * {@link #eliminar}.
+     */
+    private Vehiculo buscarActivoDelConductor(Long id, Long idConductor) {
+        Vehiculo vehiculo = buscarDelConductor(id, idConductor);
+        if (vehiculo.getEstadoVehiculo() != EstadoRegistro.A) {
             throw RecursoNoEncontradoException.de("Vehiculo", id);
         }
         return vehiculo;

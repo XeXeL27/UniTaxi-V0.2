@@ -149,8 +149,10 @@ class CategoriaServicioExpediente {
 /// Se agrupa por nombre porque la base puede tener varias filas con el mismo nombre (las
 /// DELIVERY duplicadas de las pruebas) y asi el desplegable no muestra "DELIVERY" quince veces; el
 /// mismo criterio que aplica la app del conductor. La categoria que ya tiene el vehiculo se agrega
-/// al inicio si no quedo en la lista (puede ser justamente una de las duplicadas), para que el
-/// formulario muestre el valor actual y el desplegable no se rompa.
+/// al inicio cuando su nombre no quedo en la lista (puede ser justamente una de las duplicadas),
+/// para que el formulario muestre el valor actual y el desplegable no se rompa. La comparacion es
+/// por nombre normalizado y no por id: si el vehiculo tiene una DELIVERY duplicada y el desplegable
+/// ya muestra la DELIVERY de menor id, agregar la fila propia repetiria la etiqueta.
 List<CategoriaServicioExpediente> categoriasDeVehiculo(
   List<CategoriaServicioExpediente> catalogo,
   VehiculoExpediente vehiculo,
@@ -163,7 +165,12 @@ List<CategoriaServicioExpediente> categoriasDeVehiculo(
   }
   final opciones = porNombre.values.toList()..sort((a, b) => a.id.compareTo(b.id));
   final idActual = vehiculo.idCategoriaServicio;
-  if (idActual != null && !opciones.any((c) => c.id == idActual)) {
+  final nombreActual = (vehiculo.categoria ?? '').trim().toUpperCase();
+  final yaEsta = idActual != null &&
+      (nombreActual.isEmpty
+          ? opciones.any((c) => c.id == idActual)
+          : opciones.any((c) => c.nombre.trim().toUpperCase() == nombreActual));
+  if (idActual != null && !yaEsta) {
     opciones.insert(
       0,
       CategoriaServicioExpediente(

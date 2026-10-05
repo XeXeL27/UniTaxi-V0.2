@@ -213,6 +213,25 @@ class ConductorAdminVehiculoCategoriaTest {
                 .andExpect(jsonPath("$.datos.idCategoriaServicio").value(delivery.getId()));
     }
 
+    /**
+     * Un vehiculo eliminado logicamente no existe para este endpoint, tampoco cuando llega su id
+     * explicito: el listado del administrador si lo muestra, asi que sin esta guarda el panel
+     * ofrece cambiar la categoria de una moto dada de baja y el cambio responde con exito.
+     */
+    @Test
+    void elVehiculoEliminadoDa404AunqueVengaSuId() throws Exception {
+        Conductor conductor = conductorConMoto(categoriaMoto("MOTO-PRUEBA"));
+        Vehiculo eliminado = moto(conductor, categoriaMoto("ELIMINADA-PRUEBA"));
+        eliminado.setEstadoVehiculo(EstadoRegistro.X);
+        vehiculoRepository.saveAndFlush(eliminado);
+        CategoriaServicio delivery = datos.categoriaDelivery();
+
+        mockMvc.perform(cambiar(conductor, delivery.getId(), eliminado.getId()).with(user("admin").roles("ADMIN")))
+                .andExpect(status().isNotFound());
+
+        assertEquals("ELIMINADA-PRUEBA", categoriaDe(eliminado));
+    }
+
     // ------------------------------------------------------------------ ayudas
 
     private MockHttpServletRequestBuilder cambiar(Conductor conductor, Integer idCategoriaServicio) {
