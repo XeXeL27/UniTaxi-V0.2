@@ -2,7 +2,7 @@
 
 ## Qué implementé
 
-- Corregí los códigos DELIVERY de recogida y entrega para que se generen y validen como exactamente ocho dígitos aleatorios, con dos códigos distintos por encomienda e independientes de teléfono, CI e identificadores.
+- Los códigos DELIVERY de recogida y entrega quedaron alineados con el contrato vigente de **exactamente 6 dígitos aleatorios**, con dos códigos distintos por encomienda e independientes de teléfono, CI e identificadores. Corrección 2026-10-05 (commit `4b9b463`): este reporte decía "ocho dígitos", que fue el error corregido; el texto original queda suplido por esta línea.
 - Extendí el contrato administrativo de reportes con tipo de envío, descripción, contacto, destino, costo real y evidencia de compra/falla.
 - Permití resolver reportes pendientes o en revisión sin ejecutar movimientos de dinero.
 - Mostré el límite de adelanto para compras en el expediente administrativo del conductor y mantuve visible la categoría de servicio del vehículo, incluida DELIVERY.
@@ -33,4 +33,4 @@ No se escribió ni ejecutó código de tests, conforme a la instrucción explíc
 ## Preocupaciones
 
 - Las pruebas automatizadas y compilaciones quedan pendientes deliberadamente y deben ejecutarse en la revisión final.
-- El cambio de longitud de columnas de códigos depende de `ddl-auto=update` para ampliar las columnas existentes en la base de datos.
+- El cambio de longitud de columnas de códigos depende de `ddl-auto=update` para ampliar las columnas existentes en la base de datos. Corrección 2026-10-05: al pasar de 8 a 6 dígitos el problema es el inverso, `ddl-auto=update` **no** reduce columnas, así que `codigo_recogida` y `codigo_entrega` quedan como `varchar(8)` en las bases ya creadas. No molesta: los valores siguen siendo de 6 caracteres y el `@Pattern` de la entidad los valida.

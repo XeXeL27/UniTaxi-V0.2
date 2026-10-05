@@ -122,6 +122,7 @@ class _DetalleReporteState extends State<_DetalleReporte> {
         if (r.tipoResolucion != null) ...[
           const SizedBox(height: 14),
           Text('Resolución: ${Formato.enumTexto(r.tipoResolucion)}'),
+          if (r.fechaResolucion != null) Text('Registrada: ${Formato.fechaHora(r.fechaResolucion)}'),
           if (r.observacionAdmin != null) Text('Observación administrativa: ${r.observacionAdmin}'),
         ],
       ],
