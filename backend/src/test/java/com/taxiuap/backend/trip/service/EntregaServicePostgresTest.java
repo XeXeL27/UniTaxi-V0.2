@@ -31,7 +31,7 @@ import com.taxiuap.backend.pricing.enums.SituacionPago;
 import com.taxiuap.backend.pricing.repository.BilleteraConductorRepository;
 import com.taxiuap.backend.pricing.repository.PagoRepository;
 import com.taxiuap.backend.pricing.repository.TarifaRepository;
-import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.testsupport.DatosPruebaDelivery;
 import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
@@ -125,8 +125,11 @@ class EntregaServicePostgresTest {
         Conductor otro = datos.crearConductorAprobado();
         autenticar(otro.getUsuario().getId(), "CONDUCTOR");
 
-        assertThrows(NegocioException.class, () -> entregaService.validarRecogida(escenario.viaje().getId(),
-                new ValidarCodigoEntregaRequest(CODIGO_RECOGIDA)));
+        // Un conductor que no es el asignado recibe "no encontrado": el servicio oculta la
+        // existencia del viaje en vez de confirmar que existe y no le pertenece.
+        assertThrows(RecursoNoEncontradoException.class,
+                () -> entregaService.validarRecogida(escenario.viaje().getId(),
+                        new ValidarCodigoEntregaRequest(CODIGO_RECOGIDA)));
     }
 
     @Test
@@ -135,7 +138,7 @@ class EntregaServicePostgresTest {
         Pasajero otro = datos.crearPasajero();
         autenticar(otro.getUsuario().getId(), "PASAJERO");
 
-        assertThrows(NegocioException.class,
+        assertThrows(RecursoNoEncontradoException.class,
                 () -> entregaService.confirmarCompra(escenario.viaje().getId()));
     }
 
