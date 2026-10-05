@@ -1,5 +1,7 @@
 package com.taxiuap.backend.trip.service;
 
+import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
+import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -212,6 +214,52 @@ class SolicitudViajeDeliveryFlowTest {
         when(vehiculoRepository.findByConductorId(40L)).thenReturn(List.of(motoDelivery));
 
         assertTrue(service.listarDisponiblesParaConductor().isEmpty());
+    }
+
+    @Test
+    void elRepartidorNoVeViajesDeTaxi() {
+        Conductor repartidor = conductor(40L, new BigDecimal("100.00"));
+        when(conductorRepository.findByUsuarioId(10L)).thenReturn(Optional.of(repartidor));
+        when(documentoService.puedeOperar(40L)).thenReturn(true);
+        when(solicitudRepository.findBySituacionSolicitud(any())).thenReturn(List.of(solicitudTaxi(91L)));
+        when(ofertaRepository.existsBySolicitudIdAndConductorIdAndSituacionOferta(any(), any(), any())).thenReturn(false);
+        when(vehiculoRepository.findByConductorId(40L)).thenReturn(List.of(vehiculo(delivery, delivery.getTipoVehiculo())));
+
+        assertTrue(service.listarDisponiblesParaConductor().isEmpty());
+    }
+
+    @Test
+    void elTaxistaVeLosViajesDeTaxiPeroNoLasEntregas() {
+        Conductor taxista = conductor(41L, BigDecimal.ZERO);
+        CategoriaServicio motoTaxi = new CategoriaServicio();
+        motoTaxi.setId(3);
+        motoTaxi.setNombre("MOTO");
+        motoTaxi.setTipoVehiculo(delivery.getTipoVehiculo());
+        SolicitudViaje entrega = solicitudCompra(new BigDecimal("5.00"));
+        when(conductorRepository.findByUsuarioId(10L)).thenReturn(Optional.of(taxista));
+        when(documentoService.puedeOperar(41L)).thenReturn(true);
+        when(solicitudRepository.findBySituacionSolicitud(SituacionSolicitud.PENDIENTE))
+                .thenReturn(List.of(solicitudTaxi(92L), entrega));
+        when(solicitudRepository.findBySituacionSolicitud(SituacionSolicitud.CON_OFERTAS)).thenReturn(List.of());
+        when(ofertaRepository.existsBySolicitudIdAndConductorIdAndSituacionOferta(any(), any(), any())).thenReturn(false);
+        when(vehiculoRepository.findByConductorId(41L)).thenReturn(List.of(vehiculo(motoTaxi, delivery.getTipoVehiculo())));
+
+        List<SolicitudViajeResponse> vistas = service.listarDisponiblesParaConductor();
+        assertEquals(1, vistas.size());
+        assertEquals(92L, vistas.getFirst().idSolicitud());
+    }
+
+    private SolicitudViaje solicitudTaxi(Long id) {
+        CategoriaServicio motoTaxi = new CategoriaServicio();
+        motoTaxi.setId(3);
+        motoTaxi.setNombre("MOTO");
+        motoTaxi.setTipoVehiculo(delivery.getTipoVehiculo());
+        SolicitudViaje solicitud = new SolicitudViaje();
+        solicitud.setId(id);
+        solicitud.setPasajero(pasajero);
+        solicitud.setCategoriaServicio(motoTaxi);
+        solicitud.setPrecioSugerido(new BigDecimal("8.00"));
+        return solicitud;
     }
 
     private SolicitudViajeRequest request(DatosEntregaRequest datos) {

@@ -265,9 +265,14 @@ public class SolicitudViajeService {
         return datos;
     }
 
-    private boolean puedeVer(Conductor conductor, SolicitudViaje solicitud) {
-        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return true;
-        if (!tieneMotoDelivery(conductor.getId())) return false;
+    /**
+     * Cada conductor ve solo las solicitudes de la categoria de su moto: el taxista los viajes y el
+     * repartidor (moto DELIVERY) las entregas que puede adelantar.
+     */
+    boolean puedeVer(Conductor conductor, SolicitudViaje solicitud) {
+        boolean repartidor = tieneMotoDelivery(conductor.getId());
+        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return !repartidor;
+        if (!repartidor) return false;
         DatosEntrega datos = solicitud.getDatosEntrega();
         return datos == null || datos.getTipoEnvio() != TipoEnvio.COMPRA_Y_ENTREGA
                 || (datos.getCostoProductoEstimado() != null

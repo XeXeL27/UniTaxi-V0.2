@@ -290,11 +290,20 @@ public class OfertaViajeService {
                 DatosEntregaResponse.desde(solicitud.getDatosEntrega(), esPasajero));
     }
 
+    /**
+     * Una moto DELIVERY solo atiende entregas y una moto de taxi solo viajes: cada conductor recibe y
+     * acepta las solicitudes de la categoria de su moto.
+     */
     private void validarCompatibilidad(Conductor conductor, SolicitudViaje solicitud) {
-        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return;
         boolean tieneMotoDelivery = vehiculoRepository.findByConductorId(conductor.getId()).stream()
                 .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
                 .anyMatch(Vehiculo::esMotoDelivery);
+        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) {
+            if (tieneMotoDelivery) {
+                throw new NegocioException("Tu moto es de DELIVERY: solo puedes aceptar entregas");
+            }
+            return;
+        }
         if (!tieneMotoDelivery) {
             throw new NegocioException("Solo una moto DELIVERY puede aceptar esta solicitud");
         }
