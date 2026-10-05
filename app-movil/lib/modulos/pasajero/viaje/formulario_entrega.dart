@@ -4,12 +4,45 @@ import '../../../comun/modelos_viaje.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
 
+const double _anchoModalEntrega = 600;
+
+bool formularioEntregaEsPantallaCompleta(double ancho) => ancho < _anchoModalEntrega;
+
 /// Formulario de datos que el pasajero debe confirmar antes de pedir una entrega.
 Future<DatosEntregaForm?> abrirFormularioEntrega(BuildContext context, TipoEnvio tipo) {
-  return showModalBottomSheet<DatosEntregaForm>(
+  if (formularioEntregaEsPantallaCompleta(MediaQuery.sizeOf(context).width)) {
+    return Navigator.of(context).push<DatosEntregaForm>(
+      MaterialPageRoute(
+        fullscreenDialog: true,
+        builder: (_) => Scaffold(
+          backgroundColor: ColoresApp.fondo,
+          appBar: AppBar(
+            backgroundColor: ColoresApp.azul,
+            foregroundColor: ColoresApp.blanco,
+            title: Text(tipo.nombre, style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              child: _FormularioEntrega(tipo: tipo),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+  return showDialog<DatosEntregaForm>(
     context: context,
-    isScrollControlled: true,
-    builder: (_) => _FormularioEntrega(tipo: tipo),
+    builder: (_) => Dialog(
+      insetPadding: const EdgeInsets.all(24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(26, 22, 26, 24),
+          child: _FormularioEntrega(tipo: tipo),
+        ),
+      ),
+    ),
   );
 }
 

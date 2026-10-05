@@ -63,13 +63,13 @@ class DatosEntregaForm {
         'tipoEnvio': tipoEnvio.codigo,
         'descripcion': descripcion.trim(),
         'costoProductoEstimado': tipoEnvio == TipoEnvio.compraYEntrega ? costoProductoEstimado : null,
+        'aceptaPoliticaArticulos': aceptaPoliticaArticulos,
         if (tipoEnvio == TipoEnvio.encomienda) ...{
           'nombreRemitente': nombreRemitente!.trim(),
           'telefonoRemitente': telefonoRemitente!.trim(),
           'nombreReceptor': nombreReceptor!.trim(),
           'telefonoReceptor': telefonoReceptor!.trim(),
           if (fotoPaqueteUrl != null) 'fotoPaqueteUrl': fotoPaqueteUrl,
-          'aceptaPoliticaArticulos': aceptaPoliticaArticulos,
         },
       };
 }
@@ -154,6 +154,8 @@ class DatosEntrega {
 
   double get totalProducto => costoProductoReal ?? costoProductoEstimado ?? 0;
   bool get muestraCancelacion => EstadoEntrega.puedeCancelar(estadoEntrega);
+  bool get tieneReporte => (fotoFallaUrl?.trim().isNotEmpty ?? false) || (motivoFalla?.trim().isNotEmpty ?? false);
+  String? get resumenReporte => motivoFalla?.trim().isEmpty ?? true ? null : motivoFalla!.trim();
 }
 
 class EstadoEntrega {

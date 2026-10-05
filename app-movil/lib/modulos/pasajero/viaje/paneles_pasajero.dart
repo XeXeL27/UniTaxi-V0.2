@@ -10,6 +10,17 @@ import '../../../comun/modelos_viaje.dart';
 import '../../../comun/qr_pago.dart';
 import '../../../comun/vista_chat.dart';
 
+/// Etiqueta contractual del precio DELIVERY: ENCOMIENDA queda fija; COMPRA puede ser estimada
+/// hasta que el backend fija el precio desde el comercio real.
+String etiquetaPrecioDelivery(Viaje viaje) {
+  final datos = viaje.datosEntrega;
+  if (datos?.tipoEnvio == TipoEnvio.encomienda) return 'Precio fijo del servicio';
+  if (datos?.tipoEnvio == TipoEnvio.compraYEntrega) {
+    return viaje.precioEstimado ? 'Precio estimado del servicio' : 'Precio definitivo del servicio';
+  }
+  return 'Precio del viaje';
+}
+
 /// Panel mientras el pasajero elige su destino: arriba el precio y la forma de pago, luego partida
 /// (GPS), destino y ruta, y al final el boton para solicitar el taxi.
 class PanelEligiendo extends StatelessWidget {
@@ -520,7 +531,11 @@ class PanelViaje extends StatelessWidget {
         FilaLugar.partida(texto: viaje.origenDireccion),
         FilaLugar.destino(texto: viaje.destinoTexto),
         const SizedBox(height: 10),
-        RecuadroPrecio(etiqueta: MetodoPago.frase('Pagas', viaje.metodoPago), monto: formatoBs(viaje.precioFinal)),
+        RecuadroPrecio(
+          etiqueta: viaje.datosEntrega == null ? MetodoPago.frase('Pagas', viaje.metodoPago) : etiquetaPrecioDelivery(viaje),
+          detalle: viaje.datosEntrega == null ? null : MetodoPago.frase('Pagas', viaje.metodoPago),
+          monto: formatoBs(viaje.precioFinal),
+        ),
         if (viaje.datosEntrega != null) ...[
           const SizedBox(height: 8),
           _ResumenEntrega(datos: viaje.datosEntrega!, precioServicio: viaje.precioFinal),
@@ -611,6 +626,14 @@ class _ResumenEntrega extends StatelessWidget {
             const Padding(
               padding: EdgeInsets.only(top: 5),
               child: Text('El pedido está en manos del repartidor. Ya no puedes cancelarlo.', style: TextStyle(color: ColoresApp.rojo, fontSize: 12)),
+            ),
+          if (datos.tieneReporte)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Reporte: ${datos.resumenReporte ?? 'evidencia registrada'}',
+                style: const TextStyle(color: ColoresApp.rojo, fontSize: 12),
+              ),
             ),
         ],
       ),
