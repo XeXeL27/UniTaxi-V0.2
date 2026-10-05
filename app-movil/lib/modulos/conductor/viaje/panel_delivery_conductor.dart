@@ -36,7 +36,9 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   @override
   void dispose() {
-    for (final c in [_codigo, _nombre, _telefono, _detalle, _monto, _observacion, _motivo]) c.dispose();
+    for (final c in [_codigo, _nombre, _telefono, _detalle, _monto, _observacion, _motivo]) {
+      c.dispose();
+    }
     super.dispose();
   }
 
