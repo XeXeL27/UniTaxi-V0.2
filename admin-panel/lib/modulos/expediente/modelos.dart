@@ -90,25 +90,90 @@ class PerfilExpediente {
 }
 
 class VehiculoExpediente {
+  final int id;
   final String placa;
   final String? marca;
   final String? modelo;
   final String? color;
   final int? anio;
+  final int? idTipoVehiculo;
   final String? tipo;
+  final int? idCategoriaServicio;
   final String? categoria;
 
-  VehiculoExpediente({required this.placa, this.marca, this.modelo, this.color, this.anio, this.tipo, this.categoria});
+  VehiculoExpediente({
+    required this.id,
+    required this.placa,
+    this.marca,
+    this.modelo,
+    this.color,
+    this.anio,
+    this.idTipoVehiculo,
+    this.tipo,
+    this.idCategoriaServicio,
+    this.categoria,
+  });
 
   factory VehiculoExpediente.desdeJson(Map<String, dynamic> json) => VehiculoExpediente(
+    id: Formato.leerEntero(json['id']) ?? 0,
     placa: json['placa'] as String? ?? '',
     marca: json['marca'] as String?,
     modelo: json['modelo'] as String?,
     color: json['color'] as String?,
     anio: Formato.leerEntero(json['anio']),
+    idTipoVehiculo: Formato.leerEntero(json['idTipoVehiculo']),
     tipo: json['nombreTipoVehiculo'] as String?,
+    idCategoriaServicio: Formato.leerEntero(json['idCategoriaServicio']),
     categoria: json['nombreCategoriaServicio'] as String?,
   );
+}
+
+/// Categoria de servicio del catalogo que administra el panel (CategoriaServicioResponse del backend).
+class CategoriaServicioExpediente {
+  final int id;
+  final int idTipoVehiculo;
+  final String nombre;
+
+  CategoriaServicioExpediente({required this.id, required this.idTipoVehiculo, required this.nombre});
+
+  factory CategoriaServicioExpediente.desdeJson(Map<String, dynamic> json) => CategoriaServicioExpediente(
+    id: Formato.leerEntero(json['id']) ?? 0,
+    idTipoVehiculo: Formato.leerEntero(json['idTipoVehiculo']) ?? 0,
+    nombre: json['nombre'] as String? ?? '',
+  );
+}
+
+/// Las categorias que puede elegir el administrador para un vehiculo: solo las de su tipo (el
+/// backend rechaza las de otro tipo) y, de cada nombre, la de menor id.
+///
+/// Se agrupa por nombre porque la base puede tener varias filas con el mismo nombre (las
+/// DELIVERY duplicadas de las pruebas) y asi el desplegable no muestra "DELIVERY" quince veces; el
+/// mismo criterio que aplica la app del conductor. La categoria que ya tiene el vehiculo se agrega
+/// al inicio si no quedo en la lista (puede ser justamente una de las duplicadas), para que el
+/// formulario muestre el valor actual y el desplegable no se rompa.
+List<CategoriaServicioExpediente> categoriasDeVehiculo(
+  List<CategoriaServicioExpediente> catalogo,
+  VehiculoExpediente vehiculo,
+) {
+  final porNombre = <String, CategoriaServicioExpediente>{};
+  for (final categoria in catalogo.where((c) => c.idTipoVehiculo == vehiculo.idTipoVehiculo)) {
+    final clave = categoria.nombre.trim().toUpperCase();
+    final guardada = porNombre[clave];
+    if (guardada == null || categoria.id < guardada.id) porNombre[clave] = categoria;
+  }
+  final opciones = porNombre.values.toList()..sort((a, b) => a.id.compareTo(b.id));
+  final idActual = vehiculo.idCategoriaServicio;
+  if (idActual != null && !opciones.any((c) => c.id == idActual)) {
+    opciones.insert(
+      0,
+      CategoriaServicioExpediente(
+        id: idActual,
+        idTipoVehiculo: vehiculo.idTipoVehiculo ?? 0,
+        nombre: vehiculo.categoria ?? '',
+      ),
+    );
+  }
+  return opciones;
 }
 
 class ViajeExpediente {

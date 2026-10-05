@@ -268,6 +268,18 @@ class _Datos extends StatelessWidget {
     alTerminar: alCambiar,
   );
 
+  /// Corrige la categoria de servicio de un vehiculo. El boton va en el propio vehiculo, no en el
+  /// encabezado de la seccion, para que con mas de una moto quede claro cual se esta cambiando; el
+  /// id viaja en la peticion y el backend lo exige cuando hay mas de un vehiculo activo.
+  Future<void> _editarCategoria(BuildContext context, VehiculoExpediente vehiculo, VoidCallback recargar) =>
+      flujoEditar(
+        context,
+        descripcion: 'la categoría de servicio de la placa ${vehiculo.placa}',
+        formulario: _FormularioCategoriaVehiculo(api: api, idConductor: idConductor, vehiculo: vehiculo),
+        mensajeExito: 'La categoría de servicio de la placa ${vehiculo.placa} se actualizó.',
+        alTerminar: recargar,
+      );
+
   @override
   Widget build(BuildContext context) {
     return ListView(
@@ -319,19 +331,37 @@ class _Datos extends StatelessWidget {
           icono: Iconos.motorcycle,
           child: Carga<List<VehiculoExpediente>>(
             cargar: () => api.vehiculos(idConductor),
-            builder: (vehiculos, _) => vehiculos.isEmpty
+            builder: (vehiculos, recargar) => vehiculos.isEmpty
                 ? const Text('Sin vehículo registrado', style: TextStyle(color: ColoresApp.textoSuave))
                 : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       for (final v in vehiculos)
-                        DatosEnGrilla([
-                          ('Placa', v.placa),
-                          ('Marca y modelo', [v.marca, v.modelo].whereType<String>().join(' ')),
-                          ('Color', v.color),
-                          ('Año', v.anio?.toString()),
-                          ('Tipo', v.tipo),
-                          ('Categoría de servicio', v.categoria),
-                        ]),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            DatosEnGrilla([
+                              ('Placa', v.placa),
+                              ('Marca y modelo', [v.marca, v.modelo].whereType<String>().join(' ')),
+                              ('Color', v.color),
+                              ('Año', v.anio?.toString()),
+                              ('Tipo', v.tipo),
+                              ('Categoría de servicio', v.categoria),
+                            ]),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton.icon(
+                                onPressed: () => _editarCategoria(context, v, recargar),
+                                style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
+                                icon: const Icon(Iconos.penToSquare, size: 14),
+                                label: const Text(
+                                  'Cambiar categoría de servicio',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
           ),
@@ -833,6 +863,69 @@ class _FormularioLicenciaState extends State<_FormularioLicencia> {
         );
         return true;
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------- categoria del vehiculo
+
+/// Corrige la categoria de servicio de un vehiculo (por ejemplo de reparto a taxi). Muestra la
+/// actual antes de elegir y ofrece solo las categorias de su tipo, deduplicadas por nombre.
+/// El catalogo se pide al abrir el formulario, no al abrir el expediente.
+class _FormularioCategoriaVehiculo extends StatefulWidget {
+  final ExpedienteApi api;
+  final int idConductor;
+  final VehiculoExpediente vehiculo;
+
+  const _FormularioCategoriaVehiculo({
+    required this.api,
+    required this.idConductor,
+    required this.vehiculo,
+  });
+
+  @override
+  State<_FormularioCategoriaVehiculo> createState() => _FormularioCategoriaVehiculoState();
+}
+
+class _FormularioCategoriaVehiculoState extends State<_FormularioCategoriaVehiculo> {
+  final _clave = GlobalKey<FormState>();
+  late int? _categoria = widget.vehiculo.idCategoriaServicio;
+
+  @override
+  Widget build(BuildContext context) {
+    return ModalFormulario(
+      titulo: 'Categoría de servicio',
+      icono: Iconos.motorcycle,
+      claveFormulario: _clave,
+      textoGuardar: 'Guardar cambios',
+      alGuardar: () async {
+        await widget.api.cambiarCategoriaVehiculo(
+          widget.idConductor,
+          _categoria!,
+          idVehiculo: widget.vehiculo.id,
+        );
+        return true;
+      },
+      campos: [
+        Text(
+          'Placa ${widget.vehiculo.placa}. '
+          'Categoría actual: ${widget.vehiculo.categoria ?? "sin categoría"}.',
+          style: const TextStyle(color: ColoresApp.textoSuave),
+        ),
+        Carga<List<CategoriaServicioExpediente>>(
+          cargar: widget.api.categoriasServicio,
+          builder: (catalogo, _) {
+            final opciones = categoriasDeVehiculo(catalogo, widget.vehiculo);
+            return DropdownButtonFormField<int>(
+              initialValue: _categoria,
+              decoration: const InputDecoration(labelText: 'Categoría de servicio *'),
+              items: [for (final c in opciones) DropdownMenuItem(value: c.id, child: Text(c.nombre))],
+              onChanged: (v) => setState(() => _categoria = v),
+              validator: (v) => v == null ? 'Elija la categoría' : null,
+            );
+          },
+        ),
+      ],
     );
   }
 }

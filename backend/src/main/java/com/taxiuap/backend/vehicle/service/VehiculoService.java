@@ -90,6 +90,27 @@ public class VehiculoService {
     }
 
     /**
+     * Corrige solo la categoria de servicio de un vehiculo del conductor, sin tocar el resto de
+     * sus datos. Es el camino del administrador, que no viene con su sesion de conductor: recibe el
+     * id de usuario para no abrir una segunda busqueda del conductor.
+     *
+     * Sin [idVehiculo] se cambia el unico vehiculo activo del conductor. Si tiene mas de uno, o
+     * ninguno, hay que indicar cual con 422: un conductor puede tener varias motos y cambiar la
+     * categoria de la que no es, por sorpresa, no corresponde.
+     */
+    @Transactional
+    public VehiculoResponse cambiarCategoriaServicio(Long idUsuario, Integer idVehiculo,
+            Integer idCategoriaServicio) {
+        Conductor conductor = buscarConductor(idUsuario);
+        Vehiculo vehiculo = idVehiculo == null
+                ? buscarVehiculoActivo(conductor.getId())
+                : buscarDelConductor(idVehiculo.longValue(), conductor.getId());
+
+        vehiculo.setCategoriaServicio(resolverCategoriaServicio(vehiculo.getTipoVehiculo(), idCategoriaServicio));
+        return aRespuesta(vehiculoRepository.save(vehiculo));
+    }
+
+    /**
      * Resuelve la categoria de servicio elegida por id y comprueba que sirve para el tipo de
      * vehiculo. Es la regla unica de compatibilidad: la usan el alta y la edicion de un vehiculo y
      * tambien el registro de la moto del conductor, para que esos caminos no diverjan. Un id
@@ -116,6 +137,24 @@ public class VehiculoService {
             throw RecursoNoEncontradoException.de("Vehiculo", id);
         }
         return vehiculo;
+    }
+
+    /**
+     * El unico vehiculo activo del conductor. {@code findByConductorId} no filtra por estado, asi
+     * que el filtro es explicito: los vehiculos eliminados no cuentan como candidatos.
+     */
+    private Vehiculo buscarVehiculoActivo(Long idConductor) {
+        List<Vehiculo> activos = vehiculoRepository.findByConductorId(idConductor).stream()
+                .filter(vehiculo -> vehiculo.getEstadoVehiculo() == EstadoRegistro.A)
+                .toList();
+        if (activos.isEmpty()) {
+            throw new NegocioException("El conductor no tiene ningun vehiculo activo");
+        }
+        if (activos.size() > 1) {
+            throw new NegocioException("El conductor tiene " + activos.size()
+                    + " vehiculos activos: indique en idVehiculo el que quiere cambiar");
+        }
+        return activos.get(0);
     }
 
     private void validarPlacaDisponible(String placa, Long idVehiculoActual) {
