@@ -18,11 +18,13 @@ import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.trip.dto.OfertaViajeRequest;
 import com.taxiuap.backend.trip.dto.OfertaViajeResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.dto.DatosEntregaResponse;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
+import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
@@ -59,6 +61,7 @@ public class OfertaViajeService {
 
         SolicitudViaje solicitud = solicitudViajeRepository.findById(idSolicitud)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud));
+        validarCompatibilidad(conductor, solicitud);
         if (solicitud.getSituacionSolicitud() != SituacionSolicitud.PENDIENTE
                 && solicitud.getSituacionSolicitud() != SituacionSolicitud.CON_OFERTAS) {
             throw new NegocioException("La solicitud ya no admite ofertas");
@@ -70,7 +73,8 @@ public class OfertaViajeService {
         OfertaViaje oferta = new OfertaViaje();
         oferta.setSolicitud(solicitud);
         oferta.setConductor(conductor);
-        oferta.setPrecioOfertado(request.precioOfertado());
+        oferta.setPrecioOfertado(solicitud.getCategoriaServicio().esDeliveryCompatible()
+                ? solicitud.getPrecioSugerido() : request.precioOfertado());
         oferta.setTiempoLlegadaMin(request.tiempoLlegadaMin());
         oferta.setSituacionOferta(SituacionOferta.PENDIENTE);
         oferta.setFechaOferta(LocalDateTime.now());
@@ -133,10 +137,15 @@ public class OfertaViajeService {
                 || !solicitudSolicitada.getPasajero().getId().equals(pasajero.getId())) {
             throw RecursoNoEncontradoException.de("SolicitudViaje", solicitudSolicitada.getId());
         }
+        Conductor conductorOferta = ofertaSolicitada.getConductor();
+        if (!documentoConductorService.puedeOperar(conductorOferta.getId())) {
+            throw new NegocioException("El conductor no esta habilitado para recibir solicitudes");
+        }
+        validarCompatibilidad(conductorOferta, solicitudSolicitada);
         Long idSolicitud = solicitudSolicitada.getId();
         // El conductor de la oferta no puede quedar con dos viajes si dos pasajeros aceptan sus
         // ofertas a la vez: se bloquea su fila y se revisa.
-        Long idConductorOferta = ofertaSolicitada.getConductor().getId();
+        Long idConductorOferta = conductorOferta.getId();
         conductorRepository.bloquear(idConductorOferta);
         if (viajeService.conductorTieneViajeActivo(idConductorOferta)) {
             throw new ConflictoException("El conductor de esta oferta ya tomo otro viaje");
@@ -192,6 +201,9 @@ public class OfertaViajeService {
         if (!solicitudViajeRepository.existsById(idSolicitud)) {
             throw RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud);
         }
+        SolicitudViaje disponible = solicitudViajeRepository.findById(idSolicitud)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud));
+        validarCompatibilidad(conductor, disponible);
         Long idConductor = conductor.getId();
         // El conductor que cancelo este pedido no lo puede volver a tomar: queda para otro.
         if (ofertaViajeRepository.existsBySolicitudIdAndConductorIdAndSituacionOferta(
@@ -241,9 +253,10 @@ public class OfertaViajeService {
                 .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de conductor"));
     }
 
-    private String buscarPlacaVehiculo(Long idConductor) {
+    private String buscarPlacaVehiculo(Long idConductor, boolean esDelivery) {
         return vehiculoRepository.findByConductorId(idConductor).stream()
                 .filter(vehiculo -> vehiculo.getEstadoVehiculo() == EstadoRegistro.A)
+                .filter(vehiculo -> !esDelivery || vehiculo.esMotoDelivery())
                 .map(Vehiculo::getPlaca)
                 .findFirst()
                 .orElse(null);
@@ -257,16 +270,41 @@ public class OfertaViajeService {
                                 + conductor.getUsuario().getPersona().getApellidos()
                         : null;
 
+        boolean esPasajero = oferta.getSolicitud() != null && oferta.getSolicitud().getPasajero() != null
+                && UsuarioActual.obtener().map(u -> u.idUsuario().equals(
+                        oferta.getSolicitud().getPasajero().getUsuario().getId())).orElse(false);
+        SolicitudViaje solicitud = oferta.getSolicitud();
+        boolean esDelivery = solicitud.getCategoriaServicio() != null
+                && solicitud.getCategoriaServicio().esDeliveryCompatible();
         return new OfertaViajeResponse(
                 oferta.getId(),
                 oferta.getSolicitud() != null ? oferta.getSolicitud().getId() : null,
                 conductor != null ? conductor.getId() : null,
                 nombreConductor,
                 conductor != null ? conductor.getCalificacionPromedio() : null,
-                conductor != null ? buscarPlacaVehiculo(conductor.getId()) : null,
-                oferta.getPrecioOfertado(),
+                conductor != null ? buscarPlacaVehiculo(conductor.getId(), esDelivery) : null,
+                esDelivery ? solicitud.getPrecioSugerido() : oferta.getPrecioOfertado(),
                 oferta.getTiempoLlegadaMin(),
                 oferta.getSituacionOferta(),
-                oferta.getFechaOferta());
+                oferta.getFechaOferta(),
+                DatosEntregaResponse.desde(solicitud.getDatosEntrega(), esPasajero));
+    }
+
+    private void validarCompatibilidad(Conductor conductor, SolicitudViaje solicitud) {
+        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return;
+        boolean tieneMotoDelivery = vehiculoRepository.findByConductorId(conductor.getId()).stream()
+                .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
+                .anyMatch(Vehiculo::esMotoDelivery);
+        if (!tieneMotoDelivery) {
+            throw new NegocioException("Solo una moto DELIVERY puede aceptar esta solicitud");
+        }
+        if (solicitud.getDatosEntrega() != null
+                && solicitud.getDatosEntrega().getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA
+                && (conductor.getLimiteAdelantoCompra() == null
+                        || solicitud.getDatosEntrega().getCostoProductoEstimado() == null
+                        || solicitud.getDatosEntrega().getCostoProductoEstimado()
+                                .compareTo(conductor.getLimiteAdelantoCompra()) > 0)) {
+            throw new NegocioException("El costo estimado supera el limite de adelanto del repartidor");
+        }
     }
 }

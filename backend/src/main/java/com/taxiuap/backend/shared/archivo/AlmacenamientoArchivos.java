@@ -150,6 +150,14 @@ public class AlmacenamientoArchivos {
         return carpetaPersona(persona) + "/conductor/qr";
     }
 
+    /**
+     * Evidencia de los viajes DELIVERY del conductor: comprobantes de compra y fotos de falla. Se
+     * guardan junto a sus documentos porque quien las sube es siempre el repartidor asignado.
+     */
+    public String carpetaEntregaConductor(Persona persona) {
+        return carpetaPersona(persona) + "/conductor/entrega";
+    }
+
     // ------------------------------------------------------------------ PDF
 
     /** Valida que el archivo sea un PDF de hasta 5 MB. Se llama antes de guardar nada en la BD. */

@@ -34,6 +34,7 @@ import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import '../../../widgets/requiere_gps.dart';
+import '../../../widgets/selector_servicio.dart';
 import '../../registro/ingreso_google.dart';
 import '../favoritos/favoritos_api.dart';
 import '../favoritos/formulario_lugar.dart';
@@ -41,9 +42,11 @@ import '../favoritos/lugares_frecuentes.dart';
 import '../favoritos/seccion_favoritos.dart';
 import '../perfil/pantalla_perfil.dart';
 import '../viaje/flujo_pasajero.dart';
+import '../viaje/modo_servicio.dart';
 import '../viaje/paneles_pasajero.dart';
 import '../viaje/viaje_api.dart';
 import '../viaje/vista_calificacion.dart';
+import '../viaje/formulario_entrega.dart';
 import 'buscador_destino.dart';
 
 /// Vista principal del pasajero, con la barra inferior Inicio / Actividad / Perfil.
@@ -108,7 +111,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
 
   /// Botones que explica la guia de inicio (primera vez que entra).
   final _guiaDestino = GlobalKey();
-  final _guiaMoto = GlobalKey();
+  final _guiaServicio = GlobalKey();
   final _guiaPedir = GlobalKey();
   final _guiaHistorial = GlobalKey();
   final _guiaMas = GlobalKey();
@@ -205,9 +208,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         texto: 'Toca aquí para buscar tu destino, o toca directamente el punto del mapa al que quieres ir.',
       ),
       PasoGuia(
-        clave: _guiaMoto,
-        titulo: 'Mototaxis cerca',
-        texto: 'Aquí ves cuántos mototaxistas libres hay cerca de ti. También aparecen en el mapa.',
+        clave: _guiaServicio,
+        titulo: 'Viaje o entrega',
+        texto: 'Aquí eliges si quieres que te lleven a algún lado o que mandemos un paquete por ti.',
       ),
       PasoGuia(
         clave: _guiaPedir,
@@ -528,17 +531,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     );
   }
 
-  /// Boton del centro: pide el taxi si ya hay destino; si no, explica que falta.
+  /// Boton del centro: pide el servicio si ya hay destino; si no, explica que falta.
   void _botonCentral() {
     if (_flujo.puedeSolicitar) {
       _solicitar();
       return;
     }
+    final entrega = _flujo.servicio == ServicioActivo.entrega;
     final mensaje = switch (_flujo.etapa) {
-      EtapaPasajero.buscando => 'Ya estamos buscando un conductor para ti.',
-      EtapaPasajero.enViaje => 'Tienes un viaje en curso.',
+      EtapaPasajero.buscando =>
+        entrega ? 'Ya estamos buscando un repartidor para tu envío.' : 'Ya estamos buscando un conductor para ti.',
+      EtapaPasajero.enViaje => entrega ? 'Tienes un envío en curso.' : 'Tienes un viaje en curso.',
       _ when _mapa.b == null => 'Primero elige tu destino: búscalo arriba o tócalo en el mapa.',
-      _ => 'Espera a que termine de trazarse la ruta.',
+      _ when _flujo.modo.faltaElegirTipo => 'Elige qué quieres enviar: encomienda o compra y entrega.',
+      _ => entrega ? 'Espera a que termine de trazarse la ruta de tu envío.' : 'Espera a que termine de trazarse la ruta.',
     };
     mostrarMensaje(context, mensaje);
   }
@@ -546,8 +552,19 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// Los dos botones de pedir el taxi (el del panel y el central) pasan por aqui: primero se
   /// muestra el modal con el detalle y solo si el pasajero confirma se envia la solicitud.
   Future<void> _solicitar() async {
+    // En un reparto faltan los datos de qué se manda antes de poder pedirlo. Si el pasajero abrió el
+    // selector y todavía no eligió, no se manda nada: se pediría un viaje normal con la cabecera
+    // diciendo "Entrega".
+    if (_flujo.servicio == ServicioActivo.entrega && _flujo.datosEntregaForm == null) {
+      final tipo = _flujo.modo.tipo;
+      if (tipo == null) return;
+      final datos = await abrirFormularioEntrega(context, tipo);
+      if (datos == null || !mounted) return;
+      _flujo.guardarDatosEntrega(datos);
+    }
     final confirmado = await confirmarViaje(
       context,
+      titulo: textoConfirmacion(_flujo.servicio),
       contenido: DetalleSolicitudViaje(flujo: _flujo),
     );
     if (!confirmado || !mounted) return;
@@ -557,10 +574,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       if (mounted && _libres == 0) {
         await mostrarAviso(
           context,
-          titulo: 'No hay taxistas libres',
-          mensaje:
-              'Tu solicitud ya fue enviada. En este momento no hay taxistas libres, así que puede '
-              'demorar un poco encontrar uno que acepte tu viaje.',
+          titulo: textoSinLibresTitulo(_flujo.servicio),
+          mensaje: textoSinLibresAviso(_flujo.servicio),
         );
       }
     } on ApiExcepcion catch (e) {
@@ -582,6 +597,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     try {
       await _flujo.pedirCambioPago(metodo);
       if (mounted) mostrarMensaje(context, 'Esperando la respuesta del conductor.');
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
+  }
+
+  Future<void> _confirmarCompra() async {
+    try {
+      await _flujo.confirmarCompra();
+      if (mounted) mostrarMensaje(context, 'Compra confirmada. El repartidor puede comprar el producto.');
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
@@ -743,11 +767,22 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       listenable: Listenable.merge([_flujo, _mapa]),
       builder: (context, _) {
         final etapa = _flujo.etapa;
-        // Lo que tapan la cabecera con el buscador y el panel con la barra, para encuadrar la ruta.
-        final compacto = etapa == EtapaPasajero.buscando || (_panelEsPlegable && !_panelAbierto);
-        _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 160, 110, abajo + (compacto ? 170 : alto * 0.36));
         final eligiendo = etapa == EtapaPasajero.eligiendo;
         final panel = _panel(etapa);
+        // Lo que tapan la cabecera con el buscador y el panel con la barra, para encuadrar la ruta.
+        final compacto = etapa == EtapaPasajero.buscando || (_panelEsPlegable && !_panelAbierto);
+        // El segmentado de servicio y el selector de tipo van sobre el mapa: su alto se descuenta
+        // para que la ruta siga encuadrada entre la cabecera y el panel. El selector de tipo es más
+        // alto cuando ya avisó que los datos están completos.
+        final altoTipo = _flujo.datosEntregaForm != null ? altoSelectorTipoEntregaCompleto : altoSelectorTipoEntrega;
+        final extraCabecera =
+            eligiendo ? margenSelectorServicio + altoSelectorServicio + (_flujo.modo.selectorVisible ? margenSelectorServicio + altoTipo : 0) : 0;
+        _mapa.margenesVista = EdgeInsets.fromLTRB(
+          56,
+          margen.top + 160 + extraCabecera,
+          110,
+          abajo + (compacto ? 170 : alto * 0.36),
+        );
         return Stack(
           children: [
             Positioned.fill(
@@ -815,48 +850,42 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
-                        child: BarraDestino(
-                          key: _guiaDestino,
-                          destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
-                          onBuscar: _abrirBuscador,
-                          onQuitar: _flujo.quitarDestino,
+                        child: Column(
+                          children: [
+                            BarraDestino(
+                              key: _guiaDestino,
+                              destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
+                              onBuscar: _abrirBuscador,
+                              onQuitar: _flujo.quitarDestino,
+                            ),
+                            // El servicio se elige acá y no en el panel del pedido: el panel nace
+                            // plegado, así que un selector dentro de él no se ve y el pasajero no
+                            // sabe que puede mandar.
+                            const SizedBox(height: margenSelectorServicio),
+                            SelectorServicio(
+                              key: _guiaServicio,
+                              activo: _flujo.modo.activo,
+                              onCambiar: _flujo.cambiarServicio,
+                            ),
+                            if (_flujo.modo.selectorVisible) ...[
+                              const SizedBox(height: margenSelectorServicio),
+                              SelectorTipoEntrega(
+                                tipo: _flujo.modo.tipo,
+                                datosCompletos: _flujo.datosEntregaForm != null,
+                                onElegir: _flujo.elegirTipoEnvio,
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ),
-                  // La brujula va la ultima: cae debajo de lo que haya arriba y no se monta sobre
-                  // nada. Se esconde mientras el selector de la derecha este visible, porque ahi
-                  // no queda lugar libre en esa esquina.
-                  if (!(eligiendo && panel == null)) BrujulaArriba(controlador: _mapa),
+                  // La brujula va la ultima: cae debajo de lo que haya arriba y no se monta sobre nada. Antes se
+                  // escondía mientras el selector de vehiculo de la derecha estuviera visible; ese
+                  // selector ya no existe, así que ahora se muestra siempre.
+                  BrujulaArriba(controlador: _mapa),
                 ],
               ),
             ),
-            // Con el panel abierto (ruta, busqueda) el selector se esconde para no montarse sobre
-            // el panel ni sobre los botones del mapa.
-            if (eligiendo && panel == null)
-              Positioned(
-                right: 14,
-                top: margen.top + 170,
-                child: SelectorVehiculo(
-                  key: _guiaMoto,
-                  contador: _conductoresCargados ? _conductores.length : null,
-                  tooltipContador: _conductores.length == 1
-                      ? '1 mototaxista libre cerca'
-                      : '${_conductores.length} mototaxistas libres cerca',
-                  opciones: [
-                    OpcionVehiculo(
-                      nombre: 'Moto',
-                      activa: true,
-                      icono: Image.asset('assets/mototaxi.png', height: 42, fit: BoxFit.contain),
-                      onTap: () => mostrarMensaje(
-                        context,
-                        _conductores.isEmpty
-                            ? 'Viajas en mototaxi. Ahora no hay mototaxistas libres cerca.'
-                            : 'Viajas en mototaxi. Hay ${_conductores.length} libres cerca de ti.',
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             // Botones del mapa y panel en la misma Column: los botones quedan justo encima de la
             // tarjeta (nunca montados sobre ella) y se mueven con el panel si cambia de alto.
             // Anclados 34 px por encima del boton central, que sobresale ~30 px de la barra.
@@ -899,7 +928,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       icono: FontAwesomeIcons.moneyBillWave,
       color: ColoresApp.azul,
       resumen: _resumenRuta(),
-      tituloAbierto: 'Detalle del viaje',
+      tituloAbierto: _flujo.servicio == ServicioActivo.entrega ? 'Detalle de la entrega' : 'Detalle del viaje',
       accionPlegado: OpcionesEligiendo(flujo: _flujo, libres: _libres),
       child: _panelEligiendo(),
     ),
@@ -922,10 +951,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     return etapa == EtapaPasajero.eligiendo && _mapa.a != null && _mapa.b != null && !_flujo.guardandoLugar;
   }
 
-  /// "Tarifa: 8 Bs - 679 m - 2 min".
+  /// "Entrega - Tarifa: 8 Bs - 679 m - 2 min". Con el panel plegado esta barra es lo unico que se
+  /// ve del pedido, asi que el servicio tiene que aparecer aca: si no, el pasajero no recuerda que
+  /// esta mandando un paquete cuando confirma.
   String _resumenRuta() {
     final ruta = _mapa.ruta;
     return [
+      if (_flujo.servicio == ServicioActivo.entrega) 'Entrega',
       'Tarifa: ${_flujo.textoPrecio}',
       if (ruta != null) ...[ruta.distanciaTexto, ruta.duracionTexto] else 'trazando la ruta...',
     ].join(' - ');
@@ -943,15 +975,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   );
 
   Widget _panelViaje() {
-    final (icono, texto, color) = estadoViajePasajero(_flujo.viaje?.situacion ?? '');
+    final (icono, texto, color) = estadoViajePasajero(_flujo.viaje?.situacion ?? '', _flujo.servicio);
     return PanelPlegable(
       abierto: _panelAbierto,
       onAlternar: _alternarPanel,
       icono: icono,
       color: color,
       resumen: texto,
-      tituloAbierto: 'Detalle del viaje',
-      child: PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
+      tituloAbierto: _flujo.servicio == ServicioActivo.entrega ? 'Detalle de la entrega' : 'Detalle del viaje',
+       child: PanelViaje(
+         flujo: _flujo,
+         onCancelar: _cancelarViaje,
+         onPedirCambioPago: _pedirCambioPago,
+         onConfirmarCompra: _confirmarCompra,
+       ),
     );
   }
 }

@@ -5,6 +5,256 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-05 | ✨ | El pasajero elige entre viaje y entrega en un segmentado de la cabecera, con todo el texto del pedido acorde al servicio |
+| 2026-10-05 | 🐛 | Test del selector de categoría del conductor corregido tras cambiar el texto de la opción de reparto |
+| 2026-10-05 | ✨ | La moto del conductor puede registrarse con la categoría DELIVERY elegida (Task 1 del plan del repartidor) |
+| 2026-10-05 | 📚 | Plan del registro del repartidor DELIVERY: selector de categoría en el registro, cambio de categoría por el admin y precio de referencia igual al del taxista |
+| 2026-10-05 | 🐛 | Aclaración del agente verificador: los códigos DELIVERY siempre tienen 6 dígitos |
+| 2026-10-05 | 🔧 | Se mejora el agente verificador: credenciales explícitas para pruebas PostgreSQL, control anti-bucle y reglas de evidencia histórica |
+| 2026-10-05 | 🧪 | Verificación de las Tasks 3 a 8 de DELIVERY: suite completa, autoverificación de permisos y builds reales |
+| 2026-10-05 | ✨ | Task 8 DELIVERY: panel administrativo, evidencia y resolución de reportes |
+| 2026-10-05 | ✨ | Task 7 DELIVERY: flujo del repartidor en app móvil |
+| 2026-10-05 | Arreglo | Task 6 DELIVERY: correcciones de serialización, precios, reportes y responsive |
+| 2026-10-05 | ✨ | Task 6 DELIVERY: flujo de pasajero en app móvil |
+| 2026-10-05 | Arreglo | Task 5 DELIVERY: prueba completa de asociación del reporte de paquete no coincidente y su evidencia |
+| 2026-10-05 | Arreglo | Task 5 DELIVERY: cobertura completa de asociación de evidencia y matriz de permisos administrativos |
+| 2026-10-05 | Arreglo | Task 5 DELIVERY: transición administrativa cerrada, evidencia y pruebas de permisos/persistencia añadidas |
+| 2026-10-05 | ✨ | Task 5 DELIVERY: reportes automáticos y resolución administrativa de incidentes |
+| 2026-10-04 | Nuevo | Task 4 DELIVERY: transiciones de pedido, validación atómica de códigos, compra confirmada por el cliente, pago directo, entrega y falla de entrega |
+| 2026-10-04 | Arreglo | Task 3 fix round 2 DELIVERY: tarifa técnica zona nula on-demand, defaults MOTO, placa compatible y catálogo de tarifas seguro |
+| 2026-10-04 | Arreglo | Task 3 DELIVERY: precio OSRM por snapshot, estimado marcado al asignar, moto compatible, tarifa de referencia y revalidación de aceptación |
+| 2026-10-02 | 📚 | Pausa documentada de implementación DELIVERY en Task 3; Tasks 1 y 2 revisadas, Task 3 implementada pendiente de re-review |
+| 2026-10-02 | Arreglo | Correcciones del reviewer para Task 3 DELIVERY: tipo MOTO explícito, flujo focal y bloqueo de aceptación |
+| 2026-10-02 | Nuevo | Flujo backend de solicitudes y aceptación DELIVERY (Task 3) |
+| 2026-10-02 | Arreglo | Correcciones directas de Task 2: OSRM sin fallback y validación de rutas |
+| 2026-10-02 | Nuevo | Precio DELIVERY por OSRM y límite de adelanto del repartidor (Task 2) |
+| 2026-10-02 | Arreglo | Correcciones del reviewer para Task 1 DELIVERY |
+| 2026-10-02 | Nuevo | Modelo backend y catálogo DELIVERY (Task 1) |
+| 2026-10-02 | 📚 | DELIVERY: spec rediseñada y consolidada con precio, códigos, compra, límites, estados, cancelaciones y resolución administrativa |
+| 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
+| 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
+| 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-05
+
+### ✨ Nuevo · El pasajero elige entre viaje y entrega en la cabecera
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), pantalla de inicio.
+- **Descripción:** el selector de entrega estaba como primera fila del panel del pedido, que nace
+  plegado, así que el pasajero no veía que podía mandar un paquete. Ahora elige *Viaje* o *Entrega*
+  en un segmentado bajo "¿A dónde vas?", siempre visible con el panel abierto o cerrado, y todo el
+  texto del pedido habla del servicio que realmente se está pidiendo.
+- **Cambios clave:**
+  - `ModoServicio` (nuevo, Dart puro): única fuente de verdad del modo, con `limpiar()` para que el
+    pedido anterior no se filtre al volver a elegir destino, y `faltaElegirTipo` para que no se pueda
+    pedir sin haber dicho qué se manda.
+  - `tipoEnvio` pasa a derivar del servidor cuando ya hay solicitud o viaje. Arregla el caso de abrir
+    la app con un reparto en curso: antes toda la pantalla hablaba de taxistas y conductores.
+  - `_entrarEligiendo()` limpia el modo y los datos de entrega.
+  - `SelectorServicio` y `SelectorTipoEntrega` (nuevos) en la cabecera. El encuadre del mapa
+    descuenta su alto real, que es mayor cuando el selector avisa que los datos están completos.
+  - `estadoViajePasajero` y `DisponibilidadTaxis` reciben el servicio; en un reparto se habla de
+    repartidor, no de conductor, y el precio es "del servicio".
+  - Se borra `SelectorVehiculo` / `OpcionVehiculo` / `_Vehiculo`, que quedaban sin uso, y con él la
+    regla que escondía la brújula del mapa.
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/pasajero/viaje/modo_servicio.dart` (nuevo)
+  - `app-movil/lib/widgets/selector_servicio.dart` (nuevo)
+  - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart`
+  - `app-movil/lib/widgets/inicio_mapa.dart`
+  - `app-movil/test/modo_servicio_test.dart` (nuevo)
+  - `app-movil/test/selector_servicio_test.dart` (nuevo)
+- **Verificación (salida real):** `flutter analyze` → `No issues found!`; `flutter test` →
+  `00:02 +109: All tests passed!` (17 pruebas nuevas del selector de servicio, más 4 de las alturas
+  reales de los selectores y 4 de `faltaElegirTipo`). Sin verificación en dispositivo: la pantalla
+  final queda para prueba manual en Chrome o APK.
+
+### 🐛 Arreglo · Test del selector de categoría del conductor desactualizado
+
+- **Módulo / área:** app móvil, test del registro del conductor.
+- **Descripción:** al cambiar el texto de la opción de reparto a "Repartidor de entregas (Delivery)"
+  quedó una prueba esperando el texto anterior, y la suite entera no pasaba.
+- **Cambios clave:** la prueba compara contra el texto vigente.
+- **Archivos afectados:** `app-movil/test/registro_conductor_categoria_test.dart`.
+- **Verificación (salida real):** `flutter test` → `00:02 +109: All tests passed!`.
+
+### 🧪 Verificación · Deuda de verificación de DELIVERY (Tasks 3 a 8)
+
+- **Módulo / área:** DELIVERY (viaje, entrega, reportes), app móvil y panel administrativo.
+- **Descripción:** se ejecutó por primera vez la verificación que las Tasks 3 a 8 dejaron diferida
+  (suite backend completa, `flutter test`, `flutter analyze`, builds de las dos apps, recorrido
+  end-to-end por la API contra PostgreSQL y smoke de `/app` y `/admin` en Chrome). Se corrigieron
+  los defectos encontrados.
+- **Cambios clave:**
+  - `EntregaServicePostgresTest` esperaba `NegocioException` cuando un actor equivocado intenta
+    avanzar el pedido, pero `ViajeService.obtenerViajeDelConductor` responde a propósito
+    "no encontrado" para no revelar que el viaje existe. Se corrigió la suposición del test, no la
+    protección.
+  - `ReporteAdminControllerSecurityTest` resolvia el reporte con `@WithMockUser`, que deja un `User`
+    de Spring en el `SecurityContext` y no un `JwtUser`; el controller lee
+    `UsuarioActual.obtener().orElseThrow()` y la petición terminaba en 500 sin llegar al servicio.
+    El caso ADMIN ahora se autentica como lo hace `JwtAuthFilter`.
+  - `flutter analyze` estaba diferido en Tasks 7 y 8: aparecieron tres hallazgos que nunca se
+    habían visto (un import de `dart:typed_data` innecesario, un `for` sin llaves en el panel del
+    repartidor y un import muerto de `dialogos.dart` en la pantalla de reportes de entrega).
+  - Se documenta que `limite_adelanto_compra` no es editable por el repartidor: el permiso `DATOS`
+    lo bloquea, en contra del spec sección 2. Queda como decisión de producto abierta.
+- **Archivos afectados:**
+  `backend/src/test/java/com/taxiuap/backend/trip/service/EntregaServicePostgresTest.java`,
+  `backend/src/test/java/com/taxiuap/backend/controller/admin/ReporteAdminControllerSecurityTest.java`,
+  `app-movil/lib/modulos/conductor/viaje/flujo_conductor.dart`,
+  `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`,
+  `admin-panel/lib/modulos/reportes/pantalla_reportes_entrega.dart`,
+  `docs/CHANGELOG.md`, `docs/superpowers/2026-10-05-verificacion-entrega.md`.
+- **Verificación (salida real):**
+  - `./gradlew test` → `BUILD SUCCESSFUL`, `tests=177 failures=0 errors=0 skipped=0 classes=38`.
+  - `./gradlew build` → `BUILD SUCCESSFUL in 25s`.
+  - `flutter test` (app-movil) → `00:02 +78: All tests passed!`.
+  - `flutter analyze` (app-movil) → `No issues found!`; (admin-panel) → `No issues found!`.
+  - `flutter build web --release --no-tree-shake-icons --no-web-resources-cdn` en las dos apps →
+    `✓ Built build/web`.
+  - Autoverificación: quitado el chequeo de propietario del conductor, la prueba de permisos falla;
+    puesto el UPDATE de código de recogida incondicional, fallan 8 pruebas de concurrencia y de
+    estado persistido.
+  - Recorrido por la API contra PostgreSQL: 62 comprobaciones pasan sobre ENCOMIENDA y
+    COMPRA_Y_ENTREGA completos (visibilidad, códigos de 6 dígitos, compra, pago, entrega, falla,
+    reporte y resolución). Detalle en `docs/superpowers/2026-10-05-verificacion-entrega.md`.
+  - Smoke en Chrome: `/app` y `/admin` montan sin excepción de Dart, con los títulos correctos.
+
+### ✨ Nuevo · La moto del conductor puede ser DELIVERY (Task 1 del plan del repartidor)
+
+- **Módulo / área:** backend (`identity/dto`, `vehicle`).
+- **Descripción:** el registro del conductor acepta la categoría de servicio de la moto; si no viene, sigue la MOTO estándar. La elección queda solo en `vehiculo.categoria_servicio`, en nada más.
+- **Cambios clave:** `DatosConductorRequest` suma `idCategoriaServicio` opcional; `CategoriaServicioRepository` gana la categoría activa por id y la MOTO estándar de forma determinista (activa de menor id que no sea DELIVERY); `VehiculoService.resolverCategoriaServicio` queda como regla única de compatibilidad (404 si el id no existe o la categoría está eliminada, 422 si es de otro tipo de vehículo) y la reutilizan el alta, la edición y el registro; `RegistroMotoConductorService` deja de usar el `findFirst()` sin orden y el chequeo DELIVERY duplicado.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/identity/dto/DatosConductorRequest.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/repository/CategoriaServicioRepository.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/service/VehiculoService.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/service/RegistroMotoConductorService.java`, `backend/src/test/java/com/taxiuap/backend/vehicle/service/RegistroMotoConductorCategoriaTest.java`, `backend/src/test/java/com/taxiuap/backend/vehicle/service/VehiculoEntregaTest.java`.
+- **Verificación:** `./gradlew compileJava`, `./gradlew test --tests '*Vehiculo*' --tests '*RegistroMotoConductorCategoriaTest*'` y `./gradlew build` con el perfil `appu` (182 pruebas, 0 fallos).
+
+### 🐛 Arreglo · Longitud de códigos DELIVERY en el agente verificador
+
+- **Módulo / área:** configuración de opencode (`.opencode/agent/verificador.md`).
+- **Descripción:** se eliminó la ambigüedad entre los códigos DELIVERY de 6 dígitos y las referencias legítimas a teléfonos, contraseñas y números de tareas que contienen el número 8.
+- **Cambios clave:** el agente ahora declara explícitamente que nunca debe usar 8 como longitud de `codigo_recogida` o `codigo_entrega`.
+- **Archivos afectados:** `.opencode/agent/verificador.md`, `docs/CHANGELOG.md`.
+- **Verificación:** revisión estática de todas las referencias numéricas del agente; no se ejecutaron tests ni builds.
+
+### 🔧 Arreglo · Agente verificador de pruebas y validaciones
+
+- **Módulo / área:** configuración de opencode (`.opencode/agent`) y proceso de verificación.
+- **Descripción:** se revisó y reforzó el subagente `verificador` para ejecutar la deuda de verificación sin repetir bloqueos ni alterar históricos.
+- **Cambios clave:** las pruebas Spring pasan explícitamente `TAXIUAP_DB_PASSWORD='<12346578>'`; se añadieron límites anti-bucle, clasificación de bloqueos, detención ante ambigüedades y protección de cambios locales/secretos; el changelog y reportes históricos se actualizan de forma acumulativa.
+- **Archivos afectados:** `.opencode/agent/verificador.md`, `docs/CHANGELOG.md`.
+- **Verificación:** revisión estática del agente y de sus instrucciones; no se ejecutaron tests ni builds porque esta tarea solo ajusta el agente.
+
+### ✨ Nuevo · Task 8 DELIVERY: panel administrativo y contratos de evidencia
+
+- **Módulo / área:** backend (`communication`, `trip`) y admin-panel (`reportes`, `expediente`).
+- **Descripción:** se completó la consulta administrativa de incidentes DELIVERY con evidencia operativa y resolución documentada, sin movimientos automáticos de dinero ni lectura del chat efímero.
+- **Cambios clave:** códigos de recogida y entrega de exactamente ocho dígitos aleatorios e independientes; contrato administrativo enriquecido con contacto, tipo de envío y evidencia; límite de adelanto visible en expedientes; menú, listado, filtros, detalle responsive, foto de falla y modal de resolución con tipos y observación.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/entity/DatosEntrega.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/ValidarCodigoEntregaRequest.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/SolicitudViajeService.java`, `backend/src/main/java/com/taxiuap/backend/communication/dto/ReporteResponse.java`, `backend/src/main/java/com/taxiuap/backend/communication/service/ReporteService.java`, `admin-panel/lib/core/menu.dart`, `admin-panel/lib/core/rutas.dart`, `admin-panel/lib/modulos/expediente/modelos.dart`, `admin-panel/lib/modulos/expediente/expediente_conductor.dart`, `admin-panel/lib/modulos/reportes/modelos.dart`, `admin-panel/lib/modulos/reportes/reportes_api.dart`, `admin-panel/lib/modulos/reportes/pantalla_reportes_entrega.dart`.
+- **Verificación:** revisión de código y diff; pruebas, análisis, builds y pruebas manuales quedaron diferidos por instrucción explícita de la tarea.
+
+### ✨ Nuevo · Flujo DELIVERY del repartidor
+
+- **Módulo / área:** app-movil (`conductor/viaje`).
+- **Descripción:** se añadieron acciones de recogida, coordinación de compra, registro de costo, pago, entrega y reportes con evidencia.
+- **Cambios clave:** códigos no expuestos en respuestas, validación visual de códigos de ocho dígitos, recibo opcional, advertencia por paquete no coincidente y regla visual de diez minutos/dos intentos.
+- **Archivos afectados:** `app-movil/lib/comun/modelos_viaje.dart`, `app-movil/lib/core/cliente_api.dart`, `app-movil/lib/modulos/conductor/viaje/acciones_delivery.dart`, `app-movil/lib/modulos/conductor/viaje/conductor_api.dart`, `app-movil/lib/modulos/conductor/viaje/flujo_conductor.dart`, `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`, `app-movil/lib/modulos/conductor/viaje/paneles_conductor.dart`, `app-movil/test/acciones_delivery_conductor_test.dart`.
+- **Verificación:** no se ejecutaron tests, análisis, build ni pruebas manuales por instrucción de la tarea.
+
+### 🐛 Arreglo · Correcciones de revisión Task 6 DELIVERY
+
+- **Módulo / área:** app-movil (`pasajero/viaje`), modelos y formulario responsive.
+- **Descripción:** se corrigieron hallazgos de revisión del flujo DELIVERY del pasajero.
+- **Cambios clave:** aceptación de prohibiciones en ambos tipos, etiquetas de precio fijo/estimado/definitivo, estado y evidencia de reporte disponibles, pantalla completa bajo 600 px.
+- **Archivos afectados:** `app-movil/lib/comun/modelos_viaje.dart`, `app-movil/lib/modulos/pasajero/viaje/formulario_entrega.dart`, `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`, `app-movil/test/entrega_test.dart`.
+- **Verificación:** `flutter test test/entrega_test.dart`, `flutter test`, `flutter analyze`, `flutter build web --no-tree-shake-icons`.
+
+### ✨ Nuevo · Task 6: flujo DELIVERY para pasajero
+
+- **Módulo / área:** app-movil (`pasajero/viaje`), modelos, API y paneles.
+- **Descripción:** selección de encomienda o compra y entrega, captura de datos y seguimiento del pedido.
+- **Cambios clave:** validación de remitente/receptor, descripción, monto estimado, política de artículos, estados, desglose y cancelación bloqueada en `EN_MANO`; categoría DELIVERY resuelta desde el catálogo público.
+- **Archivos afectados:** `app-movil/lib/comun/modelos_viaje.dart`, `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart`, `app-movil/lib/modulos/pasajero/viaje/formulario_entrega.dart`, `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`, `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`, `app-movil/lib/modulos/pasajero/viaje/viaje_api.dart`, `app-movil/test/entrega_test.dart`.
+- **Verificación:** `flutter test`, `flutter analyze`, `flutter build web --no-tree-shake-icons`.
+
+### ✨ Nuevo · Task 5: reportes y administración de incidentes DELIVERY
+
+- **Módulo / área:** backend (`communication`, `trip`, `controller/admin`), administración DELIVERY.
+- **Descripción:** las fallas de entrega crean un reporte pendiente transaccional; el administrador puede consultarlo, ver su evidencia y registrar resolución sin mover dinero ni suspender automáticamente.
+- **Cambios clave:** resolución con tipo, observación, fecha e identidad; advertencia `PAQUETE_NO_COINCIDE`; descarga de foto bajo `/api/admin/reportes/**`.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/communication`, `backend/src/main/java/com/taxiuap/backend/trip/service/EntregaService.java`, `backend/src/main/java/com/taxiuap/backend/controller/admin/ReporteAdminController.java`, pruebas focalizadas de reportes.
+- **Verificación:** `SPRING_PROFILES_ACTIVE=appu ./gradlew test --console=plain --tests 'com.taxiuap.backend.trip.service.EntregaServiceFallaTest' --tests 'com.taxiuap.backend.communication.service.ReporteDeliveryTest'` (4 tests, BUILD SUCCESSFUL); suite completa intentada, con 12 fallos de contexto PostgreSQL/Dialect fuera de esta tarea.
+
+## 2026-10-04
+
+### 🆕 Nuevo · Task 4: transiciones, códigos, compra, entrega y cancelación DELIVERY
+
+- **Módulo / área:** backend (`trip`, `shared/archivo`), dominio DELIVERY.
+- **Descripción:** `DatosEntrega.estado_entrega` dejó de ser decorativo. Cada transición tiene su acción y su condición: aceptar el pedido lleva la solicitud a `EN_CAMINO_RECOGIDA`, el código de recogida o la compra confirmada llevan el pedido a `EN_MANO` con el viaje en `EN_CURSO`, el código de entrega o la identidad del receptor con el pago confirmado lo llevan a `ENTREGADO` con el viaje `COMPLETADO`, y "No se pudo entregar" deja `NO_ENTREGADO` con foto y motivo, cancela y no republica.
+- **Validación atómica:** los códigos se comparan en la base de datos con UPDATE condicionales de estado y código (`avanzarSiCodigoRecogidaCoincide`, `avanzarSiCodigoEntregaCoincide`, `avanzarSiEstadoPermitido`, `registrarFallaSiEstadoPermitido`), nunca leyendo y guardando. Una doble pulsación o dos pantallas simultáneas hacen que solo una gane. La falla escribe estado y evidencia en la misma sentencia para que no exista un `NO_ENTREGADO` sin foto ni motivo.
+- **Compra y pago:** el repartidor propone el comercio y el monto, el cliente lo confirma, y solo entonces se compra. Si el costo real supera al confirmado hay que volver a proponer y volver a confirmar; el recorrido hasta el comercio no se cobra y el precio del servicio se recalcula desde el comercio hasta el destino. El repartidor registra el pago directo (producto + servicio) y el servidor exige que el monto sea exactamente el total a cobrar. El comprobante de compra y la foto de falla son archivos opcionales y obligatorios respectivamente, guardados en la carpeta de entrega del repartidor.
+- **Cancelaciones:** con el pedido `EN_MANO` ni el cliente ni el repartidor pueden cancelar: hay que reportar la falla. La cancelación temprana del repartidor republica conservando códigos y comercio propuesto, pero limpiando lo que el repartidor hizo; la del cliente no cobra ni compensa nada. `iniciar` y `finalizar` genéricos rechazan los viajes DELIVERY.
+- **Cambios clave:** columnas nuevas `compra_confirmada_por_cliente`, `costo_producto_confirmado`, `pago_confirmado` y `monto_pago_recibido` (creadas por `ddl-auto=update`, sin SQL ni Flyway); invariantes `@AssertTrue` en `DatosEntrega`; `DatosEntregaResponse` expone al repartidor el comercio, los montos y los puntos en WKT, y sigue sin exponerle los códigos; `PuntoDesdeWkt` evita duplicar el parseo de coordenadas; endpoints de entrega en `ViajeConductorController` y `ViajePasajeroController`.
+- **Pruebas:** 52 pruebas nuevas (baseline 107 → 159). RED observado en cada slice; las pruebas contra PostgreSQL real encontraron dos bugs de producción que las unitarias no veían (un `@Enumerated` sobre un `Boolean` y columnas `NOT NULL` sin default que `ddl-auto=update` no podía agregar). Suite completa: **159 pruebas, 0 fallos, 0 errores, 0 omitidas**.
+- **Fuera de alcance:** la creación del `Reporte` del incidente de falla de entrega es Task 5.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/service/EntregaService.java`, `PuntoDesdeWkt.java`, `ViajeService.java`, `SolicitudViajeService.java`, `trip/repository/DatosEntregaRepository.java`, `trip/entity/DatosEntrega.java`, `trip/dto/` (cinco requests nuevos y `DatosEntregaResponse`), `controller/conductor/ViajeConductorController.java`, `controller/pasajero/ViajePasajeroController.java`, `shared/archivo/AlmacenamientoArchivos.java`; pruebas en `trip/service`, `trip/entity`, `trip/dto` y `trip/repository`; `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-4-report.md`.
+
+### 🐛 Arreglo · Cierre de hallazgos de Task 3 DELIVERY
+
+- **Módulo / área:** backend (`trip`, `pricing`, `seed`).
+- **Descripción:** ENCOMIENDA ahora fija al crear el precio del servicio calculado por OSRM A -> B e ignora el precio enviado por el cliente. Un fallo de OSRM impide persistir la solicitud. COMPRA_Y_ENTREGA calcula al asignar el GPS actual del repartidor -> B, persiste el snapshot en `SolicitudViaje.precioSugerido` y expone `precioEstimado`; no se agregó ninguna columna ni se implementó la compra de Task 4.
+- **Cambios clave:** Las respuestas de solicitud, oferta y viaje usan el snapshot DELIVERY en lugar del precio fijo genérico; el viaje usa exclusivamente precios de `CalculoPrecioDeliveryService`, conserva una tarifa vigente solo como FK requerida y selecciona una moto DELIVERY activa. La aceptación por oferta vuelve a comprobar aprobación, vehículo compatible y límite de adelanto. La comisión DELIVERY usa la configuración propia (0% por defecto) y solo el precio del servicio.
+- **Seed:** nueva tarifa DELIVERY idempotente, leída de las propiedades `taxiuap.delivery.*`; se asegura también cuando el seeder normal omite la carga porque ya hay datos de prueba.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedOrquestador.java`, `SeedPrecios.java`, `SeedTarifaDelivery.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/SolicitudViajeResponse.java`, `ViajeResponse.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`, `SolicitudViajeService.java`, `ViajeService.java`; pruebas DELIVERY en `backend/src/test/java/com/taxiuap/backend/seed/` y `backend/src/test/java/com/taxiuap/backend/trip/service/`; `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
+- **Verificación:** RED observado antes de implementar: 15 pruebas, 8 fallos de comportamiento esperados. GREEN focalizado: 25 pruebas con `BUILD SUCCESSFUL`; `compileJava` y `compileTestJava` correctos. Suite completa: 102 pruebas, 3 fallos durante el arranque de contexto por `DataSourceBeanCreationException`; la prueba de aceptación con persistencia también queda bloqueada por la misma configuración de base de datos. No se declara cobertura ejecutada de concurrencia.
+
+### 🐛 Arreglo · Fix round 2: tarifa de aceptación independiente del seeder
+
+- **Módulo / área:** backend (`pricing`, `trip`, `seed`).
+- **Descripción:** La aceptación DELIVERY ahora crea on-demand una tarifa vigente de referencia con `zona=null` si no hay tarifa vigente usable. Primero respeta la tarifa administrativa aplicable y después cualquier otra tarifa administrada vigente; la referencia técnica nunca determina el precio del cliente, que sigue siendo OSRM.
+- **Cambios clave:** el seeder de inicio queda como conveniencia; el flujo no depende de `seed.habilitado`, zona `Centro` ni de que la categoría existiera al arrancar. Los defaults configurables de base/km/minuto pasan a `4.00/1.80/0.20`, iguales a MOTO en `SeedPrecios`. La placa en la respuesta de oferta DELIVERY se selecciona entre motos DELIVERY activas. La referencia zona nula queda fuera del listado administrativo por zona y su respuesta por ID no falla.
+- **Pruebas:** RED observado para tarifa ausente, defaults cero y placa estándar incorrecta. GREEN focal no-DB: `BUILD SUCCESSFUL`. Se añadieron una prueba de aceptación persistida con categoría creada después del arranque y una prueba PostgreSQL concurrente de ganador único; ambas se compilaron pero quedaron **NOT RUN / BLOCKED** hasta que el usuario inicie Docker. No se inició Docker ni se intentó PostgreSQL.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`, `CalculoPrecioDeliveryService.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedTarifaDelivery.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`, `backend/src/main/resources/application-xexel.properties.example`, pruebas de `pricing`, `seed` y `trip`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
+
+## 2026-10-02
+
+### 📚 Documentación · Pausa de implementación DELIVERY en Task 3
+
+- **Módulo / área:** backend DELIVERY (`trip`, `vehicle`, `pricing`) y SDD.
+- **Descripción:** Se detuvo la implementación por solicitud del usuario después de
+  completar el implementer de Task 3 y antes de su re-review. El trabajo queda
+  documentado para continuar sin repetir contexto.
+- **Estado:** Tasks 1 y 2 están implementadas y aprobadas por reviewer. Task 3 tiene
+  los commits `662de56` y `cee202b`; el segundo corrige los hallazgos del reviewer,
+  pero todavía falta ejecutar la re-review. Tasks 4 a 8 no comenzaron.
+- **Cambios clave ya implementados:** modelo `DatosEntrega` y categoría DELIVERY;
+  precios OSRM sin fallback a línea recta; límite de adelanto del repartidor; creación,
+  visibilidad, filtrado, republicación y aceptación DELIVERY; validación explícita
+  MOTO y bloqueo pesimista del conductor.
+- **Archivos afectados:** `docs/superpowers/plans/2026-10-02-delivery-implementation-plan.md`,
+  `docs/CHANGELOG.md`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/progress.md`.
+- **Verificación:** commits `6bad27a`, `f4d1213`, `2f308bf`, `964cf19`, `662de56` y
+  `cee202b`; `compileJava` y suites focalizadas reportadas como correctas. La suite
+  backend completa continúa condicionada por la configuración/credenciales locales
+  de PostgreSQL.
+
+### ✨ Nuevo · Correcciones reviewer Task 3 DELIVERY
+
+- **Módulo / área:** backend (`trip`, `vehicle`, `identity`)
+- **Descripción:** se corrigió la validación de vehículos DELIVERY y se amplió la cobertura del flujo de solicitud, visibilidad, republicación y serialización de aceptación.
+- **Cambios clave:** validación explícita de tipo `MOTO`; pruebas de ENCOMIENDA, COMPRA_Y_ENTREGA, límite insuficiente, republicación y bloqueo pesimista del conductor.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/vehicle/entity/Vehiculo.java`, servicios `trip`, pruebas de flujo DELIVERY y `ConductorRepositoryLockTest`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
+- **Verificación:** `./gradlew compileJava`; suite focalizada Task 3 con `BUILD SUCCESSFUL`.
+
+### ✨ Nuevo · Flujo backend de solicitudes y aceptación DELIVERY
+
+- **Módulo / área:** backend (`trip`)
+- **Descripción:** se integró la creación, visibilidad y aceptación de solicitudes DELIVERY para ENCOMIENDA y COMPRA_Y_ENTREGA.
+- **Cambios clave:** códigos independientes para encomiendas; compra sin precio definitivo inicial; filtro por moto DELIVERY, aprobación y límite de adelanto; datos de entrega en respuestas y republicación con reinicio de datos operativos.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/service/SolicitudViajeService.java`, `OfertaViajeService.java`, `ViajeService.java`, DTOs de `trip`, `backend/src/test/java/com/taxiuap/backend/trip/dto/DatosEntregaResponseDeliveryTest.java`.
+- **Verificación:** `./gradlew compileJava`; tests focalizados DELIVERY y DTO (`BUILD SUCCESSFUL`).
 | 2026-09-30 | 🎨 | Botones del mapa: capas y ubicación sobre el panel (sin taparlo) y brújula en la esquina superior |
 | 2026-09-30 | 🐛 | Chat en memoria: se restaura @Transactional y desaparece el LazyInitializationException |
 | 2026-09-30 | 🐛 | Chat en memoria y en modal flotante: se arregla la autenticación del WebSocket y los mensajes sí se ven |
@@ -19,6 +269,24 @@
 | 2026-09-29 | ✨ | Seguimiento en vivo del conductor: distancia y ETA al pasajero durante recogida y viaje |
 | 2026-09-29 | ✨ | Favoritos como segunda pestaña de Historial en la app del pasajero |
 
+## 2026-10-02
+
+### 🐛 Arreglo · OSRM bloquea operaciones sin ruta válida
+
+- **Módulo / área:** app móvil y backend (`pricing`, `mapa`)
+- **Descripción:** se eliminó el fallback móvil a línea recta cuando OSRM falla y se validaron distancia, duración y geometría antes de usar una ruta.
+- **Cambios clave:** `RutaNoDisponibleException` en el móvil, validación de `RutaResponse` y pruebas de respuestas OSRM negativas.
+- **Archivos afectados:** `app-movil/lib/mapa/servicios_mapa.dart`, `backend/src/main/java/com/taxiuap/backend/pricing/dto/RutaResponse.java`, `backend/src/test/java/com/taxiuap/backend/pricing/service/ClienteOsrmTest.java`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-2-report.md`.
+- **Verificación:** `./gradlew test --tests 'com.taxiuap.backend.pricing.service.*'`, `./gradlew compileJava`, `flutter test` (70 pruebas Dart).
+
+### ✨ Nuevo · Precio DELIVERY por OSRM y límite de adelanto
+
+- **Módulo / área:** backend (`pricing`, `identity`) y app móvil (`core`, `mapa`)
+- **Descripción:** se implementó el cálculo de precios DELIVERY por rutas de calles y la configuración editable del límite que el repartidor adelanta para compras.
+- **Cambios clave:** cliente OSRM con timeout y respuesta tipada; precios A-B, GPS-B y comercio-B; fallo de OSRM sin respaldo en línea recta; comisión DELIVERY configurable con valor inicial 0% solo sobre el servicio; filtro reutilizable por límite de adelanto; URL de OSRM configurable en la app.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/dto/RutaResponse.java`, `backend/src/main/java/com/taxiuap/backend/pricing/dto/DesglosePrecioDelivery.java`, `backend/src/main/java/com/taxiuap/backend/pricing/service/ClienteRutas.java`, `backend/src/main/java/com/taxiuap/backend/pricing/service/ClienteOsrm.java`, `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioDeliveryService.java`, `backend/src/main/java/com/taxiuap/backend/identity/dto/ActualizarPerfilConductorRequest.java`, `backend/src/main/java/com/taxiuap/backend/identity/service/PerfilConductorService.java`, `backend/src/main/resources/application-xexel.properties`, `backend/src/main/resources/application-xexel.properties.example`, `app-movil/lib/core/config.dart`, `app-movil/lib/mapa/servicios_mapa.dart`, pruebas focalizadas.
+- **Verificación:** `./gradlew test --tests 'com.taxiuap.backend.pricing.service.*'`, `./gradlew compileJava`; `./gradlew test` ejecutó 77 pruebas y quedó bloqueado por 2 fallos de autenticación/configuración PostgreSQL local.
+
 ## Convenciones
 
 - **Fecha:** `YYYY-MM-DD` (no usar texto suelto).
@@ -26,6 +294,100 @@
 - **Fuente de verdad:** este archivo se mantiene al día al finalizar cada tarea.
 
 ---
+
+## 2026-10-02
+
+### Arreglo · Correcciones del reviewer para Task 1 DELIVERY
+
+- **Módulo / área:** backend (`vehicle`, `identity`, `trip`, `seed`)
+- **Descripción:** Se cerraron las brechas de validación y persistencia detectadas en la revisión del modelo DELIVERY.
+- **Cambios clave:** DELIVERY queda bloqueado para tipos no MOTO en creación/actualización de vehículos y alta de moto; el límite de adelanto es obligatorio y no negativo; COMPRA_Y_ENTREGA exige costo estimado positivo en request y entidad; se agregó prueba JPA real de relación 1-1 y FK única; se corrigió el contador del seeder.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/vehicle/service/VehiculoService.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/service/RegistroMotoConductorService.java`, `backend/src/main/java/com/taxiuap/backend/identity/entity/Conductor.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/DatosEntregaRequest.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedCatalogos.java`, pruebas DELIVERY y reporte Task 1
+- **Verificación:** `TAXIUAP_DB_PASSWORD='<12346578>' ./gradlew test --tests '*Entrega*'`; `./gradlew compileJava`; `TAXIUAP_DB_PASSWORD='<12346578>' ./gradlew test`.
+
+### Nuevo · Modelo backend y catálogo DELIVERY
+
+- **Módulo / área:** backend (`trip`, `vehicle`, `identity`, `seed`)
+- **Descripción:** Se agregó el modelo persistente inicial para pedidos DELIVERY y la categoría exclusiva para motos.
+- **Cambios clave:** Se crearon `DatosEntrega`, `TipoEnvio`, `EstadoEntrega`, repositorio y DTOs; se relacionaron los datos 1-1 con `SolicitudViaje`; se agregaron validaciones de costos, códigos, evidencia y política de encomiendas; se agregó el límite de adelanto al conductor; el catálogo y seed incluyen `DELIVERY` y asignan una moto de prueba a esa categoría.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/`, `backend/src/main/java/com/taxiuap/backend/vehicle/`, `backend/src/main/java/com/taxiuap/backend/identity/`, `backend/src/main/java/com/taxiuap/backend/seed/`, `backend/src/test/java/com/taxiuap/backend/trip/`, `backend/src/test/java/com/taxiuap/backend/vehicle/`
+- **Verificación:** `./gradlew test --tests '*Entrega*'` pasa; `./gradlew compileJava` pasa; `./gradlew test` ejecuta 67 pruebas y falla solo `TaxiuapApplicationTests.contextLoads()` por credenciales locales de PostgreSQL.
+
+### 📚 Documentación · Spec DELIVERY rediseñada y consolidada
+
+- **Módulo / área:** docs (`docs/superpowers/specs/`)
+- **Descripción:** Se consolidaron las respuestas de la sesión en un diseño completo
+  para DELIVERY, eliminando ambigüedades de precio, recorrido, compra, códigos,
+  límites del repartidor, estados, cancelaciones y resolución de incidentes.
+- **Cambios clave:** ENCOMIENDA fija precio A -> B al crear y usa códigos separados
+  de recogida y entrega; COMPRA_Y_ENTREGA muestra estimado desde el GPS del repartidor
+  y fija comercio -> B al confirmar la compra; el repartidor configura su límite de
+  adelanto; no se aceptan diferencias de precio sin confirmación; se reutilizan estados
+  de viaje con `estado_entrega`; cancelaciones tempranas no compensan ni repúblican
+  después de tener el pedido; fallos exigen foto, motivo y reporte; el admin registra la
+  resolución fuera de la app, sin pasarela de pagos; comisión inicial DELIVERY de 0%.
+- **Archivos afectados:** docs/superpowers/specs/2026-10-02-delivery-design.md,
+  docs/CHANGELOG.md
+- **Verificación:** lectura completa del spec; `git diff --check --
+  docs/superpowers/specs/2026-10-02-delivery-design.md` sin errores.
+
+### 📚 Documentación · Spec del módulo DELIVERY: cancelaciones decididas
+
+- **Módulo / área:** docs (`docs/superpowers/specs/`)
+- **Descripción:** Se revisó junto con el usuario el spec del módulo DELIVERY (que
+  estaba con secciones corruptas y cancelaciones PENDIENTE-DECISION). Se discutieron y
+  decidieron las reglas de cancelación y se reescribió/limpió el documento completo.
+- **Cambios clave:** decisiones de la sección 6: (1) cliente bloqueado de cancelar
+  cuando el repartidor ya tiene el pedido en mano ("Ya tengo el pedido" ->
+  `estado_entrega = EN_MANO`); (2) repartidor con el pedido en mano solo puede usar
+  "No se pudo entregar" con foto + motivo obligatorios, viaje CANCELADO, sin
+  república de la solicitud; (3) código de entrega de 6 dígitos solo para ENCOMIENDA;
+  (4) todo "No se pudo entregar" crea un reporte automático PENDIENTE para el admin
+  (foto, motivo, costo_producto_real, dirección B, teléfono) que resuelve devolución/
+  pago/pérdida fuera de la app, porque en fase 1 no hay pasarela de pagos y el dinero
+  es directo. Además se agregó al spec el enum `estado_entrega`
+  (PENDIENTE_COMPRA/EN_MANO/ENTREGADO/NO_ENTREGADO) como campo de datos_entrega y
+  `foto_falla_url`/`motivo_falla`. El spec ya cancela la ambigüedad previa y sirve de
+  base para el plan de implementación.
+- **Archivos afectados:** docs/superpowers/specs/2026-10-02-delivery-design.md,
+  docs/CHANGELOG.md
+- **Verificación:** lectura del documento final en pantalla (texto completo, sin
+  secciones corruptas; tabla de cancelaciones y fuera de alcance coherentes con lo
+  decidido).
+
+### 📚 Documentación · Spec del módulo Fletes
+
+- **Módulo / área:** docs (`docs/superpowers/specs/`)
+- **Descripción:** Se diseñó con el usuario el módulo de fletes (decisión: Opción A en
+  todo: categoría FLETE sobre vehículos CAMIONETA/CAMION, flujo solicitud-oferta-viaje
+  reutilizado, datos_flete 1-1 con solicitud_viaje, chat efímero con banner y fotos por
+  REST). Se dejó la spec escrita para poder retomar el diseño y el plan de
+  implementación en una sesión futura sin repetir conversaciones.
+- **Archivos afectados:** `docs/superpowers/specs/2026-10-02-fletes-design.md`
+- **Verificación:** revisión de la spec (sin "TBD", coherente con el diseño discutido);
+  el usuario falta por dar el visto bueno explícito al archivo.
+
+### 🔧 Config · Puesta en marcha local del backend
+
+- **Módulo / área:** backend (configuración) y raíz del monorepo (`.env`)
+- **Descripción:** El proyecto no arrancaba: faltaba `application-xexel.properties` (solo
+  existía el `.example`, por lo que no había datasource) y el `.env` tenía pegadas
+  propiedades de Spring (`spring.mail.*`) que ahí no tienen efecto, porque el `.env` solo
+  define variables de entorno (las carga `bootRun` en `backend/build.gradle`).
+- **Cambios clave:**
+  - Se corrigió `.env`: solo variables (`TAXIUAP_DB_PASSWORD`,
+    `MAIL_HOST/MAIL_PORT/MAIL_USUARIO/MAIL_PASSWORD/MAIL_REMITENTE`, Google,
+    Firebase, Gemini); las líneas `spring.mail.*` se quitaron.
+  - Se creó `application-xexel.properties` (gitignored; no versionar): datasource
+    5436/taxiuap, JWT por defecto del `application.properties`, CORS 5173, admin inicial,
+    SMTP Google con los valores del `.env`, seed habilitado.
+  - La contraseña real de la BD es la del contenedor `taxiuap-db` ya en ejecución
+    (proyecto UniTaxi-V0.2, cuyo directorio fue borrado pero el contenedor sigue vivo).
+- **Archivos afectados:** `.env`, `backend/src/main/resources/application-xexel.properties`,
+  `docs/CHANGELOG.md`.
+- **Verificación:** `./gradlew bootRun` arrancó en 8080 ("Started TaxiuapApplication");
+  `GET /api/publico/instituciones` devolvió HTTP 200 con las 3 instituciones; la BD
+  conserva los datos (16 personas, 29 viajes).
 
 ## 2026-09-30
 
@@ -445,3 +807,29 @@
   - `app-movil/test/lugares_frecuentes_test.dart` (nuevo, 14 pruebas)
 - **Verificación:** `flutter analyze` sin incidencias; `flutter test` 14/14;
   `dart format --line-length 120` sobre los archivos del cambio.
+
+## [Ronda corrección Task 4] — 2026-10-04
+
+### Cambios en backend
+- `trip/entity/DatosEntrega`: añadido `@Size(max=500)` a `motivoFalla` (coherente con columna `length=500`).
+- `trip/repository/DatosEntregaRepository`: nuevo método `confirmarPagoSiEnMano` con UPDATE condicional nativo y `clearAutomatically/flushAutomatically` para evitar escritura completa que borre evidencia en transiciones concurrentes.
+- `trip/service/EntregaService`: `confirmarPago` utiliza UPDATE condicional; si no actualiza filas, distingue entre estado cambiado y pago ya confirmado.
+- Tests: `DatosEntregaTest` añade `rechazaMotivoDeFallaMuyLargo()`; `DatosEntregaDtoTest` amplía aserciones; `EntregaServiceRecogidaEntregaTest` ajustado para nuevo flujo.
+
+### Decisión sobre pago parcial
+- Según `docs/superpowers/specs/2026-10-02-delivery-design.md`, el flujo exige pago **total** (producto+servicio) y validación exacta. No se implementa registro de pago parcial/no pago; queda como pregunta abierta para revisión futura.
+
+### Verificación
+- Suite completa con perfil `appu`: `tests=160 failures=0 errors=0 skipped=0` (1 test añadido). BUILD SUCCESSFUL.
+
+## [Sesion 2026-10-05] — sin cambios de codigo
+
+- Se cerro la pregunta abierta del pago parcial: **se mantiene el spec**, el repartidor
+  registra el total exacto y no hay campo de monto parcial. Si el cliente no paga todo, el
+  repartidor usa "No se pudo entregar" con foto y motivo.
+- Se documento en `docs/superpowers/2026-10-05-entrega-handoff.md` el estado de la fase 1 de
+  DELIVERY: Tasks 1-4 implementadas, cierre de Task 4 pendiente (los dos hallazgos
+  importantes siguen abiertos, no se alcanzo a despachar el implementador) y Task 5 en
+  adelante.
+- Se confirmo que el repartidor es el mismo `Conductor` con moto de categoria DELIVERY y su
+  campo `limite_adelanto_compra`, no un actor nuevo.

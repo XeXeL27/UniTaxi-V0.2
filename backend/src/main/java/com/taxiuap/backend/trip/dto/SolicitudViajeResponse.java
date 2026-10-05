@@ -19,12 +19,14 @@ public record SolicitudViajeResponse(
         String destinoDireccion,
         /** Lo que paga el pasajero y cobra el conductor (precio normal menos el descuento de estudiante). */
         BigDecimal precioSugerido,
+        boolean precioEstimado,
         SituacionSolicitud situacionSolicitud,
         LocalDateTime fechaSolicitud,
         int cantidadOfertas,
         MetodoPago metodoPago,
         /** Nombre del favorito elegido como destino: solo en las respuestas al pasajero (si no, null). */
         String destinoNombre,
+        DatosEntregaResponse datosEntrega,
         /** Precio sin descuento, descuento de estudiante (0 si no tiene) y km por calles. */
         BigDecimal precioNormal,
         BigDecimal descuentoEstudiante,
@@ -34,7 +36,9 @@ public record SolicitudViajeResponse(
     public SolicitudViajeResponse sinNombreDestino() {
         return new SolicitudViajeResponse(idSolicitud, idPasajero, nombrePasajero, idCategoriaServicio,
                 nombreCategoriaServicio, origenWkt, destinoWkt, origenDireccion, destinoDireccion, precioSugerido,
-                situacionSolicitud, fechaSolicitud, cantidadOfertas, metodoPago, null, precioNormal,
-                descuentoEstudiante, distanciaKm);
+                precioEstimado,
+                situacionSolicitud, fechaSolicitud, cantidadOfertas, metodoPago, null, datosEntrega == null
+                        ? null : datosEntrega.paraConductor(),
+                precioNormal, descuentoEstudiante, distanciaKm);
     }
 }

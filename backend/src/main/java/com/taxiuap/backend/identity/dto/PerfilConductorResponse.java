@@ -35,5 +35,6 @@ public record PerfilConductorResponse(
         LocalDate licenciaVencimiento,
         /** Tiene las fotos del carnet y de la licencia (Mis documentos las muestra). */
         boolean tieneFotosCarnet,
-        boolean tieneFotosLicencia) {
+         boolean tieneFotosLicencia,
+         BigDecimal limiteAdelantoCompra) {
 }

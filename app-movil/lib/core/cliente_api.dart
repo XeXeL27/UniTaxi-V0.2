@@ -79,6 +79,25 @@ class ClienteApi {
     return _desempaquetar(respuesta);
   }
 
+  /// Multipart con una parte JSON cuyo nombre lo define el contrato del endpoint.
+  Future<dynamic> enviarFormularioConParteJson(
+    String ruta,
+    String parteJson,
+    Map<String, dynamic> datos,
+    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})> archivos, {
+    String metodo = 'POST',
+  }) async {
+    final respuesta = await _conReintento(() {
+      final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
+      peticion.files.add(http.MultipartFile.fromString(parteJson, jsonEncode(datos), contentType: MediaType('application', 'json')));
+      for (final a in archivos) {
+        peticion.files.add(http.MultipartFile.fromBytes(a.campo, a.bytes, filename: a.nombre, contentType: a.tipo));
+      }
+      return peticion;
+    });
+    return _desempaquetar(respuesta);
+  }
+
   /// Envia la peticion y desempaqueta ApiResponse. La peticion se arma de nuevo en cada intento
   /// porque una peticion http ya enviada no se puede reenviar.
   Future<dynamic> _enviar(String metodo, String ruta, [Map<String, dynamic>? cuerpo]) async {

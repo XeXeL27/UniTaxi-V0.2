@@ -14,7 +14,7 @@ class Ruta {
   final double distanciaMetros;
   final double duracionSegundos;
 
-  /// true si el servicio de rutas no respondio y se dibuja la linea recta entre A y B.
+  /// Se conserva para distinguir rutas aproximadas antiguas; las rutas OSRM nuevas nunca son aproximadas.
   final bool aproximada;
 
   const Ruta({
@@ -39,16 +39,12 @@ class Ruta {
 
 /// Servicios externos del mapa: rutas (OSRM), direccion de un punto (Nominatim) y GPS.
 class ServiciosMapa {
-  static const _servidorRutas = 'https://router.project-osrm.org';
   static const _servidorDirecciones = 'https://nominatim.openstreetmap.org';
 
-  /// Velocidad supuesta en ciudad para estimar el tiempo de la ruta aproximada (km/h).
-  static const _velocidadCiudadKmH = 25.0;
-
-  /// Ruta por calles entre [a] y [b]. Si el servicio no responde devuelve la linea recta.
+  /// Ruta por calles entre [a] y [b]. Si OSRM falla, la operación falla sin inventar una ruta.
   static Future<Ruta> calcularRuta(LatLng a, LatLng b) async {
     final url = Uri.parse(
-      '$_servidorRutas/route/v1/driving/${a.longitude},${a.latitude};${b.longitude},${b.latitude}'
+      '${Config.osrmUrl}/route/v1/driving/${a.longitude},${a.latitude};${b.longitude},${b.latitude}'
       '?overview=full&geometries=geojson',
     );
     try {
@@ -58,27 +54,34 @@ class ServiciosMapa {
         final rutas = json['routes'] as List<dynamic>?;
         if (json['code'] == 'Ok' && rutas != null && rutas.isNotEmpty) {
           final ruta = rutas.first as Map<String, dynamic>;
-          final coordenadas = (ruta['geometry'] as Map<String, dynamic>)['coordinates'] as List<dynamic>;
+          final distancia = (ruta['distance'] as num?)?.toDouble();
+          final duracion = (ruta['duration'] as num?)?.toDouble();
+          if (distancia == null || duracion == null ||
+              !distancia.isFinite || !duracion.isFinite || distancia < 0 || duracion < 0) {
+            throw RutaNoDisponibleException('OSRM devolvio distancia o duracion invalida');
+          }
+          final geometria = ruta['geometry'] as Map<String, dynamic>?;
+          final coordenadas = geometria?['coordinates'] as List<dynamic>?;
+          if (coordenadas == null) {
+            throw RutaNoDisponibleException('OSRM no devolvio la geometria de la ruta');
+          }
           final puntos = [for (final c in coordenadas) LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())];
           if (puntos.length >= 2) {
             return Ruta(
               puntos: puntos,
-              distanciaMetros: (ruta['distance'] as num).toDouble(),
-              duracionSegundos: (ruta['duration'] as num).toDouble(),
+              distanciaMetros: distancia,
+              duracionSegundos: duracion,
             );
           }
+          throw RutaNoDisponibleException('OSRM devolvio una geometria sin suficientes puntos');
         }
+        throw RutaNoDisponibleException('OSRM no encontro una ruta valida');
       }
-    } catch (_) {
-      // Sin conexion o respuesta invalida: se usa la linea recta.
+      throw RutaNoDisponibleException('OSRM respondio con estado ${respuesta.statusCode}');
+    } catch (error) {
+      if (error is RutaNoDisponibleException) rethrow;
+      throw RutaNoDisponibleException('No se pudo obtener una ruta por calles desde OSRM');
     }
-    final metros = const Distance().as(LengthUnit.Meter, a, b);
-    return Ruta(
-      puntos: [a, b],
-      distanciaMetros: metros,
-      duracionSegundos: metros / (_velocidadCiudadKmH * 1000 / 3600),
-      aproximada: true,
-    );
   }
 
   /// Direccion legible de un punto (calle y barrio). Null si el servicio no responde.
@@ -189,6 +192,16 @@ class ServiciosMapa {
 
   /// El navegador no deja cambiar el User-Agent; en el telefono se identifica la app.
   static Map<String, String> _cabeceras() => kIsWeb ? const {} : const {'User-Agent': Config.agenteMapas};
+}
+
+/// Indica que no existe una ruta por calles utilizable para continuar la operación.
+class RutaNoDisponibleException implements Exception {
+  final String mensaje;
+
+  const RutaNoDisponibleException(this.mensaje);
+
+  @override
+  String toString() => mensaje;
 }
 
 /// Resultado de la busqueda de lugares.

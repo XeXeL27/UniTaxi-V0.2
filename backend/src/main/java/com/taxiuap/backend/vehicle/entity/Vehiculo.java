@@ -62,4 +62,12 @@ public class Vehiculo extends EntidadAuditable {
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_vehiculo", length = 20)
     private EstadoRegistro estadoVehiculo = EstadoRegistro.A;
+
+    /** Un vehículo DELIVERY debe ser físicamente una moto y tener la categoría DELIVERY. */
+    public boolean esMotoDelivery() {
+        return tipoVehiculo != null
+                && "MOTO".equalsIgnoreCase(tipoVehiculo.getCodigo())
+                && categoriaServicio != null
+                && categoriaServicio.esDeliveryCompatible();
+    }
 }

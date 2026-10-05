@@ -299,7 +299,7 @@ class ControladorMapa extends ChangeNotifier {
     final hasta = _puntoReferenciaConductor;
     if (desde == null || hasta == null) return;
     final consulta = ++_consultaRutaConductor;
-    final resultado = await ServiciosMapa.calcularRuta(desde, hasta);
+    final resultado = await _rutaOnull(desde, hasta);
     if (_cerrado || consulta != _consultaRutaConductor || !mostrarRutaConductor) return;
     rutaConductor = resultado;
     _avisar();
@@ -316,6 +316,15 @@ class ControladorMapa extends ChangeNotifier {
     }
   }
 
+  /// Ruta por calles, o null si OSRM no la dio (ServiciosMapa ya no inventa la linea recta).
+  static Future<Ruta?> _rutaOnull(LatLng desde, LatLng hasta) async {
+    try {
+      return await ServiciosMapa.calcularRuta(desde, hasta);
+    } on RutaNoDisponibleException {
+      return null;
+    }
+  }
+
   Future<void> trazar({bool encuadrar = true}) async {
     final origen = a;
     final destino = b;
@@ -324,7 +333,8 @@ class ControladorMapa extends ChangeNotifier {
     calculandoRuta = true;
     if (encuadrar) ruta = null;
     _avisar();
-    final resultado = await ServiciosMapa.calcularRuta(origen.posicion, destino.posicion);
+    // Sin ruta (OSRM no respondio) no se dibuja, pero se puede pedir: el servidor calcula el precio igual.
+    final resultado = await _rutaOnull(origen.posicion, destino.posicion);
     if (_cerrado || consulta != _consultaRuta) return;
     ruta = resultado;
     calculandoRuta = false;
@@ -338,7 +348,7 @@ class ControladorMapa extends ChangeNotifier {
     if (desde == null || hasta == null) return;
     final consulta = ++_consultaAcercamiento;
     _origenAcercamiento = desde;
-    final resultado = await ServiciosMapa.calcularRuta(desde, hasta);
+    final resultado = await _rutaOnull(desde, hasta);
     if (_cerrado || consulta != _consultaAcercamiento || !mostrarAcercamiento) return;
     acercamiento = resultado;
     _avisar();

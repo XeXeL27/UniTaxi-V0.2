@@ -19,6 +19,19 @@ class ExpedienteApi {
   Future<List<VehiculoExpediente>> vehiculos(int idConductor) =>
       _api.lista('/api/admin/conductores/$idConductor/vehiculos', VehiculoExpediente.desdeJson);
 
+  /// Corrige la categoria de servicio de un vehiculo (por ejemplo de reparto a taxi). [idVehiculo]
+  /// viaja siempre: el backend exige indicarlo cuando el conductor tiene mas de un vehiculo activo,
+  /// y desde el expediente el vehiculo es el que el administrador eligio.
+  Future<void> cambiarCategoriaVehiculo(int idConductor, int idCategoriaServicio, {required int idVehiculo}) =>
+      _api.put('/api/admin/conductores/$idConductor/vehiculo/categoria', {
+        'idCategoriaServicio': idCategoriaServicio,
+        'idVehiculo': idVehiculo,
+      });
+
+  /// Catalogo de categorias de servicio, para el selector del expediente del conductor.
+  Future<List<CategoriaServicioExpediente>> categoriasServicio() =>
+      _api.lista('/api/admin/categorias-servicio', CategoriaServicioExpediente.desdeJson);
+
   Future<List<ViajeExpediente>> viajesConductor(int id) =>
       _api.lista('/api/admin/conductores/$id/viajes', ViajeExpediente.desdeJson);
 

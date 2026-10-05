@@ -45,8 +45,7 @@ public class VehiculoService {
         validarPlacaDisponible(request.placa(), null);
 
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
-        CategoriaServicio categoriaServicio = buscarCategoriaServicio(request.idCategoriaServicio());
-        validarCategoriaDelTipo(tipoVehiculo, categoriaServicio);
+        CategoriaServicio categoriaServicio = resolverCategoriaServicio(tipoVehiculo, request.idCategoriaServicio());
 
         Vehiculo vehiculo = new Vehiculo();
         vehiculo.setConductor(conductor);
@@ -69,8 +68,7 @@ public class VehiculoService {
         validarPlacaDisponible(request.placa(), vehiculo.getId());
 
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
-        CategoriaServicio categoriaServicio = buscarCategoriaServicio(request.idCategoriaServicio());
-        validarCategoriaDelTipo(tipoVehiculo, categoriaServicio);
+        CategoriaServicio categoriaServicio = resolverCategoriaServicio(tipoVehiculo, request.idCategoriaServicio());
 
         vehiculo.setTipoVehiculo(tipoVehiculo);
         vehiculo.setCategoriaServicio(categoriaServicio);
@@ -91,6 +89,47 @@ public class VehiculoService {
         vehiculoRepository.save(vehiculo);
     }
 
+    /**
+     * Corrige solo la categoria de servicio de un vehiculo del conductor, sin tocar el resto de
+     * sus datos. Es el camino del administrador, que no viene con su sesion de conductor: recibe el
+     * id de usuario para no abrir una segunda busqueda del conductor.
+     *
+     * Sin [idVehiculo] se cambia el unico vehiculo activo del conductor. Si tiene mas de uno, o
+     * ninguno, hay que indicar cual con 422: un conductor puede tener varias motos y cambiar la
+     * categoria de la que no es, por sorpresa, no corresponde.
+     *
+     * Un vehiculo eliminado logicamente no existe para este camino (404), tampoco cuando llega su
+     * id explicito: el listado del administrador si los muestra y el cambio no debe dar un exito
+     * falso sobre una fila que ya no manda. {@code buscarDelConductor} no cambia, porque la
+     * comparten {@link #actualizar} y {@link #eliminar}.
+     */
+    @Transactional
+    public VehiculoResponse cambiarCategoriaServicio(Long idUsuario, Integer idVehiculo,
+            Integer idCategoriaServicio) {
+        Conductor conductor = buscarConductor(idUsuario);
+        Vehiculo vehiculo = idVehiculo == null
+                ? buscarVehiculoActivo(conductor.getId())
+                : buscarActivoDelConductor(idVehiculo.longValue(), conductor.getId());
+
+        vehiculo.setCategoriaServicio(resolverCategoriaServicio(vehiculo.getTipoVehiculo(), idCategoriaServicio));
+        return aRespuesta(vehiculoRepository.save(vehiculo));
+    }
+
+    /**
+     * Resuelve la categoria de servicio elegida por id y comprueba que sirve para el tipo de
+     * vehiculo. Es la regla unica de compatibilidad: la usan el alta y la edicion de un vehiculo y
+     * tambien el registro de la moto del conductor, para que esos caminos no diverjan. Un id
+     * inexistente o de una categoria eliminada es 404; una categoria de otro tipo de vehiculo (por
+     * ejemplo una categoria de auto en una MOTO) es 422.
+     */
+    public CategoriaServicio resolverCategoriaServicio(TipoVehiculo tipoVehiculo, Integer idCategoriaServicio) {
+        CategoriaServicio categoriaServicio = categoriaServicioRepository
+                .findByIdAndEstadoCategoriaServicio(idCategoriaServicio, EstadoRegistro.A)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("CategoriaServicio", idCategoriaServicio));
+        validarCategoriaDelTipo(tipoVehiculo, categoriaServicio);
+        return categoriaServicio;
+    }
+
     private Conductor buscarConductor(Long idUsuario) {
         return conductorRepository.findByUsuarioId(idUsuario)
                 .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de conductor"));
@@ -103,6 +142,38 @@ public class VehiculoService {
             throw RecursoNoEncontradoException.de("Vehiculo", id);
         }
         return vehiculo;
+    }
+
+    /**
+     * Un vehiculo del conductor que siga activo. Un vehiculo eliminado logicamente responde 404
+     * tambien cuando llega su id explicito, para que el cambio no caiga sobre una fila que ya no
+     * manda. {@link #buscarDelConductor} no cambia porque la comparten {@link #actualizar} y
+     * {@link #eliminar}.
+     */
+    private Vehiculo buscarActivoDelConductor(Long id, Long idConductor) {
+        Vehiculo vehiculo = buscarDelConductor(id, idConductor);
+        if (vehiculo.getEstadoVehiculo() != EstadoRegistro.A) {
+            throw RecursoNoEncontradoException.de("Vehiculo", id);
+        }
+        return vehiculo;
+    }
+
+    /**
+     * El unico vehiculo activo del conductor. {@code findByConductorId} no filtra por estado, asi
+     * que el filtro es explicito: los vehiculos eliminados no cuentan como candidatos.
+     */
+    private Vehiculo buscarVehiculoActivo(Long idConductor) {
+        List<Vehiculo> activos = vehiculoRepository.findByConductorId(idConductor).stream()
+                .filter(vehiculo -> vehiculo.getEstadoVehiculo() == EstadoRegistro.A)
+                .toList();
+        if (activos.isEmpty()) {
+            throw new NegocioException("El conductor no tiene ningun vehiculo activo");
+        }
+        if (activos.size() > 1) {
+            throw new NegocioException("El conductor tiene " + activos.size()
+                    + " vehiculos activos: indique en idVehiculo el que quiere cambiar");
+        }
+        return activos.get(0);
     }
 
     private void validarPlacaDisponible(String placa, Long idVehiculoActual) {
@@ -118,15 +189,14 @@ public class VehiculoService {
                 .orElseThrow(() -> RecursoNoEncontradoException.de("TipoVehiculo", id));
     }
 
-    private CategoriaServicio buscarCategoriaServicio(Integer id) {
-        return categoriaServicioRepository.findById(id)
-                .orElseThrow(() -> RecursoNoEncontradoException.de("CategoriaServicio", id));
-    }
-
     private void validarCategoriaDelTipo(TipoVehiculo tipoVehiculo, CategoriaServicio categoriaServicio) {
         if (categoriaServicio.getTipoVehiculo() == null
                 || !categoriaServicio.getTipoVehiculo().getId().equals(tipoVehiculo.getId())) {
             throw new NegocioException("La categoria de servicio no corresponde al tipo de vehiculo");
+        }
+        if ("DELIVERY".equalsIgnoreCase(categoriaServicio.getNombre())
+                && !"MOTO".equalsIgnoreCase(tipoVehiculo.getCodigo())) {
+            throw new NegocioException("La categoria DELIVERY solo puede asociarse a una MOTO");
         }
     }
 

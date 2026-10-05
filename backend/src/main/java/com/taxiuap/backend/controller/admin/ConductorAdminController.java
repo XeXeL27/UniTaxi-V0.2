@@ -45,6 +45,7 @@ import com.taxiuap.backend.rating.service.CalificacionService;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.service.ViajeService;
+import com.taxiuap.backend.vehicle.dto.CambiarCategoriaVehiculoRequest;
 import com.taxiuap.backend.vehicle.dto.VehiculoResponse;
 import com.taxiuap.backend.vehicle.service.VehiculoService;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -97,6 +98,20 @@ public class ConductorAdminController {
     public ResponseEntity<ApiResponse<List<VehiculoResponse>>> vehiculos(@PathVariable Long id) {
         Long idUsuario = perfilConductorService.obtenerPorConductor(id).idUsuario();
         return ResponseEntity.ok(ApiResponse.exito(vehiculoService.listar(idUsuario)));
+    }
+
+    /**
+     * Corrige la categoria de servicio del vehiculo de un conductor (por ejemplo cuando eligio
+     * reparto y en realidad lleva pasajeros). Sin idVehiculo en el cuerpo se cambia su unico
+     * vehiculo activo; con mas de uno, el backend exige que se indique cual.
+     */
+    @PutMapping("/{id}/vehiculo/categoria")
+    public ResponseEntity<ApiResponse<VehiculoResponse>> cambiarCategoriaVehiculo(
+            @PathVariable Long id, @Valid @RequestBody CambiarCategoriaVehiculoRequest request) {
+        Long idUsuario = perfilConductorService.obtenerPorConductor(id).idUsuario();
+        VehiculoResponse actualizado = vehiculoService.cambiarCategoriaServicio(idUsuario,
+                request.idVehiculo(), request.idCategoriaServicio());
+        return ResponseEntity.ok(ApiResponse.exito("Categoria del vehiculo actualizada", actualizado));
     }
 
     @GetMapping("/{id}/viajes")

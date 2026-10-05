@@ -35,7 +35,9 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Registro de la moto y los documentos PDF de un conductor (alta desde el panel admin o registro
- * desde la app). En esta primera etapa todos los conductores operan en motocicleta.
+ * desde la app). En esta primera etapa todos los conductores operan en motocicleta: la categoria de
+ * servicio es la MOTO estandar o, si el registro la elige, la que venga en
+ * [DatosConductorRequest.idCategoriaServicio] (DELIVERY para el reparto).
  */
 @Service
 @RequiredArgsConstructor
@@ -60,11 +62,15 @@ public class RegistroMotoConductorService {
 
     private static final String CODIGO_MOTO = "MOTO";
 
+    /** Categoria que el registro nunca elige solo: el reparto se pide de forma expresa. */
+    private static final String NOMBRE_CATEGORIA_DELIVERY = "DELIVERY";
+
     private final TipoVehiculoRepository tipoVehiculoRepository;
     private final CategoriaServicioRepository categoriaServicioRepository;
     private final VehiculoRepository vehiculoRepository;
     private final DocumentoConductorRepository documentoConductorRepository;
     private final AlmacenamientoArchivos almacenamientoArchivos;
+    private final VehiculoService vehiculoService;
 
     /** Validacion del alta desde el panel admin: los documentos obligatorios no se pueden omitir. */
     @Transactional(readOnly = true)
@@ -113,10 +119,9 @@ public class RegistroMotoConductorService {
     public void registrar(Conductor conductor, DatosConductorRequest datos, Map<TipoDocumento, MultipartFile> documentos) {
         TipoVehiculo moto = tipoVehiculoRepository.findByCodigo(CODIGO_MOTO)
                 .orElseThrow(() -> new NegocioException("El tipo de vehiculo MOTO no esta configurado"));
-        CategoriaServicio categoria = categoriaServicioRepository
-                .findByTipoVehiculoIdAndEstadoCategoriaServicio(moto.getId(), EstadoRegistro.A).stream()
-                .findFirst()
-                .orElseThrow(() -> new NegocioException("No hay categoria de servicio activa para MOTO"));
+        CategoriaServicio categoria = datos.idCategoriaServicio() != null
+                ? vehiculoService.resolverCategoriaServicio(moto, datos.idCategoriaServicio())
+                : categoriaEstandarDeMoto(moto);
 
         Vehiculo vehiculo = new Vehiculo();
         vehiculo.setConductor(conductor);
@@ -142,6 +147,18 @@ public class RegistroMotoConductorService {
             documento.setSituacionRevision(SituacionRevision.PENDIENTE);
             documentoConductorRepository.save(documento);
         }
+    }
+
+    /**
+     * Categoria MOTO estandar del registro sin categoria elegida: la activa de menor id que no sea
+     * DELIVERY. El orden y el filtro los trae el repositorio porque en MOTO hay varias categorias
+     * activas (DELIVERY entre ellas) y la base podria devolver cualquiera sin ellos.
+     */
+    private CategoriaServicio categoriaEstandarDeMoto(TipoVehiculo moto) {
+        return categoriaServicioRepository
+                .findFirstByTipoVehiculoIdAndEstadoCategoriaServicioAndNombreNotIgnoreCaseOrderByIdAsc(
+                        moto.getId(), EstadoRegistro.A, NOMBRE_CATEGORIA_DELIVERY)
+                .orElseThrow(() -> new NegocioException("No hay categoria de servicio estandar activa para MOTO"));
     }
 
     private static String normalizarPlaca(String placa) {

@@ -42,7 +42,7 @@ class SeedOrquestador {
                         + "3 tipos de vehiculo, 3 categorias de servicio, {} etiquetas de calificacion, "
                         + "{} zonas, 1 administrador de pruebas, {} pasajeros ({} estudiantes con matricula), "
                         + "{} conductores ({} aprobados con vehiculo y documentos, 1 pendiente, 1 rechazado), "
-                        + "6 tarifas, 1 regla de descuento estudiantil, {} cupones, {} viajes completados, "
+                        + "7 tarifas, 1 regla de descuento estudiantil, {} cupones, {} viajes completados, "
                         + "{} viajes cancelados, 1 solicitud pendiente, 1 solicitud con ofertas, 1 viaje en curso, "
                         + "calificaciones sobre los primeros 4 viajes completados, mensajes en 2 viajes, "
                         + "1 alerta SOS atendida, 1 reporte resuelto",

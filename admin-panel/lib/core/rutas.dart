@@ -16,6 +16,7 @@ import '../modulos/personas/pantalla_conductores.dart';
 import '../modulos/personas/pantalla_pasajeros.dart';
 import '../modulos/personas/pantalla_personas.dart';
 import '../modulos/personas/pantalla_usuarios.dart';
+import '../modulos/reportes/pantalla_reportes_entrega.dart';
 import 'menu.dart';
 import 'sesion.dart';
 
@@ -60,6 +61,7 @@ GoRouter crearRutas(Sesion sesion) {
             pageBuilder: (_, _) => pagina(const PantallaDescuentoEstudiante()),
           ),
           GoRoute(path: Menu.carpetaArchivos.ruta, pageBuilder: (_, _) => pagina(const PantallaCarpeta())),
+          GoRoute(path: Menu.reportesEntrega.ruta, pageBuilder: (_, _) => pagina(const PantallaReportesEntrega())),
         ],
       ),
     ],

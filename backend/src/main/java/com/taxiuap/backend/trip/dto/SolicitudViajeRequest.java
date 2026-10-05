@@ -7,6 +7,7 @@ import com.taxiuap.backend.pricing.enums.MetodoPago;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.PositiveOrZero;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.Valid;
 
 /**
  * Datos para que un pasajero solicite un viaje. Origen y destino viajan como WKT POINT. Sin
@@ -21,5 +22,6 @@ public record SolicitudViajeRequest(
         /** Nombre del favorito elegido como destino; solo lo ve el pasajero (el conductor, la direccion). */
         @Size(max = 100) String destinoNombre,
         @PositiveOrZero BigDecimal precioSugerido,
-        MetodoPago metodoPago) {
+        MetodoPago metodoPago,
+        @Valid DatosEntregaRequest datosEntrega) {
 }

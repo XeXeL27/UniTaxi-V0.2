@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 /// fijar al compilar con --dart-define=API_URL=http://servidor:8080
 class Config {
   static const String _apiDefinida = String.fromEnvironment('API_URL');
+  static const String _osrmDefinido = String.fromEnvironment('OSRM_URL');
 
   /// Sin API_URL:
   /// - en el navegador, compilada en release y servida por el backend (/app): el mismo servidor
@@ -24,6 +25,11 @@ class Config {
     if (api.startsWith('http://')) return api.replaceFirst('http://', 'ws://');
     return api;
   }
+
+  /// Servidor OSRM para rutas por calles. Se puede cambiar con --dart-define=OSRM_URL=...
+  static String get osrmUrl => _osrmDefinido.isNotEmpty
+      ? _osrmDefinido
+      : 'https://router.project-osrm.org';
 
   static const String rolPasajero = 'PASAJERO';
   static const String rolConductor = 'CONDUCTOR';

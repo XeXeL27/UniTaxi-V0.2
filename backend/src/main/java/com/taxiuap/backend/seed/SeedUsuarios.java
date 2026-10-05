@@ -142,6 +142,8 @@ class SeedUsuarios {
                 "70100002", "LIC-00002", SituacionAprobacion.APROBADO);
         Conductor conductorC = crearConductor(rolConductor, "Kevin", "Justiniano", "conductor3@taxiuap.bo",
                 "70100003", "LIC-00003", SituacionAprobacion.APROBADO);
+        conductorC.setLimiteAdelantoCompra(new BigDecimal("100.00"));
+        conductorC = conductorRepository.save(conductorC);
         Conductor conductorD = crearConductor(rolConductor, "Lucia", "Herrera", "conductor4@taxiuap.bo",
                 "70100004", "LIC-00004", SituacionAprobacion.APROBADO);
         Conductor conductorPendiente = crearConductor(rolConductor, "Marco", "Antelo", "conductor5@taxiuap.bo",
@@ -157,14 +159,14 @@ class SeedUsuarios {
                 "1001ABC", "Toyota", "Yaris", "Blanco", 2018);
         Vehiculo vehiculoB = crearVehiculo(conductorB, sedan, catalogos.sedanEjecutivo(),
                 "1002ABC", "Nissan", "Sentra", "Negro", 2020);
-        Vehiculo vehiculoC = crearVehiculo(conductorC, moto, catalogos.motoCategoria(),
+        Vehiculo vehiculoC = crearVehiculo(conductorC, moto, catalogos.deliveryCategoria(),
                 "1003ABC", "Honda", "CB160", "Rojo", 2021);
         Vehiculo vehiculoD = crearVehiculo(conductorD, sedan, catalogos.sedanEstandar(),
                 "1004ABC", "Hyundai", "Accent", "Gris", 2019);
 
         List<Vehiculo> vehiculosAprobados = List.of(vehiculoA, vehiculoB, vehiculoC, vehiculoD);
         List<CategoriaServicio> categoriasAprobados = List.of(
-                catalogos.sedanEstandar(), catalogos.sedanEjecutivo(), catalogos.motoCategoria(), catalogos.sedanEstandar());
+                catalogos.sedanEstandar(), catalogos.sedanEjecutivo(), catalogos.deliveryCategoria(), catalogos.sedanEstandar());
 
         for (int i = 0; i < conductoresAprobados.size(); i++) {
             crearDocumentosAprobados(conductoresAprobados.get(i), vehiculosAprobados.get(i), adminPruebas);

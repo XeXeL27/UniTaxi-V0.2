@@ -15,6 +15,7 @@ import '../../core/api_excepcion.dart';
 import '../../core/carnet/lectura_carnet.dart';
 import '../../core/carnet/lectura_licencia.dart';
 import '../../core/carnet/lector_documentos.dart';
+import '../../core/categorias_servicio.dart';
 import '../../core/cliente_api.dart';
 import '../../core/config.dart';
 import '../../core/formato.dart';
@@ -136,6 +137,16 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   bool _errorLicenciaPorNombre = false;
 
   bool get _pideCarnet => !_tieneCarnet;
+
+  /// Categorias de servicio que puede elegir para su moto (las compatibles con MOTO del catalogo
+  /// publico) y la elegida. Empieza en la de taxi, que es la que deja el backend si no se elige
+  /// ninguna.
+  List<CategoriaServicio> _categorias = const [];
+  CategoriaServicio? _categoriaElegida;
+
+  /// Aviso cuando no hay con que elegir: el registro sigue igual de usable y el backend deja la
+  /// categoria de taxi.
+  String? _avisoCategorias;
 
   /// La licencia se leyo con OCR en el telefono y coincide con el carnet: el numero es el CI (leido
   /// de la foto del carnet o el que ya tenia registrado) y el nombre es el de la persona y el del
@@ -335,6 +346,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   void initState() {
     super.initState();
     if (_datosConocidos) _cargarGoogle();
+    _cargarCategorias();
   }
 
   @override
@@ -392,6 +404,33 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       if (mounted) _precargar(datos);
     } on ApiExcepcion catch (e) {
       if (mounted) setState(() => _errorGoogle = e.mensaje);
+    }
+  }
+
+  /// Catalogo publico de categorias de servicio, para que el conductor elija si su moto lleva
+  /// pasajeros o reparte entregas. Si no se puede leer, o no hay categorias de moto, se avisa y el
+  /// registro sigue igual: no se manda el campo y el backend deja la categoria de taxi.
+  Future<void> _cargarCategorias() async {
+    try {
+      final categorias = await categoriasServicioMoto(context.read<ClienteApi>());
+      if (!mounted) return;
+      setState(() {
+        _categorias = categorias;
+        // La de taxi es la elegida por defecto; si el catalogo no la trae se ofrece la que haya.
+        _categoriaElegida = categoriaTaxi(categorias) ?? (categorias.isEmpty ? null : categorias.first);
+        _avisoCategorias = categorias.isEmpty
+            ? 'No hay categorías de servicio para motos disponibles. Te registraremos como mototaxi.'
+            : categoriaReparto(categorias) == null
+            ? 'Por ahora no hay categoría de reparto de entregas. Te registraremos como mototaxi.'
+            : null;
+      });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _avisoCategorias =
+              'No pudimos leer las categorías del servicio. Te registraremos como mototaxi.',
+        );
+      }
     }
   }
 
@@ -527,7 +566,9 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
     });
     final v = _vencimientoLicencia!;
     final aprobado = !observado && _licenciaVerificada;
-    final conductor = {
+    // La categoria elegida en el selector viaja aqui y la comparten los tres caminos del registro
+    // (formulario, Google y desde pasajero).
+    final conductor = conductorConCategoria({
       'numeroLicencia': _texto('numeroLicencia'),
       'categoriaLicencia': 'M',
       'vencimientoLicencia':
@@ -538,7 +579,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       'color': _texto('color'),
       'anio': int.tryParse(_c['anio']!.text.trim()),
       'licenciaVerificada': aprobado,
-    };
+    }, _categoriaElegida);
     final fecha = _fechaNacimiento == null
         ? null
         : '${_fechaNacimiento!.year.toString().padLeft(4, '0')}-${_fechaNacimiento!.month.toString().padLeft(2, '0')}-'
@@ -1020,6 +1061,25 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                           },
                         ),
                       ]),
+                      if (_categorias.isNotEmpty) ...[
+                        const SizedBox(height: 14),
+                        _SelectorCategoriaMoto(
+                          elegida: _categoriaElegida,
+                          categorias: _categorias,
+                          alElegir: (categoria) => setState(() => _categoriaElegida = categoria),
+                        ),
+                      ],
+                      if (_avisoCategorias != null) ...[
+                        const SizedBox(height: 10),
+                        Text(
+                          _avisoCategorias!,
+                          style: const TextStyle(
+                            color: ColoresApp.rutaSecundariaBorde,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                       const SizedBox(height: 6),
                       const Text(
                         'El pasajero verá la marca, el modelo, el color y la placa para reconocer tu moto.',
@@ -1314,6 +1374,54 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Selector de la categoria del servicio de la moto: llevas pasajeros o repartes entregas. Mismo
+/// estilo que el selector de tipo de envio del pasajero: la elegida con fondo azul y texto blanco,
+/// la otra con borde.
+class _SelectorCategoriaMoto extends StatelessWidget {
+  final CategoriaServicio? elegida;
+  final List<CategoriaServicio> categorias;
+  final ValueChanged<CategoriaServicio> alElegir;
+
+  const _SelectorCategoriaMoto({required this.elegida, required this.categorias, required this.alElegir});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget opcion(CategoriaServicio categoria) {
+      final activa = elegida?.id == categoria.id;
+      return Expanded(
+        child: OutlinedButton(
+          onPressed: () => alElegir(categoria),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: activa ? ColoresApp.blanco : ColoresApp.azul,
+            backgroundColor: activa ? ColoresApp.azul : null,
+            side: BorderSide(color: activa ? ColoresApp.azul : ColoresApp.borde),
+          ),
+          child: Text(categoria.texto),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          '¿Para qué usas tu moto?',
+          style: TextStyle(color: ColoresApp.textoSuave, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            for (var i = 0; i < categorias.length; i++) ...[
+              if (i > 0) const SizedBox(width: 8),
+              opcion(categorias[i]),
+            ],
+          ],
+        ),
+      ],
     );
   }
 }

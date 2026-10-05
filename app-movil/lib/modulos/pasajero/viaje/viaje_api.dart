@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/categorias_servicio.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -94,7 +95,10 @@ class ViajeApi {
 
   /// [destinoNombre]: nombre del favorito elegido como destino (solo lo ve el pasajero).
   Future<Solicitud> solicitar(PuntoRuta origen, PuntoRuta destino,
-      {String metodoPago = MetodoPago.efectivo, String? destinoNombre}) async {
+      {String metodoPago = MetodoPago.efectivo,
+      String? destinoNombre,
+      int? idCategoriaServicio,
+      DatosEntregaForm? datosEntrega}) async {
     final datos = await cliente.post('/api/pasajero/solicitudes', {
       'origenWkt': wktDesdePunto(origen.posicion),
       'destinoWkt': wktDesdePunto(destino.posicion),
@@ -102,6 +106,8 @@ class ViajeApi {
       'destinoDireccion': destino.texto,
       'destinoNombre': ?destinoNombre,
       'metodoPago': metodoPago,
+      'idCategoriaServicio': ?idCategoriaServicio,
+      'datosEntrega': ?datosEntrega?.aJson(),
     });
     return Solicitud.desdeJson(datos as Map<String, dynamic>);
   }
@@ -112,6 +118,14 @@ class ViajeApi {
   Future<List<Solicitud>> misSolicitudes() => cliente.lista('/api/pasajero/solicitudes', Solicitud.desdeJson);
 
   Future<void> cancelarSolicitud(int id) => cliente.delete('/api/pasajero/solicitudes/$id');
+
+  /// Categoria publica DELIVERY. No se fija un id en la app porque el administrador puede cambiarlo.
+  Future<int?> categoriaDelivery() => categoriaRepartoId(cliente);
+
+  Future<Viaje> confirmarCompra(int idViaje) async => Viaje.desdeJson(
+        await cliente.post('/api/pasajero/viajes/$idViaje/entrega/confirmar-compra', const {})
+            as Map<String, dynamic>,
+      );
 
   /// Viaje activo del pasajero, o null si no tiene.
   Future<Viaje?> viajeEnCurso() async {

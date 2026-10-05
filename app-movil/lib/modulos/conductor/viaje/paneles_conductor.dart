@@ -9,6 +9,7 @@ import '../../../widgets/paneles.dart';
 import 'flujo_conductor.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/vista_chat.dart';
+import 'panel_delivery_conductor.dart';
 
 String _km(double? metros) {
   if (metros == null) return '-';
@@ -156,6 +157,11 @@ class _TarjetaSolicitud extends StatelessWidget {
             children: [
               Row(
                 children: [
+                  if (solicitud.datosEntrega != null)
+                    Text(
+                      solicitud.datosEntrega!.tipoEnvio.nombre,
+                      style: const TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w700, fontSize: 12),
+                    ),
                   AvatarIniciales(nombre: solicitud.nombrePasajero, radio: 16),
                   const SizedBox(width: 10),
                   Expanded(
@@ -340,6 +346,7 @@ class PanelViajeConductor extends StatelessWidget {
   Widget build(BuildContext context) {
     final viaje = flujo.viaje;
     if (viaje == null) return const SizedBox.shrink();
+    if (viaje.datosEntrega != null) return PanelDeliveryConductor(flujo: flujo);
     final (texto, color, boton, colorBoton) = estadoViajeConductor(viaje);
     final distanciaDestino = flujo.metrosDesdeMi(viaje.destino);
     return Column(

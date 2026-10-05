@@ -19,6 +19,9 @@ import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
+import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.NotNull;
+import org.hibernate.annotations.ColumnDefault;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -56,6 +59,14 @@ public class Conductor extends EntidadAuditable {
     /** Vencimiento leido de la licencia: vencida no puede operar. */
     @Column(name = "licencia_vencimiento")
     private LocalDate licenciaVencimiento;
+
+    /** Maximo que el repartidor acepta adelantar para pedidos de compra, en bolivianos. El default 0 en la
+     *  BD deja agregar la columna NOT NULL a una tabla con conductores (ddl-auto=update). */
+    @NotNull
+    @DecimalMin(value = "0.00")
+    @ColumnDefault("0")
+    @Column(name = "limite_adelanto_compra", precision = 10, scale = 2, nullable = false)
+    private BigDecimal limiteAdelantoCompra = BigDecimal.ZERO;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "situacion_aprobacion", length = 20, nullable = false)

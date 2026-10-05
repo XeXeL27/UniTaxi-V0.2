@@ -7,6 +7,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.vehicle.dto.CategoriaServicioRequest;
 import com.taxiuap.backend.vehicle.dto.CategoriaServicioResponse;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
@@ -46,6 +47,7 @@ public class CategoriaServicioService {
     @Transactional
     public CategoriaServicioResponse crear(CategoriaServicioRequest request) {
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
+        validarDelivery(tipoVehiculo, request.nombre());
 
         CategoriaServicio categoriaServicio = new CategoriaServicio();
         categoriaServicio.setTipoVehiculo(tipoVehiculo);
@@ -59,6 +61,7 @@ public class CategoriaServicioService {
     public CategoriaServicioResponse actualizar(Integer id, CategoriaServicioRequest request) {
         CategoriaServicio categoriaServicio = buscarPorId(id);
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
+        validarDelivery(tipoVehiculo, request.nombre());
 
         categoriaServicio.setTipoVehiculo(tipoVehiculo);
         categoriaServicio.setNombre(request.nombre());
@@ -81,6 +84,12 @@ public class CategoriaServicioService {
     private TipoVehiculo buscarTipoVehiculo(Integer idTipoVehiculo) {
         return tipoVehiculoRepository.findById(idTipoVehiculo)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("TipoVehiculo", idTipoVehiculo));
+    }
+
+    private void validarDelivery(TipoVehiculo tipoVehiculo, String nombre) {
+        if ("DELIVERY".equalsIgnoreCase(nombre) && !"MOTO".equalsIgnoreCase(tipoVehiculo.getCodigo())) {
+            throw new NegocioException("La categoria DELIVERY solo puede asociarse a una MOTO");
+        }
     }
 
     private CategoriaServicioResponse aRespuesta(CategoriaServicio categoriaServicio) {
