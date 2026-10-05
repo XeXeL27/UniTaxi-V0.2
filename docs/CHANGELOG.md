@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-05 | Arreglo | Task 5 DELIVERY: prueba completa de asociación del reporte de paquete no coincidente y su evidencia |
 | 2026-10-05 | Arreglo | Task 5 DELIVERY: cobertura completa de asociación de evidencia y matriz de permisos administrativos |
 | 2026-10-05 | Arreglo | Task 5 DELIVERY: transición administrativa cerrada, evidencia y pruebas de permisos/persistencia añadidas |
 | 2026-10-05 | ✨ | Task 5 DELIVERY: reportes automáticos y resolución administrativa de incidentes |

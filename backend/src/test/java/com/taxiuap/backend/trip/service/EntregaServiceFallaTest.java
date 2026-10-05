@@ -138,9 +138,17 @@ class EntregaServiceFallaTest {
         entregaService.reportarPaqueteIncorrecto(500L, "No cabe en la moto", foto());
 
         assertEquals("personas/20_x/entrega/paquete.jpg", viaje.getSolicitud().getDatosEntrega().getFotoFallaUrl());
-        verify(reporteRepository).save(org.mockito.ArgumentMatchers.argThat(reporte ->
-                "PAQUETE_NO_COINCIDE".equals(reporte.getMotivo())
-                        && SituacionReporte.PENDIENTE == reporte.getSituacionReporte()));
+        assertEquals("No cabe en la moto", viaje.getSolicitud().getDatosEntrega().getMotivoFalla());
+        org.mockito.ArgumentCaptor<Reporte> reporteCaptor = org.mockito.ArgumentCaptor.forClass(Reporte.class);
+        verify(reporteRepository).save(reporteCaptor.capture());
+        assertSame(viaje, reporteCaptor.getValue().getViaje());
+        assertSame(viaje.getSolicitud().getDatosEntrega(),
+                reporteCaptor.getValue().getViaje().getSolicitud().getDatosEntrega());
+        assertEquals("PAQUETE_NO_COINCIDE", reporteCaptor.getValue().getMotivo());
+        assertEquals(SituacionReporte.PENDIENTE, reporteCaptor.getValue().getSituacionReporte());
+        assertEquals("personas/20_x/entrega/paquete.jpg",
+                reporteCaptor.getValue().getViaje().getSolicitud().getDatosEntrega().getFotoFallaUrl());
+        verify(viajeService).cancelarFallaEntrega(500L);
         assertEquals(EstadoRegistro.A, viaje.getConductor().getEstadoConductor());
     }
 
