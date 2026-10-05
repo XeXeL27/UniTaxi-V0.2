@@ -18,6 +18,7 @@ public record SolicitudViajeResponse(
         String origenDireccion,
         String destinoDireccion,
         BigDecimal precioSugerido,
+        boolean precioEstimado,
         SituacionSolicitud situacionSolicitud,
         LocalDateTime fechaSolicitud,
         int cantidadOfertas,
@@ -30,6 +31,7 @@ public record SolicitudViajeResponse(
     public SolicitudViajeResponse sinNombreDestino() {
         return new SolicitudViajeResponse(idSolicitud, idPasajero, nombrePasajero, idCategoriaServicio,
                 nombreCategoriaServicio, origenWkt, destinoWkt, origenDireccion, destinoDireccion, precioSugerido,
+                precioEstimado,
                 situacionSolicitud, fechaSolicitud, cantidadOfertas, metodoPago, null, datosEntrega == null
                         ? null : datosEntrega.paraConductor());
     }

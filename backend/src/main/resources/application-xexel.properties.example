@@ -36,7 +36,7 @@ taxiuap.seed.habilitado=true
 # --- Delivery -----------------------------------------------
 taxiuap.rutas.osrm.url=https://router.project-osrm.org
 taxiuap.rutas.osrm.timeout-ms=5000
-taxiuap.delivery.tarifa-base=0.00
-taxiuap.delivery.precio-km=0.00
-taxiuap.delivery.precio-minuto=0.00
+taxiuap.delivery.tarifa-base=4.00
+taxiuap.delivery.precio-km=1.80
+taxiuap.delivery.precio-minuto=0.20
 taxiuap.delivery.comision-porcentaje=0.00

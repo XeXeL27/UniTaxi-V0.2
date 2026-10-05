@@ -29,6 +29,7 @@ public record ViajeResponse(
         BigDecimal precioOriginal,
         BigDecimal montoDescuento,
         BigDecimal precioFinal,
+        boolean precioEstimado,
         SituacionViaje situacionViaje,
         CanceladoPor canceladoPor,
         LocalDateTime fechaInicio,
@@ -50,7 +51,7 @@ public record ViajeResponse(
         return new ViajeResponse(idViaje, idSolicitud, idPasajero, nombrePasajero, idConductor, nombreConductor,
                 placaVehiculo, marcaVehiculo, modeloVehiculo, colorVehiculo, calificacionConductor, origenWkt,
                 destinoWkt, origenDireccion, destinoDireccion, distanciaKm, duracionMin, precioOriginal,
-                montoDescuento, precioFinal, situacionViaje, canceladoPor, fechaInicio, fechaFin,
+                montoDescuento, precioFinal, precioEstimado, situacionViaje, canceladoPor, fechaInicio, fechaFin,
                 calificadoPorPasajero, metodoPago, metodoPagoPedido, conductorTieneQr, calificacionOfrecida, null,
                 datosEntrega == null ? null : datosEntrega.paraConductor());
     }

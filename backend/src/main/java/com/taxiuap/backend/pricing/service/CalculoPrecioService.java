@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 import org.locationtech.jts.geom.Point;
@@ -57,6 +58,15 @@ public class CalculoPrecioService {
     @Value("${taxiuap.viaje.precio-fijo:8.00}")
     private BigDecimal precioFijo;
 
+    @Value("${taxiuap.delivery.tarifa-base:4.00}")
+    private BigDecimal tarifaBaseDelivery = new BigDecimal("4.00");
+
+    @Value("${taxiuap.delivery.precio-km:1.80}")
+    private BigDecimal precioKmDelivery = new BigDecimal("1.80");
+
+    @Value("${taxiuap.delivery.precio-minuto:0.20}")
+    private BigDecimal precioMinutoDelivery = new BigDecimal("0.20");
+
     @Value("${taxiuap.descuento-estudiantil.habilitado:false}")
     private boolean descuentoEstudiantilHabilitado;
 
@@ -68,7 +78,7 @@ public class CalculoPrecioService {
     public CalculoPrecio calcular(SolicitudViaje solicitud, OfertaViaje oferta, Pasajero pasajero) {
         BigDecimal distanciaKm = calcularDistanciaKm(solicitud.getOrigen(), solicitud.getDestino());
         Integer duracionMin = calcularDuracionMin(distanciaKm);
-        Tarifa tarifa = buscarTarifaVigente(solicitud);
+        Tarifa tarifa = tarifaVigente(solicitud);
 
         BigDecimal precioOriginal = calcularPrecioOriginal(oferta, tarifa, distanciaKm, duracionMin);
         ResultadoDescuento descuento = calcularDescuento(pasajero, solicitud, precioOriginal);
@@ -116,11 +126,11 @@ public class CalculoPrecioService {
     }
 
     /**
-     * Tarifa vigente para la categoria de servicio de la solicitud. Se intenta primero con la
-     * zona activa cuyo poligono contiene el origen del viaje; si ninguna zona lo contiene (o no
-     * tiene tarifa vigente), se usa la primera tarifa vigente de la categoria sin importar zona.
+     * Resuelve una tarifa administrativa o la referencia tecnica requerida para persistir el viaje.
+     * DELIVERY no cobra esta tarifa: su precio lo calcula CalculoPrecioDeliveryService.
      */
-    private Tarifa buscarTarifaVigente(SolicitudViaje solicitud) {
+    @Transactional
+    public Tarifa tarifaVigente(SolicitudViaje solicitud) {
         Integer idCategoriaServicio = solicitud.getCategoriaServicio().getId();
         LocalDate hoy = LocalDate.now();
 
@@ -133,12 +143,34 @@ public class CalculoPrecioService {
                 .filter(tarifa -> cubreVigencia(tarifa.getVigenteDesde(), tarifa.getVigenteHasta(), hoy))
                 .findFirst();
 
-        return tarifaDeZona
-                .or(() -> tarifaRepository.findByCategoriaServicioId(idCategoriaServicio).stream()
-                        .filter(tarifa -> tarifa.getEstadoTarifa() == EstadoRegistro.A)
-                        .filter(tarifa -> cubreVigencia(tarifa.getVigenteDesde(), tarifa.getVigenteHasta(), hoy))
-                        .findFirst())
-                .orElseThrow(() -> new NegocioException("No hay una tarifa vigente para la categoria de servicio"));
+        if (tarifaDeZona.isPresent()) return tarifaDeZona.get();
+
+        List<Tarifa> tarifasVigentes = tarifaRepository.findByCategoriaServicioId(idCategoriaServicio).stream()
+                .filter(tarifa -> tarifa.getEstadoTarifa() == EstadoRegistro.A)
+                .filter(tarifa -> cubreVigencia(tarifa.getVigenteDesde(), tarifa.getVigenteHasta(), hoy))
+                .toList();
+        Optional<Tarifa> tarifaAdministrativa = tarifasVigentes.stream()
+                .filter(tarifa -> tarifa.getZona() != null)
+                .findFirst();
+        if (tarifaAdministrativa.isPresent()) return tarifaAdministrativa.get();
+
+        Optional<Tarifa> tarifaTecnica = tarifasVigentes.stream()
+                .filter(tarifa -> tarifa.getZona() == null)
+                .findFirst();
+        if (tarifaTecnica.isPresent()) return tarifaTecnica.get();
+        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) {
+            throw new NegocioException("No hay una tarifa vigente para la categoria de servicio");
+        }
+
+        Tarifa referencia = new Tarifa();
+        referencia.setCategoriaServicio(solicitud.getCategoriaServicio());
+        referencia.setTarifaBase(tarifaBaseDelivery);
+        referencia.setPrecioKm(precioKmDelivery);
+        referencia.setPrecioMinuto(precioMinutoDelivery);
+        referencia.setTarifaMinima(tarifaBaseDelivery);
+        referencia.setVigenteDesde(hoy.minusMonths(6));
+        referencia.setEstadoTarifa(EstadoRegistro.A);
+        return tarifaRepository.save(referencia);
     }
 
     private boolean contieneOrigen(Zona zona, Point origen) {

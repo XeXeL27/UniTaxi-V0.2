@@ -33,6 +33,8 @@ public class TarifaService {
     public List<TarifaResponse> listar(Integer idZona, Integer idCategoriaServicio, boolean incluirInactivos) {
         return tarifaRepository.findAll().stream()
                 .filter(tarifa -> incluirInactivos || tarifa.getEstadoTarifa() == EstadoRegistro.A)
+                // La tarifa tecnica DELIVERY sin zona no forma parte del catalogo administrable por zona.
+                .filter(tarifa -> tarifa.getZona() != null)
                 .filter(tarifa -> idZona == null || tarifa.getZona().getId().equals(idZona))
                 .filter(tarifa -> idCategoriaServicio == null
                         || tarifa.getCategoriaServicio().getId().equals(idCategoriaServicio))
@@ -109,12 +111,13 @@ public class TarifaService {
     }
 
     private TarifaResponse aResponse(Tarifa tarifa) {
+        Zona zona = tarifa.getZona();
         return new TarifaResponse(
                 tarifa.getId(),
                 tarifa.getCategoriaServicio().getId(),
                 tarifa.getCategoriaServicio().getNombre(),
-                tarifa.getZona().getId(),
-                tarifa.getZona().getNombre(),
+                zona != null ? zona.getId() : null,
+                zona != null ? zona.getNombre() : null,
                 tarifa.getTarifaBase(),
                 tarifa.getPrecioKm(),
                 tarifa.getPrecioMinuto(),

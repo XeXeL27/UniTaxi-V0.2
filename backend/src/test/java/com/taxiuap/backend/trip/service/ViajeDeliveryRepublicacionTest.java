@@ -21,6 +21,7 @@ import com.taxiuap.backend.pricing.repository.BilleteraConductorRepository;
 import com.taxiuap.backend.pricing.repository.ComisionRepository;
 import com.taxiuap.backend.pricing.repository.PagoRepository;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
+import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.rating.repository.CalificacionRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
@@ -41,7 +42,8 @@ class ViajeDeliveryRepublicacionTest {
         ViajeService service = new ViajeService(mock(ViajeRepository.class), mock(PasajeroRepository.class),
                 mock(ConductorRepository.class), mock(VehiculoRepository.class), mock(PagoRepository.class),
                 mock(ComisionRepository.class), mock(BilleteraConductorRepository.class),
-                mock(CalculoPrecioService.class), mock(HistorialViajeService.class), mock(SimpMessagingTemplate.class),
+                mock(CalculoPrecioService.class), mock(CalculoPrecioDeliveryService.class),
+                mock(HistorialViajeService.class), mock(SimpMessagingTemplate.class),
                 mock(CalificacionRepository.class), mock(QrPagoConductorService.class),
                 mock(SolicitudViajeRepository.class), mock(DatosEntregaRepository.class),
                 mock(OfertaViajeRepository.class), mock(UbicacionConductorRepository.class),

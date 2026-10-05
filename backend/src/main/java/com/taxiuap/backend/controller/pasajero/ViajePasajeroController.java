@@ -25,6 +25,7 @@ import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.enums.PeriodoHistorial;
+import com.taxiuap.backend.trip.service.EntregaService;
 import com.taxiuap.backend.trip.service.ViajeService;
 
 import jakarta.validation.Valid;
@@ -37,6 +38,7 @@ import lombok.RequiredArgsConstructor;
 public class ViajePasajeroController {
 
     private final ViajeService viajeService;
+    private final EntregaService entregaService;
     private final QrPagoConductorService qrPagoConductorService;
     private final AlmacenamientoArchivos almacenamientoArchivos;
 
@@ -81,6 +83,16 @@ public class ViajePasajeroController {
             @PathVariable Long id, @RequestBody(required = false) CancelarViajeRequest request) {
         ViajeResponse cancelado = viajeService.cancelar(id, request);
         return ResponseEntity.ok(ApiResponse.exito("Viaje cancelado", cancelado));
+    }
+
+    /**
+     * COMPRA_Y_ENTREGA: el cliente confirma el comercio y el monto que propuso el repartidor. Sin esta
+     * confirmacion el repartidor no puede comprar, y si el costo real se pasa hace falta confirmar otra
+     * vez. No aplica a ENCOMIENDA, donde no hay nada que comprar.
+     */
+    @PostMapping("/{id}/entrega/confirmar-compra")
+    public ResponseEntity<ApiResponse<ViajeResponse>> confirmarCompra(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito("Compra confirmada", entregaService.confirmarCompra(id)));
     }
 
     /** Pide al conductor pagar de otra forma; el cambio vale cuando el conductor lo acepta. */

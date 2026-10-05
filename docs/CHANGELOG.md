@@ -5,6 +5,9 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-04 | Nuevo | Task 4 DELIVERY: transiciones de pedido, validación atómica de códigos, compra confirmada por el cliente, pago directo, entrega y falla de entrega |
+| 2026-10-04 | Arreglo | Task 3 fix round 2 DELIVERY: tarifa técnica zona nula on-demand, defaults MOTO, placa compatible y catálogo de tarifas seguro |
+| 2026-10-04 | Arreglo | Task 3 DELIVERY: precio OSRM por snapshot, estimado marcado al asignar, moto compatible, tarifa de referencia y revalidación de aceptación |
 | 2026-10-02 | 📚 | Pausa documentada de implementación DELIVERY en Task 3; Tasks 1 y 2 revisadas, Task 3 implementada pendiente de re-review |
 | 2026-10-02 | Arreglo | Correcciones del reviewer para Task 3 DELIVERY: tipo MOTO explícito, flujo focal y bloqueo de aceptación |
 | 2026-10-02 | Nuevo | Flujo backend de solicitudes y aceptación DELIVERY (Task 3) |
@@ -16,6 +19,37 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-04
+
+### 🆕 Nuevo · Task 4: transiciones, códigos, compra, entrega y cancelación DELIVERY
+
+- **Módulo / área:** backend (`trip`, `shared/archivo`), dominio DELIVERY.
+- **Descripción:** `DatosEntrega.estado_entrega` dejó de ser decorativo. Cada transición tiene su acción y su condición: aceptar el pedido lleva la solicitud a `EN_CAMINO_RECOGIDA`, el código de recogida o la compra confirmada llevan el pedido a `EN_MANO` con el viaje en `EN_CURSO`, el código de entrega o la identidad del receptor con el pago confirmado lo llevan a `ENTREGADO` con el viaje `COMPLETADO`, y "No se pudo entregar" deja `NO_ENTREGADO` con foto y motivo, cancela y no republica.
+- **Validación atómica:** los códigos se comparan en la base de datos con UPDATE condicionales de estado y código (`avanzarSiCodigoRecogidaCoincide`, `avanzarSiCodigoEntregaCoincide`, `avanzarSiEstadoPermitido`, `registrarFallaSiEstadoPermitido`), nunca leyendo y guardando. Una doble pulsación o dos pantallas simultáneas hacen que solo una gane. La falla escribe estado y evidencia en la misma sentencia para que no exista un `NO_ENTREGADO` sin foto ni motivo.
+- **Compra y pago:** el repartidor propone el comercio y el monto, el cliente lo confirma, y solo entonces se compra. Si el costo real supera al confirmado hay que volver a proponer y volver a confirmar; el recorrido hasta el comercio no se cobra y el precio del servicio se recalcula desde el comercio hasta el destino. El repartidor registra el pago directo (producto + servicio) y el servidor exige que el monto sea exactamente el total a cobrar. El comprobante de compra y la foto de falla son archivos opcionales y obligatorios respectivamente, guardados en la carpeta de entrega del repartidor.
+- **Cancelaciones:** con el pedido `EN_MANO` ni el cliente ni el repartidor pueden cancelar: hay que reportar la falla. La cancelación temprana del repartidor republica conservando códigos y comercio propuesto, pero limpiando lo que el repartidor hizo; la del cliente no cobra ni compensa nada. `iniciar` y `finalizar` genéricos rechazan los viajes DELIVERY.
+- **Cambios clave:** columnas nuevas `compra_confirmada_por_cliente`, `costo_producto_confirmado`, `pago_confirmado` y `monto_pago_recibido` (creadas por `ddl-auto=update`, sin SQL ni Flyway); invariantes `@AssertTrue` en `DatosEntrega`; `DatosEntregaResponse` expone al repartidor el comercio, los montos y los puntos en WKT, y sigue sin exponerle los códigos; `PuntoDesdeWkt` evita duplicar el parseo de coordenadas; endpoints de entrega en `ViajeConductorController` y `ViajePasajeroController`.
+- **Pruebas:** 52 pruebas nuevas (baseline 107 → 159). RED observado en cada slice; las pruebas contra PostgreSQL real encontraron dos bugs de producción que las unitarias no veían (un `@Enumerated` sobre un `Boolean` y columnas `NOT NULL` sin default que `ddl-auto=update` no podía agregar). Suite completa: **159 pruebas, 0 fallos, 0 errores, 0 omitidas**.
+- **Fuera de alcance:** la creación del `Reporte` del incidente de falla de entrega es Task 5.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/trip/service/EntregaService.java`, `PuntoDesdeWkt.java`, `ViajeService.java`, `SolicitudViajeService.java`, `trip/repository/DatosEntregaRepository.java`, `trip/entity/DatosEntrega.java`, `trip/dto/` (cinco requests nuevos y `DatosEntregaResponse`), `controller/conductor/ViajeConductorController.java`, `controller/pasajero/ViajePasajeroController.java`, `shared/archivo/AlmacenamientoArchivos.java`; pruebas en `trip/service`, `trip/entity`, `trip/dto` y `trip/repository`; `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-4-report.md`.
+
+### 🐛 Arreglo · Cierre de hallazgos de Task 3 DELIVERY
+
+- **Módulo / área:** backend (`trip`, `pricing`, `seed`).
+- **Descripción:** ENCOMIENDA ahora fija al crear el precio del servicio calculado por OSRM A -> B e ignora el precio enviado por el cliente. Un fallo de OSRM impide persistir la solicitud. COMPRA_Y_ENTREGA calcula al asignar el GPS actual del repartidor -> B, persiste el snapshot en `SolicitudViaje.precioSugerido` y expone `precioEstimado`; no se agregó ninguna columna ni se implementó la compra de Task 4.
+- **Cambios clave:** Las respuestas de solicitud, oferta y viaje usan el snapshot DELIVERY en lugar del precio fijo genérico; el viaje usa exclusivamente precios de `CalculoPrecioDeliveryService`, conserva una tarifa vigente solo como FK requerida y selecciona una moto DELIVERY activa. La aceptación por oferta vuelve a comprobar aprobación, vehículo compatible y límite de adelanto. La comisión DELIVERY usa la configuración propia (0% por defecto) y solo el precio del servicio.
+- **Seed:** nueva tarifa DELIVERY idempotente, leída de las propiedades `taxiuap.delivery.*`; se asegura también cuando el seeder normal omite la carga porque ya hay datos de prueba.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedOrquestador.java`, `SeedPrecios.java`, `SeedTarifaDelivery.java`, `backend/src/main/java/com/taxiuap/backend/trip/dto/SolicitudViajeResponse.java`, `ViajeResponse.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`, `SolicitudViajeService.java`, `ViajeService.java`; pruebas DELIVERY en `backend/src/test/java/com/taxiuap/backend/seed/` y `backend/src/test/java/com/taxiuap/backend/trip/service/`; `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
+- **Verificación:** RED observado antes de implementar: 15 pruebas, 8 fallos de comportamiento esperados. GREEN focalizado: 25 pruebas con `BUILD SUCCESSFUL`; `compileJava` y `compileTestJava` correctos. Suite completa: 102 pruebas, 3 fallos durante el arranque de contexto por `DataSourceBeanCreationException`; la prueba de aceptación con persistencia también queda bloqueada por la misma configuración de base de datos. No se declara cobertura ejecutada de concurrencia.
+
+### 🐛 Arreglo · Fix round 2: tarifa de aceptación independiente del seeder
+
+- **Módulo / área:** backend (`pricing`, `trip`, `seed`).
+- **Descripción:** La aceptación DELIVERY ahora crea on-demand una tarifa vigente de referencia con `zona=null` si no hay tarifa vigente usable. Primero respeta la tarifa administrativa aplicable y después cualquier otra tarifa administrada vigente; la referencia técnica nunca determina el precio del cliente, que sigue siendo OSRM.
+- **Cambios clave:** el seeder de inicio queda como conveniencia; el flujo no depende de `seed.habilitado`, zona `Centro` ni de que la categoría existiera al arrancar. Los defaults configurables de base/km/minuto pasan a `4.00/1.80/0.20`, iguales a MOTO en `SeedPrecios`. La placa en la respuesta de oferta DELIVERY se selecciona entre motos DELIVERY activas. La referencia zona nula queda fuera del listado administrativo por zona y su respuesta por ID no falla.
+- **Pruebas:** RED observado para tarifa ausente, defaults cero y placa estándar incorrecta. GREEN focal no-DB: `BUILD SUCCESSFUL`. Se añadieron una prueba de aceptación persistida con categoría creada después del arranque y una prueba PostgreSQL concurrente de ganador único; ambas se compilaron pero quedaron **NOT RUN / BLOCKED** hasta que el usuario inicie Docker. No se inició Docker ni se intentó PostgreSQL.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioService.java`, `CalculoPrecioDeliveryService.java`, `backend/src/main/java/com/taxiuap/backend/seed/SeedTarifaDelivery.java`, `backend/src/main/java/com/taxiuap/backend/trip/service/OfertaViajeService.java`, `backend/src/main/resources/application-xexel.properties.example`, pruebas de `pricing`, `seed` y `trip`, `.superpowers/sdd/2026-10-02-delivery-implementation-plan/task-3-report.md`.
 
 ## 2026-10-02
 
@@ -606,3 +640,29 @@
   - `app-movil/test/lugares_frecuentes_test.dart` (nuevo, 14 pruebas)
 - **Verificación:** `flutter analyze` sin incidencias; `flutter test` 14/14;
   `dart format --line-length 120` sobre los archivos del cambio.
+
+## [Ronda corrección Task 4] — 2026-10-04
+
+### Cambios en backend
+- `trip/entity/DatosEntrega`: añadido `@Size(max=500)` a `motivoFalla` (coherente con columna `length=500`).
+- `trip/repository/DatosEntregaRepository`: nuevo método `confirmarPagoSiEnMano` con UPDATE condicional nativo y `clearAutomatically/flushAutomatically` para evitar escritura completa que borre evidencia en transiciones concurrentes.
+- `trip/service/EntregaService`: `confirmarPago` utiliza UPDATE condicional; si no actualiza filas, distingue entre estado cambiado y pago ya confirmado.
+- Tests: `DatosEntregaTest` añade `rechazaMotivoDeFallaMuyLargo()`; `DatosEntregaDtoTest` amplía aserciones; `EntregaServiceRecogidaEntregaTest` ajustado para nuevo flujo.
+
+### Decisión sobre pago parcial
+- Según `docs/superpowers/specs/2026-10-02-delivery-design.md`, el flujo exige pago **total** (producto+servicio) y validación exacta. No se implementa registro de pago parcial/no pago; queda como pregunta abierta para revisión futura.
+
+### Verificación
+- Suite completa con perfil `appu`: `tests=160 failures=0 errors=0 skipped=0` (1 test añadido). BUILD SUCCESSFUL.
+
+## [Sesion 2026-10-05] — sin cambios de codigo
+
+- Se cerro la pregunta abierta del pago parcial: **se mantiene el spec**, el repartidor
+  registra el total exacto y no hay campo de monto parcial. Si el cliente no paga todo, el
+  repartidor usa "No se pudo entregar" con foto y motivo.
+- Se documento en `docs/superpowers/2026-10-05-entrega-handoff.md` el estado de la fase 1 de
+  DELIVERY: Tasks 1-4 implementadas, cierre de Task 4 pendiente (los dos hallazgos
+  importantes siguen abiertos, no se alcanzo a despachar el implementador) y Task 5 en
+  adelante.
+- Se confirmo que el repartidor es el mismo `Conductor` con moto de categoria DELIVERY y su
+  campo `limite_adelanto_compra`, no un actor nuevo.

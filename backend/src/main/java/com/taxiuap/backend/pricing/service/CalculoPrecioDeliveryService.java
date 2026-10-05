@@ -10,8 +10,6 @@ import org.springframework.stereotype.Service;
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.dto.RutaResponse;
 
-import lombok.RequiredArgsConstructor;
-
 /** Calcula precios DELIVERY usando exclusivamente distancias por calles. */
 @Service
 public class CalculoPrecioDeliveryService {
@@ -26,9 +24,9 @@ public class CalculoPrecioDeliveryService {
     private final BigDecimal porcentajeComision;
 
     public CalculoPrecioDeliveryService(ClienteRutas clienteRutas,
-            @Value("${taxiuap.delivery.tarifa-base:0.00}") BigDecimal tarifaBase,
-            @Value("${taxiuap.delivery.precio-km:0.00}") BigDecimal precioKilometro,
-            @Value("${taxiuap.delivery.precio-minuto:0.00}") BigDecimal precioMinuto,
+            @Value("${taxiuap.delivery.tarifa-base:4.00}") BigDecimal tarifaBase,
+            @Value("${taxiuap.delivery.precio-km:1.80}") BigDecimal precioKilometro,
+            @Value("${taxiuap.delivery.precio-minuto:0.20}") BigDecimal precioMinuto,
             @Value("${taxiuap.delivery.comision-porcentaje:0.00}") BigDecimal porcentajeComision) {
         this.clienteRutas = clienteRutas;
         this.tarifaBase = tarifaBase;

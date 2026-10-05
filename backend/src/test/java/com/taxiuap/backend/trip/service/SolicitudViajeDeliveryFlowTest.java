@@ -1,12 +1,17 @@
 package com.taxiuap.backend.trip.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -16,6 +21,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.locationtech.jts.geom.Point;
+import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,7 +36,9 @@ import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
+import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
+import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.dto.DatosEntregaRequest;
@@ -60,8 +70,9 @@ class SolicitudViajeDeliveryFlowTest {
     @Mock private ViajeEventPublisher publisher;
     @Mock private ViajeService viajeService;
     @Mock private CalculoPrecioService precioService;
+    @Mock private CalculoPrecioDeliveryService precioDeliveryService;
 
-    private SolicitudViajeService service;
+    @InjectMocks private SolicitudViajeService service;
     private Pasajero pasajero;
     private CategoriaServicio delivery;
 
@@ -84,9 +95,6 @@ class SolicitudViajeDeliveryFlowTest {
         delivery.setNombre("DELIVERY");
         delivery.setTipoVehiculo(moto);
 
-        service = new SolicitudViajeService(solicitudRepository, ofertaRepository, pasajeroRepository,
-                conductorRepository, categoriaRepository, vehiculoRepository, datosRepository,
-                documentoService, publisher, viajeService, precioService);
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new JwtUser(10L, "pasajero", "PASAJERO"), null));
         lenient().when(pasajeroRepository.findByUsuarioId(10L)).thenReturn(Optional.of(pasajero));
@@ -114,16 +122,37 @@ class SolicitudViajeDeliveryFlowTest {
     @Test
     void creaEncomiendaConPrecioYCodigosIndependientes() {
         when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+        lenient().when(precioDeliveryService.calcularEncomienda(any(Point.class), any(Point.class)))
+                .thenReturn(new DesglosePrecioDelivery(new BigDecimal("17.50"), new BigDecimal("4.25"), 13, false));
         SolicitudViajeRequest request = request(new DatosEntregaRequest(TipoEnvio.ENCOMIENDA,
-                "Documentos", BigDecimal.ZERO, "Ana", "70000000", "Luis", "71111111", null, true));
+                "Documentos", BigDecimal.ZERO, "Ana", "70000000", "Luis", "71111111", null, true),
+                new BigDecimal("99.00"));
 
         var respuesta = service.crear(request);
 
-        assertEquals(new BigDecimal("8.00"), respuesta.precioSugerido());
+        assertEquals(new BigDecimal("17.50"), respuesta.precioSugerido());
+        ArgumentCaptor<SolicitudViaje> solicitudGuardada = ArgumentCaptor.forClass(SolicitudViaje.class);
+        verify(solicitudRepository).save(solicitudGuardada.capture());
+        assertEquals(new BigDecimal("17.50"), solicitudGuardada.getValue().getPrecioSugerido());
         assertNotNull(respuesta.datosEntrega());
         assertNotNull(respuesta.datosEntrega().codigoRecogida());
         assertNotNull(respuesta.datosEntrega().codigoEntrega());
         assertTrue(!respuesta.datosEntrega().codigoRecogida().equals(respuesta.datosEntrega().codigoEntrega()));
+        verify(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class));
+    }
+
+    @Test
+    void falloDeRutaImpideCrearLaSolicitudEncomienda() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+        doThrow(new IllegalStateException("OSRM no disponible"))
+                .when(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class));
+
+        assertThrows(IllegalStateException.class, () -> service.crear(request(
+                new DatosEntregaRequest(TipoEnvio.ENCOMIENDA, "Documentos", BigDecimal.ZERO,
+                        "Ana", "70000000", "Luis", "71111111", null, true),
+                new BigDecimal("99.00"))));
+
+        verify(solicitudRepository, never()).save(any());
     }
 
     @Test
@@ -137,6 +166,34 @@ class SolicitudViajeDeliveryFlowTest {
         assertNull(respuesta.precioSugerido());
         assertEquals(new BigDecimal("25.00"), respuesta.datosEntrega().costoProductoEstimado());
         assertNull(respuesta.datosEntrega().codigoRecogida());
+    }
+
+    @Test
+    void unaCompraSinAsignarNoMarcaElPrecioComoEstimado() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+
+        var respuesta = service.crear(request(new DatosEntregaRequest(TipoEnvio.COMPRA_Y_ENTREGA,
+                "Medicamento", new BigDecimal("25.00"), null, null, null, null, null, null)));
+
+        assertTrue(respuesta.toString().contains("precioEstimado=false"));
+    }
+
+    @Test
+    void solicitudDeCompraMuestraElSnapshotEstimadoHastaRegistrarLaCompra() {
+        SolicitudViaje compra = solicitudCompra(new BigDecimal("25.00"));
+        compra.setPrecioSugerido(new BigDecimal("21.75"));
+        compra.setSituacionSolicitud(com.taxiuap.backend.trip.enums.SituacionSolicitud.ACEPTADA);
+        when(solicitudRepository.findById(90L)).thenReturn(Optional.of(compra));
+
+        var antesDeComprar = service.obtenerPropia(90L);
+        assertEquals(new BigDecimal("21.75"), antesDeComprar.precioSugerido());
+        assertTrue(antesDeComprar.toString().contains("precioEstimado=true"));
+
+        compra.getDatosEntrega().setCostoProductoReal(new BigDecimal("25.00"));
+        compra.setPrecioSugerido(new BigDecimal("16.25"));
+        var despuesDeComprar = service.obtenerPropia(90L);
+        assertEquals(new BigDecimal("16.25"), despuesDeComprar.precioSugerido());
+        assertFalse(despuesDeComprar.toString().contains("precioEstimado=true"));
     }
 
     @Test
@@ -154,8 +211,12 @@ class SolicitudViajeDeliveryFlowTest {
     }
 
     private SolicitudViajeRequest request(DatosEntregaRequest datos) {
+        return request(datos, null);
+    }
+
+    private SolicitudViajeRequest request(DatosEntregaRequest datos, BigDecimal precioCliente) {
         return new SolicitudViajeRequest(7, "POINT (-68.75 -11.02)", "POINT (-68.74 -11.03)",
-                "A", "B", null, null, MetodoPago.EFECTIVO, datos);
+                "A", "B", null, precioCliente, MetodoPago.EFECTIVO, datos);
     }
 
     private SolicitudViaje solicitudCompra(BigDecimal costo) {

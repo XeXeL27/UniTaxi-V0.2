@@ -65,4 +65,21 @@ class DatosEntregaTest {
         datos.setMotivoFalla("Receptor ausente");
         assertTrue(validator.validate(datos).isEmpty());
     }
+
+    @Test
+    void rechazaMotivoDeFallaMuyLargo() {
+        String motivoLargo = "A".repeat(501);
+        DatosEntrega datos = new DatosEntrega();
+        datos.setSolicitud(new SolicitudViaje());
+        datos.setTipoEnvio(TipoEnvio.ENCOMIENDA);
+        datos.setDescripcion("Paquete");
+        datos.setCodigoRecogida("123456");
+        datos.setCodigoEntrega("654321");
+        datos.setAceptaPoliticaArticulos(true);
+        datos.setEstadoEntrega(EstadoEntrega.NO_ENTREGADO);
+        datos.setFotoFallaUrl("fallas/foto.jpg");
+        datos.setMotivoFalla(motivoLargo);
+
+        assertFalse(validator.validate(datos).isEmpty());
+    }
 }
