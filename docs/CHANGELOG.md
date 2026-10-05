@@ -5,6 +5,12 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-05 | ✨ | El pasajero elige entre viaje y entrega en un segmentado de la cabecera, con todo el texto del pedido acorde al servicio |
+| 2026-10-05 | 🐛 | Test del selector de categoría del conductor corregido tras cambiar el texto de la opción de reparto |
+| 2026-10-05 | ✨ | La moto del conductor puede registrarse con la categoría DELIVERY elegida (Task 1 del plan del repartidor) |
+| 2026-10-05 | 📚 | Plan del registro del repartidor DELIVERY: selector de categoría en el registro, cambio de categoría por el admin y precio de referencia igual al del taxista |
+| 2026-10-05 | 🐛 | Aclaración del agente verificador: los códigos DELIVERY siempre tienen 6 dígitos |
+| 2026-10-05 | 🔧 | Se mejora el agente verificador: credenciales explícitas para pruebas PostgreSQL, control anti-bucle y reglas de evidencia histórica |
 | 2026-10-05 | 🧪 | Verificación de las Tasks 3 a 8 de DELIVERY: suite completa, autoverificación de permisos y builds reales |
 | 2026-10-05 | ✨ | Task 8 DELIVERY: panel administrativo, evidencia y resolución de reportes |
 | 2026-10-05 | ✨ | Task 7 DELIVERY: flujo del repartidor en app móvil |
@@ -30,6 +36,49 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-05
+
+### ✨ Nuevo · El pasajero elige entre viaje y entrega en la cabecera
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), pantalla de inicio.
+- **Descripción:** el selector de entrega estaba como primera fila del panel del pedido, que nace
+  plegado, así que el pasajero no veía que podía mandar un paquete. Ahora elige *Viaje* o *Entrega*
+  en un segmentado bajo "¿A dónde vas?", siempre visible con el panel abierto o cerrado, y todo el
+  texto del pedido habla del servicio que realmente se está pidiendo.
+- **Cambios clave:**
+  - `ModoServicio` (nuevo, Dart puro): única fuente de verdad del modo, con `limpiar()` para que el
+    pedido anterior no se filtre al volver a elegir destino, y `faltaElegirTipo` para que no se pueda
+    pedir sin haber dicho qué se manda.
+  - `tipoEnvio` pasa a derivar del servidor cuando ya hay solicitud o viaje. Arregla el caso de abrir
+    la app con un reparto en curso: antes toda la pantalla hablaba de taxistas y conductores.
+  - `_entrarEligiendo()` limpia el modo y los datos de entrega.
+  - `SelectorServicio` y `SelectorTipoEntrega` (nuevos) en la cabecera. El encuadre del mapa
+    descuenta su alto real, que es mayor cuando el selector avisa que los datos están completos.
+  - `estadoViajePasajero` y `DisponibilidadTaxis` reciben el servicio; en un reparto se habla de
+    repartidor, no de conductor, y el precio es "del servicio".
+  - Se borra `SelectorVehiculo` / `OpcionVehiculo` / `_Vehiculo`, que quedaban sin uso, y con él la
+    regla que escondía la brújula del mapa.
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/pasajero/viaje/modo_servicio.dart` (nuevo)
+  - `app-movil/lib/widgets/selector_servicio.dart` (nuevo)
+  - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart`
+  - `app-movil/lib/widgets/inicio_mapa.dart`
+  - `app-movil/test/modo_servicio_test.dart` (nuevo)
+  - `app-movil/test/selector_servicio_test.dart` (nuevo)
+- **Verificación (salida real):** `flutter analyze` → `No issues found!`; `flutter test` →
+  `00:02 +109: All tests passed!` (17 pruebas nuevas del selector de servicio, más 4 de las alturas
+  reales de los selectores y 4 de `faltaElegirTipo`). Sin verificación en dispositivo: la pantalla
+  final queda para prueba manual en Chrome o APK.
+
+### 🐛 Arreglo · Test del selector de categoría del conductor desactualizado
+
+- **Módulo / área:** app móvil, test del registro del conductor.
+- **Descripción:** al cambiar el texto de la opción de reparto a "Repartidor de entregas (Delivery)"
+  quedó una prueba esperando el texto anterior, y la suite entera no pasaba.
+- **Cambios clave:** la prueba compara contra el texto vigente.
+- **Archivos afectados:** `app-movil/test/registro_conductor_categoria_test.dart`.
+- **Verificación (salida real):** `flutter test` → `00:02 +109: All tests passed!`.
 
 ### 🧪 Verificación · Deuda de verificación de DELIVERY (Tasks 3 a 8)
 
@@ -74,7 +123,29 @@
     reporte y resolución). Detalle en `docs/superpowers/2026-10-05-verificacion-entrega.md`.
   - Smoke en Chrome: `/app` y `/admin` montan sin excepción de Dart, con los títulos correctos.
 
-## 2026-10-05
+### ✨ Nuevo · La moto del conductor puede ser DELIVERY (Task 1 del plan del repartidor)
+
+- **Módulo / área:** backend (`identity/dto`, `vehicle`).
+- **Descripción:** el registro del conductor acepta la categoría de servicio de la moto; si no viene, sigue la MOTO estándar. La elección queda solo en `vehiculo.categoria_servicio`, en nada más.
+- **Cambios clave:** `DatosConductorRequest` suma `idCategoriaServicio` opcional; `CategoriaServicioRepository` gana la categoría activa por id y la MOTO estándar de forma determinista (activa de menor id que no sea DELIVERY); `VehiculoService.resolverCategoriaServicio` queda como regla única de compatibilidad (404 si el id no existe o la categoría está eliminada, 422 si es de otro tipo de vehículo) y la reutilizan el alta, la edición y el registro; `RegistroMotoConductorService` deja de usar el `findFirst()` sin orden y el chequeo DELIVERY duplicado.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/identity/dto/DatosConductorRequest.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/repository/CategoriaServicioRepository.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/service/VehiculoService.java`, `backend/src/main/java/com/taxiuap/backend/vehicle/service/RegistroMotoConductorService.java`, `backend/src/test/java/com/taxiuap/backend/vehicle/service/RegistroMotoConductorCategoriaTest.java`, `backend/src/test/java/com/taxiuap/backend/vehicle/service/VehiculoEntregaTest.java`.
+- **Verificación:** `./gradlew compileJava`, `./gradlew test --tests '*Vehiculo*' --tests '*RegistroMotoConductorCategoriaTest*'` y `./gradlew build` con el perfil `appu` (182 pruebas, 0 fallos).
+
+### 🐛 Arreglo · Longitud de códigos DELIVERY en el agente verificador
+
+- **Módulo / área:** configuración de opencode (`.opencode/agent/verificador.md`).
+- **Descripción:** se eliminó la ambigüedad entre los códigos DELIVERY de 6 dígitos y las referencias legítimas a teléfonos, contraseñas y números de tareas que contienen el número 8.
+- **Cambios clave:** el agente ahora declara explícitamente que nunca debe usar 8 como longitud de `codigo_recogida` o `codigo_entrega`.
+- **Archivos afectados:** `.opencode/agent/verificador.md`, `docs/CHANGELOG.md`.
+- **Verificación:** revisión estática de todas las referencias numéricas del agente; no se ejecutaron tests ni builds.
+
+### 🔧 Arreglo · Agente verificador de pruebas y validaciones
+
+- **Módulo / área:** configuración de opencode (`.opencode/agent`) y proceso de verificación.
+- **Descripción:** se revisó y reforzó el subagente `verificador` para ejecutar la deuda de verificación sin repetir bloqueos ni alterar históricos.
+- **Cambios clave:** las pruebas Spring pasan explícitamente `TAXIUAP_DB_PASSWORD='<12346578>'`; se añadieron límites anti-bucle, clasificación de bloqueos, detención ante ambigüedades y protección de cambios locales/secretos; el changelog y reportes históricos se actualizan de forma acumulativa.
+- **Archivos afectados:** `.opencode/agent/verificador.md`, `docs/CHANGELOG.md`.
+- **Verificación:** revisión estática del agente y de sus instrucciones; no se ejecutaron tests ni builds porque esta tarea solo ajusta el agente.
 
 ### ✨ Nuevo · Task 8 DELIVERY: panel administrativo y contratos de evidencia
 

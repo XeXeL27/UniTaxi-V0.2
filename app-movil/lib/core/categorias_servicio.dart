@@ -5,7 +5,7 @@ import 'cliente_api.dart';
 const String nombreCategoriaReparto = 'DELIVERY';
 
 /// Texto de la opcion de reparto en el selector del conductor.
-const String textoCategoriaReparto = 'Repartidor de entregas';
+const String textoCategoriaReparto = 'Repartidor de entregas (Delivery)';
 
 /// Texto de la opcion de taxi en el selector del conductor.
 const String textoCategoriaTaxi = 'Mototaxi (pido pasajeros)';

@@ -85,6 +85,7 @@ void main() {
 
     expect(datos.tieneReporte, isTrue);
     expect(datos.resumenReporte, 'No respondió');
+    expect(datos.informacionReporte, 'Incidente registrado; estado administrativo no disponible para el pasajero');
   });
 
   test('usa pantalla completa debajo de 600 pixeles', () {

@@ -24,8 +24,8 @@ Los archivos con credenciales no se suben al repositorio. Se crean a partir de s
 
 ```bash
 cp .env.example .env
-cp backend/src/main/resources/application-xexel.properties.example \
-   backend/src/main/resources/application-xexel.properties
+cp backend/src/main/resources/application-profile.properties.example \
+   backend/src/main/resources/application-profile.properties
 ```
 
 Completar en ambos los valores `<cambiar>`. La contraseña de `.env` (`TAXIUAP_DB_PASSWORD`) debe ser la

@@ -41,7 +41,7 @@ Resultado: ambos terminaron con `BUILD SUCCESSFUL`; pasan las 2 clases focalizad
 - `backend/src/main/java/com/taxiuap/backend/pricing/service/CalculoPrecioDeliveryService.java`
 - `backend/src/main/java/com/taxiuap/backend/identity/dto/ActualizarPerfilConductorRequest.java`
 - `backend/src/main/java/com/taxiuap/backend/identity/service/PerfilConductorService.java`
-- `backend/src/main/resources/application-xexel.properties`
+- `backend/src/main/resources/application-profile.properties`
 - `backend/src/main/resources/application-xexel.properties.example`
 - `app-movil/lib/core/config.dart`
 - `app-movil/lib/mapa/servicios_mapa.dart`
