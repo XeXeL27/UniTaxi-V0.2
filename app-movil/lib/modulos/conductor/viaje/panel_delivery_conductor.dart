@@ -56,7 +56,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   Future<void> _codigoAccion(Future<void> Function(String) accion) async {
     final valor = _codigo.text.trim();
     if (!ValidadorCodigoDelivery.esValido(valor)) {
-      _mensaje('El código debe tener exactamente 8 dígitos.');
+      _mensaje('El código debe tener exactamente 6 dígitos.');
       return;
     }
     await accion(valor);
@@ -83,7 +83,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           Text(titulo, style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17)),
           Text(ayuda, style: const TextStyle(color: ColoresApp.textoSuave)),
           const SizedBox(height: 8),
-          TextField(controller: _codigo, keyboardType: TextInputType.number, maxLength: 8, decoration: const InputDecoration(labelText: 'Código dictado')),
+          TextField(controller: _codigo, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Código dictado')),
           FilledButton(onPressed: flujo.ocupado ? null : confirmar, child: const Text('Confirmar código')),
           _botonPaqueteIncorrecto(),
         ],

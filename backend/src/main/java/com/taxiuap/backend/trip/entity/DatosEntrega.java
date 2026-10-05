@@ -38,7 +38,7 @@ import lombok.Setter;
 @NoArgsConstructor
 public class DatosEntrega extends EntidadAuditable {
 
-    private static final String PATRON_CODIGO = "\\d{8}";
+    private static final String PATRON_CODIGO = "\\d{6}";
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -72,11 +72,11 @@ public class DatosEntrega extends EntidadAuditable {
     @Column(name = "telefono_receptor", length = 30)
     private String telefonoReceptor;
 
-    @Column(name = "codigo_recogida", length = 8)
+    @Column(name = "codigo_recogida", length = 6)
     @Pattern(regexp = PATRON_CODIGO)
     private String codigoRecogida;
 
-    @Column(name = "codigo_entrega", length = 8)
+    @Column(name = "codigo_entrega", length = 6)
     @Pattern(regexp = PATRON_CODIGO)
     private String codigoEntrega;
 

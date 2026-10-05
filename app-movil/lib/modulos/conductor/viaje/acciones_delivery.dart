@@ -1,6 +1,6 @@
 /// Validaciones que la app puede hacer sin conocer secretos del pedido.
 class ValidadorCodigoDelivery {
-  static final _patron = RegExp(r'^\d{8}$');
+  static final _patron = RegExp(r'^\d{6}$');
 
   static bool esValido(String valor) => _patron.hasMatch(valor.trim());
 }
