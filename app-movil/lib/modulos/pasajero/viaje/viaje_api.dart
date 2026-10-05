@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/categorias_servicio.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
 import '../../../mapa/controlador_mapa.dart';
@@ -113,16 +114,7 @@ class ViajeApi {
   Future<void> cancelarSolicitud(int id) => cliente.delete('/api/pasajero/solicitudes/$id');
 
   /// Categoria publica DELIVERY. No se fija un id en la app porque el administrador puede cambiarlo.
-  Future<int?> categoriaDelivery() async {
-    final categorias = await cliente.get('/api/publico/categorias-servicio') as List<dynamic>;
-    for (final dato in categorias) {
-      final categoria = dato as Map<String, dynamic>;
-      if ((categoria['nombre'] as String?)?.toUpperCase() == 'DELIVERY') {
-        return (categoria['id'] as num).toInt();
-      }
-    }
-    return null;
-  }
+  Future<int?> categoriaDelivery() => categoriaRepartoId(cliente);
 
   Future<Viaje> confirmarCompra(int idViaje) async => Viaje.desdeJson(
         await cliente.post('/api/pasajero/viajes/$idViaje/entrega/confirmar-compra', const {})
