@@ -25,11 +25,24 @@ import 'selector_carnet.dart';
 /// Con [codigoGoogle] es el registro de un pasajero nuevo con Google: no hay sesion ni nada guardado
 /// todavia; al confirmar se crean juntos la persona, el carnet y la cuenta. "Cancelar registro"
 /// ([onCancelar]) vuelve al login sin dejar rastro.
+///
+/// Con [codigoEstudiante] es el registro de un estudiante UAP (su RU ya se consulto en el SIGSE): el
+/// servidor compara el carnet con los datos de la UAP y crea la cuenta como estudiante.
 class PantallaVerificarCarnet extends StatefulWidget {
   final String? codigoGoogle;
+  final String? codigoEstudiante;
+
+  /// Nombre completo que dio el SIGSE, para el saludo.
+  final String? nombreEstudiante;
   final VoidCallback? onCancelar;
 
-  const PantallaVerificarCarnet({super.key, this.codigoGoogle, this.onCancelar});
+  const PantallaVerificarCarnet({
+    super.key,
+    this.codigoGoogle,
+    this.codigoEstudiante,
+    this.nombreEstudiante,
+    this.onCancelar,
+  });
 
   @override
   State<PantallaVerificarCarnet> createState() => _PantallaVerificarCarnetState();
@@ -59,7 +72,9 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
   /// Primer nombre para el titulo: el de la sesion o, en el registro con Google, el de la cuenta.
   String _primerNombre = '';
 
-  bool get _registro => widget.codigoGoogle != null;
+  bool get _registro => widget.codigoGoogle != null || _estudiante;
+
+  bool get _estudiante => widget.codigoEstudiante != null;
 
   /// "No, no son mis datos": se descartan las fotos y todo lo leido de ellas.
   void _reiniciar(String aviso) {
@@ -80,6 +95,10 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
   @override
   void initState() {
     super.initState();
+    if (_estudiante) {
+      _primerNombre = enTitulo((widget.nombreEstudiante ?? '').trim().split(' ').first);
+      return;
+    }
     if (_registro) {
       _cargarPerfilGoogle();
       return;
@@ -213,11 +232,19 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       if (_registro) {
         // Recien ahora se guarda todo; con la sesion iniciada la app pasa sola a la vista del pasajero.
         final navegador = Navigator.of(context);
-        await sesion.registrarPasajeroGoogle(
-          {...datos, 'codigo': widget.codigoGoogle},
-          anverso: _seleccion.anverso!,
-          reverso: _seleccion.reverso!,
-        );
+        if (_estudiante) {
+          await sesion.registrarEstudianteUap(
+            {...datos, 'codigo': widget.codigoEstudiante},
+            anverso: _seleccion.anverso!,
+            reverso: _seleccion.reverso!,
+          );
+        } else {
+          await sesion.registrarPasajeroGoogle(
+            {...datos, 'codigo': widget.codigoGoogle},
+            anverso: _seleccion.anverso!,
+            reverso: _seleccion.reverso!,
+          );
+        }
         if (widget.onCancelar == null) navegador.popUntil((ruta) => ruta.isFirst);
         return;
       }

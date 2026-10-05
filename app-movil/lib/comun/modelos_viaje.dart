@@ -71,6 +71,31 @@ class PrecioViaje {
   double? get gananciaConductor => precio == null ? null : precio! * (1 - comisionPorcentaje / 100);
 }
 
+/// Precio del viaje elegido, calculado por el servidor con la distancia por calles (CotizacionViajeResponse):
+/// precio normal por tramos de km, descuento de estudiante UAP (0 si no tiene) y lo que se paga.
+class CotizacionViaje {
+  final double distanciaKm;
+  final double precioNormal;
+  final double descuentoEstudiante;
+  final double precio;
+
+  const CotizacionViaje({
+    required this.distanciaKm,
+    required this.precioNormal,
+    required this.descuentoEstudiante,
+    required this.precio,
+  });
+
+  factory CotizacionViaje.desdeJson(Map<String, dynamic> json) => CotizacionViaje(
+    distanciaKm: numeroDesdeJson(json['distanciaKm']) ?? 0,
+    precioNormal: numeroDesdeJson(json['precioNormal']) ?? 0,
+    descuentoEstudiante: numeroDesdeJson(json['descuentoEstudiante']) ?? 0,
+    precio: numeroDesdeJson(json['precio']) ?? 0,
+  );
+
+  bool get conDescuento => descuentoEstudiante > 0;
+}
+
 /// Solicitud de viaje (SolicitudViajeResponse).
 class Solicitud {
   final int id;
@@ -83,10 +108,15 @@ class Solicitud {
   /// Nombre del favorito que el pasajero eligio como destino ("Casa de mi mama"). Solo llega en
   /// las respuestas al pasajero: el conductor ve [destinoDireccion].
   final String? destinoNombre;
+  /// Lo que paga el pasajero y cobra el conductor (con el descuento de estudiante ya restado).
   final double? precio;
   final String situacion;
   final DateTime? fecha;
   final String metodoPago;
+
+  /// Descuento de estudiante UAP (0 si no tiene) y precio sin descuento.
+  final double descuentoEstudiante;
+  final double? precioNormal;
 
   const Solicitud({
     required this.id,
@@ -100,6 +130,8 @@ class Solicitud {
     required this.situacion,
     required this.fecha,
     this.metodoPago = MetodoPago.efectivo,
+    this.descuentoEstudiante = 0,
+    this.precioNormal,
   });
 
   factory Solicitud.desdeJson(Map<String, dynamic> json) => Solicitud(
@@ -114,6 +146,8 @@ class Solicitud {
     situacion: json['situacionSolicitud'] as String? ?? '',
     fecha: fechaDesdeJson(json['fechaSolicitud']),
     metodoPago: json['metodoPago'] as String? ?? MetodoPago.efectivo,
+    descuentoEstudiante: numeroDesdeJson(json['descuentoEstudiante']) ?? 0,
+    precioNormal: numeroDesdeJson(json['precioNormal']),
   );
 
   bool get activa => situacion == 'PENDIENTE' || situacion == 'CON_OFERTAS';

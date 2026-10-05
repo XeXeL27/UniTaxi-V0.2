@@ -16,5 +16,8 @@ public record PasajeroAdminResponse(
         Integer totalCalificaciones,
         LocalDateTime fechaRegistro,
         /** Estado de su cuenta: A (activa) o S (suspendida). */
-        String estadoUsuario) {
+        String estadoUsuario,
+        /** Estudiante UAP: VERIFICADO, VENCIDO, PENDIENTE, RECHAZADO o NINGUNO; ru si lo tiene. */
+        String estudiante,
+        String ru) {
 }

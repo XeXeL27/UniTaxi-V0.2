@@ -86,6 +86,12 @@ class ViajeApi {
   Future<PrecioViaje> precio() async =>
       PrecioViaje.desdeJson(await cliente.get('/api/pasajero/solicitudes/precio') as Map<String, dynamic>);
 
+  /// Precio de ir de [a] a [b] para este pasajero (con su descuento de estudiante, si tiene).
+  Future<CotizacionViaje> cotizar(LatLng a, LatLng b) async => CotizacionViaje.desdeJson(
+    await cliente.get('/api/pasajero/solicitudes/cotizacion?origenLat=${a.latitude}&origenLng=${a.longitude}'
+        '&destinoLat=${b.latitude}&destinoLng=${b.longitude}') as Map<String, dynamic>,
+  );
+
   /// [destinoNombre]: nombre del favorito elegido como destino (solo lo ve el pasajero).
   Future<Solicitud> solicitar(PuntoRuta origen, PuntoRuta destino,
       {String metodoPago = MetodoPago.efectivo, String? destinoNombre}) async {

@@ -213,7 +213,7 @@ public class OfertaViajeService {
         OfertaViaje oferta = new OfertaViaje();
         oferta.setSolicitud(solicitud);
         oferta.setConductor(conductorActual);
-        oferta.setPrecioOfertado(solicitud.getPrecioSugerido());
+        oferta.setPrecioOfertado(solicitud.precioACobrar());
         oferta.setSituacionOferta(SituacionOferta.ACEPTADA);
         oferta.setFechaOferta(LocalDateTime.now());
         oferta.setEstadoOferViaje(EstadoRegistro.A);

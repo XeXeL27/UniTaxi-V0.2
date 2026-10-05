@@ -20,6 +20,7 @@ import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.enums.SituacionCarnet;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PersonaRepository;
+import com.taxiuap.backend.institution.service.EstudianteUapService;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
@@ -53,6 +54,7 @@ public class RevisionCarnetService {
     private final GestionConductorService gestionConductorService;
     private final CredencialesCorreoService credencialesCorreoService;
     private final NotificacionPushService notificacionPushService;
+    private final EstudianteUapService estudianteUapService;
 
     @Transactional(readOnly = true)
     public List<CarnetObservadoResponse> listar() {
@@ -75,6 +77,7 @@ public class RevisionCarnetService {
         persona.setSituacionCarnet(SituacionCarnet.VERIFICADO);
         persona.setMotivoObservacion(null);
         persona.setFechaObservacion(null);
+        estudianteUapService.resolverRevision(persona, !Boolean.FALSE.equals(datos.comoEstudiante()));
 
         List<Usuario> cuentas = credencialesCorreoService.cuentasDeApp(persona);
         Optional<Usuario> conductor = cuenta(cuentas, RolSistema.CONDUCTOR);
@@ -125,6 +128,7 @@ public class RevisionCarnetService {
 
     public void rechazar(Long idPersona, String motivo, Long idUsuarioActual) {
         Persona persona = observada(idPersona);
+        estudianteUapService.quitarEstudiante(persona);
         String texto = motivo.trim();
         String correo = persona.getCorreo();
         credencialesCorreoService.registroRechazado(persona, correo, texto);
@@ -203,7 +207,8 @@ public class RevisionCarnetService {
                 tipo,
                 conductor.map(Conductor::getNumeroLicencia).orElse(null),
                 persona.getMotivoObservacion(),
-                persona.getFechaObservacion());
+                persona.getFechaObservacion(),
+                estudianteUapService.ruPendiente(persona).orElse(null));
     }
 
     private static String vacioANull(String valor) {

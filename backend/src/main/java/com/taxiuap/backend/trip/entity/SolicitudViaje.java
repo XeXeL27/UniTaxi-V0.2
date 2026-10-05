@@ -67,8 +67,27 @@ public class SolicitudViaje extends EntidadAuditable {
     @Column(name = "destino_nombre_pasajero", length = 100)
     private String destinoNombrePasajero;
 
+    /** Precio normal del viaje (sin descuento), calculado por el servidor con la distancia por calles. */
     @Column(name = "precio_sugerido", precision = 10, scale = 2)
     private BigDecimal precioSugerido;
+
+    /** Km por calles con que se calculo el precio (OSRM, o linea recta si no respondio). */
+    @Column(name = "distancia_km", precision = 10, scale = 2)
+    private BigDecimal distanciaKm;
+
+    /**
+     * Bs que se le descuentan al pasajero por ser estudiante con matricula vigente (null o 0: sin
+     * descuento). Lo pone el conductor: cobra precio_sugerido menos esto.
+     */
+    @Column(name = "descuento_estudiante", precision = 10, scale = 2)
+    private BigDecimal descuentoEstudiante;
+
+    /** Lo que paga el pasajero (y cobra el conductor). */
+    public BigDecimal precioACobrar() {
+        if (precioSugerido == null) return null;
+        BigDecimal descuento = descuentoEstudiante == null ? BigDecimal.ZERO : descuentoEstudiante;
+        return precioSugerido.subtract(descuento).max(BigDecimal.ZERO);
+    }
 
     @Enumerated(EnumType.STRING)
     @Column(name = "situacion_solicitud", length = 20)

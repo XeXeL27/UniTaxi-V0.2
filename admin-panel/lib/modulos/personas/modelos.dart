@@ -303,6 +303,10 @@ class PasajeroAdmin {
   /// Estado de su cuenta: A (activa) o S (suspendida).
   final String estadoUsuario;
 
+  /// Estudiante UAP: VERIFICADO, VENCIDO, PENDIENTE, RECHAZADO o NINGUNO; ru si lo tiene.
+  final String estudiante;
+  final String? ru;
+
   PasajeroAdmin({
     required this.idPasajero,
     required this.idUsuario,
@@ -315,9 +319,14 @@ class PasajeroAdmin {
     this.totalCalificaciones,
     this.fechaRegistro,
     this.estadoUsuario = 'A',
+    this.estudiante = 'NINGUNO',
+    this.ru,
   });
 
   bool get suspendida => estadoUsuario == 'S';
+
+  /// Columna "Estudiante UAP" de la tabla.
+  String get estudianteTexto => estudiante == 'NINGUNO' ? 'NO' : estudiante;
 
   String get situacion => suspendida ? 'SUSPENDIDO' : 'ACTIVO';
 
@@ -335,6 +344,8 @@ class PasajeroAdmin {
     totalCalificaciones: Formato.leerEntero(json['totalCalificaciones']),
     fechaRegistro: Formato.leerFecha(json['fechaRegistro']),
     estadoUsuario: json['estadoUsuario'] as String? ?? 'A',
+    estudiante: json['estudiante'] as String? ?? 'NINGUNO',
+    ru: json['ru'] as String?,
   );
 }
 
@@ -446,6 +457,9 @@ class CarnetObservado {
   final String? motivo;
   final DateTime? fechaObservacion;
 
+  /// RU si se registro como estudiante UAP: se aprueba como estudiante o como pasajero normal.
+  final String? ruEstudiante;
+
   CarnetObservado({
     required this.idPersona,
     this.idUsuario,
@@ -461,11 +475,14 @@ class CarnetObservado {
     this.numeroLicencia,
     this.motivo,
     this.fechaObservacion,
+    this.ruEstudiante,
   });
 
   String get nombreCompleto => '$nombres $apellidos';
 
   bool get esConductor => idConductor != null;
+
+  bool get esEstudianteUap => ruEstudiante != null;
 
   String get carnet => (complementoCi ?? '').isEmpty ? (ci ?? '') : '${ci ?? ''}-$complementoCi';
 
@@ -484,5 +501,6 @@ class CarnetObservado {
     numeroLicencia: json['numeroLicencia'] as String?,
     motivo: json['motivo'] as String?,
     fechaObservacion: Formato.leerFecha(json['fechaObservacion']),
+    ruEstudiante: json['ruEstudiante'] as String?,
   );
 }

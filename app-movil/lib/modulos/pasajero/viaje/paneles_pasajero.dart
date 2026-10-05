@@ -58,10 +58,11 @@ class PanelEligiendo extends StatelessWidget {
         if (b != null) ...[
           RecuadroPrecio(
             etiqueta: 'Precio del viaje',
-            detalle: flujo.metodoPago == MetodoPago.qr
-                ? 'Pagas con el QR del conductor'
-                : 'Pagas en efectivo al conductor',
-            monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
+            detalle: [
+              ?flujo.detalleDescuento,
+              flujo.metodoPago == MetodoPago.qr ? 'Pagas con el QR del conductor' : 'Pagas en efectivo al conductor',
+            ].join('\n'),
+            monto: flujo.textoPrecio,
           ),
           const SizedBox(height: 10),
           _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
@@ -159,7 +160,8 @@ class DetalleSolicitudViaje extends StatelessWidget {
       children: [
         RecuadroPrecio(
           etiqueta: 'Precio del viaje',
-          monto: flujo.precio?.precio != null ? formatoBs(flujo.precio!.precio) : 'A calcular',
+          detalle: flujo.detalleDescuento,
+          monto: flujo.textoPrecio,
         ),
         const SizedBox(height: 4),
         _FilaDato(

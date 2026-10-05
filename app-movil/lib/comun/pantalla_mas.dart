@@ -16,6 +16,7 @@ import '../widgets/notificaciones.dart';
 import '../widgets/pagina_seccion.dart';
 import 'cambiar_contrasena.dart';
 import 'configuracion_avisos.dart';
+import 'estudiante_uap.dart';
 import 'textos_legales.dart';
 
 // Colores de los iconos, como los de Ajustes de iOS.
@@ -178,6 +179,7 @@ class _PantallaMasState extends State<PantallaMas> {
               detalle: 'El QR de tu banca móvil para cobrar (hasta 3)',
               onTap: widget.onMisQr,
             ),
+          if (!esConductor) const TarjetaEstudianteUap(),
           if (widget.registroConductor != null)
             TarjetaOpcion(
               icono: Icons.two_wheeler_rounded,

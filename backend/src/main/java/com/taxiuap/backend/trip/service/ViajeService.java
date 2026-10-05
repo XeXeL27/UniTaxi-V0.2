@@ -299,6 +299,8 @@ public class ViajeService {
         nueva.setDestinoDireccion(anterior.getDestinoDireccion());
         nueva.setDestinoNombrePasajero(anterior.getDestinoNombrePasajero());
         nueva.setPrecioSugerido(anterior.getPrecioSugerido());
+        nueva.setDistanciaKm(anterior.getDistanciaKm());
+        nueva.setDescuentoEstudiante(anterior.getDescuentoEstudiante());
         nueva.setMetodoPago(metodoPagoDe(viaje));
         nueva.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         nueva.setFechaSolicitud(LocalDateTime.now());
@@ -308,7 +310,7 @@ public class ViajeService {
         OfertaViaje rechazo = new OfertaViaje();
         rechazo.setSolicitud(nueva);
         rechazo.setConductor(viaje.getConductor());
-        rechazo.setPrecioOfertado(nueva.getPrecioSugerido());
+        rechazo.setPrecioOfertado(nueva.precioACobrar());
         rechazo.setSituacionOferta(SituacionOferta.RECHAZADA);
         rechazo.setFechaOferta(LocalDateTime.now());
         ofertaViajeRepository.save(rechazo);

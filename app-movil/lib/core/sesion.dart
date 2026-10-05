@@ -262,8 +262,21 @@ class Sesion extends ChangeNotifier {
 
   /// Termina el registro de pasajero con Google: recien aqui el servidor guarda la persona, el carnet
   /// y la cuenta, y envia las credenciales. Al terminar la sesion queda iniciada.
-  Future<void> registrarPasajeroGoogle(Map<String, dynamic> datos, {required Uint8List anverso, required Uint8List reverso}) async {
-    final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}/api/auth/registro/pasajero/google'));
+  Future<void> registrarPasajeroGoogle(Map<String, dynamic> datos, {required Uint8List anverso, required Uint8List reverso}) =>
+      _registrarConCarnet('/api/auth/registro/pasajero/google', datos, anverso: anverso, reverso: reverso);
+
+  /// Registro de estudiante UAP, paso 1: el RU. El servidor lo consulta en el SIGSE y devuelve el
+  /// codigo para el paso 2, o (tieneCuenta) el mensaje para quien ya tenia cuenta.
+  Future<Map<String, dynamic>> consultarRuUap(String ru) async =>
+      await _postAuth('/api/auth/estudiante-uap/consulta', {'ru': ru}) as Map<String, dynamic>;
+
+  /// Registro de estudiante UAP, paso 2: el carnet confirmado. Al terminar la sesion queda iniciada.
+  Future<void> registrarEstudianteUap(Map<String, dynamic> datos, {required Uint8List anverso, required Uint8List reverso}) =>
+      _registrarConCarnet('/api/auth/registro/estudiante-uap', datos, anverso: anverso, reverso: reverso);
+
+  Future<void> _registrarConCarnet(String ruta, Map<String, dynamic> datos,
+      {required Uint8List anverso, required Uint8List reverso}) async {
+    final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
     peticion.files.addAll([
       http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
       http.MultipartFile.fromBytes('anverso', anverso, filename: 'carnet_anverso.jpg', contentType: MediaType('image', 'jpeg')),

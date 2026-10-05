@@ -7,21 +7,19 @@ import java.time.LocalDateTime;
 import java.util.Optional;
 
 import org.locationtech.jts.geom.Point;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.institution.entity.Estudiante;
-import com.taxiuap.backend.institution.entity.MatriculaEstudiante;
 import com.taxiuap.backend.institution.service.EstudianteService;
 import com.taxiuap.backend.institution.service.MatriculaEstudianteService;
 import com.taxiuap.backend.location.entity.Zona;
 import com.taxiuap.backend.location.repository.ZonaRepository;
 import com.taxiuap.backend.pricing.dto.CalculoPrecio;
-import com.taxiuap.backend.pricing.entity.ReglaDescuentoEstudiantil;
+import com.taxiuap.backend.pricing.dto.CotizacionViaje;
+import com.taxiuap.backend.pricing.dto.ParametrosPrecio;
 import com.taxiuap.backend.pricing.entity.Tarifa;
-import com.taxiuap.backend.pricing.repository.ReglaDescuentoEstudiantilRepository;
 import com.taxiuap.backend.pricing.repository.TarifaRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
@@ -32,87 +30,90 @@ import com.taxiuap.backend.trip.repository.ViajeRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Calcula el precio de un viaje a partir de la solicitud del pasajero y la oferta aceptada del
- * conductor, aplicando el descuento estudiantil cuando corresponde (regla de negocio 3).
+ * Precio del viaje en taxi. El servidor mide la distancia por calles (DistanciaRutaService) y le
+ * aplica el precio por tramos que el administrador edita en el panel (ParametrosPrecio): precio base
+ * hasta ciertos km y un monto por cada tramo adicional. Al estudiante con matricula vigente se le
+ * resta un descuento fijo en Bs (regla de negocio 3); lo pone el conductor, que cobra menos.
+ *
+ * El precio y el descuento quedan fijos en la solicitud al pedirla, y el viaje los copia al
+ * aceptarse: lo que el pasajero vio es lo que paga.
  */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class CalculoPrecioService {
 
-    /** Radio medio de la Tierra en kilometros, usado por la formula del haversine. */
-    private static final double RADIO_TIERRA_KM = 6371.0;
-
-    /** Velocidad urbana promedio usada para estimar la duracion del viaje. */
-    private static final BigDecimal VELOCIDAD_URBANA_KMH = BigDecimal.valueOf(25);
-
     private final TarifaRepository tarifaRepository;
     private final ZonaRepository zonaRepository;
-    private final ReglaDescuentoEstudiantilRepository reglaDescuentoRepository;
     private final EstudianteService estudianteService;
     private final MatriculaEstudianteService matriculaEstudianteService;
     private final ViajeRepository viajeRepository;
+    private final ParametrosPrecioService parametrosPrecioService;
+    private final DistanciaRutaService distanciaRutaService;
 
-    /** Precio fijo del viaje (Bs), 8.00 si no se configura; vacio: el precio sale de la tarifa vigente. */
-    @Value("${taxiuap.viaje.precio-fijo:8.00}")
-    private BigDecimal precioFijo;
-
-    @Value("${taxiuap.descuento-estudiantil.habilitado:false}")
-    private boolean descuentoEstudiantilHabilitado;
-
-    /** Precio fijo configurado, o null si el precio se calcula con la tarifa. */
-    public BigDecimal precioFijo() {
-        return precioFijo != null ? precioFijo.setScale(2, RoundingMode.HALF_UP) : null;
+    /** Precio base vigente (el de los primeros km), para mostrar antes de elegir destino. */
+    public BigDecimal precioBase() {
+        return parametrosPrecioService.actuales().precioBase();
     }
 
+    /** Precio de un viaje de [origen] a [destino] para [pasajero], con su descuento de estudiante. */
+    public CotizacionViaje cotizar(Pasajero pasajero, Point origen, Point destino) {
+        ParametrosPrecio parametros = parametrosPrecioService.actuales();
+        DistanciaRutaService.DistanciaRuta distancia = distanciaRutaService.medir(origen, destino);
+        BigDecimal precioNormal = parametros.precioPara(distancia.km());
+        Optional<Estudiante> estudiante = estudianteConDescuento(pasajero, parametros);
+        BigDecimal descuento = estudiante.isPresent()
+                ? BigDecimal.valueOf(parametros.descuentoEstudiante()).min(precioNormal).setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.ZERO.setScale(2);
+        return new CotizacionViaje(distancia.km(), distancia.minutos(), distancia.porCalles(), precioNormal,
+                descuento, precioNormal.subtract(descuento), descuento.signum() > 0 ? estudiante.get() : null);
+    }
+
+    /** Precio del viaje que nace de [solicitud]: el que quedo fijado al pedirla. */
     public CalculoPrecio calcular(SolicitudViaje solicitud, OfertaViaje oferta, Pasajero pasajero) {
-        BigDecimal distanciaKm = calcularDistanciaKm(solicitud.getOrigen(), solicitud.getDestino());
-        Integer duracionMin = calcularDuracionMin(distanciaKm);
+        BigDecimal distanciaKm = solicitud.getDistanciaKm() != null ? solicitud.getDistanciaKm()
+                : DistanciaRutaService.lineaRecta(solicitud.getOrigen(), solicitud.getDestino()).km();
+        Integer duracionMin = DistanciaRutaService.lineaRecta(solicitud.getOrigen(), solicitud.getDestino()).minutos();
         Tarifa tarifa = buscarTarifaVigente(solicitud);
 
-        BigDecimal precioOriginal = calcularPrecioOriginal(oferta, tarifa, distanciaKm, duracionMin);
-        ResultadoDescuento descuento = calcularDescuento(pasajero, solicitud, precioOriginal);
-
-        BigDecimal precioFinal = precioOriginal.subtract(descuento.monto());
-        if (precioFinal.compareTo(BigDecimal.ZERO) < 0) {
-            precioFinal = BigDecimal.ZERO;
-        }
+        // Solicitudes de antes del precio por tramos: se calcula con los parametros actuales.
+        BigDecimal precioOriginal = solicitud.getPrecioSugerido() != null ? solicitud.getPrecioSugerido()
+                : parametrosPrecioService.actuales().precioPara(distanciaKm);
+        BigDecimal descuento = solicitud.getDescuentoEstudiante() != null ? solicitud.getDescuentoEstudiante()
+                : BigDecimal.ZERO;
+        descuento = descuento.min(precioOriginal).max(BigDecimal.ZERO);
+        Estudiante estudiante = descuento.signum() > 0
+                ? estudianteService.buscarPorUsuario(pasajero.getUsuario().getId()).orElse(null)
+                : null;
+        if (estudiante == null) descuento = BigDecimal.ZERO;
 
         return new CalculoPrecio(
                 precioOriginal.setScale(2, RoundingMode.HALF_UP),
-                descuento.monto().setScale(2, RoundingMode.HALF_UP),
-                precioFinal.setScale(2, RoundingMode.HALF_UP),
+                descuento.setScale(2, RoundingMode.HALF_UP),
+                precioOriginal.subtract(descuento).setScale(2, RoundingMode.HALF_UP),
                 tarifa,
-                descuento.regla(),
-                descuento.estudiante(),
+                null,
+                estudiante,
                 distanciaKm,
                 duracionMin);
     }
 
     /**
-     * Distancia en linea recta entre origen y destino (formula del haversine, radio 6371 km).
-     * Es una aproximacion: no sigue calles ni trafico real. Cuando el proyecto incorpore un
-     * servicio de rutas (por ejemplo OSRM o Google Directions), este es el unico lugar del
-     * sistema que hay que reemplazar para que toda la app use distancia real en carretera.
+     * Regla de negocio 3: descuento solo con matricula APROBADA y vigente, un descuento configurado
+     * mayor a cero y sin pasar el maximo de viajes con descuento del dia.
      */
-    private BigDecimal calcularDistanciaKm(Point origen, Point destino) {
-        double lat1 = Math.toRadians(origen.getY());
-        double lat2 = Math.toRadians(destino.getY());
-        double deltaLat = Math.toRadians(destino.getY() - origen.getY());
-        double deltaLon = Math.toRadians(destino.getX() - origen.getX());
-
-        double a = Math.sin(deltaLat / 2) * Math.sin(deltaLat / 2)
-                + Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLon / 2) * Math.sin(deltaLon / 2);
-        double c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-        return BigDecimal.valueOf(RADIO_TIERRA_KM * c).setScale(2, RoundingMode.HALF_UP);
-    }
-
-    /** Duracion estimada a velocidad urbana constante, con un minimo de 1 minuto. */
-    private Integer calcularDuracionMin(BigDecimal distanciaKm) {
-        BigDecimal horas = distanciaKm.divide(VELOCIDAD_URBANA_KMH, 6, RoundingMode.HALF_UP);
-        int minutos = horas.multiply(BigDecimal.valueOf(60)).setScale(0, RoundingMode.HALF_UP).intValue();
-        return Math.max(1, minutos);
+    private Optional<Estudiante> estudianteConDescuento(Pasajero pasajero, ParametrosPrecio parametros) {
+        if (parametros.descuentoEstudiante() == null || parametros.descuentoEstudiante() <= 0) {
+            return Optional.empty();
+        }
+        Optional<Estudiante> estudiante = estudianteService.buscarPorUsuario(pasajero.getUsuario().getId())
+                .filter(e -> matriculaEstudianteService.buscarVigenteAprobada(e.getId()).isPresent());
+        if (estudiante.isEmpty() || parametros.viajesEstudiantePorDia() == null) {
+            return estudiante;
+        }
+        LocalDateTime inicioDia = LocalDate.now().atStartOfDay();
+        long hoy = viajeRepository.contarConDescuentoEnRango(estudiante.get().getId(), inicioDia, inicioDia.plusDays(1));
+        return hoy < parametros.viajesEstudiantePorDia() ? estudiante : Optional.empty();
     }
 
     /**
@@ -149,96 +150,5 @@ public class CalculoPrecioService {
         boolean empezoOnTime = desde != null && !desde.isAfter(hoy);
         boolean noVencio = hasta == null || !hasta.isBefore(hoy);
         return empezoOnTime && noVencio;
-    }
-
-    /**
-     * El modelo de TaxiUAP es de ofertas tipo inDrive: el conductor propone un precio y ese
-     * precio manda sobre el calculado con la tarifa. La tarifa vigente solo sirve de referencia
-     * cuando la oferta no trae un precio propio y como base para el descuento estudiantil.
-     */
-    private BigDecimal calcularPrecioOriginal(OfertaViaje oferta, Tarifa tarifa, BigDecimal distanciaKm,
-            Integer duracionMin) {
-        // Mientras haya precio fijo, todos los viajes cuestan lo mismo sin importar la oferta.
-        if (precioFijo != null) {
-            return precioFijo;
-        }
-        if (oferta.getPrecioOfertado() != null) {
-            return oferta.getPrecioOfertado();
-        }
-        BigDecimal calculado = tarifa.getTarifaBase()
-                .add(tarifa.getPrecioKm().multiply(distanciaKm))
-                .add(tarifa.getPrecioMinuto().multiply(BigDecimal.valueOf(duracionMin)));
-        return calculado.max(tarifa.getTarifaMinima());
-    }
-
-    /**
-     * Regla de negocio 3: el descuento estudiantil solo aplica si el pasajero tiene un
-     * Estudiante con matricula APROBADA y vigente, existe una regla vigente para su tipo de
-     * institucion y el tipo de vehiculo de la categoria de servicio, y no supero el limite de
-     * viajes con descuento del dia. Estudiante y regla solo se devuelven cuando el descuento
-     * termino siendo mayor a cero, para que el viaje solo quede vinculado a ellos en ese caso.
-     */
-    private ResultadoDescuento calcularDescuento(Pasajero pasajero, SolicitudViaje solicitud,
-            BigDecimal precioOriginal) {
-        if (!descuentoEstudiantilHabilitado) {
-            return ResultadoDescuento.sinDescuento();
-        }
-        Optional<Estudiante> estudianteOpt = estudianteService.buscarPorUsuario(pasajero.getUsuario().getId());
-        if (estudianteOpt.isEmpty()) {
-            return ResultadoDescuento.sinDescuento();
-        }
-        Estudiante estudiante = estudianteOpt.get();
-
-        // La matricula debe estar APROBADA y no vencida (MatriculaEstudianteService.buscarVigenteAprobada).
-        Optional<MatriculaEstudiante> matriculaOpt = matriculaEstudianteService.buscarVigenteAprobada(estudiante.getId());
-        if (matriculaOpt.isEmpty()) {
-            return ResultadoDescuento.sinDescuento();
-        }
-
-        Integer idTipoInstitucion = estudiante.getInstitucion().getTipoInstitucion().getId();
-        Integer idTipoVehiculo = solicitud.getCategoriaServicio().getTipoVehiculo().getId();
-        LocalDate hoy = LocalDate.now();
-
-        // Debe existir una regla vigente para el tipo de institucion del estudiante y el tipo de
-        // vehiculo de la categoria de servicio solicitada.
-        Optional<ReglaDescuentoEstudiantil> reglaOpt = reglaDescuentoRepository.findAll().stream()
-                .filter(regla -> regla.getEstadoReglaDescuento() == EstadoRegistro.A)
-                .filter(regla -> regla.getTipoInstitucion().getId().equals(idTipoInstitucion))
-                .filter(regla -> regla.getTipoVehiculo().getId().equals(idTipoVehiculo))
-                .filter(regla -> cubreVigencia(regla.getVigenteDesde(), regla.getVigenteHasta(), hoy))
-                .findFirst();
-        if (reglaOpt.isEmpty()) {
-            return ResultadoDescuento.sinDescuento();
-        }
-        ReglaDescuentoEstudiantil regla = reglaOpt.get();
-
-        // Respeta viajes_maximos_dia: cuenta los viajes de hoy del estudiante con descuento aplicado.
-        LocalDateTime inicioDia = hoy.atStartOfDay();
-        LocalDateTime finDia = inicioDia.plusDays(1);
-        long viajesConDescuentoHoy = viajeRepository.contarConDescuentoEnRango(estudiante.getId(), inicioDia, finDia);
-        if (regla.getViajesMaximosDia() != null && viajesConDescuentoHoy >= regla.getViajesMaximosDia()) {
-            return ResultadoDescuento.sinDescuento();
-        }
-
-        BigDecimal montoDescuento = precioOriginal.multiply(regla.getPorcentaje())
-                .divide(BigDecimal.valueOf(100), 4, RoundingMode.HALF_UP);
-        // El descuento nunca puede superar el monto_maximo de la regla.
-        if (regla.getMontoMaximo() != null && montoDescuento.compareTo(regla.getMontoMaximo()) > 0) {
-            montoDescuento = regla.getMontoMaximo();
-        }
-
-        if (montoDescuento.compareTo(BigDecimal.ZERO) <= 0) {
-            return ResultadoDescuento.sinDescuento();
-        }
-
-        return new ResultadoDescuento(montoDescuento, regla, estudiante);
-    }
-
-    /** Resultado interno del calculo de descuento estudiantil. */
-    private record ResultadoDescuento(BigDecimal monto, ReglaDescuentoEstudiantil regla, Estudiante estudiante) {
-
-        static ResultadoDescuento sinDescuento() {
-            return new ResultadoDescuento(BigDecimal.ZERO, null, null);
-        }
     }
 }

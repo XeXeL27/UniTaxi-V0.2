@@ -10,4 +10,6 @@ import com.taxiuap.backend.institution.entity.Institucion;
 public interface InstitucionRepository extends JpaRepository<Institucion, Long> {
 
     List<Institucion> findByTipoInstitucionId(Integer idTipoInstitucion);
+
+    List<Institucion> findBySiglaIgnoreCase(String sigla);
 }

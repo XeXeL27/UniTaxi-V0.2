@@ -38,6 +38,7 @@ class PantallaCarnetsObservados extends StatelessWidget {
         ColumnaTabla(titulo: 'Nombre', valor: (c) => c.nombreCompleto, ancho: 160, proporcion: 2.5),
         ColumnaTabla(titulo: 'Carnet', valor: (c) => c.carnet, ancho: 100, proporcion: 1.3),
         ColumnaTabla(titulo: 'Cuenta', valor: (c) => c.cuentas, ancho: 100, proporcion: 1.3),
+        ColumnaTabla(titulo: 'RU (UAP)', valor: (c) => c.ruEstudiante, ancho: 90),
         ColumnaTabla(titulo: 'Motivo', valor: (c) => c.motivo, ancho: 180, proporcion: 2.5),
         ColumnaTabla(titulo: 'Correo', valor: (c) => c.correo, ancho: 180, proporcion: 2),
         ColumnaTabla(titulo: 'Nacimiento', tipo: TipoColumna.fecha, valor: (c) => c.fechaNacimiento),
@@ -115,6 +116,9 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
   late DateTime? _fechaNacimiento = widget.carnet.fechaNacimiento;
   bool _aprobarConductor = true;
 
+  /// Registro de estudiante UAP: true lo aprueba como estudiante (con descuento), false como pasajero normal.
+  bool _comoEstudiante = true;
+
   @override
   void dispose() {
     for (final control in [_ci, _complemento, _nombres, _apellidos]) {
@@ -131,6 +135,7 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
       'apellidos': _apellidos.text.trim(),
       'fechaNacimiento': Formato.fechaIso(_fechaNacimiento),
       'aprobarConductor': widget.carnet.esConductor && _aprobarConductor,
+      if (widget.carnet.esEstudianteUap) 'comoEstudiante': _comoEstudiante,
     });
     return true;
   }
@@ -220,6 +225,29 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
           alCambiar: (fecha) => _fechaNacimiento = fecha,
           validator: (fecha) => fecha == null ? 'Campo obligatorio' : null,
         ),
+        if (carnet.esEstudianteUap) ...[
+          _DatosUap(api: widget.api, ru: carnet.ruEstudiante!),
+          RadioGroup<bool>(
+            groupValue: _comoEstudiante,
+            onChanged: (valor) => setState(() => _comoEstudiante = valor ?? true),
+            child: const Column(
+              children: [
+                RadioListTile<bool>(
+                  value: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Aprobar como estudiante UAP'),
+                  subtitle: Text('Tendrá el descuento de estudiante en sus viajes.'),
+                ),
+                RadioListTile<bool>(
+                  value: false,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text('Aprobar como pasajero normal'),
+                  subtitle: Text('Sus datos de estudiante no son válidos: entra sin descuento.'),
+                ),
+              ],
+            ),
+          ),
+        ],
         if (carnet.esConductor)
           CheckboxListTile(
             value: _aprobarConductor,
@@ -409,6 +437,59 @@ class _FormularioRechazoState extends State<_FormularioRechazo> {
           validator: (v) => (v?.trim().isEmpty ?? true) ? 'Escriba el motivo' : null,
         ),
       ],
+    );
+  }
+}
+
+/// Lo que dice el SIGSE de la UAP del RU con que se registro, para compararlo con el carnet.
+class _DatosUap extends StatefulWidget {
+  final PersonasApi api;
+  final String ru;
+
+  const _DatosUap({required this.api, required this.ru});
+
+  @override
+  State<_DatosUap> createState() => _DatosUapState();
+}
+
+class _DatosUapState extends State<_DatosUap> {
+  late final Future<Map<String, dynamic>> _datos = widget.api.datosSigse(widget.ru);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ColoresApp.azulNeblina,
+        borderRadius: BorderRadius.circular(RadiosApp.control),
+      ),
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: _datos,
+        builder: (context, instantanea) {
+          final d = instantanea.data;
+          if (instantanea.hasError) {
+            return Text('RU ${widget.ru}: no se pudo consultar el SIGSE (${instantanea.error}).',
+                style: const TextStyle(color: ColoresApp.rojo));
+          }
+          if (d == null) return const LinearProgressIndicator();
+          final fecha = Formato.leerFecha(d['fechaNacimiento']);
+          String texto(String clave) => (d[clave] as String?) ?? '-';
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Datos de la UAP (RU ${widget.ru})',
+                  style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+              const SizedBox(height: 6),
+              Text('${texto('nombres')} ${texto('apellidos')}', style: const TextStyle(fontWeight: FontWeight.w600)),
+              Text('CI ${texto('ci')}  |  Nacimiento ${Formato.fecha(fecha)}'),
+              Text('${texto('carrera')}  |  ${texto('periodo')}  |  '
+                  '${d['matriculado'] == true ? 'Matriculado' : 'NO matriculado'}'),
+              Text('Correo de la UAP: ${texto('correo')}', style: const TextStyle(color: ColoresApp.textoSuave)),
+            ],
+          );
+        },
+      ),
     );
   }
 }

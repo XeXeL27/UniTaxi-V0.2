@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../../core/iconos.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
+import '../../core/tema.dart';
+import '../../widgets/dialogos.dart';
 import '../../widgets/listado_remoto.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../expediente/expediente_api.dart';
@@ -31,6 +34,12 @@ class PantallaPasajeros extends StatelessWidget {
       columnas: [
         ColumnaTabla(titulo: 'Usuario', valor: (p) => p.nombreUsuario),
         ColumnaTabla(titulo: 'Nombre', valor: (p) => '${p.nombres} ${p.apellidos}', ancho: 150, proporcion: 2.5),
+        ColumnaTabla(
+          titulo: 'Estudiante UAP',
+          tipo: TipoColumna.estado,
+          opciones: const ['VERIFICADO', 'VENCIDO', 'PENDIENTE', 'RECHAZADO', 'NO'],
+          valor: (p) => p.estudianteTexto,
+        ),
         ColumnaTabla(titulo: 'Correo', valor: (p) => p.correo, ancho: 210, proporcion: 2.5),
         ColumnaTabla(titulo: 'Teléfono', valor: (p) => p.telefono, ancho: 100, proporcion: 1.4),
         ColumnaTabla(titulo: 'Calificación', tipo: TipoColumna.numero, valor: (p) => p.calificacionPromedio, ancho: 90),
@@ -41,9 +50,15 @@ class PantallaPasajeros extends StatelessWidget {
           opciones: const ['ACTIVO', 'SUSPENDIDO'],
           valor: (p) => p.situacion,
         ),
+        ColumnaTabla(titulo: 'RU', valor: (p) => p.ru, ancho: 90),
         ColumnaTabla(titulo: 'Registrado', tipo: TipoColumna.fechaHora, valor: (p) => p.fechaRegistro),
       ],
       accionesFila: (pasajero, recargar) => [
+        IconButton(
+          tooltip: 'Verificar con SIGSE (estudiante UAP)',
+          onPressed: () => verificarEstudianteUap(context, api: api, pasajero: pasajero, recargar: recargar),
+          icon: const Icon(Iconos.idBadge, size: 16, color: ColoresApp.azulClaro),
+        ),
         botonSuspenderCuenta(
           context,
           api: api,
@@ -61,5 +76,56 @@ class PantallaPasajeros extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+/// Pide el RU (con el que ya tenia, si hay) y verifica al pasajero con el SIGSE de la UAP: queda como
+/// estudiante si su nombre, CI y fecha de nacimiento coinciden y esta matriculado.
+Future<void> verificarEstudianteUap(
+  BuildContext context, {
+  required PersonasApi api,
+  required PasajeroAdmin pasajero,
+  required VoidCallback recargar,
+}) async {
+  final previo = pasajero.ru != null && RegExp(r'^\d+$').hasMatch(pasajero.ru!) ? pasajero.ru! : '';
+  final campo = TextEditingController(text: previo);
+  final ru = await showDialog<String>(
+    context: context,
+    builder: (contexto) => AlertDialog(
+      title: const Text('Verificar con SIGSE'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Se consultará el RU en el sistema de la UAP. ${pasajero.nombreCompleto} quedará como estudiante '
+            '(con descuento) si está matriculado y su nombre, CI y fecha de nacimiento coinciden.',
+            style: const TextStyle(color: ColoresApp.textoSuave),
+          ),
+          const SizedBox(height: 14),
+          TextField(
+            controller: campo,
+            autofocus: true,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'RU'),
+            onSubmitted: (v) => Navigator.of(contexto).pop(v.trim()),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.of(contexto).pop(), child: const Text('Cancelar')),
+        FilledButton(onPressed: () => Navigator.of(contexto).pop(campo.text.trim()), child: const Text('Verificar')),
+      ],
+    ),
+  );
+  campo.dispose();
+  if (ru == null || ru.isEmpty || !context.mounted) return;
+  try {
+    await api.verificarEstudianteUap(pasajero.idPasajero, ru);
+    if (!context.mounted) return;
+    await mostrarExito(context, titulo: '¡Estudiante verificado!', mensaje: '${pasajero.nombreCompleto} quedó como estudiante UAP.');
+    recargar();
+  } on ApiExcepcion catch (e) {
+    if (context.mounted) await mostrarErrorDialogo(context, titulo: 'No se pudo verificar', mensaje: e.mensaje);
   }
 }

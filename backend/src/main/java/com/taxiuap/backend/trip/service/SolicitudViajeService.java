@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
@@ -27,6 +28,8 @@ import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.pricing.dto.CotizacionViaje;
+import com.taxiuap.backend.trip.dto.CotizacionViajeResponse;
 import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
 import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
@@ -91,19 +94,23 @@ public class SolicitudViajeService {
         }
 
         CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
-        // Con precio fijo, el precio lo pone la plataforma y no el pasajero.
-        BigDecimal precioFijo = calculoPrecioService.precioFijo();
+        Point origen = convertirAPunto(request.origenWkt());
+        Point destino = convertirAPunto(request.destinoWkt());
+        // El precio lo pone la plataforma (por tramos de km), no el pasajero.
+        CotizacionViaje cotizacion = calculoPrecioService.cotizar(pasajero, origen, destino);
 
         SolicitudViaje solicitud = new SolicitudViaje();
         solicitud.setPasajero(pasajero);
         solicitud.setCategoriaServicio(categoriaServicio);
-        solicitud.setOrigen(convertirAPunto(request.origenWkt()));
-        solicitud.setDestino(convertirAPunto(request.destinoWkt()));
+        solicitud.setOrigen(origen);
+        solicitud.setDestino(destino);
         solicitud.setOrigenDireccion(request.origenDireccion());
         solicitud.setDestinoDireccion(request.destinoDireccion());
         solicitud.setDestinoNombrePasajero(request.destinoNombre() == null || request.destinoNombre().isBlank()
                 ? null : request.destinoNombre().trim());
-        solicitud.setPrecioSugerido(precioFijo != null ? precioFijo : request.precioSugerido());
+        solicitud.setPrecioSugerido(cotizacion.precioNormal());
+        solicitud.setDistanciaKm(cotizacion.distanciaKm());
+        solicitud.setDescuentoEstudiante(cotizacion.descuentoEstudiante());
         solicitud.setMetodoPago(metodoPagoPermitido(request.metodoPago()));
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         solicitud.setFechaSolicitud(LocalDateTime.now());
@@ -114,9 +121,19 @@ public class SolicitudViajeService {
         return creada;
     }
 
-    /** Precio que se muestra antes de confirmar (pasajero) o de aceptar (conductor). */
+    /** Precio base (primeros km) y comision, antes de elegir destino. */
     public PrecioViajeResponse precioVigente() {
-        return new PrecioViajeResponse(calculoPrecioService.precioFijo(), "Bs", porcentajeComision);
+        return new PrecioViajeResponse(calculoPrecioService.precioBase(), "Bs", porcentajeComision);
+    }
+
+    /** Precio del viaje elegido por el pasajero, con su descuento de estudiante, antes de pedirlo. */
+    public CotizacionViajeResponse cotizar(double origenLat, double origenLng, double destinoLat, double destinoLng) {
+        Pasajero pasajero = buscarPasajero();
+        Point origen = FABRICA_GEOMETRIA.createPoint(new Coordinate(origenLng, origenLat));
+        Point destino = FABRICA_GEOMETRIA.createPoint(new Coordinate(destinoLng, destinoLat));
+        CotizacionViaje cotizacion = calculoPrecioService.cotizar(pasajero, origen, destino);
+        return new CotizacionViajeResponse(cotizacion.distanciaKm(), cotizacion.duracionMin(), cotizacion.porCalles(),
+                cotizacion.precioNormal(), cotizacion.descuentoEstudiante(), cotizacion.precioFinal(), "Bs");
     }
 
     public List<SolicitudViajeResponse> listarPropias() {
@@ -238,8 +255,6 @@ public class SolicitudViajeService {
         String destinoWkt = solicitud.getDestino() != null ? new WKTWriter().write(solicitud.getDestino()) : null;
         int cantidadOfertas = ofertaViajeRepository.findBySolicitudIdAndSituacionOferta(
                 solicitud.getId(), SituacionOferta.PENDIENTE).size();
-        BigDecimal precioFijo = calculoPrecioService.precioFijo();
-
         return new SolicitudViajeResponse(
                 solicitud.getId(),
                 solicitud.getPasajero() != null ? solicitud.getPasajero().getId() : null,
@@ -250,14 +265,16 @@ public class SolicitudViajeService {
                 destinoWkt,
                 solicitud.getOrigenDireccion(),
                 solicitud.getDestinoDireccion(),
-                // Con precio fijo se muestra el que se cobrara, aunque la solicitud se haya creado antes.
-                precioFijo != null ? precioFijo : solicitud.getPrecioSugerido(),
+                solicitud.precioACobrar(),
                 solicitud.getSituacionSolicitud(),
                 solicitud.getFechaSolicitud(),
                 cantidadOfertas,
                 solicitud.getMetodoPago() != null ? solicitud.getMetodoPago() : MetodoPago.EFECTIVO,
                 // El nombre del favorito solo se devuelve al propio pasajero.
-                esDelUsuarioActual(solicitud.getPasajero()) ? solicitud.getDestinoNombrePasajero() : null);
+                esDelUsuarioActual(solicitud.getPasajero()) ? solicitud.getDestinoNombrePasajero() : null,
+                solicitud.getPrecioSugerido(),
+                solicitud.getDescuentoEstudiante() != null ? solicitud.getDescuentoEstudiante() : BigDecimal.ZERO,
+                solicitud.getDistanciaKm());
     }
 
     private static boolean esDelUsuarioActual(Pasajero pasajero) {

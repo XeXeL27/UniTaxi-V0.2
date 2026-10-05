@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/aviso_viaje.dart';
 import '../../../core/chat.dart';
+import '../../../core/formato.dart';
 import '../../../core/notificador.dart';
 import '../../../core/push.dart';
 import '../../../core/receptor_ubicacion.dart';
@@ -77,6 +78,68 @@ class FlujoPasajero extends ChangeNotifier {
 
   FlujoPasajero({required this.api, required this.mapa, this.sesion, this.chat}) {
     mapa.alMoverseGps = _alMoverseGps;
+    mapa.addListener(_revisarCotizacion);
+  }
+
+  /// Precio de la ruta elegida (por km, con el descuento de estudiante) mientras elige destino.
+  CotizacionViaje? cotizacion;
+  bool cotizando = false;
+  (LatLng, LatLng)? _puntosCotizados;
+  int _consultaCotizacion = 0;
+
+  /// Cada vez que cambian la partida o el destino se pide al servidor el precio de esa ruta.
+  void _revisarCotizacion() {
+    if (_cerrado || etapa != EtapaPasajero.eligiendo) return;
+    final a = mapa.a?.posicion;
+    final b = mapa.b?.posicion;
+    if (a == null || b == null) {
+      if (_puntosCotizados != null || cotizacion != null) {
+        _puntosCotizados = null;
+        cotizacion = null;
+        cotizando = false;
+        _avisar();
+      }
+      return;
+    }
+    if (_puntosCotizados == (a, b)) return;
+    _puntosCotizados = (a, b);
+    unawaited(_cotizar(a, b));
+  }
+
+  Future<void> _cotizar(LatLng a, LatLng b) async {
+    final consulta = ++_consultaCotizacion;
+    cotizacion = null;
+    cotizando = true;
+    _avisar();
+    try {
+      final resultado = await api.cotizar(a, b);
+      if (_cerrado || consulta != _consultaCotizacion) return;
+      cotizacion = resultado;
+    } catch (_) {
+      // Sin precio de la ruta se muestra el precio base ("desde").
+      if (consulta == _consultaCotizacion) _puntosCotizados = null;
+    } finally {
+      if (!_cerrado && consulta == _consultaCotizacion) {
+        cotizando = false;
+        _avisar();
+      }
+    }
+  }
+
+  /// Lo que se muestra como precio antes de pedir: el de la ruta, o "desde" el precio base.
+  String get textoPrecio {
+    final c = cotizacion;
+    if (c != null) return formatoBs(c.precio);
+    if (cotizando) return 'Calculando...';
+    final base = precio?.precio;
+    return base != null ? 'Desde ${formatoBs(base)}' : 'A calcular';
+  }
+
+  /// "Estudiante UAP: 12,00 Bs menos 2,00 Bs" cuando tiene descuento.
+  String? get detalleDescuento {
+    final c = cotizacion;
+    if (c == null || !c.conDescuento) return null;
+    return 'Estudiante UAP: ${formatoBs(c.precioNormal)} menos ${formatoBs(c.descuentoEstudiante)}';
   }
 
   /// true mientras se reintenta recuperar el viaje sin conexion (el panel lo dice).
@@ -621,6 +684,7 @@ class FlujoPasajero extends ChangeNotifier {
   @override
   void dispose() {
     _cerrado = true;
+    mapa.removeListener(_revisarCotizacion);
     unawaited(Notificador.dejarDeSeguir());
     _detenerSondeo();
     _detenerSeguimientoConductor();

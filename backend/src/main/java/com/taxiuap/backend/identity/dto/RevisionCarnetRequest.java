@@ -11,6 +11,8 @@ import jakarta.validation.constraints.Size;
 /**
  * Datos del carnet que el administrador reviso (y corrigio si hacia falta) mirando las fotos.
  * aprobarConductor: si la persona es conductor, su cuenta de conductor tambien queda APROBADA.
+ * comoEstudiante: si se registro como estudiante UAP, true lo aprueba como estudiante (con descuento) y
+ * false como pasajero normal (null cuenta como true).
  */
 public record RevisionCarnetRequest(
         @NotBlank @Pattern(regexp = ReglasRegistro.PATRON_CI, message = ReglasRegistro.MENSAJE_CI) String ci,
@@ -18,5 +20,6 @@ public record RevisionCarnetRequest(
         @NotBlank @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String nombres,
         @NotBlank @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String apellidos,
         @NotNull @Past LocalDate fechaNacimiento,
-        Boolean aprobarConductor) {
+        Boolean aprobarConductor,
+        Boolean comoEstudiante) {
 }

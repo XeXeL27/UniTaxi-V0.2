@@ -139,7 +139,7 @@ public class RegistroGoogleService {
      * carnet OBSERVADO ([entregar] false) la contrasena queda sin entregar: le llega cuando el
      * administrador aprueba sus datos.
      */
-    private TokenResponse crearPasajero(Persona persona, byte[] foto, boolean entregar) {
+    public TokenResponse crearPasajero(Persona persona, byte[] foto, boolean entregar) {
         CuentaNueva nueva = crearCuenta(persona, RolSistema.PASAJERO);
         Usuario usuario = nueva.usuario();
         cuentaUsuarioService.crearPasajero(usuario);

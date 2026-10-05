@@ -10,9 +10,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.shared.response.ApiResponse;
+import com.taxiuap.backend.trip.dto.CotizacionViajeResponse;
 import com.taxiuap.backend.trip.dto.OfertaViajeResponse;
 import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
@@ -45,10 +47,19 @@ public class SolicitudViajeController {
         return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.listarPropias()));
     }
 
-    /** Precio del viaje que se muestra antes de confirmar la solicitud. */
+    /** Precio base (primeros km) que se muestra antes de elegir destino. */
     @GetMapping("/precio")
     public ResponseEntity<ApiResponse<PrecioViajeResponse>> precio() {
         return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.precioVigente()));
+    }
+
+    /** Precio del viaje de origen a destino, con el descuento de estudiante, antes de pedirlo. */
+    @GetMapping("/cotizacion")
+    public ResponseEntity<ApiResponse<CotizacionViajeResponse>> cotizacion(
+            @RequestParam double origenLat, @RequestParam double origenLng,
+            @RequestParam double destinoLat, @RequestParam double destinoLng) {
+        return ResponseEntity.ok(ApiResponse.exito(
+                solicitudViajeService.cotizar(origenLat, origenLng, destinoLat, destinoLng)));
     }
 
     @GetMapping("/{id}")

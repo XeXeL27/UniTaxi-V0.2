@@ -6,10 +6,12 @@ import '../../widgets/boton_principal.dart';
 import '../../widgets/marco_acceso.dart';
 import 'formulario_conductor.dart';
 import 'ingreso_google.dart';
+import 'registro_estudiante.dart';
 
-enum _TipoRegistro { pasajero, conductor }
+enum _TipoRegistro { pasajero, estudiante, conductor }
 
 /// Registro publico. Pasajero: solo con Google (se guardan su nombre y correo y entra directo).
+/// Estudiante UAP: con su RU, verificado con el SIGSE de la universidad (RegistroEstudianteUap).
 /// Conductor: con Google o con el formulario, y en los dos casos completa la licencia, la moto y
 /// los PDF; queda en revision hasta que la administracion lo apruebe.
 class PantallaRegistro extends StatefulWidget {
@@ -56,7 +58,18 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
                   onTap: () => setState(() => _tipo = _TipoRegistro.pasajero),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _OpcionTipo(
+                  icono: FontAwesomeIcons.graduationCap,
+                  titulo: 'Estudiante',
+                  detalle: 'UAP, con descuento',
+                  color: ColoresApp.ruta,
+                  activa: _tipo == _TipoRegistro.estudiante,
+                  onTap: () => setState(() => _tipo = _TipoRegistro.estudiante),
+                ),
+              ),
+              const SizedBox(width: 10),
               Expanded(
                 child: _OpcionTipo(
                   icono: FontAwesomeIcons.motorcycle,
@@ -72,7 +85,11 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
           const SizedBox(height: 20),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 200),
-            child: _tipo == _TipoRegistro.pasajero ? _pasajero(google) : _conductor(google),
+            child: switch (_tipo) {
+              _TipoRegistro.pasajero => _pasajero(google),
+              _TipoRegistro.estudiante => const RegistroEstudianteUap(),
+              _TipoRegistro.conductor => _conductor(google),
+            },
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -180,7 +197,7 @@ class _OpcionTipo extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 10),
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
           decoration: BoxDecoration(
             color: activa ? color.withValues(alpha: 0.08) : ColoresApp.fondo,
             borderRadius: BorderRadius.circular(18),
@@ -195,7 +212,11 @@ class _OpcionTipo extends StatelessWidget {
                 child: Center(child: FaIcon(icono, size: 20, color: activa ? ColoresApp.blanco : color)),
               ),
               const SizedBox(height: 10),
-              Text(titulo, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
+              // Con tres opciones en un celular angosto el titulo se achica en vez de partirse.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(titulo, maxLines: 1, style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.w700)),
+              ),
               const SizedBox(height: 2),
               Text(detalle, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
             ],

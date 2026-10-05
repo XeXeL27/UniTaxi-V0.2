@@ -15,6 +15,7 @@ import '../../widgets/boton_principal.dart';
 import '../../widgets/marco_acceso.dart';
 import '../registro/ingreso_google.dart';
 import '../registro/pantalla_registro.dart';
+import '../registro/registro_estudiante.dart';
 import 'restablecer_contrasena.dart';
 
 /// Inicio de sesion con usuario, correo o telefono y contrasena, o con Google. Desde aqui se abre
@@ -369,23 +370,39 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 label: const Text('Ingresar con huella', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
+            const SizedBox(height: 18),
+            const Row(
+              children: [
+                Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 12),
+                  child: Text('o', style: TextStyle(color: ColoresApp.textoSuave)),
+                ),
+                Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
+              ],
+            ),
+            const SizedBox(height: 18),
             if (googleDisponible) ...[
-              const SizedBox(height: 18),
-              const Row(
-                children: [
-                  Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 12),
-                    child: Text('o', style: TextStyle(color: ColoresApp.textoSuave)),
-                  ),
-                  Expanded(child: Divider(color: ColoresApp.borde, height: 1)),
-                ],
-              ),
-              const SizedBox(height: 18),
               BotonGoogle(
                 onPressed: _cargando ? null : _ingresarConGoogle,
               ),
+              const SizedBox(height: 12),
             ],
+            // Estudiante de la UAP: RU (SIGSE) y fotos del carnet; si ya tiene cuenta queda como estudiante.
+            OutlinedButton.icon(
+              onPressed: _cargando
+                  ? null
+                  : () => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => const PantallaEstudianteUap())),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                backgroundColor: ColoresApp.blanco,
+                foregroundColor: ColoresApp.azul,
+                side: const BorderSide(color: ColoresApp.borde),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              icon: const FaIcon(FontAwesomeIcons.graduationCap, size: 18, color: ColoresApp.ruta),
+              label: const Text('Ingresar como estudiante U.A.P.', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
+            ),
             const SizedBox(height: 18),
             Wrap(
               alignment: WrapAlignment.center,

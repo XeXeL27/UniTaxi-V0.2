@@ -37,7 +37,8 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
      * fechas, usado por el calculo de precio para respetar viajes_maximos_dia de la regla 3.
      */
     @Query("select count(v) from Viaje v where v.estudiante.id = :idEstudiante "
-            + "and v.montoDescuento > 0 and v.creadoEn >= :desde and v.creadoEn < :hasta")
+            + "and v.montoDescuento > 0 and v.creadoEn >= :desde and v.creadoEn < :hasta "
+            + "and v.situacionViaje <> com.taxiuap.backend.trip.enums.SituacionViaje.CANCELADO")
     long contarConDescuentoEnRango(
             @Param("idEstudiante") Long idEstudiante,
             @Param("desde") LocalDateTime desde,

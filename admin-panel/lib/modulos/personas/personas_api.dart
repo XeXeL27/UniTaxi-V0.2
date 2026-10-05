@@ -54,6 +54,10 @@ class PersonasApi {
 
   Future<List<PasajeroAdmin>> listarPasajeros() => _api.lista('/api/admin/pasajeros', PasajeroAdmin.desdeJson);
 
+  /// "Verificar con SIGSE": el pasajero queda como estudiante UAP si sus datos coinciden con el RU.
+  Future<void> verificarEstudianteUap(int idPasajero, String ru) =>
+      _api.post('/api/admin/pasajeros/$idPasajero/estudiante-uap', {'ru': ru});
+
   Future<List<ConductorAdmin>> listarConductores() => _api.lista('/api/admin/conductores', ConductorAdmin.desdeJson);
 
   Future<void> cambiarSituacionConductor(int id, String situacion, String? motivo) =>
@@ -70,6 +74,10 @@ class PersonasApi {
       _api.lista('/api/admin/carnets-observados', CarnetObservado.desdeJson);
 
   /// Guarda los datos corregidos y aprueba: recien ahi le llegan sus credenciales.
+  /// Lo que dice el SIGSE de la UAP de un RU (sin la foto).
+  Future<Map<String, dynamic>> datosSigse(String ru) async =>
+      await _api.get('/api/admin/estudiantes-uap/$ru') as Map<String, dynamic>;
+
   Future<void> aprobarCarnet(int idPersona, Map<String, dynamic> datos) =>
       _api.put('/api/admin/carnets-observados/$idPersona/aprobar', datos);
 

@@ -924,10 +924,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
 
   /// "Tarifa: 8 Bs - 679 m - 2 min".
   String _resumenRuta() {
-    final precio = _flujo.precio?.precio;
     final ruta = _mapa.ruta;
     return [
-      'Tarifa: ${precio != null ? formatoBs(precio) : 'a calcular'}',
+      'Tarifa: ${_flujo.textoPrecio}',
       if (ruta != null) ...[ruta.distanciaTexto, ruta.duracionTexto] else 'trazando la ruta...',
     ].join(' - ');
   }

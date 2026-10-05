@@ -24,5 +24,7 @@ public record CarnetObservadoResponse(
         String cuentas,
         String numeroLicencia,
         String motivo,
-        LocalDateTime fechaObservacion) {
+        LocalDateTime fechaObservacion,
+        /** RU si se registro como estudiante UAP: el admin lo aprueba como estudiante o como pasajero normal. */
+        String ruEstudiante) {
 }

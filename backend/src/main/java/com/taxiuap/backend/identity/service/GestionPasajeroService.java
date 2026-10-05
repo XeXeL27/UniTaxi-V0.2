@@ -5,6 +5,8 @@ import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.taxiuap.backend.institution.dto.EstadoEstudianteResponse;
+import com.taxiuap.backend.institution.service.EstudianteUapService;
 import com.taxiuap.backend.identity.dto.PasajeroAdminResponse;
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.entity.Persona;
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 public class GestionPasajeroService {
 
     private final PasajeroRepository pasajeroRepository;
+    private final EstudianteUapService estudianteUapService;
 
     public List<PasajeroAdminResponse> listar() {
         return pasajeroRepository.findByEstadoPasajeroOrderByIdAsc(EstadoRegistro.A).stream()
@@ -31,6 +34,7 @@ public class GestionPasajeroService {
     private PasajeroAdminResponse aRespuesta(Pasajero pasajero) {
         Usuario usuario = pasajero.getUsuario();
         Persona persona = usuario.getPersona();
+        EstadoEstudianteResponse estudiante = estudianteUapService.estado(persona);
         return new PasajeroAdminResponse(
                 pasajero.getId(),
                 usuario.getId(),
@@ -42,6 +46,8 @@ public class GestionPasajeroService {
                 pasajero.getCalificacionPromedio(),
                 pasajero.getTotalCalificaciones(),
                 usuario.getFechaRegistro(),
-                usuario.getEstadoUsuario().name());
+                usuario.getEstadoUsuario().name(),
+                estudiante.situacion(),
+                estudiante.ru());
     }
 }

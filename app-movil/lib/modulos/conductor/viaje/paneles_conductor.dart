@@ -265,9 +265,11 @@ class PanelDetalleSolicitud extends StatelessWidget {
         const SizedBox(height: 12),
         RecuadroPrecio(
           etiqueta: MetodoPago.frase('Cobras', solicitud.metodoPago),
-          detalle: ganancia == null
-              ? null
-              : 'Tu ganancia: ${formatoBs(ganancia)} (comisión ${comision.toStringAsFixed(0)}%)',
+          detalle: [
+            if (solicitud.descuentoEstudiante > 0)
+              'Estudiante UAP: ${formatoBs(solicitud.precioNormal)} menos ${formatoBs(solicitud.descuentoEstudiante)}',
+            if (ganancia != null) 'Tu ganancia: ${formatoBs(ganancia)} (comisión ${comision.toStringAsFixed(0)}%)',
+          ].join('\n'),
           monto: formatoBs(solicitud.precio),
         ),
         const SizedBox(height: 14),
