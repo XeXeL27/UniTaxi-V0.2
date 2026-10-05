@@ -54,10 +54,16 @@ class PanelEligiendo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        _SelectorEntrega(
+          tipo: flujo.tipoEnvio,
+          onElegir: flujo.elegirTipoEnvio,
+          completado: flujo.datosEntregaForm != null,
+        ),
+        const SizedBox(height: 12),
         // Con el destino elegido, lo primero que se ve es el precio y como se paga.
         if (b != null) ...[
           RecuadroPrecio(
-            etiqueta: 'Precio del viaje',
+            etiqueta: flujo.tipoEnvio == null ? 'Precio del viaje' : 'Precio del servicio',
             detalle: flujo.metodoPago == MetodoPago.qr
                 ? 'Pagas con el QR del conductor'
                 : 'Pagas en efectivo al conductor',
@@ -137,6 +143,46 @@ class PanelEligiendo extends StatelessWidget {
             onPressed: flujo.puedeSolicitar ? onSolicitar : null,
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _SelectorEntrega extends StatelessWidget {
+  final TipoEnvio? tipo;
+  final ValueChanged<TipoEnvio?> onElegir;
+  final bool completado;
+
+  const _SelectorEntrega({required this.tipo, required this.onElegir, required this.completado});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget opcion(TipoEnvio valor) {
+      final elegido = tipo == valor;
+      return Expanded(
+        child: OutlinedButton(
+          onPressed: () => onElegir(elegido ? null : valor),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: elegido ? ColoresApp.blanco : ColoresApp.azul,
+            backgroundColor: elegido ? ColoresApp.azul : null,
+            side: BorderSide(color: elegido ? ColoresApp.azul : ColoresApp.borde),
+          ),
+          child: Text(valor.nombre),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text('¿Qué quieres enviar?', style: TextStyle(color: ColoresApp.textoSuave, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Row(children: [opcion(TipoEnvio.encomienda), const SizedBox(width: 8), opcion(TipoEnvio.compraYEntrega)]),
+        if (completado)
+          const Padding(
+            padding: EdgeInsets.only(top: 5),
+            child: Text('Datos de la entrega completos', style: TextStyle(color: ColoresApp.exito, fontSize: 12)),
+          ),
       ],
     );
   }
@@ -386,8 +432,9 @@ class PanelViaje extends StatelessWidget {
 
   /// Pide al conductor pagar de otra forma (el conductor acepta o rechaza).
   final ValueChanged<String> onPedirCambioPago;
+  final VoidCallback onConfirmarCompra;
 
-  const PanelViaje({super.key, required this.flujo, required this.onCancelar, required this.onPedirCambioPago});
+  const PanelViaje({super.key, required this.flujo, required this.onCancelar, required this.onPedirCambioPago, required this.onConfirmarCompra});
 
   @override
   Widget build(BuildContext context) {
@@ -474,6 +521,17 @@ class PanelViaje extends StatelessWidget {
         FilaLugar.destino(texto: viaje.destinoTexto),
         const SizedBox(height: 10),
         RecuadroPrecio(etiqueta: MetodoPago.frase('Pagas', viaje.metodoPago), monto: formatoBs(viaje.precioFinal)),
+        if (viaje.datosEntrega != null) ...[
+          const SizedBox(height: 8),
+          _ResumenEntrega(datos: viaje.datosEntrega!, precioServicio: viaje.precioFinal),
+          if (viaje.datosEntrega!.tipoEnvio == TipoEnvio.compraYEntrega &&
+              viaje.datosEntrega!.detalleCompraPropuesto != null &&
+              viaje.datosEntrega!.compraConfirmadaPorCliente != true)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: BotonPrincipal(texto: 'Confirmar comercio y monto', onPressed: onConfirmarCompra),
+            ),
+        ],
         const SizedBox(height: 6),
         if (viaje.metodoPagoPedido != null)
           _Aviso(
@@ -491,7 +549,8 @@ class PanelViaje extends StatelessWidget {
               label: Text(viaje.pagaConQr ? 'Pedir pagar en efectivo' : 'Pedir pagar por QR'),
             ),
           ),
-        if (SituacionViaje.cancelables.contains(viaje.situacion))
+        if (SituacionViaje.cancelables.contains(viaje.situacion) &&
+            (viaje.datosEntrega == null || viaje.datosEntrega!.muestraCancelacion))
           TextButton(
             onPressed: onCancelar,
             style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
@@ -525,6 +584,43 @@ class PanelViaje extends StatelessWidget {
       ],
     );
   }
+}
+
+class _ResumenEntrega extends StatelessWidget {
+  final DatosEntrega datos;
+  final double? precioServicio;
+  const _ResumenEntrega({required this.datos, required this.precioServicio});
+
+  @override
+  Widget build(BuildContext context) {
+    final producto = datos.costoProductoReal ?? datos.costoProductoEstimado;
+    final total = producto == null || precioServicio == null ? null : producto + precioServicio!;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: ColoresApp.gris, borderRadius: BorderRadius.circular(10)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text('Estado: ${EstadoEntrega.nombre(datos.estadoEntrega)}', style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega)
+            _linea('Producto', producto == null ? 'Pendiente' : formatoBs(producto)),
+          _linea('Servicio', precioServicio == null ? 'Pendiente' : formatoBs(precioServicio)),
+          if (total != null) _linea('Total estimado', formatoBs(total), fuerte: true),
+          if (datos.tipoEnvio == TipoEnvio.encomienda && datos.estadoEntrega == EstadoEntrega.enMano)
+            const Padding(
+              padding: EdgeInsets.only(top: 5),
+              child: Text('El pedido está en manos del repartidor. Ya no puedes cancelarlo.', style: TextStyle(color: ColoresApp.rojo, fontSize: 12)),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _linea(String titulo, String valor, {bool fuerte = false}) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(children: [Expanded(child: Text(titulo, style: const TextStyle(color: ColoresApp.textoSuave))), Text(valor, style: TextStyle(color: ColoresApp.texto, fontWeight: fuerte ? FontWeight.w700 : FontWeight.w500))]),
+      );
 }
 
 /// Efectivo | QR, antes de solicitar el taxi.

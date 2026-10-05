@@ -56,6 +56,11 @@ class FlujoPasajero extends ChangeNotifier {
   /// Como pagara el proximo viaje (se elige antes de solicitar). Despues solo lo cambia el conductor.
   String metodoPago = MetodoPago.efectivo;
 
+  /// Si no es null, el siguiente pedido usa la categoria DELIVERY.
+  TipoEnvio? tipoEnvio;
+  DatosEntregaForm? datosEntregaForm;
+  int? idCategoriaDelivery;
+
   /// El pasajero toco "Añadir lugar": el proximo toque en el mapa guarda ese punto.
   bool guardandoLugar = false;
 
@@ -258,7 +263,20 @@ class FlujoPasajero extends ChangeNotifier {
   String? direccionOrigen;
 
   bool get puedeSolicitar =>
-      etapa == EtapaPasajero.eligiendo && mapa.a != null && mapa.b != null && !mapa.calculandoRuta;
+      etapa == EtapaPasajero.eligiendo && mapa.a != null && mapa.b != null && !mapa.calculandoRuta &&
+      (tipoEnvio == null || datosEntregaForm?.error == null);
+
+  void elegirTipoEnvio(TipoEnvio? tipo) {
+    tipoEnvio = tipo;
+    datosEntregaForm = null;
+    _avisar();
+  }
+
+  void guardarDatosEntrega(DatosEntregaForm datos) {
+    tipoEnvio = datos.tipoEnvio;
+    datosEntregaForm = datos;
+    _avisar();
+  }
 
   /// Crea la solicitud de viaje con A y B.
   Future<void> solicitar() async {
@@ -278,8 +296,15 @@ class FlujoPasajero extends ChangeNotifier {
           _direccionFavorito ?? await ServiciosMapa.direccionDe(b.posicion) ?? coordenadasTexto(b.posicion);
       destino = PuntoRuta(b.posicion, direccion);
     }
+    if (tipoEnvio != null && idCategoriaDelivery == null) {
+      idCategoriaDelivery = await api.categoriaDelivery();
+      if (idCategoriaDelivery == null) throw ApiExcepcion('No está disponible el servicio de entregas');
+    }
     final creada = await api.solicitar(origen, destino,
-        metodoPago: metodoPago, destinoNombre: esFavorito ? favorito.nombre : null);
+        metodoPago: metodoPago,
+        destinoNombre: esFavorito ? favorito.nombre : null,
+        idCategoriaServicio: idCategoriaDelivery,
+        datosEntrega: datosEntregaForm);
     _entrarBuscando(creada);
   }
 
@@ -296,6 +321,13 @@ class FlujoPasajero extends ChangeNotifier {
     final nuevo = await api.pedirCambioPago(actual.id, metodo);
     if (_cerrado || etapa != EtapaPasajero.enViaje) return;
     viaje = nuevo;
+    _avisar();
+  }
+
+  Future<void> confirmarCompra() async {
+    final actual = viaje;
+    if (actual == null) return;
+    viaje = await api.confirmarCompra(actual.id);
     _avisar();
   }
 

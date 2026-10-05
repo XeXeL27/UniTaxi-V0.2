@@ -44,6 +44,7 @@ import '../viaje/flujo_pasajero.dart';
 import '../viaje/paneles_pasajero.dart';
 import '../viaje/viaje_api.dart';
 import '../viaje/vista_calificacion.dart';
+import '../viaje/formulario_entrega.dart';
 import 'buscador_destino.dart';
 
 /// Vista principal del pasajero, con la barra inferior Inicio / Actividad / Perfil.
@@ -546,6 +547,11 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// Los dos botones de pedir el taxi (el del panel y el central) pasan por aqui: primero se
   /// muestra el modal con el detalle y solo si el pasajero confirma se envia la solicitud.
   Future<void> _solicitar() async {
+    if (_flujo.tipoEnvio != null && _flujo.datosEntregaForm == null) {
+      final datos = await abrirFormularioEntrega(context, _flujo.tipoEnvio!);
+      if (datos == null || !mounted) return;
+      _flujo.guardarDatosEntrega(datos);
+    }
     final confirmado = await confirmarViaje(
       context,
       contenido: DetalleSolicitudViaje(flujo: _flujo),
@@ -582,6 +588,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     try {
       await _flujo.pedirCambioPago(metodo);
       if (mounted) mostrarMensaje(context, 'Esperando la respuesta del conductor.');
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
+  }
+
+  Future<void> _confirmarCompra() async {
+    try {
+      await _flujo.confirmarCompra();
+      if (mounted) mostrarMensaje(context, 'Compra confirmada. El repartidor puede comprar el producto.');
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
@@ -952,7 +967,12 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       color: color,
       resumen: texto,
       tituloAbierto: 'Detalle del viaje',
-      child: PanelViaje(flujo: _flujo, onCancelar: _cancelarViaje, onPedirCambioPago: _pedirCambioPago),
+       child: PanelViaje(
+         flujo: _flujo,
+         onCancelar: _cancelarViaje,
+         onPedirCambioPago: _pedirCambioPago,
+         onConfirmarCompra: _confirmarCompra,
+       ),
     );
   }
 }
