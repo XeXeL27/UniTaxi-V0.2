@@ -24,6 +24,12 @@ public record DatosConductorRequest(
         @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_MODELO, message = ReglasRegistro.MENSAJE_MODELO) String modelo,
         @Size(max = 50) @Pattern(regexp = ReglasRegistro.PATRON_COLOR, message = ReglasRegistro.MENSAJE_COLOR) String color,
         @Min(1950) @Max(2100) Integer anio,
+        /**
+         * Categoria de servicio del vehiculo, por ejemplo la categoria DELIVERY de una moto de
+         * reparto. Es opcional: si viene null el vehiculo queda con la categoria MOTO estandar. La
+         * categoria debe existir, estar activa y ser compatible con el tipo de vehiculo.
+         */
+        Integer idCategoriaServicio,
         Map<TipoDocumento, LocalDate> vencimientos,
         /** Vencimiento leido de la foto de la licencia (registro desde la app). */
         LocalDate vencimientoLicencia,

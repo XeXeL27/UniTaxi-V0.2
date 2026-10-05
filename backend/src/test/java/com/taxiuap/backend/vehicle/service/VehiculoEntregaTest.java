@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
+import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.vehicle.dto.VehiculoRequest;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
@@ -48,7 +49,8 @@ class VehiculoEntregaTest {
         when(conductorRepository.findByUsuarioId(10L)).thenReturn(Optional.of(conductor));
         when(vehiculoRepository.findByPlaca("ABC123")).thenReturn(Optional.empty());
         when(tipoVehiculoRepository.findById(1)).thenReturn(Optional.of(sedan));
-        when(categoriaServicioRepository.findById(2)).thenReturn(Optional.of(deliverySedan));
+        when(categoriaServicioRepository.findByIdAndEstadoCategoriaServicio(2, EstadoRegistro.A))
+                .thenReturn(Optional.of(deliverySedan));
 
         assertThrows(NegocioException.class, () -> service.crear(10L,
                 new VehiculoRequest("ABC123", "Honda", "CB", "Rojo", 2020, 1, 2)));

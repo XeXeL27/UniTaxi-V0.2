@@ -45,8 +45,7 @@ public class VehiculoService {
         validarPlacaDisponible(request.placa(), null);
 
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
-        CategoriaServicio categoriaServicio = buscarCategoriaServicio(request.idCategoriaServicio());
-        validarCategoriaDelTipo(tipoVehiculo, categoriaServicio);
+        CategoriaServicio categoriaServicio = resolverCategoriaServicio(tipoVehiculo, request.idCategoriaServicio());
 
         Vehiculo vehiculo = new Vehiculo();
         vehiculo.setConductor(conductor);
@@ -69,8 +68,7 @@ public class VehiculoService {
         validarPlacaDisponible(request.placa(), vehiculo.getId());
 
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
-        CategoriaServicio categoriaServicio = buscarCategoriaServicio(request.idCategoriaServicio());
-        validarCategoriaDelTipo(tipoVehiculo, categoriaServicio);
+        CategoriaServicio categoriaServicio = resolverCategoriaServicio(tipoVehiculo, request.idCategoriaServicio());
 
         vehiculo.setTipoVehiculo(tipoVehiculo);
         vehiculo.setCategoriaServicio(categoriaServicio);
@@ -89,6 +87,21 @@ public class VehiculoService {
         Vehiculo vehiculo = buscarDelConductor(id, conductor.getId());
         vehiculo.setEstadoVehiculo(EstadoRegistro.X);
         vehiculoRepository.save(vehiculo);
+    }
+
+    /**
+     * Resuelve la categoria de servicio elegida por id y comprueba que sirve para el tipo de
+     * vehiculo. Es la regla unica de compatibilidad: la usan el alta y la edicion de un vehiculo y
+     * tambien el registro de la moto del conductor, para que esos caminos no diverjan. Un id
+     * inexistente o de una categoria eliminada es 404; una categoria de otro tipo de vehiculo (por
+     * ejemplo una categoria de auto en una MOTO) es 422.
+     */
+    public CategoriaServicio resolverCategoriaServicio(TipoVehiculo tipoVehiculo, Integer idCategoriaServicio) {
+        CategoriaServicio categoriaServicio = categoriaServicioRepository
+                .findByIdAndEstadoCategoriaServicio(idCategoriaServicio, EstadoRegistro.A)
+                .orElseThrow(() -> RecursoNoEncontradoException.de("CategoriaServicio", idCategoriaServicio));
+        validarCategoriaDelTipo(tipoVehiculo, categoriaServicio);
+        return categoriaServicio;
     }
 
     private Conductor buscarConductor(Long idUsuario) {
@@ -116,11 +129,6 @@ public class VehiculoService {
     private TipoVehiculo buscarTipoVehiculo(Integer id) {
         return tipoVehiculoRepository.findById(id)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("TipoVehiculo", id));
-    }
-
-    private CategoriaServicio buscarCategoriaServicio(Integer id) {
-        return categoriaServicioRepository.findById(id)
-                .orElseThrow(() -> RecursoNoEncontradoException.de("CategoriaServicio", id));
     }
 
     private void validarCategoriaDelTipo(TipoVehiculo tipoVehiculo, CategoriaServicio categoriaServicio) {
