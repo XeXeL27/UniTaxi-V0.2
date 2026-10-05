@@ -35,9 +35,13 @@ import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
+import com.taxiuap.backend.communication.entity.Reporte;
+import com.taxiuap.backend.communication.enums.SituacionReporte;
+import com.taxiuap.backend.communication.repository.ReporteRepository;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
@@ -63,13 +67,14 @@ class EntregaServiceFallaTest {
     @Mock private DatosEntregaRepository datosEntregaRepository;
     @Mock private CalculoPrecioDeliveryService calculoPrecioDeliveryService;
     @Mock private AlmacenamientoArchivos almacenamientoArchivos;
+    @Mock private ReporteRepository reporteRepository;
 
     private EntregaService entregaService;
 
     @BeforeEach
     void setUp() {
         entregaService = new EntregaService(viajeService, datosEntregaRepository,
-                calculoPrecioDeliveryService, almacenamientoArchivos);
+                calculoPrecioDeliveryService, almacenamientoArchivos, reporteRepository);
     }
 
     @AfterEach
@@ -93,6 +98,25 @@ class EntregaServiceFallaTest {
         verify(datosEntregaRepository).registrarFallaSiEstadoPermitido(eq(1L), anyCollection(),
                 eq(EstadoEntrega.NO_ENTREGADO), eq("El receptor no estaba"), eq("personas/20_x/entrega/falla_1.jpg"));
         verify(viajeService).cancelarFallaEntrega(500L);
+    }
+
+    @Test
+    void laFallaCreaReportePendienteSinSuspenderAlConductor() {
+        Viaje viaje = viajeEnMano(TipoEnvio.ENCOMIENDA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
+                .thenReturn("personas/20_x/entrega/falla_1.jpg");
+        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), anyString(),
+                anyString())).thenReturn(1);
+
+        entregaService.noSePudoEntregar(500L, "No respondio", foto());
+
+        org.mockito.ArgumentCaptor<Reporte> captor = org.mockito.ArgumentCaptor.forClass(Reporte.class);
+        verify(reporteRepository).save(captor.capture());
+        assertEquals(SituacionReporte.PENDIENTE, captor.getValue().getSituacionReporte());
+        assertEquals("FALLA_ENTREGA", captor.getValue().getMotivo());
+        assertEquals("A", viaje.getConductor().getEstadoConductor().name());
     }
 
     @Test
@@ -184,6 +208,7 @@ class EntregaServiceFallaTest {
         Conductor conductor = new Conductor();
         conductor.setId(40L);
         conductor.setUsuario(usuarioConductor);
+        conductor.setEstadoConductor(EstadoRegistro.A);
 
         Pasajero pasajero = new Pasajero();
         pasajero.setId(30L);

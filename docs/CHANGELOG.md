@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-05 | ✨ | Task 5 DELIVERY: reportes automáticos y resolución administrativa de incidentes |
 | 2026-10-04 | Nuevo | Task 4 DELIVERY: transiciones de pedido, validación atómica de códigos, compra confirmada por el cliente, pago directo, entrega y falla de entrega |
 | 2026-10-04 | Arreglo | Task 3 fix round 2 DELIVERY: tarifa técnica zona nula on-demand, defaults MOTO, placa compatible y catálogo de tarifas seguro |
 | 2026-10-04 | Arreglo | Task 3 DELIVERY: precio OSRM por snapshot, estimado marcado al asignar, moto compatible, tarifa de referencia y revalidación de aceptación |
@@ -19,6 +20,16 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-05
+
+### ✨ Nuevo · Task 5: reportes y administración de incidentes DELIVERY
+
+- **Módulo / área:** backend (`communication`, `trip`, `controller/admin`), administración DELIVERY.
+- **Descripción:** las fallas de entrega crean un reporte pendiente transaccional; el administrador puede consultarlo, ver su evidencia y registrar resolución sin mover dinero ni suspender automáticamente.
+- **Cambios clave:** resolución con tipo, observación, fecha e identidad; advertencia `PAQUETE_NO_COINCIDE`; descarga de foto bajo `/api/admin/reportes/**`.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/communication`, `backend/src/main/java/com/taxiuap/backend/trip/service/EntregaService.java`, `backend/src/main/java/com/taxiuap/backend/controller/admin/ReporteAdminController.java`, pruebas focalizadas de reportes.
+- **Verificación:** `SPRING_PROFILES_ACTIVE=appu ./gradlew test --console=plain --tests 'com.taxiuap.backend.trip.service.EntregaServiceFallaTest' --tests 'com.taxiuap.backend.communication.service.ReporteDeliveryTest'` (4 tests, BUILD SUCCESSFUL); suite completa intentada, con 12 fallos de contexto PostgreSQL/Dialect fuera de esta tarea.
 
 ## 2026-10-04
 

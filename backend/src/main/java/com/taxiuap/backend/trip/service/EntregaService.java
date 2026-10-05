@@ -11,6 +11,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.entity.Persona;
+import com.taxiuap.backend.communication.entity.Reporte;
+import com.taxiuap.backend.communication.enums.SituacionReporte;
+import com.taxiuap.backend.communication.repository.ReporteRepository;
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
@@ -52,15 +55,25 @@ public class EntregaService {
     private final DatosEntregaRepository datosEntregaRepository;
     private final CalculoPrecioDeliveryService calculoPrecioDeliveryService;
     private final AlmacenamientoArchivos almacenamientoArchivos;
+    private final ReporteRepository reporteRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
     public EntregaService(ViajeService viajeService,
             DatosEntregaRepository datosEntregaRepository,
             CalculoPrecioDeliveryService calculoPrecioDeliveryService,
-            AlmacenamientoArchivos almacenamientoArchivos) {
+            AlmacenamientoArchivos almacenamientoArchivos, ReporteRepository reporteRepository) {
         this.viajeService = viajeService;
         this.datosEntregaRepository = datosEntregaRepository;
         this.calculoPrecioDeliveryService = calculoPrecioDeliveryService;
         this.almacenamientoArchivos = almacenamientoArchivos;
+        this.reporteRepository = reporteRepository;
+    }
+
+    /** Constructor de compatibilidad para pruebas unitarias antiguas del flujo DELIVERY. */
+    public EntregaService(ViajeService viajeService, DatosEntregaRepository datosEntregaRepository,
+            CalculoPrecioDeliveryService calculoPrecioDeliveryService,
+            AlmacenamientoArchivos almacenamientoArchivos) {
+        this(viajeService, datosEntregaRepository, calculoPrecioDeliveryService, almacenamientoArchivos, null);
     }
 
     // ---------------------------------------------------------------- COMPRA_Y_ENTREGA: la compra
@@ -315,7 +328,49 @@ public class EntregaService {
                     "El pedido ya no esta en tus manos");
         }
 
+        crearReporteFalla(viaje, motivoNormalizado);
+
         return viajeService.cancelarFallaEntrega(idViaje);
+    }
+
+    /** Rechaza antes de recoger un paquete que no coincide y deja una advertencia administrativa. */
+    @Transactional
+    public ViajeResponse reportarPaqueteIncorrecto(Long idViaje, String motivo, MultipartFile foto) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        DatosEntrega datos = datosDe(viaje);
+        if (!ANTES_DE_TENER_EL_PEDIDO.contains(datos.getEstadoEntrega())) {
+            throw new NegocioException("El paquete solo se puede rechazar antes de recogerlo");
+        }
+        if (motivo == null || motivo.isBlank()) {
+            throw new NegocioException("Describe por que el paquete no coincide");
+        }
+        byte[] contenido = imagenOpcional(foto, "La foto del paquete");
+        if (contenido == null) {
+            throw new NegocioException("La foto del paquete es obligatoria");
+        }
+        datos.setFotoFallaUrl(guardarEvidencia(contenido, viaje, "paquete_no_coincide"));
+        datos.setMotivoFalla(motivo.trim());
+        datosEntregaRepository.save(datos);
+        crearReporte(viaje, "PAQUETE_NO_COINCIDE", motivo.trim());
+        return viajeService.cancelarFallaEntrega(idViaje);
+    }
+
+    private void crearReporteFalla(Viaje viaje, String motivo) {
+        crearReporte(viaje, "FALLA_ENTREGA", motivo);
+    }
+
+    private void crearReporte(Viaje viaje, String tipo, String descripcion) {
+        if (reporteRepository == null) {
+            return;
+        }
+        Reporte reporte = new Reporte();
+        reporte.setViaje(viaje);
+        reporte.setUsuarioReporta(viaje.getConductor().getUsuario());
+        reporte.setMotivo(tipo);
+        reporte.setDescripcion(descripcion);
+        reporte.setSituacionReporte(SituacionReporte.PENDIENTE);
+        reporte.setFecha(java.time.LocalDateTime.now());
+        reporteRepository.save(reporte);
     }
 
     // ---------------------------------------------------------------- apoyos

@@ -3,6 +3,7 @@ package com.taxiuap.backend.communication.entity;
 import java.time.LocalDateTime;
 
 import com.taxiuap.backend.communication.enums.SituacionReporte;
+import com.taxiuap.backend.communication.enums.TipoResolucionReporte;
 import com.taxiuap.backend.config.EntidadAuditable;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
@@ -56,6 +57,20 @@ public class Reporte extends EntidadAuditable {
 
     @Column(name = "fecha")
     private LocalDateTime fecha;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_resolucion", length = 30)
+    private TipoResolucionReporte tipoResolucion;
+
+    @Column(name = "observacion_admin", length = 1000)
+    private String observacionAdmin;
+
+    @Column(name = "fecha_resolucion")
+    private LocalDateTime fechaResolucion;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_usuario_admin_resolvio")
+    private Usuario usuarioAdminResolvio;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_reporte", length = 20)

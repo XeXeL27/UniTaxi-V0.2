@@ -161,6 +161,15 @@ public class ViajeConductorController {
                 entregaService.noSePudoEntregar(id, motivo, foto)));
     }
 
+    /** Rechaza un paquete que no coincide con lo declarado; solo deja advertencia, sin suspension automatica. */
+    @PostMapping("/{id}/entrega/paquete-no-coincide")
+    public ResponseEntity<ApiResponse<ViajeResponse>> paqueteNoCoincide(
+            @PathVariable Long id, @RequestParam("motivo") String motivo,
+            @RequestPart("foto") MultipartFile foto) {
+        return ResponseEntity.ok(ApiResponse.exito("Paquete rechazado y reportado",
+                entregaService.reportarPaqueteIncorrecto(id, motivo, foto)));
+    }
+
     /** Acepta o rechaza el cambio de metodo de pago que pidio el pasajero. */
     @PostMapping("/{id}/metodo-pago/respuesta")
     public ResponseEntity<ApiResponse<ViajeResponse>> responderCambioMetodoPago(
