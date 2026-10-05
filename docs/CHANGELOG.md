@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-05 | 🧪 | Verificación de las Tasks 3 a 8 de DELIVERY: suite completa, autoverificación de permisos y builds reales |
 | 2026-10-05 | ✨ | Task 8 DELIVERY: panel administrativo, evidencia y resolución de reportes |
 | 2026-10-05 | ✨ | Task 7 DELIVERY: flujo del repartidor en app móvil |
 | 2026-10-05 | Arreglo | Task 6 DELIVERY: correcciones de serialización, precios, reportes y responsive |
@@ -27,6 +28,51 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-05
+
+### 🧪 Verificación · Deuda de verificación de DELIVERY (Tasks 3 a 8)
+
+- **Módulo / área:** DELIVERY (viaje, entrega, reportes), app móvil y panel administrativo.
+- **Descripción:** se ejecutó por primera vez la verificación que las Tasks 3 a 8 dejaron diferida
+  (suite backend completa, `flutter test`, `flutter analyze`, builds de las dos apps, recorrido
+  end-to-end por la API contra PostgreSQL y smoke de `/app` y `/admin` en Chrome). Se corrigieron
+  los defectos encontrados.
+- **Cambios clave:**
+  - `EntregaServicePostgresTest` esperaba `NegocioException` cuando un actor equivocado intenta
+    avanzar el pedido, pero `ViajeService.obtenerViajeDelConductor` responde a propósito
+    "no encontrado" para no revelar que el viaje existe. Se corrigió la suposición del test, no la
+    protección.
+  - `ReporteAdminControllerSecurityTest` resolvia el reporte con `@WithMockUser`, que deja un `User`
+    de Spring en el `SecurityContext` y no un `JwtUser`; el controller lee
+    `UsuarioActual.obtener().orElseThrow()` y la petición terminaba en 500 sin llegar al servicio.
+    El caso ADMIN ahora se autentica como lo hace `JwtAuthFilter`.
+  - `flutter analyze` estaba diferido en Tasks 7 y 8: aparecieron tres hallazgos que nunca se
+    habían visto (un import de `dart:typed_data` innecesario, un `for` sin llaves en el panel del
+    repartidor y un import muerto de `dialogos.dart` en la pantalla de reportes de entrega).
+  - Se documenta que `limite_adelanto_compra` no es editable por el repartidor: el permiso `DATOS`
+    lo bloquea, en contra del spec sección 2. Queda como decisión de producto abierta.
+- **Archivos afectados:**
+  `backend/src/test/java/com/taxiuap/backend/trip/service/EntregaServicePostgresTest.java`,
+  `backend/src/test/java/com/taxiuap/backend/controller/admin/ReporteAdminControllerSecurityTest.java`,
+  `app-movil/lib/modulos/conductor/viaje/flujo_conductor.dart`,
+  `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`,
+  `admin-panel/lib/modulos/reportes/pantalla_reportes_entrega.dart`,
+  `docs/CHANGELOG.md`, `docs/superpowers/2026-10-05-verificacion-entrega.md`.
+- **Verificación (salida real):**
+  - `./gradlew test` → `BUILD SUCCESSFUL`, `tests=177 failures=0 errors=0 skipped=0 classes=38`.
+  - `./gradlew build` → `BUILD SUCCESSFUL in 25s`.
+  - `flutter test` (app-movil) → `00:02 +78: All tests passed!`.
+  - `flutter analyze` (app-movil) → `No issues found!`; (admin-panel) → `No issues found!`.
+  - `flutter build web --release --no-tree-shake-icons --no-web-resources-cdn` en las dos apps →
+    `✓ Built build/web`.
+  - Autoverificación: quitado el chequeo de propietario del conductor, la prueba de permisos falla;
+    puesto el UPDATE de código de recogida incondicional, fallan 8 pruebas de concurrencia y de
+    estado persistido.
+  - Recorrido por la API contra PostgreSQL: 62 comprobaciones pasan sobre ENCOMIENDA y
+    COMPRA_Y_ENTREGA completos (visibilidad, códigos de 6 dígitos, compra, pago, entrega, falla,
+    reporte y resolución). Detalle en `docs/superpowers/2026-10-05-verificacion-entrega.md`.
+  - Smoke en Chrome: `/app` y `/admin` montan sin excepción de Dart, con los títulos correctos.
 
 ## 2026-10-05
 
