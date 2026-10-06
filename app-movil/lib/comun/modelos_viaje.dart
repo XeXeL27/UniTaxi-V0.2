@@ -163,6 +163,17 @@ class DatosEntrega {
       ? 'Incidente registrado; estado administrativo no disponible para el pasajero'
       : null;
 
+  /// Punto real del comercio donde el repartidor compro: es el A del mapa en una COMPRA_Y_ENTREGA.
+  ///
+  /// Nulo hasta que el repartidor registra la compra. El punto propuesto (puntoCompraPropuestoWkt)
+  /// no sirve para el mapa: mientras el repartidor coordina con el comercio la ruta no cambia.
+  PuntoRuta? get puntoComercio {
+    final posicion = puntoDesdeWkt(puntoCompraWkt);
+    if (posicion == null) return null;
+    final nombre = detalleCompra?.trim() ?? '';
+    return PuntoRuta(posicion, nombre.isEmpty ? 'Comercio' : 'Comercio: $nombre');
+  }
+
   /// Códigos de 6 dígitos que el pasajero tiene que dictar, con la persona a quien se lo dicta y su
   /// teléfono.
   ///
@@ -217,6 +228,18 @@ class DatosEntrega {
   static bool _hay(String? codigo) => codigo?.trim().isNotEmpty ?? false;
 
   static String? _sinVacio(String? valor) => valor == null || valor.trim().isEmpty ? null : valor.trim();
+}
+
+/// Partida real del mapa de un viaje o solicitud: en una COMPRA_Y_ENTREGA, el comercio donde el
+/// repartidor ya compro; en ENCOMIENDA y en taxi, el origen de siempre.
+///
+/// Puede ser null: una compra que todavia no compro no tiene punto de recogida (el diseno solo
+/// define B para compra), y sin partida no hay ruta que dibujar.
+PuntoRuta? _partida(LatLng? origen, String origenDireccion, DatosEntrega? datosEntrega) {
+  if (datosEntrega != null && datosEntrega.tipoEnvio == TipoEnvio.compraYEntrega) {
+    return datosEntrega.puntoComercio;
+  }
+  return origen == null ? null : PuntoRuta(origen, origenDireccion);
 }
 
 /// Un código de entrega y a quién se lo dicta. [faseActual] marca el que toca dictar en este momento:
@@ -401,9 +424,17 @@ class Solicitud {
 
   bool get activa => situacion == 'PENDIENTE' || situacion == 'CON_OFERTAS';
 
-  bool get tieneRuta => origen != null && destino != null;
+  /// Punto de partida real del mapa: el comercio de la compra si ya compro; el origen en
+  /// encomienda y en taxi.
+  ///
+  /// Puede ser null: una compra que todavia no compro no tiene punto de recogida (el diseno solo
+  /// define B para compra); por eso [tieneRuta] exige partida no nula antes de dibujar la ruta.
+  PuntoRuta? get partida => _partida(origen, origenDireccion, datosEntrega);
 
-  PuntoRuta get puntoA => PuntoRuta(origen!, origenDireccion);
+  bool get tieneRuta => partida != null && destino != null;
+
+  /// Punto A del mapa; solo se pide despues de [tieneRuta], que ya exige partida.
+  PuntoRuta get puntoA => partida!;
 
   /// Lo que se muestra del destino: el nombre del favorito (solo el pasajero lo tiene) o la direccion.
   String get destinoTexto => (destinoNombre ?? '').trim().isEmpty ? destinoDireccion : destinoNombre!;
@@ -509,9 +540,17 @@ class Viaje {
 
   bool get pagaConQr => metodoPago == MetodoPago.qr;
 
-  bool get tieneRuta => origen != null && destino != null;
+  /// Punto de partida real del mapa: el comercio de la compra si ya compro; el origen en
+  /// encomienda y en taxi.
+  ///
+  /// Puede ser null: una compra que todavia no compro no tiene punto de recogida (el diseno solo
+  /// define B para compra); por eso [tieneRuta] exige partida no nula antes de dibujar la ruta.
+  PuntoRuta? get partida => _partida(origen, origenDireccion, datosEntrega);
 
-  PuntoRuta get puntoA => PuntoRuta(origen!, origenDireccion);
+  bool get tieneRuta => partida != null && destino != null;
+
+  /// Punto A del mapa; solo se pide despues de [tieneRuta], que ya exige partida.
+  PuntoRuta get puntoA => partida!;
 
   /// Lo que se muestra del destino: el nombre del favorito (solo el pasajero lo tiene) o la direccion.
   String get destinoTexto => (destinoNombre ?? '').trim().isEmpty ? destinoDireccion : destinoNombre!;
