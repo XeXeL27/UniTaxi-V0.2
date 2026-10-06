@@ -28,6 +28,16 @@ enum EtapaPasajero { cargando, eligiendo, buscando, enViaje, calificando }
 PuntoRuta? destinoAlSolicitar({required PuntoRuta partida, PuntoRuta? destinoElegido, required bool esCompra}) =>
     esCompra ? partida : destinoElegido;
 
+/// Punto hacia el que apunta el tramo naranja que sigue al repartidor en el mapa: el origen mientras
+/// va a recoger y el destino durante el viaje. En una compra, cuando el repartidor registra la
+/// compra, aparece la ruta real desde el comercio y no hay referencia: el tramo se detiene (el
+/// repartidor ya no "va hacia" el punto, sale de ahi) y solo sigue moviendose su marcador.
+LatLng? referenciaTramoNaranja(Viaje viaje) {
+  final esCompra = viaje.datosEntrega?.tipoEnvio == TipoEnvio.compraYEntrega;
+  if (esCompra && viaje.partida != null) return null;
+  return viaje.situacion == SituacionViaje.enCurso ? viaje.destino : viaje.origen;
+}
+
 /// Flujo del pasajero estilo Uber: A sale del GPS, el pasajero toca el mapa para marcar B, ve el
 /// precio y solicita; luego espera a que un conductor acepte, sigue el viaje y al terminar
 /// califica al conductor. El estado del backend se consulta cada pocos segundos.
@@ -301,9 +311,11 @@ class FlujoPasajero extends ChangeNotifier {
     }
   }
 
-  /// Toque en el mapa: sin GPS el primer toque marca la partida; despues, el destino.
+  /// Toque en el mapa: sin GPS el primer toque marca la partida; despues, el destino. En una compra
+  /// no hay destino que elegir: el pedido se entrega donde esta el pasajero, asi que el toque no
+  /// pone B.
   void tocarMapa(LatLng punto) {
-    if (etapa != EtapaPasajero.eligiendo || guardandoLugar) return;
+    if (etapa != EtapaPasajero.eligiendo || guardandoLugar || esCompra) return;
     if (mapa.a == null) {
       mapa.ponerA(PuntoRuta(punto, 'Buscando dirección...'));
       _resolverDireccion(punto, esOrigen: true);
@@ -314,9 +326,9 @@ class FlujoPasajero extends ChangeNotifier {
   }
 
   /// Un favorito pasa a ser el destino. El pasajero ve su nombre; al conductor le llega la
-  /// direccion real del punto, que se busca aparte.
+  /// direccion real del punto, que se busca aparte. En una compra no hay destino que elegir.
   void irAFavorito(LatLng posicion, String nombre) {
-    if (etapa != EtapaPasajero.eligiendo) return;
+    if (etapa != EtapaPasajero.eligiendo || esCompra) return;
     guardandoLugar = false;
     mapa.ponerB(PuntoRuta(posicion, nombre));
     _favorito = (posicion: posicion, nombre: nombre);
@@ -387,13 +399,26 @@ class FlujoPasajero extends ChangeNotifier {
   void elegirTipoEnvio(TipoEnvio tipo) {
     modo.elegir(tipo);
     datosEntregaForm = null;
+    if (tipo == TipoEnvio.compraYEntrega) _limpiarDestinoHeredado();
     _avisar();
   }
 
   void guardarDatosEntrega(DatosEntregaForm datos) {
     modo.elegir(datos.tipoEnvio);
     datosEntregaForm = datos;
+    if (datos.tipoEnvio == TipoEnvio.compraYEntrega) _limpiarDestinoHeredado();
     _avisar();
+  }
+
+  /// En una compra no hay destino que elegir: si se llega con el B de un viaje normal anterior,
+  /// ese punto (y la ruta trazada hasta el) no sirve y se quita.
+  void _limpiarDestinoHeredado() {
+    _favorito = null;
+    _direccionFavorito = null;
+    if (mapa.b == null) return;
+    mapa.ponerB(null);
+    final gps = mapa.miUbicacion;
+    if (gps != null) mapa.centrarEn(gps);
   }
 
   /// Crea la solicitud de viaje. En una compra, partida y destino son la misma ubicacion del
@@ -470,7 +495,13 @@ class FlujoPasajero extends ChangeNotifier {
     solicitud = nueva;
     etapa = EtapaPasajero.buscando;
     mapa.aSigueGps = false;
-    if (nueva.tieneRuta) mapa.ponerRuta(nueva.puntoA, nueva.puntoB);
+    // En una compra todavia sin comercio no hay A: solo se pone B, donde esta el pasajero, que es
+    // ademas hasta donde llega el tramo naranja del repartidor.
+    mapa.actualizarPuntos(
+      partida: nueva.partida,
+      destino: nueva.destino == null ? null : nueva.puntoB,
+      esOtro: true,
+    );
     _iniciarSondeo(_consultarSolicitud);
     _avisar();
   }
@@ -517,19 +548,22 @@ class FlujoPasajero extends ChangeNotifier {
     viaje = nuevo;
     etapa = EtapaPasajero.enViaje;
     mapa.aSigueGps = false;
-    if (cambioDeViaje && nuevo.tieneRuta) mapa.ponerRuta(nuevo.puntoA, nuevo.puntoB);
+    // Con la partida se traza (o se re-traza si cambio la posicion de A, por ejemplo al aparecer el
+    // comercio de una compra); sin partida solo se pone B, el punto de entrega del pasajero.
+    mapa.actualizarPuntos(
+      partida: nuevo.partida,
+      destino: nuevo.destino == null ? null : nuevo.puntoB,
+      esOtro: cambioDeViaje,
+    );
     _iniciarSondeo(_consultarViaje);
     _iniciarSeguimientoConductor(nuevo);
     _avisar();
   }
 
   void _iniciarSeguimientoConductor(Viaje viaje) {
-    // Punto de referencia: origen mientras va a recoger (CONFIRMADO, EN_CAMINO, LLEGO),
-    // destino durante el viaje (EN_CURSO).
-    final referencia = viaje.situacion == SituacionViaje.enCurso ? viaje.destino : viaje.origen;
-    if (referencia != null) {
-      mapa.iniciarSeguimientoConductor(referencia);
-    }
+    // Punto de referencia: origen mientras va a recoger (CONFIRMADO, EN_CAMINO, LLEGO), destino
+    // durante el viaje (EN_CURSO); en una compra ya registrada no hay: el naranja se detiene.
+    mapa.iniciarSeguimientoConductor(referenciaTramoNaranja(viaje));
     _iniciarReceptor();
   }
 
@@ -573,8 +607,9 @@ class FlujoPasajero extends ChangeNotifier {
     _revisarCambioPago(actual, nuevo);
     viaje = nuevo;
 
-    // Si cambio la situacion, actualizar el punto de referencia del seguimiento. El conductor que
-    // llega al punto de partida se avisa (vibracion y, minimizada, notificacion); el fin del viaje, solo con vibracion.
+    // Si cambio la situacion, se actualiza el mapa: la referencia del tramo naranja y, si hace
+    // falta, la ruta. El conductor que llega al punto de partida se avisa (vibracion y, minimizada,
+    // notificacion); el fin del viaje, solo con vibracion.
     if (nuevo.situacion != actual.situacion) {
       if (nuevo.situacion == SituacionViaje.llego) {
         _avisarUnaVez(nuevo.id, 2, 'Tu conductor llegó',
@@ -582,10 +617,16 @@ class FlujoPasajero extends ChangeNotifier {
       } else if (nuevo.situacion == SituacionViaje.completado) {
         unawaited(Vibracion.corta());
       }
-      final referencia = nuevo.situacion == SituacionViaje.enCurso ? nuevo.destino : nuevo.origen;
-      if (referencia != null) {
-        mapa.cambiarPuntoReferenciaConductor(referencia);
-      }
+      // Al cambiar la situacion puede aparecer la partida (el comercio de una compra registrada en
+      // este mismo sondeo): se re-traza solo si cambio la posicion de A (H11).
+      mapa.actualizarPuntos(
+        partida: nuevo.partida,
+        destino: nuevo.destino == null ? null : nuevo.puntoB,
+        esOtro: false,
+      );
+      // La referencia del tramo naranja cambia con la situacion; en una compra ya registrada no
+      // hay (aparece la ruta real desde el comercio) y el tramo se detiene ahi.
+      mapa.cambiarPuntoReferenciaConductor(referenciaTramoNaranja(nuevo));
     }
 
     // Respaldo REST: si no llego posicion por WebSocket en los ultimos 10 s, pedir por REST.

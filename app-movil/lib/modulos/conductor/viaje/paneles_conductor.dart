@@ -140,7 +140,9 @@ class _TarjetaSolicitud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final metrosViaje = solicitud.tieneRuta ? ServiciosMapa.metros(solicitud.origen!, solicitud.destino!) : null;
+    // En una compra todavia sin comercio no hay partida: sin ella no hay distancia que mostrar.
+    final metrosViaje =
+        solicitud.tieneRuta ? ServiciosMapa.metros(solicitud.partida!.posicion, solicitud.destino!) : null;
     return Material(
       color: ColoresApp.blanco,
       shape: RoundedRectangleBorder(

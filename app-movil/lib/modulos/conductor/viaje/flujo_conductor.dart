@@ -222,11 +222,20 @@ class FlujoConductor extends ChangeNotifier {
   }
 
   /// Muestra en el mapa la ruta de la solicitud y el camino desde el conductor hasta el pasajero.
+  /// En una compra todavia sin comercio no hay partida (el diseno solo define B para compra), y el
+  /// detalle se abre igual: solo B, con el tramo naranja hasta el pasajero (H10).
   void verSolicitud(Solicitud solicitud) {
-    if (!solicitud.tieneRuta) return;
+    final destino = solicitud.destino == null ? null : solicitud.puntoB;
+    // Sin destino no hay nada que dibujar; sin partida solo se abre si es un reparto.
+    if (destino == null || (solicitud.partida == null && solicitud.datosEntrega == null)) return;
     seleccionada = solicitud;
     etapa = EtapaConductor.detalle;
-    mapa.ponerRuta(solicitud.puntoA, solicitud.puntoB, conAcercamiento: true);
+    mapa.actualizarPuntos(
+      partida: solicitud.partida,
+      destino: destino,
+      esOtro: true,
+      conAcercamiento: true,
+    );
     _avisar();
   }
 
@@ -264,11 +273,14 @@ class FlujoConductor extends ChangeNotifier {
     etapa = EtapaConductor.enViaje;
     seleccionada = null;
     _finalizandoSolo = false;
-    if (esOtro && nuevo.tieneRuta) {
-      mapa.ponerRuta(nuevo.puntoA, nuevo.puntoB, conAcercamiento: _vaABuscarPasajero(nuevo.situacion));
-    } else {
-      mapa.cambiarAcercamiento(_vaABuscarPasajero(nuevo.situacion));
-    }
+    // Con la partida se traza (o se re-traza si cambio la posicion de A, por ejemplo al aparecer
+    // el comercio de una compra); sin partida solo se pone B, que es hasta donde va el naranja.
+    mapa.actualizarPuntos(
+      partida: nuevo.partida,
+      destino: nuevo.destino == null ? null : nuevo.puntoB,
+      esOtro: esOtro,
+      conAcercamiento: _vaABuscarPasajero(nuevo.situacion),
+    );
     _iniciarSondeo(_consultarViaje, _intervaloViaje);
     _avisar();
   }

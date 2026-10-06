@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | ✨ | Task 3 del plan de compra: el mapa dibuja el tramo naranja hasta el pasajero y la ruta desde el comercio, y re-traza solo si cambió la posición de A |
 | 2026-10-06 | ✨ | Task 2 del plan de compra: el pasajero pide una compra sin elegir destino (origen = destino = su ubicación, precio "A calcular", sin cotizar OSRM) |
 | 2026-10-06 | 📚 | Plan del punto de entrega y el mapa de la compra y entrega: B es donde está el pasajero, naranja punteado hasta él y ruta desde el comercio |
 | 2026-10-06 | 🐛 | El repartidor confirma que recibió el pago con un check, sin escribir el monto (el servidor ya lo sabe y exige que sea exacto) |
@@ -45,6 +46,51 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-06
+
+### ✨ Nuevo · Task 3 del plan de compra: el mapa dibuja el tramo al pasajero y la ruta desde el comercio
+
+- **Módulo / área:** app móvil (`app-movil`), mapa del reparto en las dos vistas (pasajero y
+  repartidor).
+- **Descripción:** en COMPRA_Y_ENTREGA no hay punto de recogida hasta que el repartidor registra la
+  compra, y el mapa tenía que dibujar lo que toca en cada momento: sin comercio solo se ve B (donde
+  está el pasajero) y el tramo naranja llega hasta ahí (H5/H10); al registrar la compra aparece A
+  (el comercio) con la ruta azul comercio → pasajero y el naranja se detiene en las dos apps, sin
+  borrar el marcador del repartidor, que sigue moviéndose. Además el re-trazado se limita a cuando
+  cambia la posición de A (H11), para no relanzar OSRM en cada sondeo, y en una compra ya no se
+  pueden fijar B desde el mapa ni desde un favorito ni heredarse un destino de un viaje normal.
+- **Cambios clave:**
+  - `controlador_mapa.dart`: regla pura `debeReTrazar(esOtro, aActual, partida)`; método
+    `actualizarPuntos(partida, destino, esOtro, conAcercamiento)` que con `partida == null` solo
+    pone B (y limpia la ruta heredada) y con partida traza solo si dice la regla; getter
+    `puntoAcercamiento` (`a ?? b`, comentado porque sin A parece un error); `_trazarAcercamiento`
+    y la recalculación del GPS ya no exigen A; `iniciarSeguimientoConductor` y
+    `cambiarPuntoReferenciaConductor` aceptan `null` para detener el tramo naranja sin tocar la
+    posición del marcador.
+  - `flujo_conductor.dart`: `verSolicitud` ya no corta con `!tieneRuta` en un reparto (abre el
+    detalle con B y el naranja hacia el pasajero) y `_entrarViaje` pasa por `actualizarPuntos`, así
+    que al registrar la compra re-traza desde el comercio y apaga el naranja (EN_CURSO).
+  - `flujo_pasajero.dart`: `actualizarPuntos` en `_entrarBuscando`, `_entrarViaje` y en el sondeo
+    cuando cambia la situación (R-PF3: en compra queda `a = null` y `b` = el pasajero; con el
+    comercio, la ruta); regla pura `referenciaTramoNaranja(viaje)` que devuelve `null` cuando la
+    compra ya tiene comercio; `tocarMapa` e `irAFavorito` no ponen B en compra; `elegirTipoEnvio` y
+    `guardarDatosEntrega` limpian un B heredado con su ruta.
+  - `paneles_conductor.dart`: la distancia del viaje de la tarjeta usa `partida` y se oculta cuando
+    no la hay (el `solicitud.origen!` de antes ya no lo garantizaba `tieneRuta`).
+- **Tests:** `test/mapa_reparto_test.dart` (24): la regla de re-trazado y su aplicación sin relanzar
+  OSRM, el destino del tramo naranja sin A, que detenerlo conserva al repartidor, la referencia del
+  naranja en compra/taxi, el mapa del pasajero al pedir y al abrir con el viaje (más el sondeo que
+  ve el comercio recién registrado), que en compra no se elige destino (toque, favorito y B
+  heredado) y el mapa del repartidor al ver, aceptar y registrar la compra.
+- **Archivos afectados:**
+  - `app-movil/lib/mapa/controlador_mapa.dart`
+  - `app-movil/lib/modulos/conductor/viaje/flujo_conductor.dart`
+  - `app-movil/lib/modulos/conductor/viaje/paneles_conductor.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`
+  - `app-movil/test/mapa_reparto_test.dart` (nuevo)
+  - `docs/CHANGELOG.md`
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` completo: 205/205 en verde
+  (los 24 del archivo nuevo con su fase RED: 10 fallos por aserción y la de símbolos sin compilar).
+  El recorrido manual en Chrome queda pendiente para la Task 6.
 
 ### ✨ Nuevo · Task 2 del plan de compra: el pasajero pide una compra sin elegir destino
 
