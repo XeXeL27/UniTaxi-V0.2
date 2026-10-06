@@ -205,8 +205,12 @@ luego A -> B.
 - `textoPrecio`: en compra, "A calcular" siempre mientras se elige (Ruling 2). El estimado del
   backend llega con el repartidor asignado y el precio real con la compra registrada; ninguno de
   los dos se conoce al pedir. En encomienda sigue mostrando la tarifa del servicio como hoy.
-- `PanelEligiendo`: en compra, en vez de "Busca tu destino arriba o toca el mapa", "Se entrega donde
-  estas"; sin busqueda de destino, sin favoritos y sin "quitar destino".
+- `PanelEligiendo`: hoy el precio, el selector de pago y el boton de pedir estan **dentro** de
+  `if (b != null)` (`paneles_pasajero.dart:69-155`), y en compra no hay `b`. Regla del plan
+  (R-PF1): en compra esas tres piezas se muestran igualmente, y la fila del destino se sustituye por
+  "Se entrega donde estas". Sin busqueda de destino, sin favoritos y sin "quitar destino".
+  **No** se pone `mapa.b = mapa.a` como solucion: `aSigueGps` mueve A con el GPS y dejaria B
+  quieto, trazando una ruta falsa y gastando una llamada a OSRM entre dos puntos casi iguales.
 - Regla pura y testeable del destino de una compra, junto a las que ya viven fuera de widget
   (como `etiquetaPrecioDelivery`).
 
