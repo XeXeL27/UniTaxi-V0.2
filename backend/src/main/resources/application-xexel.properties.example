@@ -21,7 +21,7 @@ spring.jpa.properties.hibernate.format_sql=true
 jwt.secret=<cambiar>
 
 # --- CORS (panel admin Vite) -------------------------------
-cors.origenes=http://virtual.uap.edu.bo:5557,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://localhost:5175
+cors.origenes=https://uni-taxi.uap.edu.bo,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://localhost:5175
 
 # --- Administrador inicial ---------------------------------
 admin.inicial.correo=admin@taxiuap.bo
@@ -43,4 +43,4 @@ spring.mail.username=cuenta@dominio
 spring.mail.password=CAMBIAR
 
 # Direccion con que se abre la app desde el enlace de los correos
-taxiuap.url-publica=http://virtual.uap.edu.bo:5557
+taxiuap.url-publica=https://uni-taxi.uap.edu.bo

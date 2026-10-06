@@ -60,8 +60,10 @@ compilar() {
   fi
   if $FORZAR || [[ ! -f "$indice" || -n "$cambios" ]]; then
     if [[ ! -x "$FLUTTER" ]] && ! command -v "$FLUTTER" >/dev/null; then
-      [[ -f "$indice" ]] || falta "hay que compilar $proyecto y no se encontro Flutter. Instala Flutter 3.x o define FLUTTER=/ruta/a/flutter."
-      echo "== $proyecto: sin Flutter para recompilar, se usa la compilacion anterior"
+      # Sin Flutter (servidor de produccion): el backend sirve la copia compilada que va en el repositorio.
+      [[ -f "$indice" || -f "$RAIZ/backend/src/main/resources/web/$base/index.html" ]] \
+        || falta "hay que compilar $proyecto y no se encontro Flutter. Instala Flutter 3.x o define FLUTTER=/ruta/a/flutter."
+      echo "== $proyecto: sin Flutter, se usa la version compilada del repositorio"
       return
     fi
     echo "== Compilando $proyecto (/$base)"
@@ -83,7 +85,7 @@ echo
 echo "   Panel admin:  http://localhost:$PUERTO/admin"
 echo "   App:          http://localhost:$PUERTO/app"
 [[ -n "$IP" ]] && echo "   Desde otro equipo de la red: http://$IP:$PUERTO/app"
-echo "   Produccion:   http://virtual.uap.edu.bo:$PUERTO/app  y  /admin"
+echo "   Produccion:   https://uni-taxi.uap.edu.bo/app  y  /admin (proxy con certificado hacia el $PUERTO)"
 echo
 
 echo "== Backend"

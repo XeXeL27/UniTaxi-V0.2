@@ -18,6 +18,8 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * </ul>
  * Al salir del mismo servidor que la API no hace falta CORS. Las carpetas se cambian con
  * taxiuap.web.admin y taxiuap.web.app (rutas relativas a la carpeta desde donde corre el backend).
+ * Si no estan (servidor sin Flutter) se usa la copia compilada que va en el repositorio dentro del
+ * backend, resources/web/admin y resources/web/app (la actualiza ./compilar-web.sh).
  */
 @Configuration
 public class SitiosWebConfig implements WebMvcConfigurer {
@@ -32,10 +34,10 @@ public class SitiosWebConfig implements WebMvcConfigurer {
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // Sin cache: despues de recompilar se ve la version nueva al recargar la pagina.
         registry.addResourceHandler("/admin/**")
-                .addResourceLocations(ubicacion(carpetaAdmin))
+                .addResourceLocations(ubicacion(carpetaAdmin), "classpath:/web/admin/")
                 .setCacheControl(CacheControl.noCache());
         registry.addResourceHandler("/app/**")
-                .addResourceLocations(ubicacion(carpetaApp))
+                .addResourceLocations(ubicacion(carpetaApp), "classpath:/web/app/")
                 .setCacheControl(CacheControl.noCache());
     }
 

@@ -20,7 +20,7 @@ class Config {
   }
 
   /// Servidor de produccion (API, panel en /admin y app en /app).
-  static const String servidorProduccion = 'http://virtual.uap.edu.bo:5557';
+  static const String servidorProduccion = 'https://uni-taxi.uap.edu.bo';
 
   /// WebSocket del mismo servidor (ws:// o wss://). El token viaja en el frame CONNECT.
   static String get wsUrl {
