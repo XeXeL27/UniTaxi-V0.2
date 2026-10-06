@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | 📚 | Plan del punto de entrega y el mapa de la compra y entrega: B es donde está el pasajero, naranja punteado hasta él y ruta desde el comercio |
 | 2026-10-06 | 🐛 | El repartidor confirma que recibió el pago con un check, sin escribir el monto (el servidor ya lo sabe y exige que sea exacto) |
 | 2026-10-06 | ♻️ | El panel no crece sin límite y las acciones raras del reparto van en secciones plegadas; el botón de WhatsApp del código pasa a icono |
 | 2026-10-06 | 🐛 | Panel del repartidor con los datos del pedido (ruta, monto, chat y cancelar) y que no se reabra solo en cada etapa |
@@ -43,6 +44,44 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-06
+
+### 📚 Documentación · Plan del punto de entrega y el mapa de la compra y entrega
+
+- **Módulo / área:** módulo DELIVERY (`app-movil`, `backend`), planificación.
+- **Descripción:** al revisar el panel del reparto aparecieron cuatro datos que el backend ya envía
+  y la app no pintaba (el comercio real, la observación de compra, el comprobante y el teléfono del
+  cliente), y al revisarlos con el usuario salió uno mayor: en COMPRA_Y_ENTREGA el punto de entrega
+  es donde está el pasajero, pero la app lo pide como un destino más, igual que un viaje normal, y
+  el mapa nunca dibuja el punto donde el repartidor compró. Se redactó el plan de las 6 tareas que
+  cierran todo eso.
+- **Decisiones del usuario, escritas como rulings en el plan:** en compra el punto de entrega es la
+  ubicación del pasajero al pedir y deja de elegir destino (solo en compra; encomienda no cambia);
+  antes de que haya repartidor el precio dice "A calcular"; el punto queda fijado al pedir aunque el
+  pasajero se mueva; el mapa dibuja el punto real del comercio y no el propuesto; el teléfono del
+  cliente se expone solo en compra; el comprobante lo puede ver el pasajero.
+- **Comportamiento del mapa que deja el plan:** en compra, naranja punteado desde el repartidor en
+  movimiento hasta el pasajero mientras no compró, con el pasajero como punto fijo; al registrar la
+  compra, A pasa a ser el comercio y se traza la ruta comercio -> pasajero, y el naranja se detiene.
+  En encomienda nada cambia.
+- **Hallazgos verificados que sostienen el plan (H1 a H19):** entre otros, `puntoCompraWkt` se
+  parsea y no se usa (`modelos_viaje.dart:148-149`), `registrarPedidoEnMano` fija el precio desde el
+  comercio pero no cambia `viaje.origen` (`ViajeService.java:272-282`), el tramo naranja del
+  repartidor va hasta A (`controlador_mapa.dart:345-348`) y el repartidor no vería nada en una
+  compra sin A (`flujo_conductor.dart:225-229`).
+- **Tareas:** 1) modelo con el punto de partida real, 2) el pasajero pide compra sin destino, 3) el
+  mapa por fase, 4) los dos paneles dicen la verdad, 5) teléfono y comprobante (backend y app),
+  6) spec, recorrido completo en Chrome y bitácora.
+- **Queda escrito como fuera de alcance,** para que no se pierda: "Rechazar paquete" en el panel del
+  código de entrega donde el backend no lo acepta; la foto anterior si se cancela la cámara;
+  "Registrar la falla" sin mirar `flujo.ocupado`; `EntregaSinContacto` sin usar (el spec pide 10
+  minutos y dos intentos para "No se pudo entregar"); y el orden del pago frente al receptor y al
+  código de entrega, que el spec dice al revés de como lo pide el backend.
+- **Archivos afectados:**
+  - `docs/superpowers/plans/2026-10-06-delivery-compra-mapa-plan.md` (nuevo, 348 líneas)
+  - `docs/CHANGELOG.md`
+- **Verificación:** plan revisido contra el código cited (H1 a H19) y contra
+  `2026-10-02-delivery-design.md` (secciones 4, 5, 6 y 10); sin cambios de codigo, no hay pruebas
+  que ejecutar.
 
 ### 🐛 Arreglo · El repartidor confirma que recibió el pago con un check, sin escribir el monto
 
