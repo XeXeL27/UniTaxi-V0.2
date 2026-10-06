@@ -5,6 +5,8 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | 🐛 | El repartidor confirma que recibió el pago con un check, sin escribir el monto (el servidor ya lo sabe y exige que sea exacto) |
+| 2026-10-06 | ♻️ | El panel no crece sin límite y las acciones raras del reparto van en secciones plegadas; el botón de WhatsApp del código pasa a icono |
 | 2026-10-06 | 🐛 | Panel del repartidor con los datos del pedido (ruta, monto, chat y cancelar) y que no se reabra solo en cada etapa |
 | 2026-10-06 | ✨ | El código de entrega se copia al portapapeles con un toque y aparece también el del punto B para mandarlo a quien recibe |
 | 2026-10-06 | 🐛 | Task 3: al tocar "Entrega" con un tipo ya elegido se reabre el selector, se puede cambiar de tipo y se ve el aviso de datos completos |
@@ -41,6 +43,84 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-06
+
+### 🐛 Arreglo · El repartidor confirma que recibió el pago con un check, sin escribir el monto
+
+- **Módulo / área:** app móvil del conductor (`app-movil`), panel del reparto, sección "Pedido en tus
+  manos".
+- **Descripción:** con el pedido en mano había un campo "Pago recibido en Bs" que el repartidor
+  escribía a mano. El campo nunca estuvo en los planes: el diseño solo dice que el repartidor
+  *registra* el pago total (producto más servicio) y que no se puede marcar `ENTREGADO` sin esa
+  confirmación, sin pedir que escriba el importe, y el brief de la Task 7 solo dice "implementar
+  confirmar pago". El total ya lo conoce el servidor (`total_cliente = costo_producto_real +
+  precio_servicio_final`) y `EntregaService.confirmarPago` rechaza todo monto que no sea exactamente
+  ese. El campo solo agregaba formas de fallar: una errata bloqueaba la entrega y, en una compra,
+  quedaba en el campo el costo del producto escrito en la fase anterior (50 en vez de 58).
+- **Cambios clave:**
+  - Se sustituye el `TextField` por un `CheckboxListTile`: "Recibí Bs X" con el método de pago como
+    subtítulo ("El cliente paga en efectivo / por QR"). "Confirmar pago" permanece deshabilitado
+    hasta marcar el check.
+  - `totalAPagarEntrega` (en `acciones_delivery.dart`, junto a las demás reglas testeables del
+    módulo) calcula el total y **redondea a dos decimales**. Sin redondear, la suma de dos montos de
+    dos decimales no siempre lo es en la app (0,05 + 0,10 da 0,15000000000000002) y el servidor
+    rechazaría el pago con un mensaje que muestra el mismo número que se envió; se comprobó que en
+    35 de cada 100 pares de centavos la suma cruda no coincide con el monto de dos decimales.
+  - Cuando el pago ya está confirmado se muestra "Pago confirmado: Bs X", que usa
+    `DatosEntrega.montoPagoRecibido`: ese campo llegaba desde el backend y no se pintaba en ninguna
+    parte de la app.
+  - Se quita el texto "Total a cobrar" duplicado de la sección (el resumen del pedido, arriba, ya lo
+    muestra con su desglose).
+  - Tests nuevos de la sección, que no tenía ninguno: check sin campo de monto, botón bloqueado
+    hasta marcar, y confirmación de lo registrado con el código de entrega en pantalla.
+- **Descuadrado detectado en los md (no se tocó el diseño):** el orden del diseño no es el que
+  implements el código. `2026-10-02-delivery-design.md:179-182` pone la verificación del receptor
+  antes del pago en COMPRA_Y_ENTREGA, y `:198-200` cobra después del código de entrega en
+  ENCOMIENDA; la app hace lo contrario en ambos casos y el backend exige ese orden
+  (`EntregaService.entregarConCodigo` llama a `exigirPagoConfirmado`). Además `EntregaSinContacto`
+  (`acciones_delivery.dart`), que exige los 10 minutos y dos intentos de contacto que pide el diseño
+  (`:217-222`, `:337`), no lo usa nadie: "No se pudo entregar" está disponible desde `EN_MANO`.
+- **Hallazgos de la revisión del panel que quedan pendientes:** "Rechazar paquete" aparece también en
+  el panel del código de entrega (donde el backend no lo acepta, solo antes de recoger), si se
+  cancela la cámara se reenvía la foto del intento anterior, "Registrar la falla" no mira
+  `flujo.ocupado` y el panel de reparto nunca indica el método de pago (la rama de delivery de
+  `paneles_conductor.dart` salta el bloque que lo tenía).
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`
+  - `app-movil/lib/modulos/conductor/viaje/acciones_delivery.dart`
+  - `app-movil/test/panel_repartidor_test.dart` (3 pruebas nuevas, 14 en total)
+  - `app-movil/test/entrega_test.dart` (2 pruebas nuevas, 10 en total)
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (155 pruebas, todas pasan),
+  autoverificación: con el campo de texto restaurado a mano la prueba "el repartidor marca que lo
+  recibió, sin escribir el monto" falla ("Found 1 widget with type TextField" donde no se esperaba
+  ninguno); al restaurar el código vuelve a pasar.
+
+### ♻️ Refactor · El panel no crece sin límite y las acciones raras van plegadas
+
+- **Módulo / área:** app móvil (`app-movil`), widgets compartidos y paneles del conductor y del
+  pasajero.
+- **Descripción:** el panel plegable crecía sin tope y un contenido largo (el resumen del pedido del
+  repartidor, los dos códigos de entrega del pasajero) se salía por arriba de la pantalla sin
+  forma de desplazarse. Además, en el panel del reparto "Rechazar paquete" y "No se pudo entregar"
+  competían en igualdad de condiciones con la acción del momento (confirmar el código o la compra).
+- **Cambios clave:**
+  - `PanelPlegable` limita el contenido abierto al 45 de cada 100 de alto de pantalla
+    (`altoMaximo`) y lo que sobra se desplaza dentro del panel; la barra sigue visible.
+  - `SeccionDesplegable` (nuevo): la acción del día a día queda a la vista y las raras, con sus
+    campos, se despliegan al tocar el título. Lo usa "El paquete no coincide con lo pedido" y "No se
+    pudo entregar".
+  - El campo del código de 6 dígitos se centra, con `helperText` y botón de confirmar a todo el
+    ancho.
+  - En la tarjeta de códigos del pasajero, el de la fase actual mantiene los dígitos grandes y el de
+    la otra punta pasa a una línea con un icono de WhatsApp (`_bloqueCompacto`), que antes competía
+    en ancho con los dígitos y era un botón con texto.
+- **Archivos afectados:**
+  - `app-movil/lib/widgets/paneles.dart`
+  - `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/test/paneles_test.dart` (nuevo)
+  - `app-movil/test/seccion_desplegable_test.dart` (nuevo)
+  - `app-movil/test/codigo_entrega_test.dart`
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (155 pruebas, todas pasan).
 
 ### 🐛 Arreglo · Panel del repartidor con los datos del pedido y sin reabrirse solo
 

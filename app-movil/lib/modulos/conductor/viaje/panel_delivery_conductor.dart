@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../../../core/tema.dart';
@@ -126,10 +127,18 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   final _motivo = TextEditingController();
   Uint8List? _foto;
   Uint8List? _comprobante;
+  bool _pagoRecibido = false;
 
   FlujoConductor get flujo => widget.flujo;
   Viaje? get viaje => flujo.viaje;
   DatosEntrega? get datos => viaje?.datosEntrega;
+
+  /// Lo que hay que cobrar con el pedido en mano: el costo del producto (0 en ENCOMIENDA) más el
+  /// precio del servicio. El repartidor no escribe el monto, solo confirma que lo recibió.
+  double get _totalACobrar => totalAPagarEntrega(
+        costoProducto: datos?.totalProducto ?? 0,
+        precioServicio: viaje?.precioFinal ?? 0,
+      );
 
   @override
   void dispose() {
@@ -179,16 +188,56 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     return _compraPanel(entrega, propuesta: false);
   }
 
+  /// La accion del momento (el codigo de esta fase) queda a la vista; lo raro va en secciones
+  /// plegadas, para que el panel no crezca con campos que casi nunca se usan.
   Widget _codigoPanel(String titulo, String ayuda, Future<void> Function() confirmar) => Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(titulo, style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17)),
           Text(ayuda, style: const TextStyle(color: ColoresApp.textoSuave)),
-          const SizedBox(height: 8),
-          TextField(controller: _codigo, keyboardType: TextInputType.number, maxLength: 6, decoration: const InputDecoration(labelText: 'Código dictado')),
-          FilledButton(onPressed: flujo.ocupado ? null : confirmar, child: const Text('Confirmar código')),
-          _botonPaqueteIncorrecto(),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _codigo,
+            keyboardType: TextInputType.number,
+            maxLength: 6,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 8, color: ColoresApp.azul),
+            decoration: const InputDecoration(
+              labelText: 'Código dictado',
+              counterText: '',
+              helperText: 'Son 6 dígitos',
+              helperStyle: TextStyle(color: ColoresApp.textoSuave),
+            ),
+          ),
+          const SizedBox(height: 10),
+          FilledButton.icon(
+            onPressed: flujo.ocupado ? null : confirmar,
+            icon: const FaIcon(FontAwesomeIcons.circleCheck, size: 16),
+            label: const Text('Confirmar código'),
+            style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+          ),
+          _seccionPaqueteIncorrecto(),
         ],
+      );
+
+  /// "Rechazar paquete" no es la accion del dia a dia: es una advertencia. Antes estaba siempre
+  /// desplegada con su boton, compitiendo en igualdad de condiciones con "Confirmar código".
+  Widget _seccionPaqueteIncorrecto() => SeccionDesplegable(
+        titulo: 'El paquete no coincide con lo pedido',
+        ayuda: 'Registra una foto y el motivo. Es una advertencia para el administrador, no una '
+            'suspension automatique.',
+        icono: FontAwesomeIcons.boxOpen,
+        color: ColoresApp.textoSuave,
+        child: OutlinedButton.icon(
+          onPressed: flujo.ocupado ? null : _reportarPaquete,
+          icon: const FaIcon(FontAwesomeIcons.flag, size: 14),
+          label: const Text('Rechazar paquete'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: ColoresApp.rojo,
+            side: const BorderSide(color: ColoresApp.rojo),
+            minimumSize: const Size.fromHeight(46),
+          ),
+        ),
       );
 
   Widget _compraPanel(DatosEntrega entrega, {required bool propuesta}) => Column(
@@ -224,7 +273,8 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
             },
             child: Text(propuesta ? 'Proponer al cliente' : 'Ya tengo el pedido'),
           ),
-          _botonPaqueteIncorrecto(),
+          const SizedBox(height: 12),
+          _seccionPaqueteIncorrecto(),
         ],
       );
 
@@ -232,18 +282,25 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           const Text('Pedido en tus manos', style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17)),
-          Text('Total a cobrar: ${formatoBs(entrega.totalProducto + (viaje?.precioFinal ?? 0))}'),
           if (!entrega.pagoConfirmado) ...[
-            TextField(controller: _monto, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Pago recibido en Bs')),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _pagoRecibido,
+              onChanged: flujo.ocupado ? null : (valor) => setState(() => _pagoRecibido = valor ?? false),
+              title: Text('Recibí ${formatoBs(_totalACobrar)}',
+                  style: const TextStyle(color: ColoresApp.texto, fontWeight: FontWeight.w600)),
+              subtitle: Text(MetodoPago.frase('El cliente paga', viaje?.metodoPago ?? MetodoPago.efectivo)),
+            ),
             FilledButton(
-              onPressed: flujo.ocupado ? null : () async {
-                final monto = double.tryParse(_monto.text.replaceAll(',', '.'));
-                if (monto == null || monto < 0) return _mensaje('Registra el monto recibido.');
-                await flujo.confirmarPago(monto, viaje!.metodoPago);
-              },
+              onPressed: flujo.ocupado || !_pagoRecibido
+                  ? null
+                  : () => flujo.confirmarPago(_totalACobrar, viaje!.metodoPago),
               child: const Text('Confirmar pago'),
             ),
-          ],
+          ] else
+            Text('Pago confirmado: ${formatoBs(entrega.montoPagoRecibido ?? _totalACobrar)}',
+                style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
           if (entrega.pagoConfirmado && entrega.tipoEnvio == TipoEnvio.encomienda)
             _codigoPanel('Código de entrega', 'Pide el código al receptor en el punto B.', () => _codigoAccion(flujo.validarEntrega))
           else if (entrega.pagoConfirmado) ...[
@@ -257,13 +314,39 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
               child: const Text('Confirmar receptor'),
             ),
           ],
-          const SizedBox(height: 8),
-          TextField(controller: _motivo, maxLines: 2, decoration: const InputDecoration(labelText: 'Motivo si no puedes entregar')),
-          OutlinedButton(onPressed: _reportarFalla, child: const Text('No se pudo entregar')),
+          _seccionFalla(),
         ],
       );
 
-  Widget _botonPaqueteIncorrecto() => OutlinedButton(onPressed: _reportarPaquete, child: const Text('Rechazar paquete'));
+  /// "No se pudo entregar" solo se usa cuando algo sale mal, asi que su campo de motivo queda
+  /// escondido hasta que el repartidor decide usarlo.
+  Widget _seccionFalla() => SeccionDesplegable(
+        titulo: 'No se pudo entregar',
+        ayuda: 'Toma una foto del lugar y explica que paso. Se envia al administrador.',
+        icono: FontAwesomeIcons.triangleExclamation,
+        color: ColoresApp.rojo,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextField(
+              controller: _motivo,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _reportarFalla,
+              icon: const FaIcon(FontAwesomeIcons.camera, size: 15),
+              label: const Text('Registrar la falla'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: ColoresApp.rojo,
+                side: const BorderSide(color: ColoresApp.rojo),
+                minimumSize: const Size.fromHeight(46),
+              ),
+            ),
+          ],
+        ),
+      );
 
   Future<void> _reportarFalla() async {
     await _elegirFoto(comprobante: false);

@@ -1,6 +1,9 @@
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:taxiuap_movil/comun/modelos_viaje.dart';
+import 'package:taxiuap_movil/modulos/conductor/viaje/acciones_delivery.dart';
 import 'package:taxiuap_movil/modulos/pasajero/viaje/formulario_entrega.dart';
 import 'package:taxiuap_movil/modulos/pasajero/viaje/paneles_pasajero.dart';
 
@@ -91,6 +94,21 @@ void main() {
   test('usa pantalla completa debajo de 600 pixeles', () {
     expect(formularioEntregaEsPantallaCompleta(599), isTrue);
     expect(formularioEntregaEsPantallaCompleta(600), isFalse);
+  });
+
+  group('el total a cobrar con el pedido en mano', () {
+    test('suma el costo del producto y el precio del servicio', () {
+      expect(totalAPagarEntrega(costoProducto: 40, precioServicio: 8), 48);
+      // En ENCOMIENDA no hay producto: solo el servicio.
+      expect(totalAPagarEntrega(costoProducto: 0, precioServicio: 8), 8);
+    });
+
+    test('lo redondea a dos decimales porque el backend lo exige exacto', () {
+      // Sin redondear la app mandaría 0,15000000000000002 y el servidor lo rechazaría.
+      expect(totalAPagarEntrega(costoProducto: 0.05, precioServicio: 0.10), 0.15);
+      expect(jsonEncode(totalAPagarEntrega(costoProducto: 0.05, precioServicio: 0.10)), '0.15');
+      expect(totalAPagarEntrega(costoProducto: 8.15, precioServicio: 49.85), 58);
+    });
   });
 }
 

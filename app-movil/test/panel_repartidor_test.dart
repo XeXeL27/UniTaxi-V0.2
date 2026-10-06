@@ -2,7 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:taxiuap_movil/comun/modelos_viaje.dart';
+import 'package:taxiuap_movil/core/cliente_api.dart';
+import 'package:taxiuap_movil/core/sesion.dart';
+import 'package:taxiuap_movil/mapa/controlador_mapa.dart';
 import 'package:taxiuap_movil/modulos/conductor/viaje/apertura_panel.dart';
+import 'package:taxiuap_movil/modulos/conductor/viaje/conductor_api.dart';
+import 'package:taxiuap_movil/modulos/conductor/viaje/flujo_conductor.dart';
 import 'package:taxiuap_movil/modulos/conductor/viaje/panel_delivery_conductor.dart';
 
 void main() {
@@ -72,6 +77,46 @@ void main() {
     });
   });
 
+  group('con el pedido en tus manos', () {
+    testWidgets('el repartidor marca que lo recibio, sin escribir el monto', (tester) async {
+      await tester.pumpWidget(_envolver(PanelDeliveryConductor(
+        flujo: _flujo(_viaje(datosEntrega: {'estadoEntrega': EstadoEntrega.enMano})),
+      )));
+
+      expect(find.text('Pedido en tus manos'), findsOneWidget);
+      expect(find.text('Recibí 8 Bs'), findsOneWidget);
+      expect(find.text('El cliente paga en efectivo'), findsOneWidget);
+      // El monto ya lo conoce el servidor: el repartidor solo lo confirma.
+      expect(find.byType(TextField), findsNothing);
+      expect(find.text('Pago recibido en Bs'), findsNothing);
+    });
+
+    testWidgets('no se puede confirmar el pago sin marcar el check', (tester) async {
+      await tester.pumpWidget(_envolver(PanelDeliveryConductor(
+        flujo: _flujo(_viaje(datosEntrega: {'estadoEntrega': EstadoEntrega.enMano})),
+      )));
+
+      expect(_botonPago(tester).onPressed, isNull);
+
+      await tester.tap(find.byType(CheckboxListTile));
+      await tester.pumpAndSettle();
+
+      expect(_botonPago(tester).onPressed, isNotNull);
+    });
+
+    testWidgets('con el pago ya confirmado dice cuanto quedo registrado', (tester) async {
+      await tester.pumpWidget(_envolver(PanelDeliveryConductor(flujo: _flujo(_viaje(datosEntrega: {
+            'estadoEntrega': EstadoEntrega.enMano,
+            'pagoConfirmado': true,
+            'montoPagoRecibido': 8,
+          })))));
+
+      expect(find.text('Pago confirmado: 8 Bs'), findsOneWidget);
+      expect(find.text('Código de entrega'), findsOneWidget);
+      expect(find.byType(CheckboxListTile), findsNothing);
+    });
+  });
+
   group('cuando se abre solo el panel', () {
     test('al empezar un viaje se abre', () {
       final apertura = AperturaPanelConductor();
@@ -120,6 +165,21 @@ void main() {
 }
 
 Widget _envolver(Widget hijo) => MaterialApp(home: Scaffold(body: SingleChildScrollView(child: hijo)));
+
+FilledButton _botonPago(WidgetTester tester) =>
+    tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Confirmar pago'));
+
+/// Flujo con el viaje ya en curso: el panel del repartidor solo lee [FlujoConductor.viaje] y las
+/// acciones llegan por la API, que estas pruebas no tocan.
+FlujoConductor _flujo(Viaje viaje) {
+  final flujo = FlujoConductor(
+    api: ConductorApi(ClienteApi(Sesion())),
+    mapa: ControladorMapa(),
+  );
+  flujo.etapa = EtapaConductor.enViaje;
+  flujo.viaje = viaje;
+  return flujo;
+}
 
 Viaje _viaje({
   String situacionViaje = SituacionViaje.enCamino,
