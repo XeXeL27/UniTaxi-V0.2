@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/enlaces.dart';
 import '../../../core/formato.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
-import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import 'flujo_pasajero.dart';
 import 'modo_servicio.dart';
@@ -523,9 +521,9 @@ class PanelViaje extends StatelessWidget {
         if (viaje.datosEntrega != null) ...[
           const SizedBox(height: 8),
           _ResumenEntrega(datos: viaje.datosEntrega!, precioServicio: viaje.precioFinal),
-          if (viaje.datosEntrega!.codigoVigente != null) ...[
+          if (viaje.datosEntrega!.codigos.isNotEmpty) ...[
             const SizedBox(height: 10),
-            TarjetaCodigoEntrega(fase: viaje.datosEntrega!.codigoVigente!),
+            TarjetaCodigoEntrega(fases: viaje.datosEntrega!.codigos),
           ],
           if (viaje.datosEntrega!.tipoEnvio == TipoEnvio.compraYEntrega &&
               viaje.datosEntrega!.detalleCompraPropuesto != null &&
@@ -637,116 +635,117 @@ class _ResumenEntrega extends StatelessWidget {
 /// Los 6 digitos que el pasajero tiene que dictar en un pedido ENCOMIENDA: el de recogida en A y el
 /// de entrega en B.
 ///
-/// El repartidor nunca los ve (el backend se los anula a proposito, [DatosEntrega.codigoVigente] los
+/// El repartidor nunca los ve (el backend se los anula a proposito, [DatosEntrega.codigos] los
 /// devuelve solo al pasajero), asi que sin esta tarjeta el pedido se queda parado: el repartidor
-/// llega a A pidiendo un codigo que nadie puede ver. Se muestra en grande porque se dicta de viva voz
-/// y al tocarla se abre con los digitos enormousos, para leerlos por WhatsApp o copiarlos.
+/// llega a A pidiendo un codigo que nadie puede ver.
+///
+/// Cada codigo se copia al portapapeles con un toque en los digitos, sin pasar por el menu: se dictan
+/// de viva voz y a veces hay que pegarlos en un chat. Al lado queda el envio por WhatsApp a quien lo
+/// dicta, que es lo que resuelve el caso de quien recibe en B y no está con el remitente.
 class TarjetaCodigoEntrega extends StatelessWidget {
-  final ({String titulo, String donde, String codigo, String? nombre, String? telefono}) fase;
+  final List<FaseCodigoEntrega> fases;
 
-  const TarjetaCodigoEntrega({super.key, required this.fase});
+  /// Como se abre el enlace de WhatsApp. Null usa [abrirEnlaceExterno]; los tests pasan el suyo
+  /// para no depender de la aplicacion de WhatsApp instalada.
+  final ValueChanged<Uri>? abrirEnlace;
+
+  const TarjetaCodigoEntrega({super.key, required this.fases, this.abrirEnlace});
 
   @override
   Widget build(BuildContext context) {
-    final nombre = fase.nombre;
-    return InkWell(
-      onTap: () => _abrirHojaCodigo(context),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
-        decoration: BoxDecoration(
-          color: ColoresApp.azul.withValues(alpha: 0.07),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.25)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.azul, size: 13),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(fase.titulo, style: const TextStyle(color: ColoresApp.azul, fontSize: 15, fontWeight: FontWeight.w700)),
-                ),
-                const FaIcon(FontAwesomeIcons.chevronRight, color: ColoresApp.azul, size: 12),
-              ],
-            ),
-            const SizedBox(height: 7),
-            _DigitosCodigo(codigo: fase.codigo, tamano: 28),
-            const SizedBox(height: 7),
-            Text(
-              'Dicta este código ${nombre == null ? '' : 'a $nombre '}${fase.donde}.',
-              style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
-            ),
+    if (fases.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+      decoration: BoxDecoration(
+        color: ColoresApp.azul.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < fases.length; i++) ...[
+            if (i > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Divider(height: 1, color: Color(0x1F0A2342)),
+              ),
+            _bloque(context, fases[i]),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Future<void> _abrirHojaCodigo(BuildContext context) => showDialog<void>(
-        context: context,
-        builder: (context) => _HojaCodigoEntrega(fase: fase),
-      );
-}
-
-/// Hoja con el codigo en grande: se lee en voz alta o se manda por WhatsApp a quien lo dicta.
-class _HojaCodigoEntrega extends StatelessWidget {
-  final ({String titulo, String donde, String codigo, String? nombre, String? telefono}) fase;
-
-  const _HojaCodigoEntrega({required this.fase});
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _bloque(BuildContext context, FaseCodigoEntrega fase) {
     final nombre = fase.nombre;
-    final telefono = telefonoWhatsapp(fase.telefono);
-    final mensaje = textoWhatsappCodigo(fase);
-    return Dialog(
-      insetPadding: const EdgeInsets.all(24),
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 420),
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(24, 22, 24, 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(fase.titulo, style: const TextStyle(color: ColoresApp.azul, fontSize: 19, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(
-                'Dicta este código ${nombre == null ? '' : 'a $nombre '}${fase.donde}.',
-                style: const TextStyle(color: ColoresApp.textoSuave),
+    final enlace = enlaceWhatsappCodigo(fase);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.azul, size: 13),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                fase.titulo,
+                style: const TextStyle(color: ColoresApp.azul, fontSize: 15, fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 18),
-              _DigitosCodigo(codigo: fase.codigo, tamano: 40, centrado: true),
-              const SizedBox(height: 20),
-              OutlinedButton.icon(
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: fase.codigo));
-                  if (context.mounted) {
-                    Navigator.of(context).pop();
-                    mostrarMensaje(context, 'Código copiado.');
-                  }
-                },
-                icon: const FaIcon(FontAwesomeIcons.copy, size: 15),
-                label: const Text('Copiar código'),
+            ),
+            if (!fase.faseActual)
+              const Text(
+                'Mandalo antes',
+                style: TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5, fontWeight: FontWeight.w600),
               ),
-              if (telefono != null) ...[
-                const SizedBox(height: 10),
-                FilledButton.icon(
-                  onPressed: () {
-                    Navigator.of(context).pop();
-                    abrirEnlaceExterno(context, Uri.https('wa.me', '/$telefono', {'text': mensaje}), mensaje);
-                  },
-                  icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 15),
-                  label: const Text('Enviar por WhatsApp'),
-                ),
-              ],
-            ],
-          ),
+          ],
         ),
-      ),
+        const SizedBox(height: 7),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => copiarAlPortapapeles(context, fase.codigo),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Flexible(child: _DigitosCodigo(codigo: fase.codigo, tamano: 28)),
+                      const SizedBox(width: 10),
+                      const FaIcon(FontAwesomeIcons.copy, color: ColoresApp.azul, size: 13),
+                      const Text('Toca para copiar',
+                          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (enlace != null) ...[
+              const SizedBox(width: 8),
+              OutlinedButton.icon(
+                onPressed: () => abrirEnlace == null
+                    ? abrirEnlaceExterno(context, enlace, textoWhatsappCodigo(fase))
+                    : abrirEnlace!(enlace),
+                icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 14),
+                label: const Text('WhatsApp'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: ColoresApp.azul,
+                  side: const BorderSide(color: ColoresApp.azul),
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  minimumSize: const Size(0, 34),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(
+          'Dicta este codigo ${nombre == null ? '' : 'a $nombre '}${fase.donde}.',
+          style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+        ),
+      ],
     );
   }
 }
@@ -755,15 +754,14 @@ class _HojaCodigoEntrega extends StatelessWidget {
 class _DigitosCodigo extends StatelessWidget {
   final String codigo;
   final double tamano;
-  final bool centrado;
 
-  const _DigitosCodigo({required this.codigo, required this.tamano, this.centrado = false});
+  const _DigitosCodigo({required this.codigo, required this.tamano});
 
   @override
   Widget build(BuildContext context) {
     return Text(
       codigo,
-      textAlign: centrado ? TextAlign.center : TextAlign.start,
+      textAlign: TextAlign.start,
       style: TextStyle(
         color: ColoresApp.azul,
         fontSize: tamano,
@@ -785,10 +783,16 @@ String? telefonoWhatsapp(String? telefono) {
 
 /// Texto del mensaje de WhatsApp: lleva el nombre de quien lo dicta y el codigo, para que no haya que
 /// escribirlo a mano ni se dicte mal.
-String textoWhatsappCodigo(({String titulo, String donde, String codigo, String? nombre, String? telefono}) fase) {
+String textoWhatsappCodigo(FaseCodigoEntrega fase) {
   final nombre = fase.nombre;
   return '${nombre == null ? '' : 'Hola $nombre. '}Tu pedido en UNITAXI. '
       'Tu ${fase.titulo.toLowerCase()} es ${fase.codigo}. Muéstraselo al repartidor ${fase.donde}.';
+}
+
+/// Enlace de WhatsApp con el codigo ya escrito, o null si no hay un numero usable.
+Uri? enlaceWhatsappCodigo(FaseCodigoEntrega fase) {
+  final telefono = telefonoWhatsapp(fase.telefono);
+  return telefono == null ? null : Uri.https('wa.me', '/$telefono', {'text': textoWhatsappCodigo(fase)});
 }
 
 /// Efectivo | QR, antes de solicitar el taxi.

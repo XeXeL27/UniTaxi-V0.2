@@ -6,8 +6,105 @@ import 'package:image_picker/image_picker.dart';
 import '../../../core/tema.dart';
 import '../../../core/formato.dart';
 import '../../../comun/modelos_viaje.dart';
+import '../../../widgets/notificaciones.dart';
+import '../../../widgets/paneles.dart';
 import 'acciones_delivery.dart';
 import 'flujo_conductor.dart';
+
+/// Datos del pedido que el repartidor necesita tener delante todo el viaje: qué lleva, dónde lo
+/// recoge, dónde lo entrega y cuánto cobra.
+///
+/// El panel de reparto antes solo tenía el formulario de la acción del momento (el código, la compra,
+/// el pago). Con el pedido en la mano el repartidor no tenia ni la ruta ni el monto, y en el mapa no
+/// tenia forma de saber a dónde ir. Los codigos nunca aparecen aqui: los dicta la persona.
+class ResumenEntregaConductor extends StatelessWidget {
+  final Viaje viaje;
+  final VoidCallback? onCancelar;
+  final bool ocupado;
+
+  /// Boton de chat con la persona que pidio el envio. En la app va [BotonChat]; los tests pasan el
+  /// suyo porque el chat real necesita la sesion.
+  final Widget? botonChat;
+
+  const ResumenEntregaConductor({
+    super.key,
+    required this.viaje,
+    this.onCancelar,
+    this.ocupado = false,
+    this.botonChat,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final datos = viaje.datosEntrega;
+    if (datos == null) return const SizedBox.shrink();
+    // El reparto se cancela antes de tenerlo en mano; despues ya no, y el backend tampoco lo acepta.
+    final cancelar = onCancelar != null && datos.muestraCancelacion && SituacionViaje.cancelables.contains(viaje.situacion);
+    final esCompra = datos.tipoEnvio == TipoEnvio.compraYEntrega;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: ColoresApp.azul.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            EstadoEntrega.nombre(datos.estadoEntrega),
+            style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 15),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            AvatarIniciales(nombre: viaje.nombrePasajero, radio: 22),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    viaje.nombrePasajero,
+                    style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  Text(
+                    esCompra ? 'Compra y entrega' : 'Encomienda',
+                    style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                  ),
+                ],
+              ),
+            ),
+            ?botonChat,
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(datos.descripcion, style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
+        const SizedBox(height: 10),
+        FilaLugar.partida(etiqueta: 'Recoger en (A)', texto: viaje.origenDireccion),
+        FilaLugar.destino(etiqueta: 'Entregar en (B)', texto: viaje.destinoDireccion),
+        const SizedBox(height: 10),
+        RecuadroPrecio(
+          etiqueta: esCompra ? 'Total a cobrar' : MetodoPago.frase('Cobra', viaje.metodoPago),
+          monto: esCompra
+              ? formatoBs(datos.totalProducto + (viaje.precioFinal ?? 0))
+              : formatoBs(viaje.precioFinal ?? 0),
+          detalle: esCompra
+              ? '${formatoBs(datos.totalProducto)} del producto y ${formatoBs(viaje.precioFinal ?? 0)} del envío'
+              : null,
+        ),
+        if (cancelar) ...[
+          const SizedBox(height: 4),
+          TextButton(
+            onPressed: ocupado ? null : onCancelar,
+            style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
+            child: const Text('Cancelar pedido', style: TextStyle(fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ],
+    );
+  }
+}
 
 /// Acciones específicas del repartidor. Los códigos nunca se leen desde [Viaje]: los dicta la persona.
 class PanelDeliveryConductor extends StatefulWidget {
@@ -65,7 +162,10 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     _codigo.clear();
   }
 
-  void _mensaje(String texto) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(texto)));
+  /// Aviso corto con el mismo estilo que el resto de la app, que además lo levanta por encima de la
+  /// barra inferior flotante: con el Snackbar a secas quedaba escondido justo donde el repartidor
+  /// mira después de confirmar un código.
+  void _mensaje(String texto) => mostrarMensaje(context, texto);
 
   @override
   Widget build(BuildContext context) {

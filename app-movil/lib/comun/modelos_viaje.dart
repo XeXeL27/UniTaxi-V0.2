@@ -163,41 +163,72 @@ class DatosEntrega {
       ? 'Incidente registrado; estado administrativo no disponible para el pasajero'
       : null;
 
-  /// Código de 6 dígitos que el pasajero tiene que dictar ahora, con la persona a quien se lo dicta
-  /// y su teléfono.
+  /// Códigos de 6 dígitos que el pasajero tiene que dictar, con la persona a quien se lo dicta y su
+  /// teléfono.
   ///
   /// Solo hay código en ENCOMIENDA: al de recogida en A (lo dicta el remitente) y al de entrega en B
   /// (lo dicta el receptor). Desaparece cuando el pedido ya se entregó o falló. El repartidor nunca
   /// lo ve: por eso el pasajero necesita leerlo, y de ahí que la tarjeta lo muestre en grande.
-  ({String titulo, String donde, String codigo, String? nombre, String? telefono})? get codigoVigente {
-    if (tipoEnvio != TipoEnvio.encomienda) return null;
+  ///
+  /// Mientras el paquete está en camino a A se listan los dos, no solo el de la fase actual: el
+  /// remitente casi nunca es quien recibe en B, y sin ese código no puede avisarle por WhatsApp.
+  List<FaseCodigoEntrega> get codigos {
+    if (tipoEnvio != TipoEnvio.encomienda) return const [];
     switch (estadoEntrega) {
       case EstadoEntrega.pendienteRecogida:
       case EstadoEntrega.enCaminoRecogida:
-        final codigo = codigoRecogida?.trim();
-        if (codigo == null || codigo.isEmpty) return null;
-        return (
-          titulo: 'Código de recogida',
-          donde: 'en el punto A',
-          codigo: codigo,
-          nombre: nombreRemitente?.trim().isEmpty ?? true ? null : nombreRemitente!.trim(),
-          telefono: telefonoRemitente,
-        );
+        return [
+          if (_hay(codigoRecogida))
+            (
+              titulo: 'Código de recogida',
+              donde: 'en el punto A',
+              codigo: codigoRecogida!.trim(),
+              nombre: _sinVacio(nombreRemitente),
+              telefono: telefonoRemitente,
+              faseActual: true,
+            ),
+          if (_hay(codigoEntrega))
+            (
+              titulo: 'Código de entrega',
+              donde: 'al llegar al punto B',
+              codigo: codigoEntrega!.trim(),
+              nombre: _sinVacio(nombreReceptor),
+              telefono: telefonoReceptor,
+              faseActual: false,
+            ),
+        ];
       case EstadoEntrega.enMano:
-        final codigo = codigoEntrega?.trim();
-        if (codigo == null || codigo.isEmpty) return null;
-        return (
-          titulo: 'Código de entrega',
-          donde: 'cuando el repartidor llegue al destino',
-          codigo: codigo,
-          nombre: nombreReceptor?.trim().isEmpty ?? true ? null : nombreReceptor!.trim(),
-          telefono: telefonoReceptor,
-        );
+        if (!_hay(codigoEntrega)) return const [];
+        return [
+          (
+            titulo: 'Código de entrega',
+            donde: 'cuando el repartidor llegue al destino',
+            codigo: codigoEntrega!.trim(),
+            nombre: _sinVacio(nombreReceptor),
+            telefono: telefonoReceptor,
+            faseActual: true,
+          ),
+        ];
       default:
-        return null;
+        return const [];
     }
   }
+
+  static bool _hay(String? codigo) => codigo?.trim().isNotEmpty ?? false;
+
+  static String? _sinVacio(String? valor) => valor == null || valor.trim().isEmpty ? null : valor.trim();
 }
+
+/// Un código de entrega y a quién se lo dicta. [faseActual] marca el que toca dictar en este momento:
+/// el otro se muestra para poder mandárselo antes a quien lo va a necesitar.
+typedef FaseCodigoEntrega = ({
+  String titulo,
+  String donde,
+  String codigo,
+  String? nombre,
+  String? telefono,
+  bool faseActual,
+});
 
 class EstadoEntrega {
   static const pendienteRecogida = 'PENDIENTE_RECOGIDA';

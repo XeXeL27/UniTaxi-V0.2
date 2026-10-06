@@ -5,6 +5,8 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | 🐛 | Panel del repartidor con los datos del pedido (ruta, monto, chat y cancelar) y que no se reabra solo en cada etapa |
+| 2026-10-06 | ✨ | El código de entrega se copia al portapapeles con un toque y aparece también el del punto B para mandarlo a quien recibe |
 | 2026-10-06 | 🐛 | Task 3: al tocar "Entrega" con un tipo ya elegido se reabre el selector, se puede cambiar de tipo y se ve el aviso de datos completos |
 | 2026-10-06 | 🐛 | El pasajero ve el código de 6 dígitos del pedido de encomienda, con hoja a pantalla completa, copiar y WhatsApp |
 | 2026-10-06 | 🔧 | Se traen a `HWatson-dev` los 3 commits de la rama remota `XeXeL27` (estudiantes UAP con SIGSE, precio por tramos y solicitudes separadas por categoría) |
@@ -39,6 +41,57 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-06
+
+### 🐛 Arreglo · Panel del repartidor con los datos del pedido y sin reabrirse solo
+
+- **Módulo / área:** app móvil del conductor (`app-movil`), panel del reparto.
+- **Descripción:** dos cosas. El panel de un reparto mostraba solo el formulario de la acción del
+  momento (el código, la compra, el pago): el repartidor no tenía la ruta, ni el monto a cobrar, ni
+  chat con quien pidió el envío, ni forma de cancelar el pedido (el botón "Cancelar viaje" estaba en
+  el panel del taxi, al que el reparto ya no llegaba). Y el panel se abría solo en cada cambio de
+  etapa: el repartidor lo bajaba para ver el mapa y a los pocos segundos se le cerraba otra vez.
+- **Cambios clave:**
+  - `ResumenEntregaConductor` (nuevo): estado del envío, quién lo pidió con botón de chat, descripción
+    del paquete, A y B, cuánto cobra (en una compra, el total: producto más envío, con el desglose) y
+    "Cancelar pedido" mientras se pueda (antes de tenerlo en mano, que es lo que acepta el backend).
+  - `PanelViajeConductor` compone ese resumen encima del formulario de la acción, solo en viajes con
+    datos de entrega.
+  - `AperturaPanelConductor` (nuevo, sin widgets): el panel se abre la primera vez de cada viaje y,
+    si el repartidor lo baja, se respeta hasta que lo vuelva a abrir o termine el viaje. Antes se
+    abría en cada cambio de etapa.
+  - Los avisos del reparto usan `mostrarMensaje` en vez de un `SnackBar` a secas, que quedaba
+    escondido bajo la barra inferior flotante justo donde se mira tras confirmar un código.
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`
+  - `app-movil/lib/modulos/conductor/viaje/apertura_panel.dart` (nuevo)
+  - `app-movil/lib/modulos/conductor/viaje/paneles_conductor.dart`
+  - `app-movil/lib/modulos/conductor/inicio/pantalla_inicio.dart`
+  - `app-movil/test/panel_repartidor_test.dart` (nuevo, 11 pruebas)
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (143 pruebas, todas pasan),
+  `flutter build web --release --base-href /app/` compila.
+
+### ✨ Nuevo · El código de entrega se copia al tocarlo y aparece también el del punto B
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), panel del viaje de reparto.
+- **Descripción:** el código de 6 dígitos se copiaba desde una hoja modal y no había forma de ver el
+  código del punto B antes de llegar: el remitente casi nunca es quien recibe, así que no podía
+  avisarle y el repartidor llegaba al destino sin que nadie le dictara nada. El backend ya le manda
+  los dos códigos al pasajero (solo se los anula al repartidor), así que esto es solo app.
+- **Cambios clave:**
+  - `DatosEntrega.codigos` reemplaza a `codigoVigente`: lista los dos códigos mientras el paquete va a
+    A (el de la fase actual primero, el otro marcado como "Mándalo antes") y solo el de B cuando ya
+    está en mano, porque el de A ya cumplió su función.
+  - Cada código se copia al portapapeles con un toque en los dígitos, sin pasar por un modal, y sale
+    el aviso "Copiado al portapapeles". Al lado queda el envío por WhatsApp a quien lo dicta, con el
+    mensaje ya escrito.
+  - `copiarAlPortapapeles` en `core/enlaces.dart`; `enlaceWhatsappCodigo` construye el `wa.me`.
+  - Se elimina la hoja modal del código: los dígitos grandes y sus dos acciones quedan en la tarjeta.
+- **Archivos afectados:**
+  - `app-movil/lib/comun/modelos_viaje.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/core/enlaces.dart`
+  - `app-movil/test/codigo_entrega_test.dart` (20 pruebas)
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (143 pruebas, todas pasan).
 
 ### 🐛 Arreglo · Task 3 · Al tocar "Entrega" con tipo ya elegido se reabre el selector
 

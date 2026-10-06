@@ -37,6 +37,7 @@ import '../../../widgets/requiere_gps.dart';
 import '../comentarios/pantalla_comentarios.dart';
 import '../perfil/pantalla_documentos.dart';
 import '../perfil/pantalla_perfil.dart';
+import '../viaje/apertura_panel.dart';
 import '../viaje/conductor_api.dart';
 import '../viaje/flujo_conductor.dart';
 import '../viaje/paneles_conductor.dart';
@@ -575,7 +576,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   Widget _panelDetalle() {
     final solicitud = _flujo.seleccionada;
     return PanelPlegable(
-      abierto: _panelAbierto,
+      abierto: _apertura.abierto,
       onAlternar: _alternarPanel,
       icono: FontAwesomeIcons.route,
       color: ColoresApp.azul,
@@ -594,7 +595,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         ? ('Viaje en curso', ColoresApp.azul, '', ColoresApp.azul)
         : estadoViajeConductor(viaje);
     return PanelPlegable(
-      abierto: _panelAbierto,
+      abierto: _apertura.abierto,
       onAlternar: _alternarPanel,
       icono: FontAwesomeIcons.motorcycle,
       color: color,
@@ -613,15 +614,18 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     );
   }
 
-  /// Panel del detalle de una solicitud o del viaje: se baja para ver el mapa completo con el tramo
-  /// y se vuelve a abrir solo al cambiar de etapa.
-  bool _panelAbierto = true;
+  /// Panel del detalle de una solicitud o del viaje: se baja para ver el mapa completo con el tramo.
+  ///
+  /// Antes se abria solo en cada cambio de etapa y el repartidor no lo podia dejar asi: le tapaba el
+  /// mapa y se le cerraba solo a los pocos segundos. Ahora [AperturaPanelConductor] respeta que lo
+  /// haya bajado hasta que el termine.
+  final AperturaPanelConductor _apertura = AperturaPanelConductor();
   EtapaConductor? _etapaPanel;
 
   bool get _plegable => _flujo.etapa == EtapaConductor.detalle || _flujo.etapa == EtapaConductor.enViaje;
 
   void _alternarPanel() {
-    setState(() => _panelAbierto = !_panelAbierto);
+    setState(() => _apertura.alternar());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _mapa.encuadrar();
     });
@@ -638,11 +642,16 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         final enLinea = _flujo.enLinea;
         if (etapa != _etapaPanel) {
           _etapaPanel = etapa;
-          _panelAbierto = true;
+          // Sin viaje en curso arranca uno nuevo, asi que el panel vuelve a abrirse solo.
+          if (etapa == EtapaConductor.lista || etapa == EtapaConductor.cargando) {
+            _apertura.nuevoViaje();
+          } else {
+            _apertura.cambioDeEtapa();
+          }
         }
         // Lo que tapan la cabecera y el panel, para encuadrar la ruta; con el panel bajado el mapa
         // queda casi completo.
-        final plegado = _plegable && !_panelAbierto;
+        final plegado = _plegable && !_apertura.abierto;
         _mapa.margenesVista = EdgeInsets.fromLTRB(56, margen.top + 175, 56, abajo + (plegado ? 190 : alto * 0.4));
         // El boton atras de Android vuelve de la ruta de una solicitud a la lista.
         return PopScope(
