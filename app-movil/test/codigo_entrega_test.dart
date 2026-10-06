@@ -169,7 +169,7 @@ void main() {
       final entrega = _entrega(estado: 'EN_MANO', telefonoReceptor: '');
       await tester.pumpWidget(_envolver(TarjetaCodigoEntrega(fases: entrega.codigos)));
 
-      expect(find.text('WhatsApp'), findsNothing);
+      expect(find.byTooltip('Mandarlo por WhatsApp'), findsNothing);
     });
 
     testWidgets('con telefono ofrece WhatsApp con el codigo de esa fase', (tester) async {
@@ -179,7 +179,7 @@ void main() {
         abrirEnlace: (uri) => enlaces.add(uri),
       )));
 
-      await tester.tap(find.text('WhatsApp'));
+      await tester.tap(find.byTooltip('Mandarlo por WhatsApp'));
       await tester.pumpAndSettle();
 
       expect(enlaces, hasLength(1));

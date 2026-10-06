@@ -266,6 +266,10 @@ class PanelPlegable extends StatelessWidget {
   /// siguiente paso del conductor), para no tener que abrirlo.
   final Widget? accionPlegado;
 
+  /// Alto maximo del contenido abierto, como fraccion de la pantalla. Lo que sobra se desplaza dentro
+  /// del panel y la barra se sigue viendo.
+  static const double altoMaximo = 0.45;
+
   const PanelPlegable({
     super.key,
     required this.abierto,
@@ -319,11 +323,116 @@ class PanelPlegable extends StatelessWidget {
     );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         barra,
-        if (abierto) ...[const SizedBox(height: 8), child],
+        if (abierto) ...[
+          const SizedBox(height: 8),
+          // El panel va en un Stack pegado abajo, sin alto dado: sin este tope, un contenido largo
+          // (el resumen del pedido del repartidor, los dos codigos de entrega del pasajero) se sale
+          // por arriba de la pantalla y lo de arriba deja de verse sin poder desplazarse.
+          ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(context).height * altoMaximo),
+            child: SingleChildScrollView(child: child),
+          ),
+        ],
         if (!abierto && accionPlegado != null) ...[const SizedBox(height: 8), accionPlegado!],
       ],
+    );
+  }
+}
+
+/// Seccion del panel que se ve siempre pero con sus campos escondidos hasta que se toca.
+///
+/// El panel del repartidor tiene acciones que casi nunca se usan (reportar que el paquete no
+/// coincide, no poder entregar) y otras que son el dia a dia (confirmar el codigo). Con todo
+/// desplegado el panel crecia, tapaba el mapa y el repartidor iba a parar en el prompt equivocado.
+/// El titulo queda siempre a la vista, que es lo que hace falta para saber que la accion existe.
+class SeccionDesplegable extends StatefulWidget {
+  final String titulo;
+  final String? ayuda;
+  final FaIconData icono;
+  final Color color;
+  final Widget child;
+
+  /// Boton aparte en la cabecera, que no despliega la seccion (por ejemplo "Cancelar pedido").
+  final Widget? accion;
+
+  final bool abiertoInicial;
+
+  const SeccionDesplegable({
+    super.key,
+    required this.titulo,
+    required this.icono,
+    required this.child,
+    this.ayuda,
+    this.color = ColoresApp.texto,
+    this.accion,
+    this.abiertoInicial = false,
+  });
+
+  @override
+  State<SeccionDesplegable> createState() => _SeccionDesplegableState();
+}
+
+class _SeccionDesplegableState extends State<SeccionDesplegable> {
+  late bool _abierto = widget.abiertoInicial;
+
+  void _alternar() => setState(() => _abierto = !_abierto);
+
+  @override
+  Widget build(BuildContext context) {
+    final separador = BorderSide(color: ColoresApp.borde.withValues(alpha: 0.8));
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(top: separador),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // La accion va fuera del InkWell a proposito: dentro, su toque desplegaria la seccion.
+          Row(
+            children: [
+              Expanded(
+                child: InkWell(
+                  onTap: _alternar,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    child: Row(
+                      children: [
+                        FaIcon(widget.icono, color: widget.color, size: 15),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            widget.titulo,
+                            style: TextStyle(color: widget.color, fontSize: 14.5, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                        AnimatedRotation(
+                          turns: _abierto ? 0.5 : 0,
+                          duration: const Duration(milliseconds: 180),
+                          child: FaIcon(FontAwesomeIcons.chevronDown, color: widget.color, size: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              if (widget.accion != null) widget.accion!,
+            ],
+          ),
+          if (_abierto) ...[
+            if (widget.ayuda != null) ...[
+              Text(widget.ayuda!, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+              const SizedBox(height: 10),
+            ],
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: widget.child,
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

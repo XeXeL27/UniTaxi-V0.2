@@ -677,9 +677,14 @@ class TarjetaCodigoEntrega extends StatelessWidget {
     );
   }
 
-  Widget _bloque(BuildContext context, FaseCodigoEntrega fase) {
+  /// El codigo de la fase actual va con los digitos grandes, que se dictan de viva voz. El de la otra
+  /// punta va en una sola linea: es de consulta rapida (mandarlo a quien recibe) y si ocupa lo mismo
+  /// que el primero el panel del pasajero crece lo que no debe.
+  Widget _bloque(BuildContext context, FaseCodigoEntrega fase) =>
+      fase.faseActual ? _bloqueGrande(context, fase) : _bloqueCompacto(context, fase);
+
+  Widget _bloqueGrande(BuildContext context, FaseCodigoEntrega fase) {
     final nombre = fase.nombre;
-    final enlace = enlaceWhatsappCodigo(fase);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -693,11 +698,6 @@ class TarjetaCodigoEntrega extends StatelessWidget {
                 style: const TextStyle(color: ColoresApp.azul, fontSize: 15, fontWeight: FontWeight.w700),
               ),
             ),
-            if (!fase.faseActual)
-              const Text(
-                'Mandalo antes',
-                style: TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5, fontWeight: FontWeight.w600),
-              ),
           ],
         ),
         const SizedBox(height: 7),
@@ -714,36 +714,76 @@ class TarjetaCodigoEntrega extends StatelessWidget {
                       Flexible(child: _DigitosCodigo(codigo: fase.codigo, tamano: 28)),
                       const SizedBox(width: 10),
                       const FaIcon(FontAwesomeIcons.copy, color: ColoresApp.azul, size: 13),
-                      const Text('Toca para copiar',
-                          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5)),
+                      const Text('Toca para copiar', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5)),
                     ],
                   ),
                 ),
               ),
             ),
-            if (enlace != null) ...[
-              const SizedBox(width: 8),
-              OutlinedButton.icon(
-                onPressed: () => abrirEnlace == null
-                    ? abrirEnlaceExterno(context, enlace, textoWhatsappCodigo(fase))
-                    : abrirEnlace!(enlace),
-                icon: const FaIcon(FontAwesomeIcons.whatsapp, size: 14),
-                label: const Text('WhatsApp'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: ColoresApp.azul,
-                  side: const BorderSide(color: ColoresApp.azul),
-                  padding: const EdgeInsets.symmetric(horizontal: 10),
-                  minimumSize: const Size(0, 34),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                ),
-              ),
-            ],
+            if (enlaceWhatsappCodigo(fase) != null) _botonWhatsapp(context, fase),
           ],
         ),
         const SizedBox(height: 5),
         Text(
           'Dicta este codigo ${nombre == null ? '' : 'a $nombre '}${fase.donde}.',
           style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+        ),
+      ],
+    );
+  }
+
+  Widget _botonWhatsapp(BuildContext context, FaseCodigoEntrega fase) {
+    final enlace = enlaceWhatsappCodigo(fase)!;
+    return IconButton(
+      onPressed: () => abrirEnlace == null
+          ? abrirEnlaceExterno(context, enlace, textoWhatsappCodigo(fase))
+          : abrirEnlace!(enlace),
+      tooltip: 'Mandarlo por WhatsApp',
+      icon: const FaIcon(FontAwesomeIcons.whatsapp, color: ColoresApp.azul, size: 16),
+    );
+  }
+
+  Widget _bloqueCompacto(BuildContext context, FaseCodigoEntrega fase) {
+    final enlace = enlaceWhatsappCodigo(fase);
+    final nombre = fase.nombre;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () => copiarAlPortapapeles(context, fase.codigo),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 11),
+                  const SizedBox(width: 7),
+                  Text(fase.titulo, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      fase.codigo,
+                      style: const TextStyle(
+                        color: ColoresApp.azul,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (enlace != null) _botonWhatsapp(context, fase),
+        ],
+      ),
+        Text(
+          'Para ${nombre ?? 'quien recibe'} ${fase.donde}.',
+          style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5),
         ),
       ],
     );
