@@ -22,6 +22,12 @@ import 'viaje_api.dart';
 /// Etapas de la pantalla del pasajero.
 enum EtapaPasajero { cargando, eligiendo, buscando, enViaje, calificando }
 
+/// El destino que se manda al crear la solicitud: en una compra el pedido se entrega donde esta el
+/// pasajero, asi que el destino es la misma partida y no puede ser un favorito; en viaje y
+/// encomienda, el punto elegido en el mapa, que todavia puede no existir.
+PuntoRuta? destinoAlSolicitar({required PuntoRuta partida, PuntoRuta? destinoElegido, required bool esCompra}) =>
+    esCompra ? partida : destinoElegido;
+
 /// Flujo del pasajero estilo Uber: A sale del GPS, el pasajero toca el mapa para marcar B, ve el
 /// precio y solicita; luego espera a que un conductor acepte, sigue el viaje y al terminar
 /// califica al conductor. El estado del backend se consulta cada pocos segundos.
@@ -73,6 +79,10 @@ class FlujoPasajero extends ChangeNotifier {
   TipoEnvio? get tipoEnvio =>
       solicitud?.datosEntrega?.tipoEnvio ?? viaje?.datosEntrega?.tipoEnvio ?? modo.tipo;
 
+  /// true cuando lo que se pide ahora es una compra: el pedido se entrega donde esta el pasajero
+  /// y no hay destino que elegir.
+  bool get esCompra => tipoEnvio == TipoEnvio.compraYEntrega;
+
   /// Servicio de lo que se está pidiendo ahora, para hablar de repartidor o de taxista.
   ServicioActivo get servicio => servicioDe(tipoEnvio);
 
@@ -106,13 +116,15 @@ class FlujoPasajero extends ChangeNotifier {
   (LatLng, LatLng)? _puntosCotizados;
   int _consultaCotizacion = 0;
 
-  /// Cada vez que cambian la partida o el destino se pide al servidor el precio de esa ruta.
+  /// Cada vez que cambian la partida o el destino se pide al servidor el precio de esa ruta. En un
+  /// reparto no se pide: su precio lo calcula el servidor de delivery (H9) y, en una compra,
+  /// A == B haria que la llamada fuera inutil (OSRM puede responder una ruta de cero).
   void _revisarCotizacion() {
     if (_cerrado || etapa != EtapaPasajero.eligiendo) return;
     final a = mapa.a?.posicion;
     final b = mapa.b?.posicion;
-    if (a == null || b == null) {
-      if (_puntosCotizados != null || cotizacion != null) {
+    if (a == null || b == null || servicio == ServicioActivo.entrega) {
+      if (_puntosCotizados != null || cotizacion != null || cotizando) {
         _puntosCotizados = null;
         cotizacion = null;
         cotizando = false;
@@ -146,8 +158,11 @@ class FlujoPasajero extends ChangeNotifier {
   }
 
   /// Lo que se muestra como precio antes de pedir: el de la ruta, o "desde" el precio base. En una
-  /// entrega se muestra como antes (su precio lo calcula el servidor de delivery al pedir).
+  /// compra nadie lo conoce al pedir: el estimado llega con el repartidor asignado y el precio
+  /// real con la compra registrada (Ruling 2), asi que siempre dice "A calcular". En el resto de
+  /// entregas, la tarifa del servicio.
   String get textoPrecio {
+    if (esCompra) return 'A calcular';
     if (servicio == ServicioActivo.entrega) {
       return precio?.precio != null ? formatoBs(precio!.precio) : 'A calcular';
     }
@@ -350,8 +365,10 @@ class FlujoPasajero extends ChangeNotifier {
   /// Direccion de la ubicacion actual (A), para mostrarla y enviarla con la solicitud.
   String? direccionOrigen;
 
+  /// En una compra no hay destino que elegir: basta con la ubicacion del pasajero (el GPS) y con
+  /// el tipo elegido y su formulario completo. En viaje y encomienda hace falta el destino.
   bool get puedeSolicitar =>
-      etapa == EtapaPasajero.eligiendo && mapa.a != null && mapa.b != null && !mapa.calculandoRuta &&
+      etapa == EtapaPasajero.eligiendo && mapa.a != null && (esCompra || mapa.b != null) && !mapa.calculandoRuta &&
       !modo.faltaElegirTipo && (tipoEnvio == null || datosEntregaForm?.error == null);
 
   /// Toca el segmentado de servicio de la cabecera.
@@ -379,23 +396,25 @@ class FlujoPasajero extends ChangeNotifier {
     _avisar();
   }
 
-  /// Crea la solicitud de viaje con A y B.
+  /// Crea la solicitud de viaje. En una compra, partida y destino son la misma ubicacion del
+  /// pasajero y no se manda nombre de favorito; en viaje y encomienda, A y B como estan en el mapa.
   Future<void> solicitar() async {
     // Mientras se recupera el viaje en curso no se puede pedir otro.
     if (etapa != EtapaPasajero.eligiendo) return;
     final a = mapa.a;
-    final b = mapa.b;
-    if (a == null || b == null) return;
+    if (a == null) return;
     final origen = PuntoRuta(a.posicion, direccionOrigen ?? a.texto);
+    var destino = destinoAlSolicitar(partida: origen, destinoElegido: mapa.b, esCompra: esCompra);
+    if (destino == null) return;
     // Si el destino es un favorito, el conductor recibe la direccion del punto y no el nombre que le
-    // puso el pasajero.
+    // puso el pasajero. En una compra el destino es la partida: ahi nunca entra un favorito.
     final favorito = _favorito;
-    final esFavorito = favorito != null && favorito.posicion == b.posicion && favorito.nombre == b.texto;
-    var destino = b;
+    final esFavorito =
+        !esCompra && favorito != null && favorito.posicion == destino.posicion && favorito.nombre == destino.texto;
     if (esFavorito) {
       final direccion =
-          _direccionFavorito ?? await ServiciosMapa.direccionDe(b.posicion) ?? coordenadasTexto(b.posicion);
-      destino = PuntoRuta(b.posicion, direccion);
+          _direccionFavorito ?? await ServiciosMapa.direccionDe(destino.posicion) ?? coordenadasTexto(destino.posicion);
+      destino = PuntoRuta(destino.posicion, direccion);
     }
     if (tipoEnvio != null && idCategoriaDelivery == null) {
       idCategoriaDelivery = await api.categoriaDelivery();

@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | ✨ | Task 2 del plan de compra: el pasajero pide una compra sin elegir destino (origen = destino = su ubicación, precio "A calcular", sin cotizar OSRM) |
 | 2026-10-06 | 📚 | Plan del punto de entrega y el mapa de la compra y entrega: B es donde está el pasajero, naranja punteado hasta él y ruta desde el comercio |
 | 2026-10-06 | 🐛 | El repartidor confirma que recibió el pago con un check, sin escribir el monto (el servidor ya lo sabe y exige que sea exacto) |
 | 2026-10-06 | ♻️ | El panel no crece sin límite y las acciones raras del reparto van en secciones plegadas; el botón de WhatsApp del código pasa a icono |
@@ -44,6 +45,42 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-06
+
+### ✨ Nuevo · Task 2 del plan de compra: el pasajero pide una compra sin elegir destino
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), flujo de viaje, panel eligiendo y
+  pantalla de inicio.
+- **Descripción:** en un pedido COMPRA_Y_ENTREGA el destino lo fija el plan (Ruling 1): el pedido se
+  entrega donde está el pasajero, que deja de elegir destino. Antes el flujo exigía `mapa.b != null`
+  para todo (`puedeSolicitar`, `solicitar()` y el panel), así que una compra quedaba bloqueada sin
+  botón de pedir. Ahora la compra se pide con origen y destino iguales a la ubicación del pasajero,
+  el panel enseña el precio, la forma de pago y el botón igual que con destino elegido, y la fila
+  del destino se sustituye por "Se entrega donde estas". En ENCOMIENDA nada cambia: destino
+  elegido, cotización y precio como antes.
+- **Cambios clave:**
+  - `flujo_pasajero.dart`: getter `esCompra` y regla pura `destinoAlSolicitar(partida,
+    destinoElegido, esCompra)` (en compra devuelve la partida, nunca un favorito);
+    `puedeSolicitar` deja de exigir `mapa.b` en compra (sigue exigiendo `mapa.a` y el formulario
+    completo); `solicitar()` manda `origen = destino = mapa.a` con la dirección de A y
+    `destinoNombre = null`; `_revisarCotizacion()` no pide cotización de taxi en modo entrega (H9,
+    evita OSRM con A == B); `textoPrecio` dice "A calcular" siempre en compra (Ruling 2).
+  - `paneles_pasajero.dart` (`PanelEligiendo`): precio, selector de pago, disponibilidad y botón de
+    pedir se muestran en compra aunque no haya `b` (R-PF1); sin `mapa.b = mapa.a`, porque `aSigueGps`
+    dejaría B quieto y trazaría una ruta falsa.
+  - `pantalla_inicio.dart`: el buscador de destino se oculta en compra; el panel ya no desaparece
+    cuando no hay destino si es compra; el aviso "Primero elige tu destino" no aplica en compra.
+- **Tests:** `test/compra_pasajero_test.dart` (18): se puede pedir una compra sin destino y en
+  encomienda no; en compra la solicitud lleva origen = destino = ubicación y sin nombre; en compra
+  no se cotiza (ni en encomienda; en viaje normal sí); el precio de una compra dice "A calcular";
+  `esCompra`, la regla del destino y el panel con su botón habilitado.
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart`
+  - `app-movil/test/compra_pasajero_test.dart` (nuevo)
+  - `docs/CHANGELOG.md`
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` completo: 181/181 en verde
+  (los 18 del archivo nuevo con su fase RED: 6 fallos por aserción y la de símbolos sin compilar).
 
 ### 📚 Documentación · Plan del punto de entrega y el mapa de la compra y entrega
 

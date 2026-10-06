@@ -542,7 +542,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       EtapaPasajero.buscando =>
         entrega ? 'Ya estamos buscando un repartidor para tu envío.' : 'Ya estamos buscando un conductor para ti.',
       EtapaPasajero.enViaje => entrega ? 'Tienes un envío en curso.' : 'Tienes un viaje en curso.',
-      _ when _mapa.b == null => 'Primero elige tu destino: búscalo arriba o tócalo en el mapa.',
+      // En una compra no hay destino que elegir, asi que ese aviso no aplica y se llega al de
+      // "elige que enviar" si le falta el tipo.
+      _ when _mapa.b == null && !_flujo.esCompra => 'Primero elige tu destino: búscalo arriba o tócalo en el mapa.',
       _ when _flujo.modo.faltaElegirTipo => 'Elige qué quieres enviar: encomienda o compra y entrega.',
       _ => entrega ? 'Espera a que termine de trazarse la ruta de tu envío.' : 'Espera a que termine de trazarse la ruta.',
     };
@@ -852,16 +854,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
                         child: Column(
                           children: [
-                            BarraDestino(
-                              key: _guiaDestino,
-                              destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
-                              onBuscar: _abrirBuscador,
-                              onQuitar: _flujo.quitarDestino,
-                            ),
+                            // En una compra no hay destino que elegir: el pedido se entrega donde
+                            // esta el pasajero, asi que no se muestra la busqueda de destino.
+                            if (!_flujo.esCompra) ...[
+                              BarraDestino(
+                                key: _guiaDestino,
+                                destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
+                                onBuscar: _abrirBuscador,
+                                onQuitar: _flujo.quitarDestino,
+                              ),
+                              const SizedBox(height: margenSelectorServicio),
+                            ],
                             // El servicio se elige acá y no en el panel del pedido: el panel nace
                             // plegado, así que un selector dentro de él no se ve y el pasajero no
                             // sabe que puede mandar.
-                            const SizedBox(height: margenSelectorServicio),
                             SelectorServicio(
                               key: _guiaServicio,
                               activo: _flujo.modo.activo,
@@ -918,9 +924,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   }
 
   /// Panel sobre la barra; sin destino elegido no hace falta (el buscador ya invita a elegirlo).
+  /// En una compra no hay destino: ahi el panel se muestra desde el principio, con el aviso de que
+  /// el pedido se entrega donde esta el pasajero.
   Widget? _panel(EtapaPasajero etapa) => switch (etapa) {
     EtapaPasajero.cargando => PanelRecuperando(sinRed: _flujo.recuperandoSinRed),
-    EtapaPasajero.eligiendo when _mapa.a != null && _mapa.b == null && !_flujo.guardandoLugar => null,
+    EtapaPasajero.eligiendo
+        when _mapa.a != null && _mapa.b == null && !_flujo.esCompra && !_flujo.guardandoLugar =>
+      null,
     EtapaPasajero.eligiendo when !_panelEsPlegable => _panelEligiendo(),
     EtapaPasajero.eligiendo => PanelPlegable(
       abierto: _panelAbierto,

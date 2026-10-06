@@ -49,6 +49,10 @@ class PanelEligiendo extends StatelessWidget {
     final a = mapa.a;
     final b = mapa.b;
     final ruta = mapa.ruta;
+    // En una compra no hay destino que elegir: el pedido se entrega donde esta el pasajero, y
+    // igual que con destino elegido se ven el precio, la forma de pago y el boton de pedir.
+    final esCompra = flujo.esCompra;
+    final verPedido = b != null || esCompra;
 
     if (flujo.guardandoLugar) {
       return Column(
@@ -67,8 +71,8 @@ class PanelEligiendo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Con el destino elegido, lo primero que se ve es el precio y como se paga.
-        if (b != null) ...[
+        // Con el destino elegido o en una compra, lo primero que se ve es el precio y como se paga.
+        if (verPedido) ...[
           RecuadroPrecio(
             etiqueta: flujo.servicio == ServicioActivo.entrega ? 'Precio del servicio' : 'Precio del viaje',
             detalle: [
@@ -95,11 +99,14 @@ class PanelEligiendo extends StatelessWidget {
                 : 'Punto de partida (A)',
             texto: flujo.direccionOrigen ?? a.texto,
           ),
-        if (a != null && b == null) ...[
+        if (esCompra) ...[
+          const SizedBox(height: 10),
+          const _Indicacion(icono: FontAwesomeIcons.locationDot, texto: 'Se entrega donde estas'),
+        ] else if (a != null && b == null) ...[
           const SizedBox(height: 10),
           const _Indicacion(icono: FontAwesomeIcons.handPointer, texto: 'Busca tu destino arriba o tócalo en el mapa.'),
         ],
-        if (b != null) ...[
+        if (b != null && !esCompra) ...[
           FilaLugar.destino(
             texto: b.texto,
             accion: Row(
@@ -143,6 +150,8 @@ class PanelEligiendo extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 12),
+        ],
+        if (verPedido) ...[
           DisponibilidadTaxis(libres: libres, servicio: flujo.servicio),
           const SizedBox(height: 14),
           BotonPrincipal(
