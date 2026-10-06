@@ -5,6 +5,7 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | 🔧 | Se traen a `HWatson-dev` los 3 commits de la rama remota `XeXeL27` (estudiantes UAP con SIGSE, precio por tramos y solicitudes separadas por categoría) |
 | 2026-10-05 | ✨ | El pasajero elige entre viaje y entrega en un segmentado de la cabecera, con todo el texto del pedido acorde al servicio |
 | 2026-10-05 | 🐛 | Test del selector de categoría del conductor corregido tras cambiar el texto de la opción de reparto |
 | 2026-10-05 | ✨ | La moto del conductor puede registrarse con la categoría DELIVERY elegida (Task 1 del plan del repartidor) |
@@ -34,6 +35,35 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-06
+
+### 🔧 Config · Se fusiona la rama `XeXeL27` en `HWatson-dev` (fast-forward)
+
+- **Módulo / área:** repositorio git (rama `HWatson-dev`), todo el proyecto.
+- **Descripción:** la rama remota `XeXeL27` de `Equipo-de-Sistemas/UniTaxiV2` estaba 3 commits por
+  delante de `HWatson-dev`, que era exactamente el ancestro común. Se trajeron con un
+  `git merge --ff-only`, sin conflictos y sin reescribir historia.
+- **Cambios clave:**
+  - `2b1f839` solicitudes separadas por categoría: el conductor con moto DELIVERY solo ve y acepta
+    entregas, y el de moto de taxi solo viajes.
+  - `ae227bc` fusión interna con el módulo DELIVERY, precio del taxi por tramos de km con descuento
+    de estudiante, `limite_adelanto_compra` con default 0 y la app ya no se queda en "calculando
+    ruta" si OSRM falla.
+  - `fd15e31` estudiantes UAP verificados con el SIGSE (registro por RU, verificación desde Perfil y
+    desde el panel, renovación automática de la matrícula) y precio de tramos de km editable en el
+    panel.
+  - Entorno: desde esta máquina `origin` (HTTPS) no resuelve, así que se añadió el remoto `xexel`
+    por SSH (`git@github.com:Equipo-de-Sistemas/UniTaxiV2.git`) para poder traer y subir ramas.
+- **Archivos afectados:** los de los tres commits fusionados (backend, `app-movil`, `admin-panel`,
+  `docs/`), entre ellos los nuevos
+  `backend/src/main/java/com/taxiuap/backend/pricing/service/ParametrosPrecioService.java`,
+  `backend/src/main/java/com/taxiuap/backend/trip/dto/CotizacionViajeResponse.java` y tres tests
+  bajo `backend/src/test/java/com/taxiuap/backend/`. Bitácora: `docs/CHANGELOG.md`.
+- **Verificación:** `git ls-remote --heads xexel` (confirma `XeXeL27` en `2b1f839`),
+  `git fetch xexel`, `git rev-list --left-right --count HWatson-dev...xexel/XeXeL27` (`0 3`, sin
+  commits locales perdidos), `git merge-base` igual a `cde5d8d` y `git merge --ff-only xexel/XeXeL27`
+  sin conflictos. No se compiló ni probó el código resultante en esta sesión.
 
 ## 2026-10-05
 
