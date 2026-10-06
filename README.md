@@ -49,12 +49,16 @@ todo desde el mismo servidor. Luego se entra solo cambiando el link:
 - `./iniciar.sh --compilar` recompila los dos frontends aunque no hayan cambiado.
 - `SERVER_PORT=8081 ./iniciar.sh` usa otro puerto (por defecto 5557).
 
-### Producción (máquina virtual)
+### Producción
 
-El sistema queda publicado en `http://virtual.uap.edu.bo:5557` (panel en `/admin`, app en `/app`).
+El sistema se publica en `https://uni-taxi.uap.edu.bo` (panel en `/admin`, app en `/app`): el backend
+escucha en el puerto 5557 y delante va un proxy (nginx, Apache...) con el certificado que reenvía a
+`http://127.0.0.1:5557` las cabeceras `Host`, `X-Forwarded-Proto` y `X-Forwarded-Host`, y la
+conexión WebSocket de `/ws` (`Upgrade` / `Connection`). El DNS de `uni-taxi.uap.edu.bo` debe apuntar
+a ese servidor.
 
-Requisitos de la máquina: Docker con el plugin compose, Java 21 y Flutter 3.x (solo para compilar el
-panel y la app la primera vez o cuando cambian), y el puerto 5557 abierto en el firewall.
+Requisitos del servidor: Docker con el plugin compose y Java 21. No hace falta Flutter: el panel y la
+app ya van compilados dentro del backend (`backend/src/main/resources/web`).
 
 ```bash
 git clone https://github.com/Equipo-de-Sistemas/UniTaxiV2.git && cd UniTaxiV2
@@ -67,8 +71,9 @@ mínimos (UAP, tipos de vehículo, categorías ESTANDAR, MOTO y DELIVERY con su 
 etiquetas). Después se completan en el `.env` las integraciones opcionales: Google, Gemini, SIGSE,
 correo y Firebase (sin ellas el sistema arranca y esas funciones quedan apagadas).
 
-APK que apunta a producción: `cd app-movil && flutter build apk --release` (sin `API_URL` usa
-`http://virtual.uap.edu.bo:5557`; para otro servidor, `--dart-define=API_URL=http://servidor:5557`).
+Al cambiar el panel o la app, antes de subir: `./compilar-web.sh` (compila los dos y actualiza la copia
+del backend). APK de producción: `cd app-movil && flutter build apk --release` (sin `API_URL` usa
+`https://uni-taxi.uap.edu.bo`; para otro servidor, `--dart-define=API_URL=http://servidor:5557`).
 
 El panel se abre con el administrador inicial: usuario `admin` y la contraseña de
 `admin.inicial.password` del perfil xexel.
