@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Levanta TaxiUAP completo con un solo comando: base de datos, frontends compilados y backend.
+# Levanta TaxiUAP: frontends compilados y backend.
 # El backend sirve el panel en /admin y la app (pasajeros y conductores) en /app.
 #
 # Uso:
@@ -14,9 +14,6 @@ RAIZ="$(cd "$(dirname "$0")" && pwd)"
 FLUTTER="${FLUTTER:-$(command -v flutter || echo "$HOME/development/flutter/bin/flutter")}"
 FORZAR=false
 [[ "${1:-}" == "--compilar" ]] && FORZAR=true
-
-echo "== Base de datos (PostGIS en Docker)"
-(cd "$RAIZ" && docker compose up -d --wait)
 
 # Compila un proyecto Flutter web con la ruta base con que lo sirve el backend.
 compilar() {
