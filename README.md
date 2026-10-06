@@ -53,13 +53,22 @@ todo desde el mismo servidor. Luego se entra solo cambiando el link:
 
 El sistema queda publicado en `http://virtual.uap.edu.bo:5557` (panel en `/admin`, app en `/app`).
 
-1. Copiar `.env.example` a `.env` y completar los valores (`TAXIUAP_DB_PASSWORD`, `JWT_SECRET`,
-   `ADMIN_CORREO`, `ADMIN_PASSWORD`, Google, Gemini, SIGSE, correo). Con el `.env` alcanza: la BD,
-   el puerto y la dirección pública tienen sus valores en `application.properties`.
-2. Abrir el puerto 5557 en el firewall de la máquina virtual.
-3. `./iniciar.sh` (o `SPRING_PROFILES_ACTIVE=prod ./iniciar.sh` para no cargar ningún perfil local).
-4. APK que apunta a producción: `cd app-movil && flutter build apk --release` (sin `API_URL` usa
-   `http://virtual.uap.edu.bo:5557`; para otro servidor, `--dart-define=API_URL=http://servidor:5557`).
+Requisitos de la máquina: Docker con el plugin compose, Java 21 y Flutter 3.x (solo para compilar el
+panel y la app la primera vez o cuando cambian), y el puerto 5557 abierto en el firewall.
+
+```bash
+git clone https://github.com/Equipo-de-Sistemas/UniTaxiV2.git && cd UniTaxiV2
+./iniciar.sh
+```
+
+La primera vez `iniciar.sh` crea el `.env` con contraseñas aleatorias (BD, JWT y el administrador
+inicial, que muestra en pantalla: usuario `admin`) y, con la BD vacía, el backend crea los catálogos
+mínimos (UAP, tipos de vehículo, categorías ESTANDAR, MOTO y DELIVERY con su tarifa, zonas y
+etiquetas). Después se completan en el `.env` las integraciones opcionales: Google, Gemini, SIGSE,
+correo y Firebase (sin ellas el sistema arranca y esas funciones quedan apagadas).
+
+APK que apunta a producción: `cd app-movil && flutter build apk --release` (sin `API_URL` usa
+`http://virtual.uap.edu.bo:5557`; para otro servidor, `--dart-define=API_URL=http://servidor:5557`).
 
 El panel se abre con el administrador inicial: usuario `admin` y la contraseña de
 `admin.inicial.password` del perfil xexel.
