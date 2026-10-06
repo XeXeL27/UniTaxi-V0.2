@@ -93,7 +93,9 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
   final idViaje = int.tryParse('${datos['idViaje'] ?? ''}');
   final evento = switch (datos['tipo']) {
     'VIAJE_ACEPTADO' => 1,
-    'CONDUCTOR_LLEGO' => 2,
+    'CONDUCTOR_LLEGO' || 'REPARTIDOR_LLEGO' => 2,
+    'PAQUETE_RECOGIDO' => 3,
+    'PAQUETE_ENTREGADO' => 4,
     _ => null,
   };
   if (idViaje == null || evento == null) return;

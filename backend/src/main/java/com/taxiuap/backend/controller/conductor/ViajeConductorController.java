@@ -2,6 +2,7 @@ package com.taxiuap.backend.controller.conductor;
 
 import java.util.List;
 
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -104,11 +105,22 @@ public class ViajeConductorController {
     // En un viaje DELIVERY, iniciar y finalizar estan bloqueados a proposito: el pedido avanza con
     // estas acciones, que son las unicas que conocen los codigos, la compra y el pago del producto.
 
-    /** ENCOMIENDA: el repartidor llego a A y valida el codigo que le dicta el remitente. */
-    @PostMapping("/{id}/entrega/validar-recogida")
+    /** El repartidor llego al punto de recogida (A): recien entonces puede recoger el paquete. */
+    @PostMapping("/{id}/entrega/llegue-recogida")
+    public ResponseEntity<ApiResponse<ViajeResponse>> llegueRecogida(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito("Llegaste al punto de recogida", entregaService.llegadaRecogida(id)));
+    }
+
+    /**
+     * ENCOMIENDA: en A valida el codigo que le dicta el remitente y adjunta la foto del paquete
+     * (multipart: parte "datos" con codigo y GPS, parte "foto" obligatoria).
+     */
+    @PostMapping(value = "/{id}/entrega/validar-recogida", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ViajeResponse>> validarRecogida(
-            @PathVariable Long id, @Valid @RequestBody ValidarCodigoEntregaRequest request) {
-        return ResponseEntity.ok(ApiResponse.exito("Recogida validada", entregaService.validarRecogida(id, request)));
+            @PathVariable Long id, @Valid @RequestPart("datos") ValidarCodigoEntregaRequest request,
+            @RequestPart(value = "foto", required = false) MultipartFile foto) {
+        return ResponseEntity.ok(ApiResponse.exito("Recogida validada",
+                entregaService.validarRecogida(id, request, foto)));
     }
 
     /** COMPRA_Y_ENTREGA: propone donde comprar. El cliente tiene que confirmarlo antes de comprar. */
@@ -135,20 +147,28 @@ public class ViajeConductorController {
         return ResponseEntity.ok(ApiResponse.exito("Pago confirmado", entregaService.confirmarPago(id, request)));
     }
 
-    /** ENCOMIENDA: en B, el receptor dicta el codigo de entrega. */
-    @PostMapping("/{id}/entrega/validar-entrega")
+    /**
+     * ENCOMIENDA: en B, el receptor dicta el codigo de entrega y el repartidor adjunta la foto de la
+     * persona con su paquete (obligatoria), con su GPS a 100 m o menos del destino.
+     */
+    @PostMapping(value = "/{id}/entrega/validar-entrega", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ViajeResponse>> validarEntrega(
-            @PathVariable Long id, @Valid @RequestBody ValidarCodigoEntregaRequest request) {
+            @PathVariable Long id, @Valid @RequestPart("datos") ValidarCodigoEntregaRequest request,
+            @RequestPart(value = "foto", required = false) MultipartFile foto) {
         return ResponseEntity.ok(ApiResponse.exito("Entrega completada",
-                entregaService.entregarConCodigo(id, request)));
+                entregaService.entregarConCodigo(id, request, foto)));
     }
 
-    /** COMPRA_Y_ENTREGA: en B se identifica al receptor, que siempre es el cliente del pedido. */
-    @PostMapping("/{id}/entrega/identificar-receptor")
+    /**
+     * COMPRA_Y_ENTREGA: en B se identifica al receptor, que siempre es el cliente del pedido, con la
+     * foto de la entrega obligatoria y el GPS a 100 m o menos del destino.
+     */
+    @PostMapping(value = "/{id}/entrega/identificar-receptor", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<ViajeResponse>> identificarReceptor(
-            @PathVariable Long id, @Valid @RequestBody IdentificarReceptorRequest request) {
+            @PathVariable Long id, @Valid @RequestPart("datos") IdentificarReceptorRequest request,
+            @RequestPart(value = "foto", required = false) MultipartFile foto) {
         return ResponseEntity.ok(ApiResponse.exito("Entrega completada",
-                entregaService.entregarConReceptor(id, request)));
+                entregaService.entregarConReceptor(id, request, foto)));
     }
 
     /** No se pudo entregar: exige foto y motivo, cancela el viaje y no republica el pedido. */

@@ -158,6 +158,14 @@ public class AlmacenamientoArchivos {
         return carpetaPersona(persona) + "/conductor/entrega";
     }
 
+    /**
+     * Una carpeta por pedido DELIVERY dentro de la evidencia del repartidor: fotos de recogida, recibo,
+     * entrega o falla y la constancia con cada confirmacion, todo junto para revisarlo despues.
+     */
+    public String carpetaEntregaViaje(Persona persona, Long idViaje) {
+        return carpetaEntregaConductor(persona) + "/viaje_" + idViaje;
+    }
+
     // ------------------------------------------------------------------ PDF
 
     /** Valida que el archivo sea un PDF de hasta 5 MB. Se llama antes de guardar nada en la BD. */

@@ -182,7 +182,7 @@ class ControladorMapa extends ChangeNotifier {
         trazar(encuadrar: false);
       }
     }
-    if (mostrarAcercamiento && a != null) {
+    if (mostrarAcercamiento && _objetivoAcercamiento != null) {
       final origen = _origenAcercamiento;
       if (origen == null || ServiciosMapa.metros(origen, posicion) > _metrosParaRecalcular) {
         _trazarAcercamiento();
@@ -212,6 +212,18 @@ class ControladorMapa extends ChangeNotifier {
     _origenAcercamiento = null;
     _alCambiarPuntos();
     if (conAcercamiento) _trazarAcercamiento();
+  }
+
+  /// Un solo punto con el tramo desde el GPS hasta el (repartidor: primero A para recoger el
+  /// paquete y, ya con el paquete, solo B para entregarlo). Sin ruta A-B.
+  void ponerObjetivo({PuntoRuta? origen, PuntoRuta? destino}) {
+    a = origen;
+    b = destino;
+    mostrarAcercamiento = true;
+    acercamiento = null;
+    _origenAcercamiento = null;
+    _alCambiarPuntos();
+    _trazarAcercamiento(encuadrarAlTerminar: true);
   }
 
   /// Muestra u oculta el tramo naranja desde el GPS hasta A.
@@ -342,9 +354,12 @@ class ControladorMapa extends ChangeNotifier {
     if (encuadrar) this.encuadrar();
   }
 
-  Future<void> _trazarAcercamiento() async {
+  /// Hacia donde va el tramo desde el GPS: A, o B cuando solo hay destino (paquete en mano).
+  LatLng? get _objetivoAcercamiento => a?.posicion ?? b?.posicion;
+
+  Future<void> _trazarAcercamiento({bool encuadrarAlTerminar = false}) async {
     final desde = miUbicacion;
-    final hasta = a?.posicion;
+    final hasta = _objetivoAcercamiento;
     if (desde == null || hasta == null) return;
     final consulta = ++_consultaAcercamiento;
     _origenAcercamiento = desde;
@@ -352,12 +367,14 @@ class ControladorMapa extends ChangeNotifier {
     if (_cerrado || consulta != _consultaAcercamiento || !mostrarAcercamiento) return;
     acercamiento = resultado;
     _avisar();
+    if (encuadrarAlTerminar) encuadrar();
   }
 
   /// Ajusta el mapa para que se vean la ruta, el acercamiento y la ubicacion actual.
   void encuadrar() {
     final puntos = <LatLng>[
       ...?ruta?.puntos,
+      if (mostrarAcercamiento) ...?acercamiento?.puntos,
       if (a != null) a!.posicion,
       if (b != null) b!.posicion,
       if (mostrarAcercamiento && miUbicacion != null) miUbicacion!,

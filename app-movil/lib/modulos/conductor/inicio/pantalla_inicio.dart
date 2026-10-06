@@ -39,6 +39,7 @@ import '../perfil/pantalla_documentos.dart';
 import '../perfil/pantalla_perfil.dart';
 import '../viaje/conductor_api.dart';
 import '../viaje/flujo_conductor.dart';
+import '../viaje/panel_delivery_conductor.dart';
 import '../viaje/paneles_conductor.dart';
 
 /// Vista principal del conductor, con la barra inferior Inicio / Historial / Comentarios / Mas y
@@ -211,8 +212,11 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
 
   void _irA(int seccion) {
     if (seccion == _seccion) return;
+    // Volver a Inicio con el numero rojo en la barra abre la lista de solicitudes y lo deja en 0.
+    final conNuevas = seccion == _seccionInicio && _flujo.nuevas > 0;
     setState(() => _seccion = seccion);
     _flujo.cambiarInicioVisible(seccion == _seccionInicio);
+    if (conNuevas) _flujo.verNuevas();
     if (seccion == _seccionHistorial) _historial.currentState?.recargar();
     if (seccion == _seccionComentarios) _comentarios.currentState?.recargar();
   }
@@ -417,6 +421,16 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   Future<void> _avanzar() async {
     final viaje = _flujo.viaje;
     if (viaje == null) return;
+    if (viaje.datosEntrega != null) {
+      // Pedido DELIVERY: plegado solo se puede marcar la llegada al punto de recogida; el resto pide
+      // codigo y foto en el panel abierto.
+      try {
+        await _flujo.llegueRecogida();
+      } on ApiExcepcion catch (e) {
+        if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+      }
+      return;
+    }
     if (viaje.situacion == SituacionViaje.enCurso) {
       final confirmado = await confirmarAccion(
         context,
@@ -592,7 +606,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final viaje = _flujo.viaje;
     final (texto, color, boton, colorBoton) = viaje == null
         ? ('Viaje en curso', ColoresApp.azul, '', ColoresApp.azul)
-        : estadoViajeConductor(viaje);
+        : viaje.datosEntrega != null
+            ? estadoEntregaConductor(viaje)
+            : estadoViajeConductor(viaje);
     return PanelPlegable(
       abierto: _panelAbierto,
       onAlternar: _alternarPanel,

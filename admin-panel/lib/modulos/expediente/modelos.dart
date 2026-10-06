@@ -199,6 +199,9 @@ class ViajeExpediente {
   final DateTime? fechaInicio;
   final DateTime? fechaFin;
 
+  /// Datos del pedido si el viaje es DELIVERY (null en un viaje de taxi).
+  final EntregaExpediente? entrega;
+
   ViajeExpediente({
     required this.id,
     required this.nombrePasajero,
@@ -214,6 +217,7 @@ class ViajeExpediente {
     this.canceladoPor,
     this.fechaInicio,
     this.fechaFin,
+    this.entrega,
   });
 
   DateTime? get fecha => fechaInicio ?? fechaFin;
@@ -233,7 +237,93 @@ class ViajeExpediente {
     canceladoPor: json['canceladoPor'] as String?,
     fechaInicio: Formato.leerFecha(json['fechaInicio']),
     fechaFin: Formato.leerFecha(json['fechaFin']),
+    entrega: json['datosEntrega'] is Map<String, dynamic>
+        ? EntregaExpediente.desdeJson(json['datosEntrega'] as Map<String, dynamic>)
+        : null,
   );
+}
+
+/// Pedido DELIVERY de un viaje con la evidencia que dejo el repartidor (sin los codigos).
+class EntregaExpediente {
+  final String tipoEnvio;
+  final String descripcion;
+  final String estadoEntrega;
+  final String? nombreRemitente;
+  final String? telefonoRemitente;
+  final String? nombreReceptor;
+  final String? telefonoReceptor;
+  final String? receptorIdentificado;
+  final String? detalleCompra;
+  final double? costoProductoReal;
+  final bool pagoConfirmado;
+  final double? montoPagoRecibido;
+  final String? motivoFalla;
+  final DateTime? fechaLlegadaRecogida;
+  final DateTime? fechaRecogida;
+  final DateTime? fechaEntrega;
+  final LatLng? ubicacionRecogida;
+  final LatLng? ubicacionEntrega;
+  final bool fotoPaquete;
+  final bool fotoRecogida;
+  final bool fotoComprobante;
+  final bool fotoEntrega;
+  final bool fotoFalla;
+
+  EntregaExpediente({
+    required this.tipoEnvio,
+    required this.descripcion,
+    required this.estadoEntrega,
+    this.nombreRemitente,
+    this.telefonoRemitente,
+    this.nombreReceptor,
+    this.telefonoReceptor,
+    this.receptorIdentificado,
+    this.detalleCompra,
+    this.costoProductoReal,
+    this.pagoConfirmado = false,
+    this.montoPagoRecibido,
+    this.motivoFalla,
+    this.fechaLlegadaRecogida,
+    this.fechaRecogida,
+    this.fechaEntrega,
+    this.ubicacionRecogida,
+    this.ubicacionEntrega,
+    this.fotoPaquete = false,
+    this.fotoRecogida = false,
+    this.fotoComprobante = false,
+    this.fotoEntrega = false,
+    this.fotoFalla = false,
+  });
+
+  static bool _hay(dynamic ruta) => ruta is String && ruta.trim().isNotEmpty;
+
+  factory EntregaExpediente.desdeJson(Map<String, dynamic> json) => EntregaExpediente(
+    tipoEnvio: json['tipoEnvio'] as String? ?? '',
+    descripcion: json['descripcion'] as String? ?? '',
+    estadoEntrega: json['estadoEntrega'] as String? ?? '',
+    nombreRemitente: json['nombreRemitente'] as String?,
+    telefonoRemitente: json['telefonoRemitente'] as String?,
+    nombreReceptor: json['nombreReceptor'] as String?,
+    telefonoReceptor: json['telefonoReceptor'] as String?,
+    receptorIdentificado: json['receptorIdentificado'] as String?,
+    detalleCompra: json['detalleCompra'] as String?,
+    costoProductoReal: Formato.leerDecimal(json['costoProductoReal']),
+    pagoConfirmado: json['pagoConfirmado'] as bool? ?? false,
+    montoPagoRecibido: Formato.leerDecimal(json['montoPagoRecibido']),
+    motivoFalla: json['motivoFalla'] as String?,
+    fechaLlegadaRecogida: Formato.leerFecha(json['fechaLlegadaRecogida']),
+    fechaRecogida: Formato.leerFecha(json['fechaRecogida']),
+    fechaEntrega: Formato.leerFecha(json['fechaEntrega']),
+    ubicacionRecogida: puntoDesdeWkt(json['ubicacionRecogidaWkt'] as String?),
+    ubicacionEntrega: puntoDesdeWkt(json['ubicacionEntregaWkt'] as String?),
+    fotoPaquete: _hay(json['fotoPaqueteUrl']),
+    fotoRecogida: _hay(json['fotoRecogidaUrl']),
+    fotoComprobante: _hay(json['fotoComprobanteUrl']),
+    fotoEntrega: _hay(json['fotoEntregaUrl']),
+    fotoFalla: _hay(json['fotoFallaUrl']),
+  );
+
+  bool get tieneFotos => fotoPaquete || fotoRecogida || fotoComprobante || fotoEntrega || fotoFalla;
 }
 
 class CalificacionExpediente {

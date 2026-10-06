@@ -30,6 +30,13 @@ String formatoFechaHora(DateTime? fecha) {
   return '${dos(fecha.day)}/${dos(fecha.month)}/${fecha.year} ${dos(fecha.hour)}:${dos(fecha.minute)}';
 }
 
+/// Solo la hora: "14:05".
+String formatoHora(DateTime? fecha) {
+  if (fecha == null) return '-';
+  String dos(int n) => n.toString().padLeft(2, '0');
+  return '${dos(fecha.hour)}:${dos(fecha.minute)}';
+}
+
 /// Lee una fecha LocalDateTime del backend (sin zona).
 DateTime? fechaDesdeJson(dynamic valor) => valor is String ? DateTime.tryParse(valor) : null;
 

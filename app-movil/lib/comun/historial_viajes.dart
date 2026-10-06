@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
@@ -9,6 +11,7 @@ import '../mapa/vista_mapa.dart';
 import '../widgets/pagina_seccion.dart';
 import '../widgets/paneles.dart';
 import '../widgets/selector_pestanas.dart';
+import 'foto_entrega.dart';
 import 'modelos_viaje.dart';
 
 /// Barra superior azul de las pantallas secundarias.
@@ -38,12 +41,16 @@ class PantallaHistorial extends StatefulWidget {
   final bool esConductor;
   final Widget Function(List<Viaje> viajes, EdgeInsets relleno)? pestanaFavoritos;
 
+  /// Foto de la entrega de un pedido DELIVERY (solo el pasajero; el repartidor ve solo el detalle).
+  final Future<Uint8List?> Function(int idViaje)? cargarFotoEntrega;
+
   const PantallaHistorial({
     super.key,
     required this.cargarHistorial,
     required this.esConductor,
     this.cargarTodos,
     this.pestanaFavoritos,
+    this.cargarFotoEntrega,
   });
 
   @override
@@ -246,7 +253,11 @@ class PantallaHistorialState extends State<PantallaHistorial> {
                         esConductor: widget.esConductor,
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute<void>(
-                            builder: (_) => PantallaDetalleViaje(viaje: viaje, esConductor: widget.esConductor),
+                            builder: (_) => PantallaDetalleViaje(
+                              viaje: viaje,
+                              esConductor: widget.esConductor,
+                              cargarFotoEntrega: widget.cargarFotoEntrega,
+                            ),
                           ),
                         ),
                       ),
@@ -481,7 +492,9 @@ class PantallaDetalleViaje extends StatefulWidget {
   final Viaje viaje;
   final bool esConductor;
 
-  const PantallaDetalleViaje({super.key, required this.viaje, required this.esConductor});
+  final Future<Uint8List?> Function(int idViaje)? cargarFotoEntrega;
+
+  const PantallaDetalleViaje({super.key, required this.viaje, required this.esConductor, this.cargarFotoEntrega});
 
   @override
   State<PantallaDetalleViaje> createState() => _PantallaDetalleViajeState();
@@ -552,13 +565,68 @@ class _PantallaDetalleViajeState extends State<PantallaDetalleViaje> {
                 _Linea(etiqueta: 'Fin', valor: formatoFechaHora(viaje.fechaFin)),
                 if (viaje.canceladoPor != null)
                   _Linea(etiqueta: 'Cancelado por', valor: viaje.canceladoPor == 'PASAJERO' ? 'Pasajero' : 'Conductor'),
+                if (viaje.datosEntrega != null) _DetalleEntrega(
+                  datos: viaje.datosEntrega!,
+                  idViaje: viaje.id,
+                  cargarFoto: widget.esConductor ? null : widget.cargarFotoEntrega,
+                ),
                 const SizedBox(height: 12),
-                RecuadroPrecio(etiqueta: 'Precio del viaje', monto: formatoBs(viaje.precioFinal)),
+                RecuadroPrecio(
+                  etiqueta: viaje.datosEntrega != null ? 'Precio del servicio' : 'Precio del viaje',
+                  monto: formatoBs(viaje.precioFinal),
+                ),
               ],
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Detalle de un pedido DELIVERY en el historial: que se envio, entre quienes y a que hora se recogio
+/// y se entrego. La foto de la entrega solo la ve el pasajero ([cargarFoto]).
+class _DetalleEntrega extends StatelessWidget {
+  final DatosEntrega datos;
+  final int idViaje;
+  final Future<Uint8List?> Function(int idViaje)? cargarFoto;
+
+  const _DetalleEntrega({required this.datos, required this.idViaje, this.cargarFoto});
+
+  @override
+  Widget build(BuildContext context) {
+    final cargar = cargarFoto;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Divider(height: 24, color: ColoresApp.borde),
+        Text(
+          datos.tipoEnvio.nombre,
+          style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 6),
+        _Linea(etiqueta: 'Contenido', valor: datos.descripcion),
+        if (datos.nombreRemitente != null)
+          _Linea(etiqueta: 'Remitente', valor: datos.nombreRemitente!),
+        if (datos.nombreReceptor != null)
+          _Linea(etiqueta: 'Receptor', valor: datos.nombreReceptor!),
+        if (datos.receptorIdentificado != null)
+          _Linea(etiqueta: 'Recibió', valor: datos.receptorIdentificado!),
+        if (datos.detalleCompra != null) _Linea(etiqueta: 'Comercio', valor: datos.detalleCompra!),
+        if (datos.costoProductoReal != null)
+          _Linea(etiqueta: 'Producto', valor: formatoBs(datos.costoProductoReal)),
+        _Linea(etiqueta: 'Estado', valor: EstadoEntrega.nombre(datos.estadoEntrega)),
+        if (datos.fechaLlegadaRecogida != null)
+          _Linea(etiqueta: 'Llegada a recoger', valor: formatoFechaHora(datos.fechaLlegadaRecogida)),
+        if (datos.fechaRecogida != null) _Linea(etiqueta: 'Recogido', valor: formatoFechaHora(datos.fechaRecogida)),
+        if (datos.fechaEntrega != null) _Linea(etiqueta: 'Entregado', valor: formatoFechaHora(datos.fechaEntrega)),
+        if (cargar != null && datos.tieneFotoEntrega) ...[
+          const SizedBox(height: 10),
+          const Text('Foto de la entrega', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
+          const SizedBox(height: 6),
+          FotoEntrega(cargar: () => cargar(idViaje)),
+        ],
+      ],
     );
   }
 }

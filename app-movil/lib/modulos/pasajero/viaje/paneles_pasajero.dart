@@ -397,14 +397,13 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
 /// servicio para que en un reparto no salga "conductor" cuando el que llega es un repartidor.
 (FaIconData, String, Color) estadoViajePasajero(String situacion, [ServicioActivo servicio = ServicioActivo.viaje]) {
   final texto = switch (situacion) {
-    SituacionViaje.confirmado =>
-      servicio == ServicioActivo.entrega ? 'Tu repartidor aceptó el servicio' : 'Tu conductor aceptó el viaje',
-    SituacionViaje.enCamino =>
-      servicio == ServicioActivo.entrega ? 'Tu repartidor va en camino' : 'Tu conductor va en camino',
+    SituacionViaje.confirmado || SituacionViaje.enCamino =>
+      servicio == ServicioActivo.entrega ? 'Tu repartidor va a recoger tu paquete' : (situacion == SituacionViaje.confirmado ? 'Tu conductor aceptó el viaje' : 'Tu conductor va en camino'),
     SituacionViaje.llego => servicio == ServicioActivo.entrega
-        ? 'Tu repartidor llegó. Te está esperando'
+        ? 'Tu repartidor llegó al punto de recogida'
         : 'Tu conductor llegó. Te está esperando',
-    SituacionViaje.enCurso => 'En viaje a tu destino',
+    SituacionViaje.enCurso =>
+      servicio == ServicioActivo.entrega ? 'Paquete recogido: va en camino al destino' : 'En viaje a tu destino',
     _ => SituacionViaje.nombre(situacion),
   };
   final (icono, color) = switch (situacion) {
@@ -452,7 +451,7 @@ class PanelViaje extends StatelessWidget {
             ],
           ),
         ),
-        if (flujo.llegandoDestino) ...[
+        if (flujo.llegandoDestino && viaje.datosEntrega == null) ...[
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -599,6 +598,8 @@ class _ResumenEntrega extends StatelessWidget {
         children: [
           Text('Estado: ${EstadoEntrega.nombre(datos.estadoEntrega)}', style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
           const SizedBox(height: 6),
+          LineaTiempoEntrega(datos: datos),
+          const SizedBox(height: 6),
           if (datos.tipoEnvio == TipoEnvio.compraYEntrega)
             _linea('Producto', producto == null ? 'Pendiente' : formatoBs(producto)),
           _linea('Servicio', precioServicio == null ? 'Pendiente' : formatoBs(precioServicio)),
@@ -625,6 +626,50 @@ class _ResumenEntrega extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 2),
         child: Row(children: [Expanded(child: Text(titulo, style: const TextStyle(color: ColoresApp.textoSuave))), Text(valor, style: TextStyle(color: ColoresApp.texto, fontWeight: fuerte ? FontWeight.w700 : FontWeight.w500))]),
       );
+}
+
+/// Seguimiento del pedido paso a paso, con la hora de cada confirmacion del repartidor.
+class LineaTiempoEntrega extends StatelessWidget {
+  final DatosEntrega datos;
+
+  const LineaTiempoEntrega({super.key, required this.datos});
+
+  @override
+  Widget build(BuildContext context) {
+    final conPaquete = datos.estadoEntrega == EstadoEntrega.enMano || datos.estadoEntrega == EstadoEntrega.entregado;
+    final pasos = <(String, bool, DateTime?)>[
+      ('Pedido aceptado', true, null),
+      ('Llegó al punto de recogida', datos.fechaLlegadaRecogida != null || conPaquete, datos.fechaLlegadaRecogida),
+      ('Paquete recogido', conPaquete, datos.fechaRecogida),
+      ('Paquete entregado', datos.estadoEntrega == EstadoEntrega.entregado, datos.fechaEntrega),
+    ];
+    return Column(
+      children: [
+        for (final (texto, hecho, hora) in pasos)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                FaIcon(
+                  hecho ? FontAwesomeIcons.solidCircleCheck : FontAwesomeIcons.circle,
+                  size: 14,
+                  color: hecho ? ColoresApp.exito : ColoresApp.borde,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    texto,
+                    style: TextStyle(color: hecho ? ColoresApp.texto : ColoresApp.textoSuave, fontWeight: hecho ? FontWeight.w600 : FontWeight.normal),
+                  ),
+                ),
+                if (hora != null)
+                  Text(formatoHora(hora), style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// Efectivo | QR, antes de solicitar el taxi.

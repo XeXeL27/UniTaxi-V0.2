@@ -67,12 +67,22 @@ class PanelSolicitudes extends StatelessWidget {
               ),
             ),
             if (nuevas > 0)
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: ColoresApp.rojo, borderRadius: BorderRadius.circular(20)),
-                child: Text(
-                  '$nuevas',
-                  style: const TextStyle(color: ColoresApp.blanco, fontWeight: FontWeight.w700),
+              Tooltip(
+                message: 'Ver solicitudes nuevas',
+                child: Material(
+                  color: ColoresApp.rojo,
+                  borderRadius: BorderRadius.circular(20),
+                  child: InkWell(
+                    onTap: flujo.verNuevas,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      child: Text(
+                        '$nuevas',
+                        style: const TextStyle(color: ColoresApp.blanco, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
                 ),
               ),
             IconButton(
@@ -346,7 +356,7 @@ class PanelViajeConductor extends StatelessWidget {
   Widget build(BuildContext context) {
     final viaje = flujo.viaje;
     if (viaje == null) return const SizedBox.shrink();
-    if (viaje.datosEntrega != null) return PanelDeliveryConductor(flujo: flujo);
+    if (viaje.datosEntrega != null) return PanelDeliveryConductor(flujo: flujo, onCancelar: onCancelar);
     final (texto, color, boton, colorBoton) = estadoViajeConductor(viaje);
     final distanciaDestino = flujo.metrosDesdeMi(viaje.destino);
     return Column(

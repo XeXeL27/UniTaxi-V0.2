@@ -133,6 +133,9 @@ class ViajeApi {
     return datos == null ? null : Viaje.desdeJson(datos as Map<String, dynamic>);
   }
 
+  /// Foto que tomo el repartidor al entregar el paquete (solo con el pedido ya entregado).
+  Future<Uint8List?> fotoEntrega(int id) => cliente.bytes('/api/pasajero/viajes/$id/entrega/foto-entrega');
+
   Future<Viaje> viaje(int id) async =>
       Viaje.desdeJson(await cliente.get('/api/pasajero/viajes/$id') as Map<String, dynamic>);
 

@@ -105,8 +105,16 @@ class ConductorApi {
   Future<CalificacionesRecibidas> calificaciones() async =>
       CalificacionesRecibidas.desdeJson(await cliente.get('/api/conductor/calificaciones') as Map<String, dynamic>);
 
-  Future<Viaje> validarRecogida(int id, String codigo) async =>
-      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/validar-recogida', {'codigo': codigo}));
+  Future<Viaje> llegueRecogida(int id) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/llegue-recogida', {}));
+
+  /// Codigo del remitente con la foto del paquete (obligatoria) y el GPS del telefono.
+  Future<Viaje> validarRecogida(int id, String codigo, Uint8List foto, LatLng? gps) async =>
+      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/validar-recogida', 'datos', {
+        'codigo': codigo,
+        if (gps != null) 'latitud': gps.latitude,
+        if (gps != null) 'longitud': gps.longitude,
+      }, [(campo: 'foto', bytes: foto, nombre: 'recogida.jpg', tipo: MediaType('image', 'jpeg'))]));
 
   Future<Viaje> proponerCompra(int id, LatLng punto, String detalle, double costo) async =>
       _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/proponer-compra', {
@@ -122,11 +130,21 @@ class ConductorApi {
   Future<Viaje> confirmarPago(int id, double monto, String metodoPago) async =>
       _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/confirmar-pago', {'montoRecibido': monto, 'metodoPago': metodoPago}));
 
-  Future<Viaje> validarEntrega(int id, String codigo) async =>
-      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/validar-entrega', {'codigo': codigo}));
+  /// Codigo del receptor con la foto de la persona y su paquete y el GPS (a 100 m o menos de B).
+  Future<Viaje> validarEntrega(int id, String codigo, Uint8List foto, LatLng gps) async =>
+      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/validar-entrega', 'datos', {
+        'codigo': codigo,
+        'latitud': gps.latitude,
+        'longitud': gps.longitude,
+      }, [(campo: 'foto', bytes: foto, nombre: 'entrega.jpg', tipo: MediaType('image', 'jpeg'))]));
 
-  Future<Viaje> identificarReceptor(int id, String nombre, String telefono) async =>
-      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/identificar-receptor', {'nombre': nombre, 'telefono': telefono}));
+  Future<Viaje> identificarReceptor(int id, String nombre, String telefono, Uint8List foto, LatLng gps) async =>
+      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/identificar-receptor', 'datos', {
+        'nombre': nombre,
+        'telefono': telefono,
+        'latitud': gps.latitude,
+        'longitud': gps.longitude,
+      }, [(campo: 'foto', bytes: foto, nombre: 'entrega.jpg', tipo: MediaType('image', 'jpeg'))]));
 
   Future<Viaje> noSePudoEntregar(int id, String motivo, Uint8List foto) async =>
       _viaje(await cliente.enviarArchivo('POST', '/api/conductor/viajes/$id/entrega/no-se-pudo-entregar', 'foto', foto, 'falla.jpg', MediaType('image', 'jpeg'), campos: {'motivo': motivo.trim()}));

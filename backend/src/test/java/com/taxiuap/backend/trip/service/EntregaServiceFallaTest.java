@@ -87,7 +87,7 @@ class EntregaServiceFallaTest {
     void laFallaGuardaEvidenciaYCancelaElViaje() {
         Viaje viaje = viajeEnMano(TipoEnvio.COMPRA_Y_ENTREGA);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), eq("personas/20_x/entrega"), eq("falla_entrega"),
                 eq("jpg"))).thenReturn("personas/20_x/entrega/falla_1.jpg");
         when(datosEntregaRepository.registrarFallaSiEstadoPermitido(eq(1L), anyCollection(),
@@ -110,7 +110,7 @@ class EntregaServiceFallaTest {
     void laFallaCreaReportePendienteSinSuspenderAlConductor() {
         Viaje viaje = viajeEnMano(TipoEnvio.ENCOMIENDA);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
                 .thenReturn("personas/20_x/entrega/falla_1.jpg");
         when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), anyString(),
@@ -130,7 +130,7 @@ class EntregaServiceFallaTest {
         Viaje viaje = viajeEnMano(TipoEnvio.ENCOMIENDA);
         viaje.getSolicitud().getDatosEntrega().setEstadoEntrega(EstadoEntrega.EN_CAMINO_RECOGIDA);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), eq("paquete_no_coincide"), eq("jpg")))
                 .thenReturn("personas/20_x/entrega/paquete.jpg");
         when(datosEntregaRepository.save(any(DatosEntrega.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
@@ -156,7 +156,7 @@ class EntregaServiceFallaTest {
     void laFallaNoRepublicaElPedido() {
         Viaje viaje = viajeEnMano(TipoEnvio.COMPRA_Y_ENTREGA);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
                 .thenReturn("personas/20_x/entrega/falla_1.jpg");
         when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), anyString(),
@@ -211,7 +211,7 @@ class EntregaServiceFallaTest {
     void unaFallaRepetidaNoSeRegistraDosVeces() {
         Viaje viaje = viajeEnMano(TipoEnvio.ENCOMIENDA);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
                 .thenReturn("personas/20_x/entrega/falla_1.jpg");
         // El pedido ya quedo en NO_ENTREGADO: el UPDATE condicional no actualiza nada.

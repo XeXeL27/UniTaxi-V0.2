@@ -95,6 +95,14 @@ public class ViajePasajeroController {
         return ResponseEntity.ok(ApiResponse.exito("Compra confirmada", entregaService.confirmarCompra(id)));
     }
 
+    /** Foto que tomo el repartidor al entregar el paquete: la confirmacion de que llego. */
+    @GetMapping("/{id}/entrega/foto-entrega")
+    public ResponseEntity<Resource> fotoEntrega(@PathVariable Long id) {
+        return ResponseEntity.ok().cacheControl(org.springframework.http.CacheControl.noCache())
+                .contentType(org.springframework.http.MediaType.IMAGE_JPEG)
+                .body(entregaService.fotoEntregaParaCliente(id));
+    }
+
     /** Pide al conductor pagar de otra forma; el cambio vale cuando el conductor lo acepta. */
     @PostMapping("/{id}/metodo-pago")
     public ResponseEntity<ApiResponse<ViajeResponse>> pedirCambioMetodoPago(

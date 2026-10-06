@@ -11,6 +11,7 @@ import '../../core/formato.dart';
 import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/insignia_estado.dart';
+import '../entregas/detalle_entrega.dart';
 import 'expediente_api.dart';
 import 'modelos.dart';
 
@@ -310,6 +311,10 @@ class ListaViajes extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                           InsigniaEstado(viaje.situacion),
+                          if (viaje.entrega != null) ...[
+                            const SizedBox(width: 6),
+                            const _EtiquetaEntrega(),
+                          ],
                           const Spacer(),
                           Text(Formato.fechaHora(viaje.fecha), style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
                         ],
@@ -331,10 +336,24 @@ class ListaViajes extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 10),
-                OutlinedButton.icon(
-                  onPressed: viaje.origen == null || viaje.destino == null ? null : () => mostrarRutaViaje(context, viaje),
-                  icon: const Icon(Iconos.route, size: 14),
-                  label: const Text('Ver ruta'),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: viaje.origen == null || viaje.destino == null ? null : () => mostrarRutaViaje(context, viaje),
+                      icon: const Icon(Iconos.route, size: 14),
+                      label: const Text('Ver ruta'),
+                    ),
+                    if (viaje.entrega != null) ...[
+                      const SizedBox(height: 6),
+                      OutlinedButton.icon(
+                        onPressed: () => mostrarEntrega(context, viaje),
+                        icon: const Icon(Iconos.paquete, size: 14),
+                        label: const Text('Ver entrega'),
+                      ),
+                    ],
+                  ],
                 ),
               ],
             ),
@@ -342,6 +361,18 @@ class ListaViajes extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Marca de los viajes DELIVERY en la lista del expediente.
+class _EtiquetaEntrega extends StatelessWidget {
+  const _EtiquetaEntrega();
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(6)),
+        child: const Text('Entrega', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+      );
 }
 
 class _Lugar extends StatelessWidget {

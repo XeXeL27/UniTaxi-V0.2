@@ -22,6 +22,10 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
 
     List<Viaje> findByConductorIdOrderByFechaInicioDesc(Long idConductor);
 
+    /** Viajes de pedidos DELIVERY (los que tienen datos_entrega), del mas nuevo al mas antiguo. */
+    @Query("select v from Viaje v join v.solicitud s join s.datosEntrega d order by v.id desc")
+    List<Viaje> findEntregas();
+
     Optional<Viaje> findBySolicitudId(Long idSolicitud);
 
     List<Viaje> findByConductorIdAndSituacionViaje(Long idConductor, SituacionViaje situacionViaje);

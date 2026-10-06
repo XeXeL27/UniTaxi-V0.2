@@ -222,10 +222,11 @@ class EntregaServiceCompraTest {
                 new RegistrarCompraRequest(WKT_COMERCIO, "Farmacia Central", new BigDecimal("25.00"), null), null);
 
         ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        verify(datosEntregaRepository).save(guardados.capture());
-        assertEquals(new BigDecimal("25.00"), guardados.getValue().getCostoProductoReal());
-        assertEquals("Farmacia Central", guardados.getValue().getDetalleCompra());
-        assertEquals(-68.745, guardados.getValue().getPuntoCompra().getX(), 0.000001);
+        // El primer save es la compra; el siguiente, la ruta de la constancia del pedido.
+        verify(datosEntregaRepository, org.mockito.Mockito.atLeastOnce()).save(guardados.capture());
+        assertEquals(new BigDecimal("25.00"), guardados.getAllValues().get(0).getCostoProductoReal());
+        assertEquals("Farmacia Central", guardados.getAllValues().get(0).getDetalleCompra());
+        assertEquals(-68.745, guardados.getAllValues().get(0).getPuntoCompra().getX(), 0.000001);
         // El precio que se cobra es solo el del servicio: comercio -> destino.
         verify(viajeService).registrarPedidoEnMano(500L, precio);
     }
@@ -243,7 +244,7 @@ class EntregaServiceCompraTest {
         when(datosEntregaRepository.findBySolicitudId(90L)).thenReturn(Optional.of(compraEnMano(viaje)));
         when(calculoPrecioDeliveryService.fijarPrecioCompra(any(), any()))
                 .thenReturn(new DesglosePrecioDelivery(new BigDecimal("9.80"), new BigDecimal("2.35"), 12, false));
-        when(almacenamientoArchivos.carpetaEntregaConductor(any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
                 .thenReturn("personas/20_x/entrega/comprobante_1.jpg");
 
@@ -253,9 +254,10 @@ class EntregaServiceCompraTest {
                 comprobante());
 
         ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        verify(datosEntregaRepository).save(guardados.capture());
-        assertEquals("personas/20_x/entrega/comprobante_1.jpg", guardados.getValue().getFotoComprobanteUrl());
-        assertEquals("El comercio no dio comprobante", guardados.getValue().getObservacionCompra());
+        // El primer save es la compra; el siguiente, la ruta de la constancia del pedido.
+        verify(datosEntregaRepository, org.mockito.Mockito.atLeastOnce()).save(guardados.capture());
+        assertEquals("personas/20_x/entrega/comprobante_1.jpg", guardados.getAllValues().get(0).getFotoComprobanteUrl());
+        assertEquals("El comercio no dio comprobante", guardados.getAllValues().get(0).getObservacionCompra());
     }
 
     @Test
@@ -278,8 +280,9 @@ class EntregaServiceCompraTest {
                 null);
 
         ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        verify(datosEntregaRepository).save(guardados.capture());
-        assertEquals(null, guardados.getValue().getFotoComprobanteUrl());
+        // El primer save es la compra; el siguiente, la ruta de la constancia del pedido.
+        verify(datosEntregaRepository, org.mockito.Mockito.atLeastOnce()).save(guardados.capture());
+        assertEquals(null, guardados.getAllValues().get(0).getFotoComprobanteUrl());
         verify(almacenamientoArchivos, never()).guardarConSello(any(), anyString(), anyString(), anyString());
     }
 
@@ -296,7 +299,8 @@ class EntregaServiceCompraTest {
         when(datosEntregaRepository.avanzarSiEstadoPermitido(eq(1L), anyCollection(), eq(EstadoEntrega.ENTREGADO)))
                 .thenReturn(1);
 
-        entregaService.entregarConReceptor(500L, new IdentificarReceptorRequest(" pasajera  prueba ", "71234567"));
+        when(datosEntregaRepository.findBySolicitudId(viaje.getSolicitud().getId())).thenReturn(Optional.of(datos));
+        entregaService.entregarConReceptor(500L, new IdentificarReceptorRequest(" pasajera  prueba ", "71234567", -11.03, -68.74), foto());
 
         verify(viajeService).finalizarDesdeEntrega(eq(500L), any());
     }
@@ -311,7 +315,7 @@ class EntregaServiceCompraTest {
 
         NegocioException error = assertThrows(NegocioException.class,
                 () -> entregaService.entregarConReceptor(500L,
-                        new IdentificarReceptorRequest("Otro Persona", "71234567")));
+                        new IdentificarReceptorRequest("Otro Persona", "71234567", -11.03, -68.74), foto()));
 
         assertEquals(true, error.getMessage().contains("nombre"));
         verify(datosEntregaRepository, never()).avanzarSiEstadoPermitido(anyLong(), anyCollection(), any());
@@ -326,7 +330,7 @@ class EntregaServiceCompraTest {
 
         assertThrows(NegocioException.class,
                 () -> entregaService.entregarConReceptor(500L,
-                        new IdentificarReceptorRequest("Pasajera Prueba", "79999999")));
+                        new IdentificarReceptorRequest("Pasajera Prueba", "79999999", -11.03, -68.74), foto()));
 
         verify(datosEntregaRepository, never()).avanzarSiEstadoPermitido(anyLong(), anyCollection(), any());
     }
@@ -345,9 +349,14 @@ class EntregaServiceCompraTest {
         when(datosEntregaRepository.avanzarSiEstadoPermitido(eq(1L), anyCollection(), eq(EstadoEntrega.ENTREGADO)))
                 .thenReturn(1);
 
-        entregaService.entregarConReceptor(500L, new IdentificarReceptorRequest("Pasajera Prueba", null));
+        when(datosEntregaRepository.findBySolicitudId(viaje.getSolicitud().getId())).thenReturn(Optional.of(datos));
+        entregaService.entregarConReceptor(500L, new IdentificarReceptorRequest("Pasajera Prueba", null, -11.03, -68.74), foto());
 
         verify(viajeService).finalizarDesdeEntrega(eq(500L), any());
+    }
+
+    private MultipartFile foto() {
+        return new MockMultipartFile("foto", "entrega.png", "image/png", imagenPng());
     }
 
     /** Comprobante real: ProcesadorImagen rechaza los bytes que no son una imagen. */

@@ -466,8 +466,13 @@ class FlujoPasajero extends ChangeNotifier {
       final asignado = await api.viajeEnCurso();
       if (asignado != null) {
         // Un conductor acepto el viaje: sonido y vibracion corta (una vez por viaje).
-        _avisarUnaVez(asignado.id, 1, 'Tu viaje fue aceptado',
-            '${asignado.primerNombreConductor} va en camino a recogerte.');
+        if (asignado.datosEntrega != null) {
+          _avisarUnaVez(asignado.id, 1, 'Tu pedido fue aceptado',
+              '${asignado.primerNombreConductor} va a recoger tu paquete.');
+        } else {
+          _avisarUnaVez(asignado.id, 1, 'Tu viaje fue aceptado',
+              '${asignado.primerNombreConductor} va en camino a recogerte.');
+        }
         _entrarViaje(asignado);
       }
     } else if (!nueva.activa) {
@@ -557,9 +562,18 @@ class FlujoPasajero extends ChangeNotifier {
     // Si cambio la situacion, actualizar el punto de referencia del seguimiento. El conductor que
     // llega al punto de partida se avisa (vibracion y, minimizada, notificacion); el fin del viaje, solo con vibracion.
     if (nuevo.situacion != actual.situacion) {
+      final entrega = nuevo.datosEntrega != null;
       if (nuevo.situacion == SituacionViaje.llego) {
-        _avisarUnaVez(nuevo.id, 2, 'Tu conductor llegó',
-            '${nuevo.primerNombreConductor} te espera en el punto de partida.');
+        _avisarUnaVez(nuevo.id, 2, entrega ? 'Tu repartidor llegó' : 'Tu conductor llegó',
+            entrega
+                ? '${nuevo.primerNombreConductor} llegó al punto de recogida de tu paquete.'
+                : '${nuevo.primerNombreConductor} te espera en el punto de partida.');
+      } else if (entrega && nuevo.situacion == SituacionViaje.enCurso) {
+        _avisarUnaVez(nuevo.id, 3, 'Tu paquete fue recogido',
+            '${nuevo.primerNombreConductor} ya tiene tu paquete y va en camino al destino.');
+      } else if (entrega && nuevo.situacion == SituacionViaje.completado) {
+        _avisarUnaVez(nuevo.id, 4, 'Tu paquete fue entregado',
+            '${nuevo.primerNombreConductor} confirmó la entrega con una foto.');
       } else if (nuevo.situacion == SituacionViaje.completado) {
         unawaited(Vibracion.corta());
       }

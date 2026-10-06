@@ -1,6 +1,7 @@
 package com.taxiuap.backend.trip.entity;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 
 import org.locationtech.jts.geom.Point;
 
@@ -136,6 +137,42 @@ public class DatosEntrega extends EntidadAuditable {
     @Column(name = "monto_pago_recibido", precision = 10, scale = 2)
     @DecimalMin(value = "0.00")
     private BigDecimal montoPagoRecibido;
+
+    // ------------------------------------------------ evidencia de recogida y entrega
+
+    /** Cuando el repartidor marco que llego al punto de recogida (A). */
+    @Column(name = "fecha_llegada_recogida")
+    private LocalDateTime fechaLlegadaRecogida;
+
+    /** Foto obligatoria del paquete al recogerlo en A (ENCOMIENDA). */
+    @Column(name = "foto_recogida_url", length = 500)
+    private String fotoRecogidaUrl;
+
+    @Column(name = "fecha_recogida")
+    private LocalDateTime fechaRecogida;
+
+    /** GPS del repartidor al confirmar la recogida. */
+    @Column(name = "ubicacion_recogida", columnDefinition = "geography(Point,4326)")
+    private Point ubicacionRecogida;
+
+    /** Foto obligatoria de la persona con su paquete al entregarlo en B. */
+    @Column(name = "foto_entrega_url", length = 500)
+    private String fotoEntregaUrl;
+
+    @Column(name = "fecha_entrega")
+    private LocalDateTime fechaEntrega;
+
+    /** GPS del repartidor al confirmar la entrega (a 100 m o menos de B). */
+    @Column(name = "ubicacion_entrega", columnDefinition = "geography(Point,4326)")
+    private Point ubicacionEntrega;
+
+    /** COMPRA_Y_ENTREGA: nombre de quien recibio, tal como lo escribio el repartidor. */
+    @Column(name = "receptor_identificado", length = 150)
+    private String receptorIdentificado;
+
+    /** Constancia en texto con cada confirmacion del pedido, en la carpeta del viaje. */
+    @Column(name = "constancia_url", length = 500)
+    private String constanciaUrl;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_entrega", length = 30, nullable = false)

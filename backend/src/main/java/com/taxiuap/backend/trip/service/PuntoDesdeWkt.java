@@ -1,5 +1,6 @@
 package com.taxiuap.backend.trip.service;
 
+import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Point;
@@ -36,5 +37,13 @@ public final class PuntoDesdeWkt {
         } catch (ParseException excepcion) {
             throw new NegocioException("La ubicacion no es un WKT valido de tipo POINT");
         }
+    }
+
+    /** Punto desde el GPS del telefono (latitud y longitud), o null si no llego. */
+    public static Point desdeCoordenadas(Double latitud, Double longitud) {
+        if (latitud == null || longitud == null) {
+            return null;
+        }
+        return FABRICA_GEOMETRIA.createPoint(new Coordinate(longitud, latitud));
     }
 }

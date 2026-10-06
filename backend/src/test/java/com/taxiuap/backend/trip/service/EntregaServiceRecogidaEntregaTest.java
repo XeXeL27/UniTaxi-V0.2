@@ -11,8 +11,12 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
 import java.util.Optional;
+
+import javax.imageio.ImageIO;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,8 +28,10 @@ import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.geom.PrecisionModel;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.JwtUser;
 import com.taxiuap.backend.identity.entity.Conductor;
@@ -87,22 +93,119 @@ class EntregaServiceRecogidaEntregaTest {
 
     @Test
     void elCodigoDeRecogidaCorrectoPoneElPedidoEnMano() {
-        Viaje viaje = viajeEncomienda(SituacionViaje.CONFIRMADO, EstadoEntrega.EN_CAMINO_RECOGIDA);
+        Viaje viaje = viajeEncomienda(SituacionViaje.CONDUCTOR_LLEGO, EstadoEntrega.EN_CAMINO_RECOGIDA);
         viaje.getSolicitud().getDatosEntrega().setId(1L);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
         // El UPDATE condicional (estado + codigo) actualiza una fila.
         when(datosEntregaRepository.avanzarSiCodigoRecogidaCoincide(eq(1L), anyCollection(), eq(EstadoEntrega.EN_MANO),
                 eq("123456"))).thenReturn(1);
 
-        entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456"));
+        when(datosEntregaRepository.findBySolicitudId(90L))
+                .thenReturn(Optional.of(viaje.getSolicitud().getDatosEntrega()));
+        when(almacenamientoArchivos.guardarConSello(any(), any(), eq("recogida"), eq("jpg")))
+                .thenReturn("personas/1/conductor/entrega/viaje_500/recogida_1.jpg");
+
+        entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456", -11.02, -68.75), foto());
 
         // El pedido ya esta en manos del repartidor, asi que el viaje empieza su curso real.
         verify(viajeService).registrarPedidoEnMano(500L, null);
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        assertEquals("personas/1/conductor/entrega/viaje_500/recogida_1.jpg", datos.getFotoRecogidaUrl());
+        assertEquals(true, datos.getFechaRecogida() != null);
+        assertEquals(-11.02, datos.getUbicacionRecogida().getY());
+        // El cliente recibe el aviso de que su paquete va en camino.
+        verify(viajeService).avisarPasajero(eq(viaje), eq("PAQUETE_RECOGIDO"), anyString(), anyString());
     }
 
     @Test
-    void unCodigoDeRecogidaIncorrectoNoAvanzaElPedido() {
+    void sinMarcarLaLlegadaAlPuntoDeRecogidaNoSeRecogeElPaquete() {
         Viaje viaje = viajeEncomienda(SituacionViaje.CONFIRMADO, EstadoEntrega.EN_CAMINO_RECOGIDA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class,
+                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456"), foto()));
+
+        assertEquals(true, error.getMessage().contains("llegaste al punto de recogida"));
+        verify(datosEntregaRepository, never()).avanzarSiCodigoRecogidaCoincide(anyLong(), anyCollection(), any(),
+                anyString());
+    }
+
+    @Test
+    void sinFotoDelPaqueteNoSeRecoge() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.CONDUCTOR_LLEGO, EstadoEntrega.EN_CAMINO_RECOGIDA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class,
+                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456"), null));
+
+        assertEquals(true, error.getMessage().contains("foto del paquete"));
+        verify(datosEntregaRepository, never()).avanzarSiCodigoRecogidaCoincide(anyLong(), anyCollection(), any(),
+                anyString());
+    }
+
+    @Test
+    void marcarLaLlegadaAlPuntoDeRecogidaGuardaLaHoraYAvanzaElViaje() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.CONFIRMADO, EstadoEntrega.EN_CAMINO_RECOGIDA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        entregaService.llegadaRecogida(500L);
+
+        assertEquals(true, viaje.getSolicitud().getDatosEntrega().getFechaLlegadaRecogida() != null);
+        verify(viajeService).llegadaRecogida(500L);
+    }
+
+    @Test
+    void lejosDelDestinoNoSeConfirmaLaEntrega() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().getDatosEntrega().setPagoConfirmado(true);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        // El origen esta a unos 1,5 km del destino.
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.entregarConCodigo(500L,
+                new ValidarCodigoEntregaRequest("654321", -11.02, -68.75), foto()));
+
+        assertEquals(true, error.getMessage().contains("m del destino"));
+        verify(datosEntregaRepository, never()).avanzarSiCodigoEntregaCoincide(anyLong(), anyCollection(), any(),
+                anyString());
+    }
+
+    @Test
+    void sinFotoDeLaEntregaNoSeCompletaElViaje() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().getDatosEntrega().setPagoConfirmado(true);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class,
+                () -> entregaService.entregarConCodigo(500L, enDestino("654321"), null));
+
+        assertEquals(true, error.getMessage().contains("foto de la entrega"));
+        verify(viajeService, never()).finalizarDesdeEntrega(anyLong(), any());
+    }
+
+    @Test
+    void laConstanciaTieneCadaConfirmacionPeroNuncaLosCodigos() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.COMPLETADO, EstadoEntrega.ENTREGADO);
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        datos.setFechaRecogida(java.time.LocalDateTime.of(2026, 10, 6, 10, 0));
+        datos.setFotoRecogidaUrl("personas/1/conductor/entrega/viaje_500/recogida_20261006_100000.jpg");
+        datos.setFechaEntrega(java.time.LocalDateTime.of(2026, 10, 6, 10, 20));
+        datos.setFotoEntregaUrl("personas/1/conductor/entrega/viaje_500/entrega_20261006_102000.jpg");
+        datos.setUbicacionEntrega(punto(-68.74, -11.03));
+
+        String texto = EntregaService.textoConstancia(viaje, datos);
+
+        assertEquals(true, texto.contains("Paquete recogido"));
+        assertEquals(true, texto.contains("recogida_20261006_100000.jpg"));
+        assertEquals(true, texto.contains("Paquete entregado"));
+        assertEquals(true, texto.contains("entrega_20261006_102000.jpg"));
+        assertEquals(false, texto.contains("123456"));
+        assertEquals(false, texto.contains("654321"));
+    }
+
+
+    @Test
+    void unCodigoDeRecogidaIncorrectoNoAvanzaElPedido() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.CONDUCTOR_LLEGO, EstadoEntrega.EN_CAMINO_RECOGIDA);
         viaje.getSolicitud().getDatosEntrega().setId(1L);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
         // El UPDATE condicional no toca ninguna fila: el codigo no coincidia.
@@ -112,7 +215,7 @@ class EntregaServiceRecogidaEntregaTest {
                 .thenReturn(Optional.of(viaje.getSolicitud().getDatosEntrega()));
 
         NegocioException error = assertThrows(NegocioException.class,
-                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("000000")));
+                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("000000"), foto()));
 
         assertEquals(true, error.getMessage().contains("codigo de recogida"));
         verify(viajeService, never()).registrarPedidoEnMano(anyLong(), any());
@@ -120,7 +223,7 @@ class EntregaServiceRecogidaEntregaTest {
 
     @Test
     void elCodigoDeRecogidaNoSePuedeUsarDosVeces() {
-        Viaje viaje = viajeEncomienda(SituacionViaje.CONFIRMADO, EstadoEntrega.EN_CAMINO_RECOGIDA);
+        Viaje viaje = viajeEncomienda(SituacionViaje.CONDUCTOR_LLEGO, EstadoEntrega.EN_CAMINO_RECOGIDA);
         viaje.getSolicitud().getDatosEntrega().setId(1L);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
         when(datosEntregaRepository.avanzarSiCodigoRecogidaCoincide(eq(1L), anyCollection(), eq(EstadoEntrega.EN_MANO),
@@ -130,14 +233,14 @@ class EntregaServiceRecogidaEntregaTest {
                 encomiendaEnMano(viaje.getSolicitud().getDatosEntrega())));
 
         NegocioException error = assertThrows(NegocioException.class,
-                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456")));
+                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456"), foto()));
 
         assertEquals(true, error.getMessage().contains("Transicion de estado no permitida"));
     }
 
     @Test
     void elCodigoSeComparaEnLaBaseDeDatosYNoConUnGuardadoSuelto() {
-        Viaje viaje = viajeEncomienda(SituacionViaje.CONFIRMADO, EstadoEntrega.EN_CAMINO_RECOGIDA);
+        Viaje viaje = viajeEncomienda(SituacionViaje.CONDUCTOR_LLEGO, EstadoEntrega.EN_CAMINO_RECOGIDA);
         viaje.getSolicitud().getDatosEntrega().setId(1L);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
         // 654321 es el codigo de entrega, no el de recogida: el UPDATE condicional no toca ninguna fila.
@@ -146,7 +249,7 @@ class EntregaServiceRecogidaEntregaTest {
         when(datosEntregaRepository.findById(1L)).thenReturn(Optional.of(viaje.getSolicitud().getDatosEntrega()));
 
         assertThrows(NegocioException.class,
-                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("654321")));
+                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("654321"), foto()));
 
         // Ni un save ni un arranque de viaje: el codigo jamas se comparo en Java, que es donde dos
         // pantallas simultaneas podrian pasar las dos.
@@ -164,9 +267,18 @@ class EntregaServiceRecogidaEntregaTest {
         when(datosEntregaRepository.avanzarSiCodigoEntregaCoincide(eq(1L), anyCollection(), eq(EstadoEntrega.ENTREGADO),
                 eq("654321"))).thenReturn(1);
 
-        entregaService.entregarConCodigo(500L, new ValidarCodigoEntregaRequest("654321"));
+        when(datosEntregaRepository.findBySolicitudId(90L))
+                .thenReturn(Optional.of(viaje.getSolicitud().getDatosEntrega()));
+        when(almacenamientoArchivos.guardarConSello(any(), any(), eq("entrega"), eq("jpg")))
+                .thenReturn("personas/1/conductor/entrega/viaje_500/entrega_1.jpg");
+
+        entregaService.entregarConCodigo(500L, enDestino("654321"), foto());
 
         verify(viajeService).finalizarDesdeEntrega(eq(500L), any());
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        assertEquals("personas/1/conductor/entrega/viaje_500/entrega_1.jpg", datos.getFotoEntregaUrl());
+        assertEquals(true, datos.getFechaEntrega() != null);
+        verify(viajeService).avisarPasajero(eq(viaje), eq("PAQUETE_ENTREGADO"), anyString(), anyString());
     }
 
     @Test
@@ -180,7 +292,7 @@ class EntregaServiceRecogidaEntregaTest {
         when(datosEntregaRepository.findById(1L)).thenReturn(Optional.of(viaje.getSolicitud().getDatosEntrega()));
 
         NegocioException error = assertThrows(NegocioException.class,
-                () -> entregaService.entregarConCodigo(500L, new ValidarCodigoEntregaRequest("111111")));
+                () -> entregaService.entregarConCodigo(500L, enDestino("111111"), foto()));
 
         assertEquals(true, error.getMessage().contains("codigo de entrega"));
         verify(viajeService, never()).finalizarDesdeEntrega(anyLong(), any());
@@ -193,7 +305,7 @@ class EntregaServiceRecogidaEntregaTest {
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
 
         NegocioException error = assertThrows(NegocioException.class,
-                () -> entregaService.entregarConCodigo(500L, new ValidarCodigoEntregaRequest("654321")));
+                () -> entregaService.entregarConCodigo(500L, enDestino("654321"), foto()));
 
         assertEquals(true, error.getMessage().contains("pago"));
         verify(datosEntregaRepository, never()).avanzarSiCodigoEntregaCoincide(anyLong(), anyCollection(), any(),
@@ -235,7 +347,7 @@ class EntregaServiceRecogidaEntregaTest {
                 .thenThrow(new NegocioException("Viaje no encontrado"));
 
         assertThrows(NegocioException.class,
-                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456")));
+                () -> entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456"), foto()));
     }
 
     @Test
@@ -246,20 +358,23 @@ class EntregaServiceRecogidaEntregaTest {
 
         // En ENCOMIENDA manda el codigo de entrega, nunca la identidad del receptor.
         assertThrows(NegocioException.class, () -> entregaService.entregarConReceptor(500L,
-                new IdentificarReceptorRequest("Pasajera Prueba", "70000001")));
+                new IdentificarReceptorRequest("Pasajera Prueba", "70000001", -11.03, -68.74), foto()));
     }
 
     @Test
-    void elCodigoNoSeValidaAntesDeQueElRepartidorAcepteElViaje() {
+    void laRecogidaNoUsaElInicioGenericoDelTaxi() {
         Viaje viaje = viajeEncomienda(SituacionViaje.CONDUCTOR_LLEGO, EstadoEntrega.EN_CAMINO_RECOGIDA);
         viaje.getSolicitud().getDatosEntrega().setId(1L);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
         when(datosEntregaRepository.avanzarSiCodigoRecogidaCoincide(eq(1L), anyCollection(), eq(EstadoEntrega.EN_MANO),
                 eq("123456"))).thenReturn(1);
 
-        entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456"));
+        when(datosEntregaRepository.findBySolicitudId(90L))
+                .thenReturn(Optional.of(viaje.getSolicitud().getDatosEntrega()));
 
-        // El repartidor no necesita pasar por CONDUCTOR_LLEGO: el viaje arranca al tomar el pedido.
+        entregaService.validarRecogida(500L, new ValidarCodigoEntregaRequest("123456"), foto());
+
+        // La recogida no usa iniciar(): el viaje pasa a EN_CURSO por registrarPedidoEnMano.
         verify(viajeService).registrarPedidoEnMano(500L, null);
         verify(viajeService, never()).iniciar(anyLong());
     }
@@ -332,6 +447,22 @@ class EntregaServiceRecogidaEntregaTest {
     private void autenticarConductor() {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new JwtUser(20L, "repartidor", "CONDUCTOR"), null));
+    }
+
+    /** Codigo dictado con el GPS del repartidor justo en el destino (B). */
+    private ValidarCodigoEntregaRequest enDestino(String codigo) {
+        return new ValidarCodigoEntregaRequest(codigo, -11.03, -68.74);
+    }
+
+    private MultipartFile foto() {
+        try {
+            BufferedImage imagen = new BufferedImage(8, 8, BufferedImage.TYPE_INT_RGB);
+            ByteArrayOutputStream salida = new ByteArrayOutputStream();
+            ImageIO.write(imagen, "png", salida);
+            return new MockMultipartFile("foto", "foto.png", "image/png", salida.toByteArray());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private Point punto(double longitud, double latitud) {

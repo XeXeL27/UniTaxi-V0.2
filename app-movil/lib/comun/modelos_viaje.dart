@@ -101,6 +101,17 @@ class DatosEntrega {
   final String? motivoFalla;
   final String estadoEntrega;
 
+  /// Cuando el repartidor marco que llego al punto de recogida (A).
+  final DateTime? fechaLlegadaRecogida;
+  final DateTime? fechaRecogida;
+  final DateTime? fechaEntrega;
+
+  /// Ruta de la foto de la entrega (persona con su paquete). No llega al repartidor.
+  final String? fotoEntregaUrl;
+
+  /// Nombre de quien recibio una compra.
+  final String? receptorIdentificado;
+
   const DatosEntrega({
     required this.tipoEnvio,
     required this.descripcion,
@@ -126,6 +137,11 @@ class DatosEntrega {
     this.fotoFallaUrl,
     this.motivoFalla,
     this.estadoEntrega = 'PENDIENTE_RECOGIDA',
+    this.fechaLlegadaRecogida,
+    this.fechaRecogida,
+    this.fechaEntrega,
+    this.fotoEntregaUrl,
+    this.receptorIdentificado,
   });
 
   factory DatosEntrega.desdeJson(Map<String, dynamic> json) => DatosEntrega(
@@ -153,9 +169,15 @@ class DatosEntrega {
         fotoFallaUrl: json['fotoFallaUrl'] as String?,
         motivoFalla: json['motivoFalla'] as String?,
         estadoEntrega: json['estadoEntrega'] as String? ?? 'PENDIENTE_RECOGIDA',
+        fechaLlegadaRecogida: fechaDesdeJson(json['fechaLlegadaRecogida']),
+        fechaRecogida: fechaDesdeJson(json['fechaRecogida']),
+        fechaEntrega: fechaDesdeJson(json['fechaEntrega']),
+        fotoEntregaUrl: json['fotoEntregaUrl'] as String?,
+        receptorIdentificado: json['receptorIdentificado'] as String?,
       );
 
   double get totalProducto => costoProductoReal ?? costoProductoEstimado ?? 0;
+  bool get tieneFotoEntrega => fotoEntregaUrl?.trim().isNotEmpty ?? false;
   bool get muestraCancelacion => EstadoEntrega.puedeCancelar(estadoEntrega);
   bool get tieneReporte => (fotoFallaUrl?.trim().isNotEmpty ?? false) || (motivoFalla?.trim().isNotEmpty ?? false);
   String? get resumenReporte => motivoFalla?.trim().isEmpty ?? true ? null : motivoFalla!.trim();
@@ -174,7 +196,7 @@ class EstadoEntrega {
   static bool puedeCancelar(String estado) => estado == pendienteRecogida || estado == enCaminoRecogida;
   static String nombre(String estado) => switch (estado) {
         pendienteRecogida => 'Pendiente de recogida',
-        enCaminoRecogida => 'Repartidor en camino',
+        enCaminoRecogida => 'Repartidor en camino a recoger',
         enMano => 'Pedido en manos del repartidor',
         entregado => 'Entregado',
         noEntregado => 'No entregado',

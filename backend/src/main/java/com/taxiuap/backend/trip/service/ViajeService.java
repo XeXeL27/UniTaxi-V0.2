@@ -206,7 +206,11 @@ public class ViajeService {
         // Regla de negocio 6: cada cambio de situacion se registra en el historial, incluido el alta.
         historialViajeService.registrar(viaje, SituacionViaje.CONFIRMADO, pasajero.getUsuario().getId());
 
-        avisarPasajero(viaje, "VIAJE_ACEPTADO", "Tu viaje fue aceptado", " va en camino a recogerte.");
+        if (esDelivery) {
+            avisarPasajero(viaje, "VIAJE_ACEPTADO", "Tu pedido fue aceptado", " va a recoger tu paquete.");
+        } else {
+            avisarPasajero(viaje, "VIAJE_ACEPTADO", "Tu viaje fue aceptado", " va en camino a recogerte.");
+        }
         return viaje;
     }
 
@@ -214,7 +218,7 @@ public class ViajeService {
      * Push al telefono del pasajero (llega aunque la app este cerrada). La app arma la notificacion
      * con su sonido; si ademas la app estaba abierta y ya aviso, no suena dos veces (mismo id).
      */
-    private void avisarPasajero(Viaje viaje, String tipo, String titulo, String resto) {
+    void avisarPasajero(Viaje viaje, String tipo, String titulo, String resto) {
         String nombre = viaje.getConductor().getUsuario().getPersona().getNombres();
         String primerNombre = nombre == null || nombre.isBlank() ? "Tu conductor" : nombre.trim().split("\\s+")[0];
         notificacionPushService.enviar(viaje.getPasajero().getUsuario().getId(), Map.of(
@@ -238,6 +242,27 @@ public class ViajeService {
         validarTransicion(viaje, SituacionViaje.CONDUCTOR_EN_CAMINO, SituacionViaje.CONDUCTOR_LLEGO);
         viaje = viajeRepository.save(viaje);
         avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Tu conductor llegó", " te espera en el punto de partida.");
+        return registrarYNotificar(viaje);
+    }
+
+    /**
+     * DELIVERY: el repartidor llego al punto de recogida (A). Un pedido aceptado no tiene el paso
+     * "voy en camino", asi que desde CONFIRMADO pasa por CONDUCTOR_EN_CAMINO y queda en
+     * CONDUCTOR_LLEGO; cada cambio queda en el historial y el cliente recibe el aviso.
+     */
+    @Transactional
+    public ViajeResponse llegadaRecogida(Long idViaje) {
+        Viaje viaje = obtenerViajeDelConductor(idViaje);
+        if (!esDelivery(viaje)) {
+            throw new NegocioException("Esta accion es solo para viajes DELIVERY");
+        }
+        if (viaje.getSituacionViaje() == SituacionViaje.CONFIRMADO) {
+            viaje.setSituacionViaje(SituacionViaje.CONDUCTOR_EN_CAMINO);
+            historialViajeService.registrar(viaje, SituacionViaje.CONDUCTOR_EN_CAMINO, UsuarioActual.idUsuario());
+        }
+        validarTransicion(viaje, SituacionViaje.CONDUCTOR_EN_CAMINO, SituacionViaje.CONDUCTOR_LLEGO);
+        viaje = viajeRepository.save(viaje);
+        avisarPasajero(viaje, "REPARTIDOR_LLEGO", "Tu repartidor llegó", " llegó al punto de recogida de tu paquete.");
         return registrarYNotificar(viaje);
     }
 
@@ -569,6 +594,18 @@ public class ViajeService {
         };
     }
 
+    /** Todos los pedidos DELIVERY, del mas reciente al mas antiguo (panel admin, Entregas). */
+    public List<ViajeResponse> listarEntregas() {
+        return viajeRepository.findEntregas().stream()
+                .map(this::aRespuesta)
+                .toList();
+    }
+
+    /** Viaje por id para el panel admin (sin control de participacion: la ruta ya exige ADMIN). */
+    public Viaje obtenerParaAdmin(Long idViaje) {
+        return obtenerViaje(idViaje);
+    }
+
     /** Viajes de un conductor, del mas reciente al mas antiguo (panel admin). */
     public List<ViajeResponse> listarPorConductor(Long idConductor) {
         return viajeRepository.findByConductorIdOrderByFechaInicioDesc(idConductor).stream()
@@ -739,8 +776,20 @@ public class ViajeService {
                 Boolean.TRUE.equals(viaje.getCalificacionOfrecidaPasajero()),
                 // El nombre del favorito solo se devuelve al propio pasajero.
                 esPasajero ? viaje.getSolicitud().getDestinoNombrePasajero() : null,
-                com.taxiuap.backend.trip.dto.DatosEntregaResponse.desde(viaje.getSolicitud().getDatosEntrega(),
-                        esPasajero));
+                datosEntregaPara(viaje.getSolicitud().getDatosEntrega(), esPasajero));
+    }
+
+    /**
+     * El pasajero ve sus codigos y la foto de su entrega, el admin toda la evidencia sin codigos y el
+     * repartidor solo el detalle del pedido.
+     */
+    private static com.taxiuap.backend.trip.dto.DatosEntregaResponse datosEntregaPara(DatosEntrega datos,
+            boolean esPasajero) {
+        boolean esAdmin = UsuarioActual.obtener().map(u -> "ADMIN".equals(u.rol())).orElse(false);
+        if (esAdmin) {
+            return com.taxiuap.backend.trip.dto.DatosEntregaResponse.paraAdmin(datos);
+        }
+        return com.taxiuap.backend.trip.dto.DatosEntregaResponse.desde(datos, esPasajero);
     }
 
     private static boolean precioDeliveryEstimado(Viaje viaje) {

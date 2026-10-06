@@ -10,10 +10,24 @@ import '../core/tema.dart';
 /// la mesa la camara suele guardar la foto de costado: la persona la gira de a un cuarto de vuelta
 /// hasta que las letras se lean derechas, y puede acercarla con dos dedos para ver si se lee.
 /// Devuelve la foto ya girada o null si cancela.
-Future<Uint8List?> enderezarFoto(BuildContext context, Uint8List foto, {required String titulo}) =>
+///
+/// [guia] y [requisitos] cambian lo que se pide de la foto (por defecto, lo del documento); la foto de
+/// una entrega DELIVERY pide otra cosa.
+Future<Uint8List?> enderezarFoto(BuildContext context, Uint8List foto,
+        {required String titulo, String? guia, List<String>? requisitos}) =>
     Navigator.of(context).push<Uint8List>(MaterialPageRoute(
       fullscreenDialog: true,
-      builder: (_) => _EditorFoto(foto: foto, titulo: titulo),
+      builder: (_) => _EditorFoto(
+        foto: foto,
+        titulo: titulo,
+        guia: guia ?? 'Gira la foto hasta que las letras se lean derechas. La foto debe estar:',
+        requisitos: requisitos ??
+            const [
+              'Derecha, con las letras de izquierda a derecha',
+              'Nítida y con buena luz, sin reflejos ni sombras',
+              'Con todo el documento a la vista, sin cortar los bordes',
+            ],
+      ),
     ));
 
 /// Gira la foto [cuartos] cuartos de vuelta a la derecha, despues de aplicar el giro que la camara
@@ -47,8 +61,10 @@ const _barrasOscuras = SystemUiOverlayStyle(
 class _EditorFoto extends StatefulWidget {
   final Uint8List foto;
   final String titulo;
+  final String guia;
+  final List<String> requisitos;
 
-  const _EditorFoto({required this.foto, required this.titulo});
+  const _EditorFoto({required this.foto, required this.titulo, required this.guia, required this.requisitos});
 
   @override
   State<_EditorFoto> createState() => _EditorFotoState();
@@ -116,19 +132,17 @@ class _EditorFotoState extends State<_EditorFoto> {
                     ],
                   ),
                 ),
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 4, 20, 12),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Gira la foto hasta que las letras se lean derechas. La foto debe estar:',
-                        style: TextStyle(color: ColoresApp.blanco, fontSize: 17, height: 1.35, fontWeight: FontWeight.w600),
+                        widget.guia,
+                        style: const TextStyle(color: ColoresApp.blanco, fontSize: 17, height: 1.35, fontWeight: FontWeight.w600),
                       ),
-                      SizedBox(height: 8),
-                      _Requisito('Derecha, con las letras de izquierda a derecha'),
-                      _Requisito('Nítida y con buena luz, sin reflejos ni sombras'),
-                      _Requisito('Con todo el documento a la vista, sin cortar los bordes'),
+                      const SizedBox(height: 8),
+                      for (final requisito in widget.requisitos) _Requisito(requisito),
                     ],
                   ),
                 ),

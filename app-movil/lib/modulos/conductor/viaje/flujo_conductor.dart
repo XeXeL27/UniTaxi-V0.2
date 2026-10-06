@@ -22,6 +22,9 @@ class FlujoConductor extends ChangeNotifier {
   static const _intervaloViaje = Duration(seconds: 5);
   static const double metrosLlegada = 50;
 
+  /// El repartidor confirma la entrega con su GPS a esta distancia o menos de B (igual que el servidor).
+  static const double metrosEntrega = 100;
+
   final ConductorApi api;
   final ControladorMapa mapa;
 
@@ -202,10 +205,19 @@ class FlujoConductor extends ChangeNotifier {
   /// Solicitudes disponibles que el conductor todavia no vio (el numero rojo).
   int get nuevas => solicitudes.where((s) => !_vistas.contains(s.id)).length;
 
-  /// Despliega o esconde la lista. Al desplegarla las solicitudes quedan vistas.
+  /// Despliega o esconde la lista. Tocar la flecha (para abrir o para cerrar) cuenta como haber visto
+  /// las solicitudes: el numero rojo vuelve a 0.
   void alternarLista() {
     listaAbierta = !listaAbierta;
-    _marcarVistas();
+    _vistas.addAll(solicitudes.map((s) => s.id));
+    _avisar();
+  }
+
+  /// Tocar el numero rojo (en el panel o en Inicio de la barra): se abre la lista con las solicitudes
+  /// y el contador vuelve a 0.
+  void verNuevas() {
+    listaAbierta = true;
+    _vistas.addAll(solicitudes.map((s) => s.id));
     _avisar();
   }
 
@@ -264,13 +276,32 @@ class FlujoConductor extends ChangeNotifier {
     etapa = EtapaConductor.enViaje;
     seleccionada = null;
     _finalizandoSolo = false;
-    if (esOtro && nuevo.tieneRuta) {
+    if (nuevo.datosEntrega != null) {
+      // Repartidor: primero solo el punto de recogida (A); con el paquete en mano, solo el destino (B).
+      final conPaquete = _conPaquete(nuevo);
+      if ((esOtro || conPaquete != _faseConPaquete) && nuevo.tieneRuta) {
+        if (conPaquete) {
+          mapa.ponerObjetivo(destino: nuevo.puntoB);
+        } else {
+          mapa.ponerObjetivo(origen: nuevo.puntoA);
+        }
+      }
+      _faseConPaquete = conPaquete;
+    } else if (esOtro && nuevo.tieneRuta) {
       mapa.ponerRuta(nuevo.puntoA, nuevo.puntoB, conAcercamiento: _vaABuscarPasajero(nuevo.situacion));
     } else {
       mapa.cambiarAcercamiento(_vaABuscarPasajero(nuevo.situacion));
     }
     _iniciarSondeo(_consultarViaje, _intervaloViaje);
     _avisar();
+  }
+
+  /// Fase del mapa del repartidor que se dibujo la ultima vez (con o sin el paquete en mano).
+  bool? _faseConPaquete;
+
+  static bool _conPaquete(Viaje viaje) {
+    final estado = viaje.datosEntrega?.estadoEntrega;
+    return estado == EstadoEntrega.enMano || estado == EstadoEntrega.entregado;
   }
 
   bool _vaABuscarPasajero(String situacion) =>
@@ -351,7 +382,11 @@ class FlujoConductor extends ChangeNotifier {
 
   bool get esDelivery => viaje?.datosEntrega != null;
 
-  Future<void> validarRecogida(String codigo) => _accionDelivery((id) => api.validarRecogida(id, codigo));
+  /// El repartidor llego al punto de recogida: recien ahi pide el codigo y la foto del paquete.
+  Future<void> llegueRecogida() => _accionDelivery((id) => api.llegueRecogida(id));
+
+  Future<void> validarRecogida(String codigo, Uint8List foto) =>
+      _accionDelivery((id) => api.validarRecogida(id, codigo, foto, mapa.miUbicacion));
 
   Future<void> proponerCompra(LatLng punto, String detalle, double costo) =>
       _accionDelivery((id) => api.proponerCompra(id, punto, detalle, costo));
@@ -361,10 +396,20 @@ class FlujoConductor extends ChangeNotifier {
 
   Future<void> confirmarPago(double monto, String metodo) => _accionDelivery((id) => api.confirmarPago(id, monto, metodo));
 
-  Future<void> validarEntrega(String codigo) => _accionDelivery((id) => api.validarEntrega(id, codigo));
+  Future<void> validarEntrega(String codigo, Uint8List foto) =>
+      _accionDelivery((id) => api.validarEntrega(id, codigo, foto, mapa.miUbicacion!));
 
-  Future<void> identificarReceptor(String nombre, String telefono) =>
-      _accionDelivery((id) => api.identificarReceptor(id, nombre, telefono));
+  Future<void> identificarReceptor(String nombre, String telefono, Uint8List foto) =>
+      _accionDelivery((id) => api.identificarReceptor(id, nombre, telefono, foto, mapa.miUbicacion!));
+
+  /// Distancia en linea recta hasta B; null sin GPS.
+  double? get metrosAlDestino => metrosDesdeMi(viaje?.destino);
+
+  /// La entrega solo se confirma con el GPS a [metrosEntrega] o menos del destino.
+  bool get cercaDelDestino {
+    final metros = metrosAlDestino;
+    return metros != null && metros <= metrosEntrega;
+  }
 
   Future<void> noSePudoEntregar(String motivo, Uint8List foto) =>
       _accionDelivery((id) => api.noSePudoEntregar(id, motivo, foto));

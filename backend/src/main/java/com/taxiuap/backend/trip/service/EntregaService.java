@@ -3,6 +3,9 @@ package com.taxiuap.backend.trip.service;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.locationtech.jts.geom.Point;
@@ -29,7 +32,9 @@ import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
+import com.taxiuap.backend.trip.enums.SituacionViaje;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
+import com.taxiuap.backend.trip.enums.TipoFotoEntrega;
 import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
 
 /**
@@ -50,6 +55,12 @@ public class EntregaService {
 
     /** Con el pedido en mano solo cabe una accion: entregar o reportar que no se pudo. */
     private static final List<EstadoEntrega> CON_PEDIDO_EN_MANO = List.of(EstadoEntrega.EN_MANO);
+
+    /** La entrega se confirma con el GPS del repartidor a esta distancia o menos del destino (B). */
+    public static final double METROS_MAXIMOS_ENTREGA = 100;
+
+    private static final String NOMBRE_CONSTANCIA = "constancia_entrega.txt";
+    private static final DateTimeFormatter FECHA_CONSTANCIA = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     private final ViajeService viajeService;
     private final DatosEntregaRepository datosEntregaRepository;
@@ -157,6 +168,9 @@ public class EntregaService {
         Point destino = viaje.getDestino();
         BigDecimal costoReal = dinero(request.costoProducto());
         Long idDatos = datos.getId();
+        // El recibo se escribe antes del UPDATE: despues, el viaje ya no esta en el contexto de persistencia.
+        String rutaComprobante = contenidoComprobante == null ? null
+                : guardarEvidencia(contenidoComprobante, viaje, "comprobante_compra");
 
         int filas = datosEntregaRepository.avanzarSiEstadoPermitido(idDatos, ANTES_DE_TENER_EL_PEDIDO,
                 EstadoEntrega.EN_MANO);
@@ -172,28 +186,57 @@ public class EntregaService {
         actualizada.setDetalleCompra(request.detalleCompra().trim());
         actualizada.setCostoProductoReal(costoReal);
         actualizada.setObservacionCompra(textoOpcional(request.observacionCompra()));
-        if (contenidoComprobante != null) {
-            actualizada.setFotoComprobanteUrl(guardarEvidencia(contenidoComprobante, viaje, "comprobante_compra"));
+        actualizada.setFechaRecogida(LocalDateTime.now());
+        if (rutaComprobante != null) {
+            actualizada.setFotoComprobanteUrl(rutaComprobante);
         }
         datosEntregaRepository.save(actualizada);
 
         DesglosePrecioDelivery precio = calculoPrecioDeliveryService.fijarPrecioCompra(puntoCompra, destino);
-        return viajeService.registrarPedidoEnMano(idViaje, precio);
+        ViajeResponse respuesta = viajeService.registrarPedidoEnMano(idViaje, precio);
+        actualizarConstancia(idViaje);
+        return respuesta;
     }
 
     // ---------------------------------------------------------------- ENCOMIENDA: recogida en A
 
     /**
-     * ENCOMIENDA: el repartidor llego a A y el remitente le dicta el codigo de recogida. Con el codigo
-     * correcto el pedido pasa a EN_MANO y el viaje a EN_CURSO. El codigo incorrecto no avanza nada y se
-     * responde con un mensaje generico, sin decir si el pedido existe o en que estado esta.
+     * El repartidor llego al punto de recogida (A). Recien ahi puede validar el codigo del remitente:
+     * hasta este paso la app le muestra solo el punto A, y al cliente le llega el aviso.
      */
     @Transactional
-    public ViajeResponse validarRecogida(Long idViaje, ValidarCodigoEntregaRequest request) {
+    public ViajeResponse llegadaRecogida(Long idViaje) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        DatosEntrega datos = datosDe(viaje);
+        if (!ANTES_DE_TENER_EL_PEDIDO.contains(datos.getEstadoEntrega())) {
+            throw new NegocioException("El paquete ya fue recogido");
+        }
+        datos.setFechaLlegadaRecogida(LocalDateTime.now());
+        datosEntregaRepository.save(datos);
+        ViajeResponse respuesta = viajeService.llegadaRecogida(idViaje);
+        actualizarConstancia(idViaje);
+        return respuesta;
+    }
+
+    /**
+     * ENCOMIENDA: el repartidor llego a A, el remitente le dicta el codigo de recogida y toma la foto
+     * del paquete (obligatoria). Con el codigo correcto el pedido pasa a EN_MANO, el viaje a EN_CURSO
+     * y empieza la entrega hacia B. El codigo incorrecto no avanza nada (la foto ya escrita se borra al
+     * deshacerse la transaccion) y se responde con un mensaje generico.
+     */
+    @Transactional
+    public ViajeResponse validarRecogida(Long idViaje, ValidarCodigoEntregaRequest request, MultipartFile foto) {
         Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
         DatosEntrega datos = datosDe(viaje);
         exigirTipo(datos, TipoEnvio.ENCOMIENDA);
         exigirEstado(datos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO);
+        if (viaje.getSituacionViaje() != SituacionViaje.CONDUCTOR_LLEGO) {
+            throw new NegocioException("Marca primero que llegaste al punto de recogida");
+        }
+        byte[] contenido = imagenObligatoria(foto, "La foto del paquete");
+        String rutaFoto = guardarEvidencia(contenido, viaje, "recogida");
+        Point ubicacion = PuntoDesdeWkt.desdeCoordenadas(request.latitud(), request.longitud());
+        Long idSolicitud = viaje.getSolicitud().getId();
         Long idDatos = datos.getId();
 
         int filas = datosEntregaRepository.avanzarSiCodigoRecogidaCoincide(idDatos, ANTES_DE_TENER_EL_PEDIDO,
@@ -203,8 +246,19 @@ public class EntregaService {
                     "El codigo de recogida no coincide");
         }
 
+        DatosEntrega actualizada = datosEntregaRepository.findBySolicitudId(idSolicitud)
+                .orElseThrow(() -> new NegocioException("El pedido ya no existe"));
+        actualizada.setFotoRecogidaUrl(rutaFoto);
+        actualizada.setFechaRecogida(LocalDateTime.now());
+        actualizada.setUbicacionRecogida(ubicacion);
+        datosEntregaRepository.save(actualizada);
+
         // El precio no cambia: el codigo de recogida solo confirma la entrega fisica del paquete.
-        return viajeService.registrarPedidoEnMano(idViaje, null);
+        ViajeResponse respuesta = viajeService.registrarPedidoEnMano(idViaje, null);
+        avisarCliente(idViaje, "PAQUETE_RECOGIDO", "Tu paquete fue recogido",
+                " ya tiene tu paquete y va en camino al destino.");
+        actualizarConstancia(idViaje);
+        return respuesta;
     }
 
     // ---------------------------------------------------------------- pago directo al cliente
@@ -250,12 +304,16 @@ public class EntregaService {
      * COMPLETADO.
      */
     @Transactional
-    public ViajeResponse entregarConCodigo(Long idViaje, ValidarCodigoEntregaRequest request) {
+    public ViajeResponse entregarConCodigo(Long idViaje, ValidarCodigoEntregaRequest request, MultipartFile foto) {
         Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
         DatosEntrega datos = datosDe(viaje);
         exigirTipo(datos, TipoEnvio.ENCOMIENDA);
         exigirEstado(datos, CON_PEDIDO_EN_MANO, EstadoEntrega.ENTREGADO);
         exigirPagoConfirmado(datos);
+        Point ubicacion = exigirCercaDelDestino(viaje, request.latitud(), request.longitud());
+        byte[] contenido = imagenObligatoria(foto, "La foto de la entrega");
+        String rutaFoto = guardarEvidencia(contenido, viaje, "entrega");
+        Long idSolicitud = viaje.getSolicitud().getId();
         Long idDatos = datos.getId();
 
         int filas = datosEntregaRepository.avanzarSiCodigoEntregaCoincide(idDatos, CON_PEDIDO_EN_MANO,
@@ -265,8 +323,8 @@ public class EntregaService {
                     "El codigo de entrega no coincide");
         }
 
-        return viajeService.finalizarDesdeEntrega(idViaje,
-                new FinalizarViajeRequest(null));
+        registrarEvidenciaEntrega(idSolicitud, rutaFoto, ubicacion, null);
+        return completarEntrega(idViaje);
     }
 
     /**
@@ -276,13 +334,17 @@ public class EntregaService {
      */
     @Transactional
     public ViajeResponse entregarConReceptor(Long idViaje,
-            IdentificarReceptorRequest request) {
+            IdentificarReceptorRequest request, MultipartFile foto) {
         Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
         DatosEntrega datos = datosDe(viaje);
         exigirTipo(datos, TipoEnvio.COMPRA_Y_ENTREGA);
         exigirEstado(datos, CON_PEDIDO_EN_MANO, EstadoEntrega.ENTREGADO);
         exigirPagoConfirmado(datos);
         validarReceptor(viaje, request);
+        Point ubicacion = exigirCercaDelDestino(viaje, request.latitud(), request.longitud());
+        byte[] contenido = imagenObligatoria(foto, "La foto de la entrega");
+        String rutaFoto = guardarEvidencia(contenido, viaje, "entrega");
+        Long idSolicitud = viaje.getSolicitud().getId();
 
         int filas = datosEntregaRepository.avanzarSiEstadoPermitido(datos.getId(), CON_PEDIDO_EN_MANO,
                 EstadoEntrega.ENTREGADO);
@@ -291,8 +353,27 @@ public class EntregaService {
                     "El pedido ya no se puede entregar");
         }
 
-        return viajeService.finalizarDesdeEntrega(idViaje,
-                new FinalizarViajeRequest(null));
+        registrarEvidenciaEntrega(idSolicitud, rutaFoto, ubicacion, request.nombre().trim());
+        return completarEntrega(idViaje);
+    }
+
+    /** Foto, hora y GPS de la entrega, escritos sobre el pedido releido despues del UPDATE condicional. */
+    private void registrarEvidenciaEntrega(Long idSolicitud, String rutaFoto, Point ubicacion, String receptor) {
+        DatosEntrega actualizada = datosEntregaRepository.findBySolicitudId(idSolicitud)
+                .orElseThrow(() -> new NegocioException("El pedido ya no existe"));
+        actualizada.setFotoEntregaUrl(rutaFoto);
+        actualizada.setFechaEntrega(LocalDateTime.now());
+        actualizada.setUbicacionEntrega(ubicacion);
+        actualizada.setReceptorIdentificado(receptor);
+        datosEntregaRepository.save(actualizada);
+    }
+
+    private ViajeResponse completarEntrega(Long idViaje) {
+        ViajeResponse respuesta = viajeService.finalizarDesdeEntrega(idViaje, new FinalizarViajeRequest(null));
+        avisarCliente(idViaje, "PAQUETE_ENTREGADO", "Tu paquete fue entregado",
+                " confirmó la entrega con una foto.");
+        actualizarConstancia(idViaje);
+        return respuesta;
     }
 
     // ---------------------------------------------------------------- fallo de entrega
@@ -330,7 +411,9 @@ public class EntregaService {
 
         crearReporteFalla(viaje, motivoNormalizado);
 
-        return viajeService.cancelarFallaEntrega(idViaje);
+        ViajeResponse respuesta = viajeService.cancelarFallaEntrega(idViaje);
+        actualizarConstancia(idViaje);
+        return respuesta;
     }
 
     /** Rechaza antes de recoger un paquete que no coincide y deja una advertencia administrativa. */
@@ -352,7 +435,35 @@ public class EntregaService {
         datos.setMotivoFalla(motivo.trim());
         datosEntregaRepository.save(datos);
         crearReporte(viaje, "PAQUETE_NO_COINCIDE", motivo.trim());
-        return viajeService.cancelarFallaEntrega(idViaje);
+        ViajeResponse respuesta = viajeService.cancelarFallaEntrega(idViaje);
+        actualizarConstancia(idViaje);
+        return respuesta;
+    }
+
+    // ---------------------------------------------------------------- fotos de la evidencia
+
+    /** Foto de la evidencia de un pedido para el panel admin. */
+    @Transactional(readOnly = true)
+    public org.springframework.core.io.Resource fotoParaAdmin(Long idViaje, TipoFotoEntrega tipo) {
+        DatosEntrega datos = datosDe(viajeService.obtenerParaAdmin(idViaje));
+        String ruta = switch (tipo) {
+            case RECOGIDA -> datos.getFotoRecogidaUrl();
+            case COMPROBANTE -> datos.getFotoComprobanteUrl();
+            case ENTREGA -> datos.getFotoEntregaUrl();
+            case FALLA -> datos.getFotoFallaUrl();
+            case PAQUETE -> datos.getFotoPaqueteUrl();
+        };
+        return almacenamientoArchivos.leer(ruta);
+    }
+
+    /** El cliente ve la foto de su paquete entregado, como confirmacion de que llego. */
+    @Transactional(readOnly = true)
+    public org.springframework.core.io.Resource fotoEntregaParaCliente(Long idViaje) {
+        DatosEntrega datos = datosDe(viajeService.obtenerViajeDelPasajero(idViaje));
+        if (datos.getEstadoEntrega() != EstadoEntrega.ENTREGADO || datos.getFotoEntregaUrl() == null) {
+            throw new NegocioException("El paquete todavia no fue entregado");
+        }
+        return almacenamientoArchivos.leer(datos.getFotoEntregaUrl());
     }
 
     private void crearReporteFalla(Viaje viaje, String motivo) {
@@ -451,17 +562,195 @@ public class EntregaService {
             throw new NegocioException(nombreCampo + " supera los 5 MB");
         }
         try {
-            return ProcesadorImagen.fotoPerfil(archivo.getBytes());
+            return ProcesadorImagen.imagenEvidencia(archivo.getBytes());
         } catch (IOException e) {
             throw new NegocioException("No se pudo leer " + nombreCampo.toLowerCase());
         }
     }
 
-    /** Como la foto viene de la app, se guarda con sello de tiempo: la evidencia no se sobreescribe. */
+    private byte[] imagenObligatoria(MultipartFile archivo, String nombreCampo) {
+        byte[] contenido = imagenOpcional(archivo, nombreCampo);
+        if (contenido == null) {
+            throw new NegocioException(nombreCampo + " es obligatoria");
+        }
+        return contenido;
+    }
+
+    /**
+     * Como la foto viene de la app, se guarda con sello de tiempo en la carpeta del viaje: la evidencia
+     * no se sobreescribe.
+     */
     private String guardarEvidencia(byte[] contenido, Viaje viaje, String nombreBase) {
         Persona persona = viaje.getConductor().getUsuario().getPersona();
         return almacenamientoArchivos.guardarConSello(contenido,
-                almacenamientoArchivos.carpetaEntregaConductor(persona), nombreBase, "jpg");
+                almacenamientoArchivos.carpetaEntregaViaje(persona, viaje.getId()), nombreBase, "jpg");
+    }
+
+    /** La entrega se confirma en B: el GPS del telefono tiene que estar a 100 m o menos del destino. */
+    private Point exigirCercaDelDestino(Viaje viaje, Double latitud, Double longitud) {
+        Point ubicacion = PuntoDesdeWkt.desdeCoordenadas(latitud, longitud);
+        if (ubicacion == null) {
+            throw new NegocioException("Activa el GPS: la entrega se confirma con tu ubicacion");
+        }
+        Point destino = viaje.getDestino();
+        if (destino != null) {
+            double metros = metrosEntre(latitud, longitud, destino.getY(), destino.getX());
+            if (metros > METROS_MAXIMOS_ENTREGA) {
+                throw new NegocioException("Estas a " + Math.round(metros) + " m del destino: la entrega se "
+                        + "confirma a " + Math.round(METROS_MAXIMOS_ENTREGA) + " m o menos");
+            }
+        }
+        return ubicacion;
+    }
+
+    /** Distancia en metros sobre la Tierra (haversine), suficiente para unos cientos de metros. */
+    static double metrosEntre(double lat1, double lng1, double lat2, double lng2) {
+        double radio = 6_371_000;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLng = Math.toRadians(lng2 - lng1);
+        double a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(Math.toRadians(lat1))
+                * Math.cos(Math.toRadians(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+        return 2 * radio * Math.asin(Math.min(1, Math.sqrt(a)));
+    }
+
+    /** Push al cliente con el pedido releido (el UPDATE condicional limpio el contexto). */
+    private void avisarCliente(Long idViaje, String tipo, String titulo, String resto) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        if (viaje != null) {
+            viajeService.avisarPasajero(viaje, tipo, titulo, resto);
+        }
+    }
+
+    // ---------------------------------------------------------------- constancia
+
+    /**
+     * Reescribe la constancia del pedido (constancia_entrega.txt en la carpeta del viaje) con cada
+     * confirmacion hecha hasta ahora: horas, GPS, codigos validados (nunca el codigo), pago, quien
+     * recibio y el nombre de cada foto. Se llama despues de cada paso del repartidor.
+     */
+    private void actualizarConstancia(Long idViaje) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        if (viaje == null || viaje.getSolicitud() == null || viaje.getSolicitud().getDatosEntrega() == null) {
+            return;
+        }
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        Persona repartidor = viaje.getConductor().getUsuario().getPersona();
+        String ruta = almacenamientoArchivos.carpetaEntregaViaje(repartidor, viaje.getId()) + "/" + NOMBRE_CONSTANCIA;
+        almacenamientoArchivos.guardar(textoConstancia(viaje, datos).getBytes(StandardCharsets.UTF_8), ruta);
+        if (!ruta.equals(datos.getConstanciaUrl())) {
+            datos.setConstanciaUrl(ruta);
+            datosEntregaRepository.save(datos);
+        }
+    }
+
+    static String textoConstancia(Viaje viaje, DatosEntrega datos) {
+        StringBuilder t = new StringBuilder();
+        t.append("CONSTANCIA DEL PEDIDO DE ENTREGA - UNITAXI\n");
+        t.append("Actualizada: ").append(fecha(LocalDateTime.now())).append("\n\n");
+        t.append("Viaje N: ").append(viaje.getId());
+        if (viaje.getSolicitud() != null) {
+            t.append("   Solicitud N: ").append(viaje.getSolicitud().getId());
+        }
+        t.append("\n");
+        t.append("Tipo de envio: ").append(datos.getTipoEnvio()).append("\n");
+        t.append("Descripcion: ").append(texto(datos.getDescripcion())).append("\n");
+        t.append("Cliente: ").append(nombre(viaje.getPasajero() == null ? null
+                : viaje.getPasajero().getUsuario())).append("\n");
+        t.append("Repartidor: ").append(nombre(viaje.getConductor().getUsuario()));
+        if (viaje.getVehiculo() != null) {
+            t.append("   Placa: ").append(texto(viaje.getVehiculo().getPlaca()));
+        }
+        t.append("\n");
+        if (datos.getNombreRemitente() != null || datos.getTelefonoRemitente() != null) {
+            t.append("Remitente: ").append(texto(datos.getNombreRemitente())).append(" (")
+                    .append(texto(datos.getTelefonoRemitente())).append(")\n");
+        }
+        if (datos.getNombreReceptor() != null || datos.getTelefonoReceptor() != null) {
+            t.append("Receptor: ").append(texto(datos.getNombreReceptor())).append(" (")
+                    .append(texto(datos.getTelefonoReceptor())).append(")\n");
+        }
+        if (viaje.getSolicitud() != null) {
+            t.append("Recoger en (A): ").append(texto(viaje.getSolicitud().getOrigenDireccion()))
+                    .append(" ").append(coordenadas(viaje.getOrigen())).append("\n");
+            t.append("Entregar en (B): ").append(texto(viaje.getSolicitud().getDestinoDireccion()))
+                    .append(" ").append(coordenadas(viaje.getDestino())).append("\n");
+        }
+        t.append("Situacion del viaje: ").append(viaje.getSituacionViaje()).append("\n");
+        t.append("Estado de la entrega: ").append(datos.getEstadoEntrega()).append("\n");
+        if (viaje.getPrecioFinal() != null) {
+            t.append("Precio del servicio: ").append(dinero(viaje.getPrecioFinal())).append(" Bs\n");
+        }
+
+        t.append("\nCONFIRMACIONES\n");
+        if (viaje.getCreadoEn() != null) {
+            t.append("- ").append(fecha(viaje.getCreadoEn())).append("  Pedido aceptado por el repartidor\n");
+        }
+        if (datos.getFechaLlegadaRecogida() != null) {
+            t.append("- ").append(fecha(datos.getFechaLlegadaRecogida()))
+                    .append("  Llego al punto de recogida (A)\n");
+        }
+        if (datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA && datos.getCostoProductoReal() != null) {
+            t.append("- ").append(fecha(datos.getFechaRecogida())).append("  Compra registrada en ")
+                    .append(texto(datos.getDetalleCompra())).append(" por ").append(dinero(datos.getCostoProductoReal()))
+                    .append(" Bs").append(datos.getFotoComprobanteUrl() == null ? ""
+                            : " | recibo: " + archivo(datos.getFotoComprobanteUrl()))
+                    .append("\n");
+        } else if (datos.getFechaRecogida() != null) {
+            t.append("- ").append(fecha(datos.getFechaRecogida()))
+                    .append("  Paquete recogido con el codigo del remitente validado")
+                    .append(" | GPS ").append(coordenadas(datos.getUbicacionRecogida()))
+                    .append(" | foto: ").append(archivo(datos.getFotoRecogidaUrl())).append("\n");
+        }
+        if (Boolean.TRUE.equals(datos.getPagoConfirmado())) {
+            t.append("- Pago recibido: ").append(dinero(datos.getMontoPagoRecibido())).append(" Bs (")
+                    .append(viaje.getMetodoPago() == null ? "EFECTIVO" : viaje.getMetodoPago()).append(")\n");
+        }
+        if (datos.getFechaEntrega() != null) {
+            t.append("- ").append(fecha(datos.getFechaEntrega())).append("  Paquete entregado")
+                    .append(datos.getReceptorIdentificado() == null
+                            ? " con el codigo del receptor validado"
+                            : " a " + datos.getReceptorIdentificado() + " (cliente identificado)")
+                    .append(" | GPS ").append(coordenadas(datos.getUbicacionEntrega()))
+                    .append(" | foto: ").append(archivo(datos.getFotoEntregaUrl())).append("\n");
+        }
+        if (datos.getMotivoFalla() != null) {
+            t.append("- ").append(datos.getEstadoEntrega() == EstadoEntrega.NO_ENTREGADO
+                    ? "No se pudo entregar: " : "Paquete rechazado: ").append(datos.getMotivoFalla())
+                    .append(datos.getFotoFallaUrl() == null ? "" : " | foto: " + archivo(datos.getFotoFallaUrl()))
+                    .append("\n");
+        }
+        if (viaje.getFechaFin() != null) {
+            t.append("- ").append(fecha(viaje.getFechaFin())).append("  Viaje completado\n");
+        }
+        return t.toString();
+    }
+
+    private static String nombre(com.taxiuap.backend.identity.entity.Usuario usuario) {
+        if (usuario == null || usuario.getPersona() == null) {
+            return "-";
+        }
+        Persona persona = usuario.getPersona();
+        return (texto(persona.getNombres()) + " " + texto(persona.getApellidos())).trim();
+    }
+
+    private static String fecha(LocalDateTime fecha) {
+        return fecha == null ? "-" : fecha.format(FECHA_CONSTANCIA);
+    }
+
+    private static String coordenadas(Point punto) {
+        return punto == null ? "[sin GPS]" : "[" + punto.getY() + ", " + punto.getX() + "]";
+    }
+
+    private static String archivo(String ruta) {
+        if (ruta == null) {
+            return "-";
+        }
+        int barra = ruta.lastIndexOf('/');
+        return barra < 0 ? ruta : ruta.substring(barra + 1);
+    }
+
+    private static String texto(String valor) {
+        return valor == null || valor.isBlank() ? "-" : valor.trim();
     }
 
     private static String textoOpcional(String texto) {

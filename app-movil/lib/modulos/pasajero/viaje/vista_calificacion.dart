@@ -7,6 +7,7 @@ import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../widgets/paneles.dart';
+import '../../../comun/foto_entrega.dart';
 import '../../../comun/modelos_viaje.dart';
 import 'flujo_pasajero.dart';
 
@@ -82,6 +83,15 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              if (viaje.datosEntrega?.tieneFotoEntrega ?? false) ...[
+                const Text(
+                  'Tu paquete fue entregado',
+                  style: TextStyle(color: ColoresApp.exito, fontSize: 16.5, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                FotoEntrega(cargar: () => widget.flujo.api.fotoEntrega(viaje.id), alto: 160),
+                const SizedBox(height: 14),
+              ],
               Row(
                 children: [
                   AvatarIniciales(nombre: viaje.nombreConductor, radio: 22),
@@ -91,11 +101,15 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          '¿Cómo fue tu viaje con ${viaje.primerNombreConductor}?',
+                          viaje.datosEntrega != null
+                              ? '¿Cómo fue tu entrega con ${viaje.primerNombreConductor}?'
+                              : '¿Cómo fue tu viaje con ${viaje.primerNombreConductor}?',
                           style: const TextStyle(color: ColoresApp.azul, fontSize: 16.5, fontWeight: FontWeight.w700),
                         ),
                         Text(
-                          'Llegaste a tu destino. ${MetodoPago.frase('Pagas ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)}.',
+                          viaje.datosEntrega != null
+                              ? 'Servicio de entrega: ${formatoBs(viaje.precioFinal)}.'
+                              : 'Llegaste a tu destino. ${MetodoPago.frase('Pagas ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)}.',
                           style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
                         ),
                       ],

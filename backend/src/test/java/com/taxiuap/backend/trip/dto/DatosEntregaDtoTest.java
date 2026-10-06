@@ -38,7 +38,15 @@ class DatosEntregaDtoTest {
                 null,
                 null,
                 null,
-                EstadoEntrega.PENDIENTE_RECOGIDA);
+                EstadoEntrega.PENDIENTE_RECOGIDA,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
 
         String json = new ObjectMapper().writeValueAsString(response);
         var node = new ObjectMapper().readTree(json);

@@ -39,12 +39,14 @@ class Menu {
   static const descuentoEstudiante = ItemMenu('Descuento estudiante', Iconos.idBadge, '/tarifas/descuento-estudiante');
   static const carpetaArchivos = ItemMenu('Carpeta de archivos', Iconos.folderOpen, '/sistema/carpeta');
   static const reportesEntrega = ItemMenu('Reportes de entrega', Iconos.triangleExclamation, '/reportes-entrega');
+  static const entregas = ItemMenu('Entregas', Iconos.paquete, '/entregas');
 
   static const grupos = [
     GrupoMenu('Personas', Iconos.users, [personas, usuarios, pasajeros, conductores, carnetsObservados, eliminacionPermanente]),
     GrupoMenu('Mapa', Iconos.map, [zonas, mapa, flota]),
     GrupoMenu('Tarifas', Iconos.layerGroup, [precioViaje, descuentoEstudiante]),
-    GrupoMenu('Sistema', Iconos.gear, [carpetaArchivos, reportesEntrega]),
+    GrupoMenu('Entregas', Iconos.paquete, [entregas, reportesEntrega]),
+    GrupoMenu('Sistema', Iconos.gear, [carpetaArchivos]),
   ];
 
   static List<ItemMenu> get todos => [inicio, for (final g in grupos) ...g.items];

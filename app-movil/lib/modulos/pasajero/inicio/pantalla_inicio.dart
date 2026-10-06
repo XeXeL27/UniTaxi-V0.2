@@ -708,6 +708,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                   cargarTodos: _flujo.api.misViajes,
                   esConductor: false,
                   pestanaFavoritos: _pestanaFavoritos,
+                  cargarFotoEntrega: _flujo.api.fotoEntrega,
                 ),
                 PantallaMas(
                   foto: _foto,

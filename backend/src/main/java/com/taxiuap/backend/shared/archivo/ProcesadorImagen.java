@@ -121,6 +121,14 @@ public final class ProcesadorImagen {
         return salida.toByteArray();
     }
 
+    /**
+     * Foto de evidencia de una entrega DELIVERY (paquete al recogerlo, persona con su paquete al
+     * entregarlo): igual que el carnet, entera y sin recortar, porque lo que importa esta en los bordes.
+     */
+    public static byte[] imagenEvidencia(byte[] original) {
+        return imagenCarnet(original);
+    }
+
     private static BufferedImage leer(byte[] original) {
         BufferedImage imagen;
         try {

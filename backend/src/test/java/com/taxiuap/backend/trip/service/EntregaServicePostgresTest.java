@@ -100,12 +100,14 @@ class EntregaServicePostgresTest {
         Escenario escenario = crearEscenarioEncomienda();
         autenticar(escenario.viaje().getConductor().getUsuario().getId(), "CONDUCTOR");
 
+        entregaService.llegadaRecogida(escenario.viaje().getId());
         entregaService.validarRecogida(escenario.viaje().getId(),
-                new ValidarCodigoEntregaRequest(CODIGO_RECOGIDA));
+                new ValidarCodigoEntregaRequest(CODIGO_RECOGIDA), foto());
         entregaService.confirmarPago(escenario.viaje().getId(),
                 new ConfirmarPagoEntregaRequest(new BigDecimal("17.50"), null));
+        Point destino = escenario.viaje().getDestino();
         entregaService.entregarConCodigo(escenario.viaje().getId(),
-                new ValidarCodigoEntregaRequest(CODIGO_ENTREGA));
+                new ValidarCodigoEntregaRequest(CODIGO_ENTREGA, destino.getY(), destino.getX()), foto());
 
         new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
             DatosEntrega persistidos = datosEntregaRepository.findById(escenario.datos().getId()).orElseThrow();
@@ -129,7 +131,7 @@ class EntregaServicePostgresTest {
         // existencia del viaje en vez de confirmar que existe y no le pertenece.
         assertThrows(RecursoNoEncontradoException.class,
                 () -> entregaService.validarRecogida(escenario.viaje().getId(),
-                        new ValidarCodigoEntregaRequest(CODIGO_RECOGIDA)));
+                        new ValidarCodigoEntregaRequest(CODIGO_RECOGIDA), foto()));
     }
 
     @Test
@@ -228,6 +230,19 @@ class EntregaServicePostgresTest {
     private void autenticar(Long idUsuario, String rol) {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new JwtUser(idUsuario, "prueba", rol), null));
+    }
+
+    private org.springframework.web.multipart.MultipartFile foto() {
+        try {
+            java.awt.image.BufferedImage imagen = new java.awt.image.BufferedImage(8, 8,
+                    java.awt.image.BufferedImage.TYPE_INT_RGB);
+            java.io.ByteArrayOutputStream salida = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(imagen, "png", salida);
+            return new org.springframework.mock.web.MockMultipartFile("foto", "foto.png", "image/png",
+                    salida.toByteArray());
+        } catch (java.io.IOException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     private Point punto(double longitud, double latitud) {
