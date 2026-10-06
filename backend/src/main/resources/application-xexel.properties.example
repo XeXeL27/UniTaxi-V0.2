@@ -5,7 +5,7 @@
 # ============================================================
 
 # --- Servidor ----------------------------------------------
-server.port=8080
+server.port=5557
 
 # --- Datasource --------------------------------------------
 spring.datasource.url=jdbc:postgresql://localhost:5436/taxiuap
@@ -21,7 +21,7 @@ spring.jpa.properties.hibernate.format_sql=true
 jwt.secret=<cambiar>
 
 # --- CORS (panel admin Vite) -------------------------------
-cors.origenes=http://localhost:5173,http://127.0.0.1:5173
+cors.origenes=http://virtual.uap.edu.bo:5557,http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://localhost:5175
 
 # --- Administrador inicial ---------------------------------
 admin.inicial.correo=admin@taxiuap.bo
@@ -32,3 +32,15 @@ spring.output.ansi.enabled=ALWAYS
 
 # --- Datos de prueba ----------------------------------------
 taxiuap.seed.habilitado=true
+
+# Google OAuth2 (login con Google); los valores vienen del .env de la raiz (bootRun lo carga)
+google.client-id=${GOOGLE_CLIENT_ID:}
+google.client-secret=${GOOGLE_CLIENT_SECRET:}
+google.redirect-uri=${GOOGLE_REDIRECT_URI:http://localhost:5557/api/auth/google/callback}
+
+# --- Correo saliente (Gmail / Google Workspace: contrasena de aplicacion) ---
+spring.mail.username=cuenta@dominio
+spring.mail.password=CAMBIAR
+
+# Direccion con que se abre la app desde el enlace de los correos
+taxiuap.url-publica=http://virtual.uap.edu.bo:5557

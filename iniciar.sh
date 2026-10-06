@@ -5,7 +5,7 @@
 # Uso:
 #   ./iniciar.sh              recompila un frontend solo si cambio su codigo
 #   ./iniciar.sh --compilar   recompila los dos frontends siempre
-#   SERVER_PORT=8081 ./iniciar.sh   usa otro puerto
+#   SERVER_PORT=8081 ./iniciar.sh   usa otro puerto (por defecto 5557)
 #
 # Para programar con recarga en caliente se sigue pudiendo usar flutter run en cada proyecto.
 set -euo pipefail
@@ -38,12 +38,15 @@ compilar() {
 compilar admin-panel admin
 compilar app-movil app
 
-PUERTO="${SERVER_PORT:-8080}"
+# El puerto va por variable de entorno: le gana a server.port de cualquier perfil.
+export SERVER_PORT="${SERVER_PORT:-5557}"
+PUERTO="$SERVER_PORT"
 IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 echo
 echo "   Panel admin:  http://localhost:$PUERTO/admin"
 echo "   App:          http://localhost:$PUERTO/app"
 [[ -n "$IP" ]] && echo "   Desde otro equipo de la red: http://$IP:$PUERTO/app"
+echo "   Produccion:   http://virtual.uap.edu.bo:$PUERTO/app  y  /admin"
 echo
 
 echo "== Backend"

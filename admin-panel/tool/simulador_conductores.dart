@@ -8,7 +8,7 @@
 // Uso:
 //   dart run tool/simulador_conductores.dart                 cuatro conductores, un envio cada 3 s
 //   dart run tool/simulador_conductores.dart --usuarios 2    solo los dos primeros
-//   API_URL=http://192.168.1.5:8080 dart run tool/simulador_conductores.dart
+//   API_URL=http://192.168.1.5:5557 dart run tool/simulador_conductores.dart
 //
 // Ctrl+C para detener.
 import 'dart:async';

@@ -42,12 +42,24 @@ todo desde el mismo servidor. Luego se entra solo cambiando el link:
 
 | Link | Qué abre |
 |---|---|
-| `http://localhost:8080/admin` | Panel de administración (cuentas ADMIN) |
-| `http://localhost:8080/app` | App: según la cuenta muestra lo del pasajero o lo del conductor; si la persona tiene las dos, pregunta cómo quiere ingresar |
-| `http://IP-de-la-PC:8080/app` | La app desde un celular de la misma red (en el navegador el GPS solo funciona en `localhost` o con HTTPS) |
+| `http://localhost:5557/admin` | Panel de administración (cuentas ADMIN) |
+| `http://localhost:5557/app` | App: según la cuenta muestra lo del pasajero o lo del conductor; si la persona tiene las dos, pregunta cómo quiere ingresar |
+| `http://IP-de-la-PC:5557/app` | La app desde un celular de la misma red (en el navegador el GPS solo funciona en `localhost` o con HTTPS) |
 
 - `./iniciar.sh --compilar` recompila los dos frontends aunque no hayan cambiado.
-- `SERVER_PORT=8081 ./iniciar.sh` usa otro puerto.
+- `SERVER_PORT=8081 ./iniciar.sh` usa otro puerto (por defecto 5557).
+
+### Producción (máquina virtual)
+
+El sistema queda publicado en `http://virtual.uap.edu.bo:5557` (panel en `/admin`, app en `/app`).
+
+1. Copiar `.env.example` a `.env` y completar los valores (`TAXIUAP_DB_PASSWORD`, `JWT_SECRET`,
+   `ADMIN_CORREO`, `ADMIN_PASSWORD`, Google, Gemini, SIGSE, correo). Con el `.env` alcanza: la BD,
+   el puerto y la dirección pública tienen sus valores en `application.properties`.
+2. Abrir el puerto 5557 en el firewall de la máquina virtual.
+3. `./iniciar.sh` (o `SPRING_PROFILES_ACTIVE=prod ./iniciar.sh` para no cargar ningún perfil local).
+4. APK que apunta a producción: `cd app-movil && flutter build apk --release` (sin `API_URL` usa
+   `http://virtual.uap.edu.bo:5557`; para otro servidor, `--dart-define=API_URL=http://servidor:5557`).
 
 El panel se abre con el administrador inicial: usuario `admin` y la contraseña de
 `admin.inicial.password` del perfil xexel.

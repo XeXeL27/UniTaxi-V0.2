@@ -8,10 +8,10 @@ class Config {
   static const bool _release = bool.fromEnvironment('dart.vm.product');
 
   /// Sin API_URL: compilado en release y servido por el backend (/admin) usa el mismo servidor que
-  /// lo entrega; con flutter run, el backend local en el 8080.
+  /// lo entrega; con flutter run, el backend local en el 5557.
   static String get apiUrl {
     if (_apiDefinida.isNotEmpty) return _apiDefinida;
-    return _release ? Uri.base.origin : 'http://localhost:8080';
+    return _release ? Uri.base.origin : 'http://localhost:5557';
   }
 
   /// Rol que puede entrar al panel.
