@@ -162,6 +162,41 @@ class DatosEntrega {
   String? get informacionReporte => tieneReporte
       ? 'Incidente registrado; estado administrativo no disponible para el pasajero'
       : null;
+
+  /// Código de 6 dígitos que el pasajero tiene que dictar ahora, con la persona a quien se lo dicta
+  /// y su teléfono.
+  ///
+  /// Solo hay código en ENCOMIENDA: al de recogida en A (lo dicta el remitente) y al de entrega en B
+  /// (lo dicta el receptor). Desaparece cuando el pedido ya se entregó o falló. El repartidor nunca
+  /// lo ve: por eso el pasajero necesita leerlo, y de ahí que la tarjeta lo muestre en grande.
+  ({String titulo, String donde, String codigo, String? nombre, String? telefono})? get codigoVigente {
+    if (tipoEnvio != TipoEnvio.encomienda) return null;
+    switch (estadoEntrega) {
+      case EstadoEntrega.pendienteRecogida:
+      case EstadoEntrega.enCaminoRecogida:
+        final codigo = codigoRecogida?.trim();
+        if (codigo == null || codigo.isEmpty) return null;
+        return (
+          titulo: 'Código de recogida',
+          donde: 'en el punto A',
+          codigo: codigo,
+          nombre: nombreRemitente?.trim().isEmpty ?? true ? null : nombreRemitente!.trim(),
+          telefono: telefonoRemitente,
+        );
+      case EstadoEntrega.enMano:
+        final codigo = codigoEntrega?.trim();
+        if (codigo == null || codigo.isEmpty) return null;
+        return (
+          titulo: 'Código de entrega',
+          donde: 'cuando el repartidor llegue al destino',
+          codigo: codigo,
+          nombre: nombreReceptor?.trim().isEmpty ?? true ? null : nombreReceptor!.trim(),
+          telefono: telefonoReceptor,
+        );
+      default:
+        return null;
+    }
+  }
 }
 
 class EstadoEntrega {
