@@ -17,6 +17,13 @@ class PuntoRuta {
   const PuntoRuta(this.posicion, this.texto);
 }
 
+/// Regla del re-trazado de la ruta del mapa: se vuelve a trazar solo si es otro viaje o si cambio
+/// la posicion de A. El comercio de una compra aparece de golpe al registrarla y justamente ahi
+/// cambia A; repetir con los mismos puntos en cada sondeo del seguimiento relanzaria OSRM sin
+/// motivo (LatLng compara por posicion).
+bool debeReTrazar({required bool esOtro, required LatLng? aActual, required PuntoRuta? partida}) =>
+    partida != null && (esOtro || aActual != partida.posicion);
+
 /// Estilo de los tiles del mapa (boton de capas).
 ///
 /// [zoomNativo] es el ultimo nivel con imagen real de cada proveedor, y por eso el mapa nunca
@@ -47,8 +54,9 @@ enum CapaMapa {
 
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
 /// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo naranja desde su
-/// posicion hasta el punto A (acercamiento). En la app del pasajero, el tramo naranja desde la
-/// posicion del conductor hasta el punto de referencia (origen o destino segun la etapa del viaje).
+/// posicion hasta el punto A, o hasta B cuando todavia no hay A (acercamiento). En la app del
+/// pasajero, el tramo naranja desde la posicion del conductor hasta el punto de referencia (origen
+/// o destino segun la etapa del viaje).
 class ControladorMapa extends ChangeNotifier {
   static const double zoomCalle = 17;
 
@@ -192,7 +200,7 @@ class ControladorMapa extends ChangeNotifier {
         trazar(encuadrar: false);
       }
     }
-    if (mostrarAcercamiento && _objetivoAcercamiento != null) {
+    if (mostrarAcercamiento && puntoAcercamiento != null) {
       final origen = _origenAcercamiento;
       if (origen == null || ServiciosMapa.metros(origen, posicion) > _metrosParaRecalcular) {
         _trazarAcercamiento();
@@ -249,6 +257,49 @@ class ControladorMapa extends ChangeNotifier {
     _avisar();
   }
 
+  /// Punto hasta donde llega el tramo naranja del acercamiento: A (la partida) si la hay. En una
+  /// compra todavia sin comercio no hay A y el tramo va hasta B, que es donde esta el pasajero.
+  PuntoRuta? get puntoAcercamiento => a ?? b;
+
+  /// Pone en el mapa los puntos de un viaje o una solicitud y decide si hay que (re)trazar la ruta.
+  ///
+  /// [partida] puede ser null: una COMPRA_Y_ENTREGA todavia sin registrar la compra no tiene punto
+  /// de recogida (el diseno solo define B para compra). En ese caso solo se pone [destino], que es
+  /// donde esta el pasajero y hasta donde llega el tramo naranja mientras no compro; al quitar A
+  /// cualquier ruta heredada se limpia.
+  ///
+  /// La ruta se vuelve a trazar solo cuando lo dice [debeReTrazar] (es otro viaje o cambio la
+  /// posicion de A). [conAcercamiento] dice si el tramo naranja debe ir hacia el punto.
+  void actualizarPuntos({
+    required PuntoRuta? partida,
+    required PuntoRuta? destino,
+    required bool esOtro,
+    bool conAcercamiento = false,
+  }) {
+    if (destino == null) {
+      cambiarAcercamiento(conAcercamiento);
+      return;
+    }
+    if (partida == null) {
+      final cambio = a != null || b?.posicion != destino.posicion || b?.texto != destino.texto;
+      a = null;
+      b = destino;
+      if (cambio) {
+        ruta = null;
+        calculandoRuta = false;
+        _consultaRuta++;
+        _avisar();
+      }
+      cambiarAcercamiento(conAcercamiento);
+      return;
+    }
+    if (debeReTrazar(esOtro: esOtro, aActual: a?.posicion, partida: partida)) {
+      ponerRuta(partida, destino, conAcercamiento: conAcercamiento);
+    } else {
+      cambiarAcercamiento(conAcercamiento);
+    }
+  }
+
   /// Cambia el texto de A o B (por ejemplo cuando llega la direccion) sin volver a trazar.
   void actualizarTexto({String? textoA, String? textoB}) {
     if (textoA != null && a != null) a = PuntoRuta(a!.posicion, textoA);
@@ -272,19 +323,28 @@ class ControladorMapa extends ChangeNotifier {
 
   /// Inicia el seguimiento del conductor asignado al viaje del pasajero.
   /// [referencia] es el punto hacia el que se dibuja la ruta (origen mientras va a recoger,
-  /// destino durante el viaje).
-  void iniciarSeguimientoConductor(LatLng referencia) {
+  /// destino durante el viaje); null detiene el tramo naranja sin borrar la posicion del marcador,
+  /// que es lo que pasa cuando una compra ya registrada muestra la ruta real desde el comercio.
+  void iniciarSeguimientoConductor(LatLng? referencia) {
     _puntoReferenciaConductor = referencia;
-    mostrarRutaConductor = true;
+    mostrarRutaConductor = referencia != null;
     rutaConductor = null;
     _consultaRutaConductor++;
     _avisar();
   }
 
-  /// Cambia el punto de referencia del seguimiento del conductor (ej: de origen a destino).
-  void cambiarPuntoReferenciaConductor(LatLng referencia) {
+  /// Cambia el punto de referencia del seguimiento (ej: de origen a destino). Con null el tramo
+  /// naranja se detiene y el marcador del conductor sigue moviendose.
+  void cambiarPuntoReferenciaConductor(LatLng? referencia) {
     if (_puntoReferenciaConductor == referencia) return;
     _puntoReferenciaConductor = referencia;
+    mostrarRutaConductor = referencia != null;
+    if (referencia == null) {
+      rutaConductor = null;
+      _consultaRutaConductor++;
+      _avisar();
+      return;
+    }
     if (mostrarRutaConductor && conductorUbicacion != null) {
       _trazarRutaConductor();
     }
@@ -364,12 +424,10 @@ class ControladorMapa extends ChangeNotifier {
     if (encuadrar) this.encuadrar();
   }
 
-  /// Hacia donde va el tramo desde el GPS: A, o B cuando solo hay destino (paquete en mano).
-  LatLng? get _objetivoAcercamiento => a?.posicion ?? b?.posicion;
-
   Future<void> _trazarAcercamiento({bool encuadrarAlTerminar = false}) async {
     final desde = miUbicacion;
-    final hasta = _objetivoAcercamiento;
+    // Sin A (compra todavia sin comercio, o el repartidor con el paquete en mano) el tramo va hasta B.
+    final hasta = puntoAcercamiento?.posicion;
     if (desde == null || hasta == null) return;
     final consulta = ++_consultaAcercamiento;
     _origenAcercamiento = desde;

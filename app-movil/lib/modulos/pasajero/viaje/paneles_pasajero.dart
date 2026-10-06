@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/enlaces.dart';
 import '../../../core/formato.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
@@ -53,6 +54,10 @@ class PanelEligiendo extends StatelessWidget {
     final a = mapa.a;
     final b = mapa.b;
     final ruta = mapa.ruta;
+    // En una compra no hay destino que elegir: el pedido se entrega donde esta el pasajero, y
+    // igual que con destino elegido se ven el precio, la forma de pago y el boton de pedir.
+    final esCompra = flujo.esCompra;
+    final verPedido = b != null || esCompra;
 
     if (flujo.guardandoLugar) {
       return Column(
@@ -74,8 +79,8 @@ class PanelEligiendo extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        // Con el destino elegido, lo primero que se ve es el precio y como se paga.
-        if (b != null) ...[
+        // Con el destino elegido o en una compra, lo primero que se ve es el precio y como se paga.
+        if (verPedido) ...[
           RecuadroPrecio(
             etiqueta: flujo.servicio == ServicioActivo.entrega ? 'Precio del servicio' : 'Precio del viaje',
             detalle: [
@@ -121,11 +126,14 @@ class PanelEligiendo extends StatelessWidget {
                   )
                 : null,
           ),
-        if (a != null && b == null) ...[
+        if (esCompra) ...[
+          const SizedBox(height: 10),
+          const _Indicacion(icono: FontAwesomeIcons.locationDot, texto: 'Se entrega donde estas'),
+        ] else if (a != null && b == null) ...[
           const SizedBox(height: 10),
           const _Indicacion(icono: FontAwesomeIcons.handPointer, texto: 'Busca tu destino arriba o tócalo en el mapa.'),
         ],
-        if (b != null) ...[
+        if (b != null && !esCompra) ...[
           FilaLugar.destino(
             texto: b.texto,
             accion: Row(
@@ -169,6 +177,8 @@ class PanelEligiendo extends StatelessWidget {
               ],
             ),
           const SizedBox(height: 12),
+        ],
+        if (verPedido) ...[
           DisponibilidadTaxis(libres: libres, servicio: flujo.servicio),
           const SizedBox(height: 14),
           BotonPrincipal(
@@ -592,6 +602,10 @@ class PanelViaje extends StatelessWidget {
         if (viaje.datosEntrega != null) ...[
           const SizedBox(height: 8),
           _ResumenEntrega(datos: viaje.datosEntrega!, precioServicio: viaje.precioFinal),
+          if (viaje.datosEntrega!.codigos.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            TarjetaCodigoEntrega(fases: viaje.datosEntrega!.codigos),
+          ],
           if (viaje.datosEntrega!.tipoEnvio == TipoEnvio.compraYEntrega &&
               viaje.datosEntrega!.detalleCompraPropuesto != null &&
               viaje.datosEntrega!.compraConfirmadaPorCliente != true)
@@ -913,6 +927,209 @@ class _ViajaTercero extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Los 6 digitos que el pasajero tiene que dictar en un pedido ENCOMIENDA: el de recogida en A y el
+/// de entrega en B.
+///
+/// El repartidor nunca los ve (el backend se los anula a proposito, [DatosEntrega.codigos] los
+/// devuelve solo al pasajero), asi que sin esta tarjeta el pedido se queda parado: el repartidor
+/// llega a A pidiendo un codigo que nadie puede ver.
+///
+/// Cada codigo se copia al portapapeles con un toque en los digitos, sin pasar por el menu: se dictan
+/// de viva voz y a veces hay que pegarlos en un chat. Al lado queda el envio por WhatsApp a quien lo
+/// dicta, que es lo que resuelve el caso de quien recibe en B y no está con el remitente.
+class TarjetaCodigoEntrega extends StatelessWidget {
+  final List<FaseCodigoEntrega> fases;
+
+  /// Como se abre el enlace de WhatsApp. Null usa [abrirEnlaceExterno]; los tests pasan el suyo
+  /// para no depender de la aplicacion de WhatsApp instalada.
+  final ValueChanged<Uri>? abrirEnlace;
+
+  const TarjetaCodigoEntrega({super.key, required this.fases, this.abrirEnlace});
+
+  @override
+  Widget build(BuildContext context) {
+    if (fases.isEmpty) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 13),
+      decoration: BoxDecoration(
+        color: ColoresApp.azul.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          for (var i = 0; i < fases.length; i++) ...[
+            if (i > 0)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 10),
+                child: Divider(height: 1, color: Color(0x1F0A2342)),
+              ),
+            _bloque(context, fases[i]),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// El codigo de la fase actual va con los digitos grandes, que se dictan de viva voz. El de la otra
+  /// punta va en una sola linea: es de consulta rapida (mandarlo a quien recibe) y si ocupa lo mismo
+  /// que el primero el panel del pasajero crece lo que no debe.
+  Widget _bloque(BuildContext context, FaseCodigoEntrega fase) =>
+      fase.faseActual ? _bloqueGrande(context, fase) : _bloqueCompacto(context, fase);
+
+  Widget _bloqueGrande(BuildContext context, FaseCodigoEntrega fase) {
+    final nombre = fase.nombre;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.azul, size: 13),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                fase.titulo,
+                style: const TextStyle(color: ColoresApp.azul, fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 7),
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => copiarAlPortapapeles(context, fase.codigo),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      Flexible(child: _DigitosCodigo(codigo: fase.codigo, tamano: 28)),
+                      const SizedBox(width: 10),
+                      const FaIcon(FontAwesomeIcons.copy, color: ColoresApp.azul, size: 13),
+                      const Text('Toca para copiar', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5)),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            if (enlaceWhatsappCodigo(fase) != null) _botonWhatsapp(context, fase),
+          ],
+        ),
+        const SizedBox(height: 5),
+        Text(
+          'Dicta este codigo ${nombre == null ? '' : 'a $nombre '}${fase.donde}.',
+          style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+        ),
+      ],
+    );
+  }
+
+  Widget _botonWhatsapp(BuildContext context, FaseCodigoEntrega fase) {
+    final enlace = enlaceWhatsappCodigo(fase)!;
+    return IconButton(
+      onPressed: () => abrirEnlace == null
+          ? abrirEnlaceExterno(context, enlace, textoWhatsappCodigo(fase))
+          : abrirEnlace!(enlace),
+      tooltip: 'Mandarlo por WhatsApp',
+      icon: const FaIcon(FontAwesomeIcons.whatsapp, color: ColoresApp.azul, size: 16),
+    );
+  }
+
+  Widget _bloqueCompacto(BuildContext context, FaseCodigoEntrega fase) {
+    final enlace = enlaceWhatsappCodigo(fase);
+    final nombre = fase.nombre;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () => copiarAlPortapapeles(context, fase.codigo),
+            borderRadius: BorderRadius.circular(8),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 11),
+                  const SizedBox(width: 7),
+                  Text(fase.titulo, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      fase.codigo,
+                      style: const TextStyle(
+                        color: ColoresApp.azul,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 2,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        if (enlace != null) _botonWhatsapp(context, fase),
+        ],
+      ),
+        Text(
+          'Para ${nombre ?? 'quien recibe'} ${fase.donde}.',
+          style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5),
+        ),
+      ],
+    );
+  }
+}
+
+/// Los 6 digitos del codigo, con el tracking abierto para que se lean de uno en uno.
+class _DigitosCodigo extends StatelessWidget {
+  final String codigo;
+  final double tamano;
+
+  const _DigitosCodigo({required this.codigo, required this.tamano});
+
+  @override
+  Widget build(BuildContext context) {
+    return Text(
+      codigo,
+      textAlign: TextAlign.start,
+      style: TextStyle(
+        color: ColoresApp.azul,
+        fontSize: tamano,
+        fontWeight: FontWeight.w800,
+        letterSpacing: tamano * 0.22,
+      ),
+    );
+  }
+}
+
+/// Numero al que se manda el codigo por WhatsApp: solo digitos y con el codigo de pais boliviano
+/// cuando el pasajero escribio el numero local (8 digitos). Null si no hay un numero usable.
+String? telefonoWhatsapp(String? telefono) {
+  final digitos = (telefono ?? '').replaceAll(RegExp(r'\D'), '');
+  if (digitos.length == 8) return '591$digitos';
+  if (digitos.length > 8) return digitos;
+  return null;
+}
+
+/// Texto del mensaje de WhatsApp: lleva el nombre de quien lo dicta y el codigo, para que no haya que
+/// escribirlo a mano ni se dicte mal.
+String textoWhatsappCodigo(FaseCodigoEntrega fase) {
+  final nombre = fase.nombre;
+  return '${nombre == null ? '' : 'Hola $nombre. '}Tu pedido en UNITAXI. '
+      'Tu ${fase.titulo.toLowerCase()} es ${fase.codigo}. Muéstraselo al repartidor ${fase.donde}.';
+}
+
+/// Enlace de WhatsApp con el codigo ya escrito, o null si no hay un numero usable.
+Uri? enlaceWhatsappCodigo(FaseCodigoEntrega fase) {
+  final telefono = telefonoWhatsapp(fase.telefono);
+  return telefono == null ? null : Uri.https('wa.me', '/$telefono', {'text': textoWhatsappCodigo(fase)});
 }
 
 /// Efectivo | QR, antes de solicitar el taxi.

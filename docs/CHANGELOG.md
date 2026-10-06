@@ -5,6 +5,16 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | ✨ | Task 3 del plan de compra: el mapa dibuja el tramo naranja hasta el pasajero y la ruta desde el comercio, y re-traza solo si cambió la posición de A |
+| 2026-10-06 | ✨ | Task 2 del plan de compra: el pasajero pide una compra sin elegir destino (origen = destino = su ubicación, precio "A calcular", sin cotizar OSRM) |
+| 2026-10-06 | 📚 | Plan del punto de entrega y el mapa de la compra y entrega: B es donde está el pasajero, naranja punteado hasta él y ruta desde el comercio |
+| 2026-10-06 | 🐛 | El repartidor confirma que recibió el pago con un check, sin escribir el monto (el servidor ya lo sabe y exige que sea exacto) |
+| 2026-10-06 | ♻️ | El panel no crece sin límite y las acciones raras del reparto van en secciones plegadas; el botón de WhatsApp del código pasa a icono |
+| 2026-10-06 | 🐛 | Panel del repartidor con los datos del pedido (ruta, monto, chat y cancelar) y que no se reabra solo en cada etapa |
+| 2026-10-06 | ✨ | El código de entrega se copia al portapapeles con un toque y aparece también el del punto B para mandarlo a quien recibe |
+| 2026-10-06 | 🐛 | Task 3: al tocar "Entrega" con un tipo ya elegido se reabre el selector, se puede cambiar de tipo y se ve el aviso de datos completos |
+| 2026-10-06 | 🐛 | El pasajero ve el código de 6 dígitos del pedido de encomienda, con hoja a pantalla completa, copiar y WhatsApp |
+| 2026-10-06 | 🔧 | Se traen a `HWatson-dev` los 3 commits de la rama remota `XeXeL27` (estudiantes UAP con SIGSE, precio por tramos y solicitudes separadas por categoría) |
 | 2026-10-05 | ✨ | El pasajero elige entre viaje y entrega en un segmentado de la cabecera, con todo el texto del pedido acorde al servicio |
 | 2026-10-05 | 🐛 | Test del selector de categoría del conductor corregido tras cambiar el texto de la opción de reparto |
 | 2026-10-05 | ✨ | La moto del conductor puede registrarse con la categoría DELIVERY elegida (Task 1 del plan del repartidor) |
@@ -34,6 +44,329 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-06
+
+### ✨ Nuevo · Task 3 del plan de compra: el mapa dibuja el tramo al pasajero y la ruta desde el comercio
+
+- **Módulo / área:** app móvil (`app-movil`), mapa del reparto en las dos vistas (pasajero y
+  repartidor).
+- **Descripción:** en COMPRA_Y_ENTREGA no hay punto de recogida hasta que el repartidor registra la
+  compra, y el mapa tenía que dibujar lo que toca en cada momento: sin comercio solo se ve B (donde
+  está el pasajero) y el tramo naranja llega hasta ahí (H5/H10); al registrar la compra aparece A
+  (el comercio) con la ruta azul comercio → pasajero y el naranja se detiene en las dos apps, sin
+  borrar el marcador del repartidor, que sigue moviéndose. Además el re-trazado se limita a cuando
+  cambia la posición de A (H11), para no relanzar OSRM en cada sondeo, y en una compra ya no se
+  pueden fijar B desde el mapa ni desde un favorito ni heredarse un destino de un viaje normal.
+- **Cambios clave:**
+  - `controlador_mapa.dart`: regla pura `debeReTrazar(esOtro, aActual, partida)`; método
+    `actualizarPuntos(partida, destino, esOtro, conAcercamiento)` que con `partida == null` solo
+    pone B (y limpia la ruta heredada) y con partida traza solo si dice la regla; getter
+    `puntoAcercamiento` (`a ?? b`, comentado porque sin A parece un error); `_trazarAcercamiento`
+    y la recalculación del GPS ya no exigen A; `iniciarSeguimientoConductor` y
+    `cambiarPuntoReferenciaConductor` aceptan `null` para detener el tramo naranja sin tocar la
+    posición del marcador.
+  - `flujo_conductor.dart`: `verSolicitud` ya no corta con `!tieneRuta` en un reparto (abre el
+    detalle con B y el naranja hacia el pasajero) y `_entrarViaje` pasa por `actualizarPuntos`, así
+    que al registrar la compra re-traza desde el comercio y apaga el naranja (EN_CURSO).
+  - `flujo_pasajero.dart`: `actualizarPuntos` en `_entrarBuscando`, `_entrarViaje` y en el sondeo
+    cuando cambia la situación (R-PF3: en compra queda `a = null` y `b` = el pasajero; con el
+    comercio, la ruta); regla pura `referenciaTramoNaranja(viaje)` que devuelve `null` cuando la
+    compra ya tiene comercio; `tocarMapa` e `irAFavorito` no ponen B en compra; `elegirTipoEnvio` y
+    `guardarDatosEntrega` limpian un B heredado con su ruta.
+  - `paneles_conductor.dart`: la distancia del viaje de la tarjeta usa `partida` y se oculta cuando
+    no la hay (el `solicitud.origen!` de antes ya no lo garantizaba `tieneRuta`).
+- **Tests:** `test/mapa_reparto_test.dart` (24): la regla de re-trazado y su aplicación sin relanzar
+  OSRM, el destino del tramo naranja sin A, que detenerlo conserva al repartidor, la referencia del
+  naranja en compra/taxi, el mapa del pasajero al pedir y al abrir con el viaje (más el sondeo que
+  ve el comercio recién registrado), que en compra no se elige destino (toque, favorito y B
+  heredado) y el mapa del repartidor al ver, aceptar y registrar la compra.
+- **Archivos afectados:**
+  - `app-movil/lib/mapa/controlador_mapa.dart`
+  - `app-movil/lib/modulos/conductor/viaje/flujo_conductor.dart`
+  - `app-movil/lib/modulos/conductor/viaje/paneles_conductor.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`
+  - `app-movil/test/mapa_reparto_test.dart` (nuevo)
+  - `docs/CHANGELOG.md`
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` completo: 205/205 en verde
+  (los 24 del archivo nuevo con su fase RED: 10 fallos por aserción y la de símbolos sin compilar).
+  El recorrido manual en Chrome queda pendiente para la Task 6.
+
+### ✨ Nuevo · Task 2 del plan de compra: el pasajero pide una compra sin elegir destino
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), flujo de viaje, panel eligiendo y
+  pantalla de inicio.
+- **Descripción:** en un pedido COMPRA_Y_ENTREGA el destino lo fija el plan (Ruling 1): el pedido se
+  entrega donde está el pasajero, que deja de elegir destino. Antes el flujo exigía `mapa.b != null`
+  para todo (`puedeSolicitar`, `solicitar()` y el panel), así que una compra quedaba bloqueada sin
+  botón de pedir. Ahora la compra se pide con origen y destino iguales a la ubicación del pasajero,
+  el panel enseña el precio, la forma de pago y el botón igual que con destino elegido, y la fila
+  del destino se sustituye por "Se entrega donde estas". En ENCOMIENDA nada cambia: destino
+  elegido, cotización y precio como antes.
+- **Cambios clave:**
+  - `flujo_pasajero.dart`: getter `esCompra` y regla pura `destinoAlSolicitar(partida,
+    destinoElegido, esCompra)` (en compra devuelve la partida, nunca un favorito);
+    `puedeSolicitar` deja de exigir `mapa.b` en compra (sigue exigiendo `mapa.a` y el formulario
+    completo); `solicitar()` manda `origen = destino = mapa.a` con la dirección de A y
+    `destinoNombre = null`; `_revisarCotizacion()` no pide cotización de taxi en modo entrega (H9,
+    evita OSRM con A == B); `textoPrecio` dice "A calcular" siempre en compra (Ruling 2).
+  - `paneles_pasajero.dart` (`PanelEligiendo`): precio, selector de pago, disponibilidad y botón de
+    pedir se muestran en compra aunque no haya `b` (R-PF1); sin `mapa.b = mapa.a`, porque `aSigueGps`
+    dejaría B quieto y trazaría una ruta falsa.
+  - `pantalla_inicio.dart`: el buscador de destino se oculta en compra; el panel ya no desaparece
+    cuando no hay destino si es compra; el aviso "Primero elige tu destino" no aplica en compra.
+- **Tests:** `test/compra_pasajero_test.dart` (18): se puede pedir una compra sin destino y en
+  encomienda no; en compra la solicitud lleva origen = destino = ubicación y sin nombre; en compra
+  no se cotiza (ni en encomienda; en viaje normal sí); el precio de una compra dice "A calcular";
+  `esCompra`, la regla del destino y el panel con su botón habilitado.
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/modulos/pasajero/inicio/pantalla_inicio.dart`
+  - `app-movil/test/compra_pasajero_test.dart` (nuevo)
+  - `docs/CHANGELOG.md`
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` completo: 181/181 en verde
+  (los 18 del archivo nuevo con su fase RED: 6 fallos por aserción y la de símbolos sin compilar).
+
+### 📚 Documentación · Plan del punto de entrega y el mapa de la compra y entrega
+
+- **Módulo / área:** módulo DELIVERY (`app-movil`, `backend`), planificación.
+- **Descripción:** al revisar el panel del reparto aparecieron cuatro datos que el backend ya envía
+  y la app no pintaba (el comercio real, la observación de compra, el comprobante y el teléfono del
+  cliente), y al revisarlos con el usuario salió uno mayor: en COMPRA_Y_ENTREGA el punto de entrega
+  es donde está el pasajero, pero la app lo pide como un destino más, igual que un viaje normal, y
+  el mapa nunca dibuja el punto donde el repartidor compró. Se redactó el plan de las 6 tareas que
+  cierran todo eso.
+- **Decisiones del usuario, escritas como rulings en el plan:** en compra el punto de entrega es la
+  ubicación del pasajero al pedir y deja de elegir destino (solo en compra; encomienda no cambia);
+  antes de que haya repartidor el precio dice "A calcular"; el punto queda fijado al pedir aunque el
+  pasajero se mueva; el mapa dibuja el punto real del comercio y no el propuesto; el teléfono del
+  cliente se expone solo en compra; el comprobante lo puede ver el pasajero.
+- **Comportamiento del mapa que deja el plan:** en compra, naranja punteado desde el repartidor en
+  movimiento hasta el pasajero mientras no compró, con el pasajero como punto fijo; al registrar la
+  compra, A pasa a ser el comercio y se traza la ruta comercio -> pasajero, y el naranja se detiene.
+  En encomienda nada cambia.
+- **Hallazgos verificados que sostienen el plan (H1 a H19):** entre otros, `puntoCompraWkt` se
+  parsea y no se usa (`modelos_viaje.dart:148-149`), `registrarPedidoEnMano` fija el precio desde el
+  comercio pero no cambia `viaje.origen` (`ViajeService.java:272-282`), el tramo naranja del
+  repartidor va hasta A (`controlador_mapa.dart:345-348`) y el repartidor no vería nada en una
+  compra sin A (`flujo_conductor.dart:225-229`).
+- **Tareas:** 1) modelo con el punto de partida real, 2) el pasajero pide compra sin destino, 3) el
+  mapa por fase, 4) los dos paneles dicen la verdad, 5) teléfono y comprobante (backend y app),
+  6) spec, recorrido completo en Chrome y bitácora.
+- **Queda escrito como fuera de alcance,** para que no se pierda: "Rechazar paquete" en el panel del
+  código de entrega donde el backend no lo acepta; la foto anterior si se cancela la cámara;
+  "Registrar la falla" sin mirar `flujo.ocupado`; `EntregaSinContacto` sin usar (el spec pide 10
+  minutos y dos intentos para "No se pudo entregar"); y el orden del pago frente al receptor y al
+  código de entrega, que el spec dice al revés de como lo pide el backend.
+- **Archivos afectados:**
+  - `docs/superpowers/plans/2026-10-06-delivery-compra-mapa-plan.md` (nuevo, 348 líneas)
+  - `docs/CHANGELOG.md`
+- **Verificación:** plan revisido contra el código cited (H1 a H19) y contra
+  `2026-10-02-delivery-design.md` (secciones 4, 5, 6 y 10); sin cambios de codigo, no hay pruebas
+  que ejecutar.
+
+### 🐛 Arreglo · El repartidor confirma que recibió el pago con un check, sin escribir el monto
+
+- **Módulo / área:** app móvil del conductor (`app-movil`), panel del reparto, sección "Pedido en tus
+  manos".
+- **Descripción:** con el pedido en mano había un campo "Pago recibido en Bs" que el repartidor
+  escribía a mano. El campo nunca estuvo en los planes: el diseño solo dice que el repartidor
+  *registra* el pago total (producto más servicio) y que no se puede marcar `ENTREGADO` sin esa
+  confirmación, sin pedir que escriba el importe, y el brief de la Task 7 solo dice "implementar
+  confirmar pago". El total ya lo conoce el servidor (`total_cliente = costo_producto_real +
+  precio_servicio_final`) y `EntregaService.confirmarPago` rechaza todo monto que no sea exactamente
+  ese. El campo solo agregaba formas de fallar: una errata bloqueaba la entrega y, en una compra,
+  quedaba en el campo el costo del producto escrito en la fase anterior (50 en vez de 58).
+- **Cambios clave:**
+  - Se sustituye el `TextField` por un `CheckboxListTile`: "Recibí Bs X" con el método de pago como
+    subtítulo ("El cliente paga en efectivo / por QR"). "Confirmar pago" permanece deshabilitado
+    hasta marcar el check.
+  - `totalAPagarEntrega` (en `acciones_delivery.dart`, junto a las demás reglas testeables del
+    módulo) calcula el total y **redondea a dos decimales**. Sin redondear, la suma de dos montos de
+    dos decimales no siempre lo es en la app (0,05 + 0,10 da 0,15000000000000002) y el servidor
+    rechazaría el pago con un mensaje que muestra el mismo número que se envió; se comprobó que en
+    35 de cada 100 pares de centavos la suma cruda no coincide con el monto de dos decimales.
+  - Cuando el pago ya está confirmado se muestra "Pago confirmado: Bs X", que usa
+    `DatosEntrega.montoPagoRecibido`: ese campo llegaba desde el backend y no se pintaba en ninguna
+    parte de la app.
+  - Se quita el texto "Total a cobrar" duplicado de la sección (el resumen del pedido, arriba, ya lo
+    muestra con su desglose).
+  - Tests nuevos de la sección, que no tenía ninguno: check sin campo de monto, botón bloqueado
+    hasta marcar, y confirmación de lo registrado con el código de entrega en pantalla.
+- **Descuadrado detectado en los md (no se tocó el diseño):** el orden del diseño no es el que
+  implements el código. `2026-10-02-delivery-design.md:179-182` pone la verificación del receptor
+  antes del pago en COMPRA_Y_ENTREGA, y `:198-200` cobra después del código de entrega en
+  ENCOMIENDA; la app hace lo contrario en ambos casos y el backend exige ese orden
+  (`EntregaService.entregarConCodigo` llama a `exigirPagoConfirmado`). Además `EntregaSinContacto`
+  (`acciones_delivery.dart`), que exige los 10 minutos y dos intentos de contacto que pide el diseño
+  (`:217-222`, `:337`), no lo usa nadie: "No se pudo entregar" está disponible desde `EN_MANO`.
+- **Hallazgos de la revisión del panel que quedan pendientes:** "Rechazar paquete" aparece también en
+  el panel del código de entrega (donde el backend no lo acepta, solo antes de recoger), si se
+  cancela la cámara se reenvía la foto del intento anterior, "Registrar la falla" no mira
+  `flujo.ocupado` y el panel de reparto nunca indica el método de pago (la rama de delivery de
+  `paneles_conductor.dart` salta el bloque que lo tenía).
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`
+  - `app-movil/lib/modulos/conductor/viaje/acciones_delivery.dart`
+  - `app-movil/test/panel_repartidor_test.dart` (3 pruebas nuevas, 14 en total)
+  - `app-movil/test/entrega_test.dart` (2 pruebas nuevas, 10 en total)
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (155 pruebas, todas pasan),
+  autoverificación: con el campo de texto restaurado a mano la prueba "el repartidor marca que lo
+  recibió, sin escribir el monto" falla ("Found 1 widget with type TextField" donde no se esperaba
+  ninguno); al restaurar el código vuelve a pasar.
+
+### ♻️ Refactor · El panel no crece sin límite y las acciones raras van plegadas
+
+- **Módulo / área:** app móvil (`app-movil`), widgets compartidos y paneles del conductor y del
+  pasajero.
+- **Descripción:** el panel plegable crecía sin tope y un contenido largo (el resumen del pedido del
+  repartidor, los dos códigos de entrega del pasajero) se salía por arriba de la pantalla sin
+  forma de desplazarse. Además, en el panel del reparto "Rechazar paquete" y "No se pudo entregar"
+  competían en igualdad de condiciones con la acción del momento (confirmar el código o la compra).
+- **Cambios clave:**
+  - `PanelPlegable` limita el contenido abierto al 45 de cada 100 de alto de pantalla
+    (`altoMaximo`) y lo que sobra se desplaza dentro del panel; la barra sigue visible.
+  - `SeccionDesplegable` (nuevo): la acción del día a día queda a la vista y las raras, con sus
+    campos, se despliegan al tocar el título. Lo usa "El paquete no coincide con lo pedido" y "No se
+    pudo entregar".
+  - El campo del código de 6 dígitos se centra, con `helperText` y botón de confirmar a todo el
+    ancho.
+  - En la tarjeta de códigos del pasajero, el de la fase actual mantiene los dígitos grandes y el de
+    la otra punta pasa a una línea con un icono de WhatsApp (`_bloqueCompacto`), que antes competía
+    en ancho con los dígitos y era un botón con texto.
+- **Archivos afectados:**
+  - `app-movil/lib/widgets/paneles.dart`
+  - `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/test/paneles_test.dart` (nuevo)
+  - `app-movil/test/seccion_desplegable_test.dart` (nuevo)
+  - `app-movil/test/codigo_entrega_test.dart`
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (155 pruebas, todas pasan).
+
+### 🐛 Arreglo · Panel del repartidor con los datos del pedido y sin reabrirse solo
+
+- **Módulo / área:** app móvil del conductor (`app-movil`), panel del reparto.
+- **Descripción:** dos cosas. El panel de un reparto mostraba solo el formulario de la acción del
+  momento (el código, la compra, el pago): el repartidor no tenía la ruta, ni el monto a cobrar, ni
+  chat con quien pidió el envío, ni forma de cancelar el pedido (el botón "Cancelar viaje" estaba en
+  el panel del taxi, al que el reparto ya no llegaba). Y el panel se abría solo en cada cambio de
+  etapa: el repartidor lo bajaba para ver el mapa y a los pocos segundos se le cerraba otra vez.
+- **Cambios clave:**
+  - `ResumenEntregaConductor` (nuevo): estado del envío, quién lo pidió con botón de chat, descripción
+    del paquete, A y B, cuánto cobra (en una compra, el total: producto más envío, con el desglose) y
+    "Cancelar pedido" mientras se pueda (antes de tenerlo en mano, que es lo que acepta el backend).
+  - `PanelViajeConductor` compone ese resumen encima del formulario de la acción, solo en viajes con
+    datos de entrega.
+  - `AperturaPanelConductor` (nuevo, sin widgets): el panel se abre la primera vez de cada viaje y,
+    si el repartidor lo baja, se respeta hasta que lo vuelva a abrir o termine el viaje. Antes se
+    abría en cada cambio de etapa.
+  - Los avisos del reparto usan `mostrarMensaje` en vez de un `SnackBar` a secas, que quedaba
+    escondido bajo la barra inferior flotante justo donde se mira tras confirmar un código.
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`
+  - `app-movil/lib/modulos/conductor/viaje/apertura_panel.dart` (nuevo)
+  - `app-movil/lib/modulos/conductor/viaje/paneles_conductor.dart`
+  - `app-movil/lib/modulos/conductor/inicio/pantalla_inicio.dart`
+  - `app-movil/test/panel_repartidor_test.dart` (nuevo, 11 pruebas)
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (143 pruebas, todas pasan),
+  `flutter build web --release --base-href /app/` compila.
+
+### ✨ Nuevo · El código de entrega se copia al tocarlo y aparece también el del punto B
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), panel del viaje de reparto.
+- **Descripción:** el código de 6 dígitos se copiaba desde una hoja modal y no había forma de ver el
+  código del punto B antes de llegar: el remitente casi nunca es quien recibe, así que no podía
+  avisarle y el repartidor llegaba al destino sin que nadie le dictara nada. El backend ya le manda
+  los dos códigos al pasajero (solo se los anula al repartidor), así que esto es solo app.
+- **Cambios clave:**
+  - `DatosEntrega.codigos` reemplaza a `codigoVigente`: lista los dos códigos mientras el paquete va a
+    A (el de la fase actual primero, el otro marcado como "Mándalo antes") y solo el de B cuando ya
+    está en mano, porque el de A ya cumplió su función.
+  - Cada código se copia al portapapeles con un toque en los dígitos, sin pasar por un modal, y sale
+    el aviso "Copiado al portapapeles". Al lado queda el envío por WhatsApp a quien lo dicta, con el
+    mensaje ya escrito.
+  - `copiarAlPortapapeles` en `core/enlaces.dart`; `enlaceWhatsappCodigo` construye el `wa.me`.
+  - Se elimina la hoja modal del código: los dígitos grandes y sus dos acciones quedan en la tarjeta.
+- **Archivos afectados:**
+  - `app-movil/lib/comun/modelos_viaje.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/core/enlaces.dart`
+  - `app-movil/test/codigo_entrega_test.dart` (20 pruebas)
+- **Verificación:** `flutter analyze` sin hallazgos, `flutter test` (143 pruebas, todas pasan).
+
+### 🐛 Arreglo · Task 3 · Al tocar "Entrega" con tipo ya elegido se reabre el selector
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), modo del servicio.
+- **Descripción:** `ModoServicio.tocarEntrega()` salía temprano si ya había un tipo elegido, así que
+  el toque no hacía nada. Dos cosas quedaban sin salida: no había forma de pasar de *Encomienda* a
+  *Compra y entrega* (había que volver antes a *Viaje* y perder el pedido en curso) y el aviso de
+  "Datos de la entrega completos" era inalcanzable, porque solo se pinta con el selector abierto y
+  abrirlo solo era posible sin tipo.
+- **Cambios clave:**
+  - `tocarEntrega()` alterna el selector siempre, con o sin tipo elegido, igual que el `Viaje`.
+  - El tipo elegido se conserva al reabrir: `SelectorTipoEntrega` lo pinta sobre azul y así se
+    cambia de tipo sin perder lo demás.
+  - Con el selector abierto y el formulario ya guardado, `datosCompletos` muestra el aviso verde; el
+    alto de la cabecera ya lo contemplaba (`altoSelectorTipoEntregaCompleto`).
+  - Tests: 3 de `ModoServicio` (reabre con tipo, cierra sin perderlo, ya se puede pedir) y 1 de
+    widget (el tipo elegido y el aviso conviven).
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/pasajero/viaje/modo_servicio.dart`
+  - `app-movil/test/modo_servicio_test.dart`
+  - `app-movil/test/selector_servicio_test.dart`
+- **Verificación:** `flutter analyze` (sin hallazgos) y `flutter test` (125 pruebas, todas pasan).
+
+### 🐛 Arreglo · El pasajero ve el código de 6 dígitos del pedido de encomienda
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), panel del viaje de reparto.
+- **Descripción:** el repartidor llegaba al punto de recogida pidiendo el código y no había nadie que
+  pudiera dictarlo. La API ya se lo devolvía al pasajero (al repartidor se lo anula a propósito),
+  pero la app lo parseaba y nunca lo pintaba, así que el paso de recoger un paquete quedaba parado.
+- **Cambios clave:**
+  - `DatosEntrega.codigoVigente`: el código de la fase actual (recogida en A para el remitente,
+    entrega en B para el receptor) y a quién se lo dicta.
+  - `TarjetaCodigoEntrega` en el panel del viaje: los 6 dígitos grandes, la instrucción y una hoja a
+    pantalla completa para leerlos en voz alta, copiarlos o mandarlos por WhatsApp al contacto de
+    esa fase.
+  - `core/enlaces.dart`: `abrirEnlaceExterno`, que estaba duplicado dentro de `inicio_mapa.dart`
+    (además, `inicio_mapa.dart` importaba `widgets/notificaciones.dart` con una ruta relativa
+    inexistente).
+  - 13 tests nuevos en `test/codigo_entrega_test.dart`.
+- **Archivos afectados:**
+  - `app-movil/lib/comun/modelos_viaje.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/widgets/inicio_mapa.dart`
+  - `app-movil/lib/core/enlaces.dart` (nuevo)
+  - `app-movil/test/codigo_entrega_test.dart` (nuevo)
+- **Verificación:** `flutter analyze` (sin hallazgos) y `flutter test` (122 pruebas, todas pasan).
+
+### 🔧 Config · Se fusiona la rama `XeXeL27` en `HWatson-dev` (fast-forward)
+
+- **Módulo / área:** repositorio git (rama `HWatson-dev`), todo el proyecto.
+- **Descripción:** la rama remota `XeXeL27` de `Equipo-de-Sistemas/UniTaxiV2` estaba 3 commits por
+  delante de `HWatson-dev`, que era exactamente el ancestro común. Se trajeron con un
+  `git merge --ff-only`, sin conflictos y sin reescribir historia.
+- **Cambios clave:**
+  - `2b1f839` solicitudes separadas por categoría: el conductor con moto DELIVERY solo ve y acepta
+    entregas, y el de moto de taxi solo viajes.
+  - `ae227bc` fusión interna con el módulo DELIVERY, precio del taxi por tramos de km con descuento
+    de estudiante, `limite_adelanto_compra` con default 0 y la app ya no se queda en "calculando
+    ruta" si OSRM falla.
+  - `fd15e31` estudiantes UAP verificados con el SIGSE (registro por RU, verificación desde Perfil y
+    desde el panel, renovación automática de la matrícula) y precio de tramos de km editable en el
+    panel.
+  - Entorno: desde esta máquina `origin` (HTTPS) no resuelve, así que se añadió el remoto `xexel`
+    por SSH (`git@github.com:Equipo-de-Sistemas/UniTaxiV2.git`) para poder traer y subir ramas.
+- **Archivos afectados:** los de los tres commits fusionados (backend, `app-movil`, `admin-panel`,
+  `docs/`), entre ellos los nuevos
+  `backend/src/main/java/com/taxiuap/backend/pricing/service/ParametrosPrecioService.java`,
+  `backend/src/main/java/com/taxiuap/backend/trip/dto/CotizacionViajeResponse.java` y tres tests
+  bajo `backend/src/test/java/com/taxiuap/backend/`. Bitácora: `docs/CHANGELOG.md`.
+- **Verificación:** `git ls-remote --heads xexel` (confirma `XeXeL27` en `2b1f839`),
+  `git fetch xexel`, `git rev-list --left-right --count HWatson-dev...xexel/XeXeL27` (`0 3`, sin
+  commits locales perdidos), `git merge-base` igual a `cde5d8d` y `git merge --ff-only xexel/XeXeL27`
+  sin conflictos. No se compiló ni probó el código resultante en esta sesión.
 
 ## 2026-10-05
 

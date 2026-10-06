@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
+import '../core/enlaces.dart';
 import '../core/tema.dart';
-import 'notificaciones.dart';
 
 /// Ancho maximo de la columna de controles sobre el mapa en pantallas anchas (PC): la cabecera y
 /// el buscador no se estiran de lado a lado.
@@ -363,7 +362,7 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
                   color: ColoresApp.azul,
                   titulo: 'Correo electrónico',
                   valor: 'unitaxi@uap.edu.bo',
-                  onTap: () => _abrirEnlace(context, Uri.parse('mailto:unitaxi@uap.edu.bo'), 'unitaxi@uap.edu.bo'),
+                  onTap: () => abrirEnlaceExterno(context, Uri.parse('mailto:unitaxi@uap.edu.bo'), 'unitaxi@uap.edu.bo'),
                 ),
                 const SizedBox(height: 10),
                 _CanalAtencion(
@@ -371,7 +370,7 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
                   color: ColoresApp.rojo,
                   titulo: 'Dirección',
                   valor: 'X6JW+Q5P, C. Bruno Racua, Cobija',
-                  onTap: () => _abrirEnlace(
+                  onTap: () => abrirEnlaceExterno(
                     context,
                     Uri.parse('https://maps.app.goo.gl/FTmrpKDkZqsoKCcb9'),
                     'la dirección',
@@ -502,22 +501,3 @@ class _CanalAtencion extends StatelessWidget {
   }
 }
 
-/// Abre un enlace externo; si falla, copia el texto al portapapeles como respaldo.
-Future<void> _abrirEnlace(BuildContext context, Uri uri, String textoPortapapeles) async {
-  try {
-    final pudo = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!pudo && context.mounted) {
-      await Clipboard.setData(ClipboardData(text: textoPortapapeles));
-      if (context.mounted) {
-        mostrarMensaje(context, 'No se pudo abrir. Copiado al portapapeles.');
-      }
-    }
-  } catch (_) {
-    if (context.mounted) {
-      await Clipboard.setData(ClipboardData(text: textoPortapapeles));
-      if (context.mounted) {
-        mostrarMensaje(context, 'No se pudo abrir. Copiado al portapapeles.');
-      }
-    }
-  }
-}

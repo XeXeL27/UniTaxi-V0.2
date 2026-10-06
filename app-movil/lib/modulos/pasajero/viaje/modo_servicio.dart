@@ -26,9 +26,13 @@ class ModoServicio {
   /// puede enviar: se enviaría un viaje normal mientras la cabecera dice "Entrega".
   bool get faltaElegirTipo => selectorVisible && tipo == null;
 
-  /// Tocar "Entrega" en el segmentado: si ya hay tipo solo cambia de modo; si no, abre el selector.
+  /// Tocar "Entrega" en el segmentado: abre o cierra el selector "¿qué quieres enviar?".
+  ///
+  /// Con un tipo ya elegido también lo abre. Antes salía temprano y el toque no hacia nada, con lo
+  /// cual no habia forma de pasar de Encomienda a Compra y entrega (habia que volver antes a Viaje) y
+  /// el aviso de "datos de la entrega completos" quedaba inalcanzable: solo se pinta con el selector
+  /// abierto, y abrirlo solo era posible sin tipo.
   void tocarEntrega() {
-    if (tipo != null) return;
     selectorVisible = !selectorVisible;
   }
 

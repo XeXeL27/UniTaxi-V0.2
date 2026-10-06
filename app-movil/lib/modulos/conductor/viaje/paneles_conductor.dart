@@ -155,7 +155,9 @@ class _TarjetaSolicitud extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final metrosViaje = solicitud.tieneRuta ? ServiciosMapa.metros(solicitud.origen!, solicitud.destino!) : null;
+    // En una compra todavia sin comercio no hay partida: sin ella no hay distancia que mostrar.
+    final metrosViaje =
+        solicitud.tieneRuta ? ServiciosMapa.metros(solicitud.partida!.posicion, solicitud.destino!) : null;
     return Material(
       color: ColoresApp.blanco,
       shape: RoundedRectangleBorder(
@@ -369,7 +371,26 @@ class PanelViajeConductor extends StatelessWidget {
   Widget build(BuildContext context) {
     final viaje = flujo.viaje;
     if (viaje == null) return const SizedBox.shrink();
-    if (viaje.datosEntrega != null) return PanelDeliveryConductor(flujo: flujo, onCancelar: onCancelar);
+    if (viaje.datosEntrega != null) {
+      // El reparto necesita los datos del pedido (ruta, monto, chat y cancelar) ademas del formulario
+      // de la accion del momento; si no, el repartidor va a la deriva con el mapa tapado.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          ResumenEntregaConductor(
+            viaje: viaje,
+            onCancelar: onCancelar,
+            ocupado: flujo.ocupado,
+            botonChat: BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
+          ),
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 14),
+            child: Divider(height: 1),
+          ),
+          PanelDeliveryConductor(flujo: flujo),
+        ],
+      );
+    }
     final (texto, color, boton, colorBoton) = estadoViajeConductor(viaje);
     final distanciaDestino = flujo.metrosDesdeMi(viaje.destino);
     return Column(

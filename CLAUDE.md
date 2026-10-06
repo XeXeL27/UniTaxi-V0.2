@@ -665,10 +665,15 @@ Basada en Config/ y security/ de uniFex, adaptada:
   cuadro se marca en el servidor (viaje.calificacion_ofrecida_pasajero, POST /api/pasajero/viajes/{id}/
   calificacion/ofrecida) y en el telefono. Cerrarlo con atras cuenta como omitir
 - PanelPlegable (lib/widgets/paneles.dart). Pasajero: eligiendo destino empieza compacto (tarifa, distancia,
-  tiempo, taxistas libres y pago Efectivo/QR; se pide con el boton central); buscando conductor es un panel
-  pequeno fijo; desde que un conductor acepta, plegable. Conductor: detalle de solicitud y todas las fases
-  del viaje plegables; plegado deja la ruta y el boton del siguiente paso. Con solicitud abierta o viaje, el
-  boton verde de conectarse no se muestra. Los paneles quedan por encima del boton central
+   tiempo, taxistas libres y pago Efectivo/QR; se pide con el boton central); buscando conductor es un panel
+   pequeno fijo; desde que un conductor acepta, plegable. Conductor: detalle de solicitud y todas las fases
+   del viaje plegables; plegado deja la ruta y el boton del siguiente paso. El panel del conductor se abre
+   solo la primera vez de cada viaje y respeta que el repartidor lo baje hasta que lo vuelva a abrir
+   (AperturaPanelConductor, lib/modulos/conductor/viaje/apertura_panel.dart): antes se reabria en cada cambio
+   de etapa y le tapaba el mapa. El panel de un reparto lleva delante los datos del pedido (ruta, monto a
+   cobrar, chat y "Cancelar pedido") con ResumenEntregaConductor, no solo el formulario de la accion.
+   Con solicitud abierta o viaje, el boton verde de conectarse no se muestra. Los paneles quedan por encima
+   del boton central
 - Mapa: capas Calles y Satelite (sin Claro); se gira con dos dedos y BotonBrujula (vista_mapa.dart) vuelve
   al norte; los marcadores quedan derechos (MarkerLayer rotate)
 - Correos: enlace "Iniciar sesion" a <taxiuap.url-publica>/ingresar?rol=... (EnlaceIngresoController):
