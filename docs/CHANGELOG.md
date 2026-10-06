@@ -5,6 +5,8 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-06 | 🐛 | Task 3: al tocar "Entrega" con un tipo ya elegido se reabre el selector, se puede cambiar de tipo y se ve el aviso de datos completos |
+| 2026-10-06 | 🐛 | El pasajero ve el código de 6 dígitos del pedido de encomienda, con hoja a pantalla completa, copiar y WhatsApp |
 | 2026-10-06 | 🔧 | Se traen a `HWatson-dev` los 3 commits de la rama remota `XeXeL27` (estudiantes UAP con SIGSE, precio por tramos y solicitudes separadas por categoría) |
 | 2026-10-05 | ✨ | El pasajero elige entre viaje y entrega en un segmentado de la cabecera, con todo el texto del pedido acorde al servicio |
 | 2026-10-05 | 🐛 | Test del selector de categoría del conductor corregido tras cambiar el texto de la opción de reparto |
@@ -37,6 +39,52 @@
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
 
 ## 2026-10-06
+
+### 🐛 Arreglo · Task 3 · Al tocar "Entrega" con tipo ya elegido se reabre el selector
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), modo del servicio.
+- **Descripción:** `ModoServicio.tocarEntrega()` salía temprano si ya había un tipo elegido, así que
+  el toque no hacía nada. Dos cosas quedaban sin salida: no había forma de pasar de *Encomienda* a
+  *Compra y entrega* (había que volver antes a *Viaje* y perder el pedido en curso) y el aviso de
+  "Datos de la entrega completos" era inalcanzable, porque solo se pinta con el selector abierto y
+  abrirlo solo era posible sin tipo.
+- **Cambios clave:**
+  - `tocarEntrega()` alterna el selector siempre, con o sin tipo elegido, igual que el `Viaje`.
+  - El tipo elegido se conserva al reabrir: `SelectorTipoEntrega` lo pinta sobre azul y así se
+    cambia de tipo sin perder lo demás.
+  - Con el selector abierto y el formulario ya guardado, `datosCompletos` muestra el aviso verde; el
+    alto de la cabecera ya lo contemplaba (`altoSelectorTipoEntregaCompleto`).
+  - Tests: 3 de `ModoServicio` (reabre con tipo, cierra sin perderlo, ya se puede pedir) y 1 de
+    widget (el tipo elegido y el aviso conviven).
+- **Archivos afectados:**
+  - `app-movil/lib/modulos/pasajero/viaje/modo_servicio.dart`
+  - `app-movil/test/modo_servicio_test.dart`
+  - `app-movil/test/selector_servicio_test.dart`
+- **Verificación:** `flutter analyze` (sin hallazgos) y `flutter test` (125 pruebas, todas pasan).
+
+### 🐛 Arreglo · El pasajero ve el código de 6 dígitos del pedido de encomienda
+
+- **Módulo / área:** app móvil del pasajero (`app-movil`), panel del viaje de reparto.
+- **Descripción:** el repartidor llegaba al punto de recogida pidiendo el código y no había nadie que
+  pudiera dictarlo. La API ya se lo devolvía al pasajero (al repartidor se lo anula a propósito),
+  pero la app lo parseaba y nunca lo pintaba, así que el paso de recoger un paquete quedaba parado.
+- **Cambios clave:**
+  - `DatosEntrega.codigoVigente`: el código de la fase actual (recogida en A para el remitente,
+    entrega en B para el receptor) y a quién se lo dicta.
+  - `TarjetaCodigoEntrega` en el panel del viaje: los 6 dígitos grandes, la instrucción y una hoja a
+    pantalla completa para leerlos en voz alta, copiarlos o mandarlos por WhatsApp al contacto de
+    esa fase.
+  - `core/enlaces.dart`: `abrirEnlaceExterno`, que estaba duplicado dentro de `inicio_mapa.dart`
+    (además, `inicio_mapa.dart` importaba `widgets/notificaciones.dart` con una ruta relativa
+    inexistente).
+  - 13 tests nuevos en `test/codigo_entrega_test.dart`.
+- **Archivos afectados:**
+  - `app-movil/lib/comun/modelos_viaje.dart`
+  - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
+  - `app-movil/lib/widgets/inicio_mapa.dart`
+  - `app-movil/lib/core/enlaces.dart` (nuevo)
+  - `app-movil/test/codigo_entrega_test.dart` (nuevo)
+- **Verificación:** `flutter analyze` (sin hallazgos) y `flutter test` (122 pruebas, todas pasan).
 
 ### 🔧 Config · Se fusiona la rama `XeXeL27` en `HWatson-dev` (fast-forward)
 

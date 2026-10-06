@@ -68,6 +68,22 @@ void main() {
     expect(find.text('Datos de la entrega completos'), findsOneWidget);
   });
 
+  testWidgets('reabierto con tipo elegido muestra el elegido y el aviso de datos completos', (tester) async {
+    // Los dos a la vez es lo que hace falta en pantalla: el pasajero vuelve a tocar "Entrega" para
+    // cambiar de tipo y, si ya llenó el formulario, se lo remindemos. Antes el selector solo se
+    // montaba sin tipo, así que el aviso nunca se veía.
+    await tester.pumpWidget(
+      _envolver(SelectorTipoEntrega(tipo: TipoEnvio.encomienda, datosCompletos: true, onElegir: (_) {})),
+    );
+
+    final encomienda = tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Encomienda'));
+    final compra = tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Compra y entrega'));
+
+    expect(encomienda.style?.backgroundColor?.resolve({}), ColoresApp.azul);
+    expect(compra.style?.backgroundColor?.resolve({}), isNull);
+    expect(find.text('Datos de la entrega completos'), findsOneWidget);
+  });
+
   testWidgets('las constantes de alto son el alto real de los selectores', (tester) async {
     // La pantalla de inicio descuenta estos altos del area visible del mapa. Si el widget crece o
     // se achica y las constantes no se tocan, el mapa queda tapado. Se montan dentro de una Column

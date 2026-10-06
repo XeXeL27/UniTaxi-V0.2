@@ -20,11 +20,28 @@ void main() {
       expect(modo.activo, ServicioActivo.entrega);
     });
 
-    test('tocar Entrega con tipo ya elegido no abre el selector', () {
+    test('tocar Entrega con tipo ya elegido reabre el selector para poder cambiarlo', () {
+      // Sin esto el pasajero que ya eligió Encomienda no tenía forma de pasar a Compra y entrega:
+      // el toque se ignoraba y el selector no volvía a aparecer.
       final modo = ModoServicio()..elegir(TipoEnvio.encomienda);
+      modo.tocarEntrega();
+      expect(modo.selectorVisible, isTrue);
+      expect(modo.tipo, TipoEnvio.encomienda);
+    });
+
+    test('tocar Entrega con el selector abierto lo cierra, sin perder el tipo', () {
+      final modo = ModoServicio()..elegir(TipoEnvio.encomienda)..tocarEntrega();
       modo.tocarEntrega();
       expect(modo.selectorVisible, isFalse);
       expect(modo.tipo, TipoEnvio.encomienda);
+      expect(modo.activo, ServicioActivo.entrega);
+    });
+
+    test('con el tipo elegido y el selector abierto ya se puede pedir', () {
+      // El aviso de "Datos de la entrega completos" solo se ve con el selector abierto y los datos
+      // cargados, así que reabrirlo es lo que hace alcanzable ese estado.
+      final modo = ModoServicio()..elegir(TipoEnvio.encomienda)..tocarEntrega();
+      expect(modo.faltaElegirTipo, isFalse);
     });
 
     test('elegir tipo deja el modo entrega y cierra el selector', () {
