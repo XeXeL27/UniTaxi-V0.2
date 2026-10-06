@@ -12,6 +12,7 @@ import '../../widgets/listado_remoto.dart';
 import '../../widgets/modal_formulario.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../expediente/vista_expediente.dart';
+import '../personas/personas_api.dart';
 import 'modelos.dart';
 import 'reportes_api.dart';
 
@@ -24,6 +25,9 @@ const _resoluciones = [
   'OTRO',
 ];
 
+/// Resoluciones del reporte "Pasajero no se presento".
+const _resolucionesAusente = ['ADVERTENCIA_AL_PASAJERO', 'CUENTA_SUSPENDIDA', 'DESESTIMADO', 'OTRO'];
+
 class PantallaReportesEntrega extends StatelessWidget {
   const PantallaReportesEntrega({super.key});
 
@@ -31,14 +35,15 @@ class PantallaReportesEntrega extends StatelessWidget {
   Widget build(BuildContext context) {
     final api = ReportesApi(context.read<ClienteApi>());
     return ListadoRemoto<ReporteEntrega>(
-      titulo: 'Reportes de entrega',
+      titulo: 'Reportes',
       icono: Iconos.triangleExclamation,
       nombreArchivo: 'reportes-entrega',
       cargar: api.listar,
       columnas: [
         ColumnaTabla(titulo: 'Reporte', tipo: TipoColumna.numero, valor: (r) => r.id),
         ColumnaTabla(titulo: 'Viaje', tipo: TipoColumna.numero, valor: (r) => r.idViaje),
-        ColumnaTabla(titulo: 'Incidente', valor: (r) => r.motivo),
+        ColumnaTabla(titulo: 'Incidente', valor: (r) => Formato.enumTexto(r.motivo)),
+        ColumnaTabla(titulo: 'Pasajero', valor: (r) => r.nombrePasajero ?? ''),
         ColumnaTabla(titulo: 'Tipo', valor: (r) => r.tipoEnvio ?? ''),
         ColumnaTabla(titulo: 'Situación', tipo: TipoColumna.estado, opciones: _situaciones, valor: (r) => r.situacion),
         ColumnaTabla(titulo: 'Fecha', tipo: TipoColumna.fechaHora, valor: (r) => r.fecha),
@@ -110,6 +115,42 @@ class _DetalleReporteState extends State<_DetalleReporte> {
         ]),
         const SizedBox(height: 14),
         Text(r.descripcion, style: const TextStyle(fontWeight: FontWeight.w600)),
+        if (r.esPasajeroAusente) ...[
+          const SizedBox(height: 14),
+          const Text('Pasajero reportado', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+          const SizedBox(height: 6),
+          DatosEnGrilla([
+            ('Pasajero', r.nombrePasajero),
+            ('Celular', r.telefonoPasajero),
+            ('Veces que no se presentó', '${r.vecesNoSePresento}'),
+            ('Cuenta', r.pasajeroSuspendido ? 'Suspendida' : 'Activa'),
+          ]),
+          if (r.idUsuarioPasajero != null && !r.pasajeroSuspendido) ...[
+            const SizedBox(height: 10),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(foregroundColor: ColoresApp.rojo),
+                onPressed: () => flujoAccion(
+                  context,
+                  mensajeConfirmacion: 'Va a suspender la cuenta de pasajero de ${r.nombrePasajero ?? 'esta persona'}. '
+                      'No podrá ingresar y, si tiene la sesión abierta, se cerrará.',
+                  textoConfirmar: 'Sí, suspender',
+                  accion: () => PersonasApi(context.read<ClienteApi>())
+                      .cambiarEstadoUsuario(r.idUsuarioPasajero!, suspender: true),
+                  tituloExito: '¡Cuenta suspendida!',
+                  mensajeExito: 'Se suspendió la cuenta de pasajero. Registra la resolución del reporte.',
+                  alTerminar: () {
+                    Navigator.of(context).pop();
+                    widget.recargar();
+                  },
+                ),
+                icon: const Icon(Iconos.userSlash, size: 16),
+                label: const Text('Suspender cuenta del pasajero'),
+              ),
+            ),
+          ],
+        ],
         if (r.motivoFalla != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Motivo registrado: ${r.motivoFalla}')),
         if (r.observacionCompra != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Observación de compra: ${r.observacionCompra}')),
         if (_foto != null) ...[
@@ -142,7 +183,8 @@ class _FormularioResolucion extends StatefulWidget {
 
 class _FormularioResolucionState extends State<_FormularioResolucion> {
   final _clave = GlobalKey<FormState>();
-  late String _tipo = widget.reporte.tipoResolucion ?? _resoluciones.first;
+  late final List<String> _opciones = widget.reporte.esPasajeroAusente ? _resolucionesAusente : _resoluciones;
+  late String _tipo = widget.reporte.tipoResolucion ?? _opciones.first;
   final _observacion = TextEditingController();
 
   @override
@@ -150,7 +192,7 @@ class _FormularioResolucionState extends State<_FormularioResolucion> {
 
   @override
   Widget build(BuildContext context) => ModalFormulario(
-    titulo: 'Resolver reporte de entrega',
+    titulo: widget.reporte.esPasajeroAusente ? 'Resolver reporte del pasajero' : 'Resolver reporte de entrega',
     icono: Iconos.clipboardCheck,
     claveFormulario: _clave,
     textoGuardar: 'Registrar resolución',
@@ -159,8 +201,13 @@ class _FormularioResolucionState extends State<_FormularioResolucion> {
       return true;
     },
     campos: [
-      const Text('La resolución solo registra la gestión administrativa. No genera devolución, cobro ni compensación automática.', style: TextStyle(color: ColoresApp.textoSuave)),
-      DropdownButtonFormField<String>(initialValue: _tipo, decoration: const InputDecoration(labelText: 'Tipo de resolución *'), items: [for (final tipo in _resoluciones) DropdownMenuItem(value: tipo, child: Text(Formato.enumTexto(tipo)))], onChanged: (v) => setState(() => _tipo = v ?? _tipo)),
+      Text(
+        widget.reporte.esPasajeroAusente
+            ? 'La resolución registra la decisión. Para suspender la cuenta usa el botón del detalle del reporte.'
+            : 'La resolución solo registra la gestión administrativa. No genera devolución, cobro ni compensación automática.',
+        style: const TextStyle(color: ColoresApp.textoSuave),
+      ),
+      DropdownButtonFormField<String>(initialValue: _tipo, decoration: const InputDecoration(labelText: 'Tipo de resolución *'), items: [for (final tipo in _opciones) DropdownMenuItem(value: tipo, child: Text(Formato.enumTexto(tipo)))], onChanged: (v) => setState(() => _tipo = v ?? _tipo)),
       TextFormField(controller: _observacion, maxLines: 4, maxLength: 1000, decoration: const InputDecoration(labelText: 'Observación del administrador *'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Describa la gestión realizada' : null),
     ],
   );

@@ -23,5 +23,22 @@ public record SolicitudViajeRequest(
         @Size(max = 100) String destinoNombre,
         @PositiveOrZero BigDecimal precioSugerido,
         MetodoPago metodoPago,
-        @Valid DatosEntregaRequest datosEntrega) {
+        @Valid DatosEntregaRequest datosEntrega,
+        /** Viaje para otra persona: quien pide no viaja. Nombre y celular de quien viaja. */
+        Boolean paraOtraPersona,
+        @Size(max = 150) String nombrePasajeroTercero,
+        @Size(max = 20) String telefonoPasajeroTercero,
+        /** true: paga quien pide (por QR); false o null: paga quien viaja. */
+        Boolean pagaSolicitante) {
+
+    public SolicitudViajeRequest(Integer idCategoriaServicio, String origenWkt, String destinoWkt,
+            String origenDireccion, String destinoDireccion, String destinoNombre, BigDecimal precioSugerido,
+            MetodoPago metodoPago, DatosEntregaRequest datosEntrega) {
+        this(idCategoriaServicio, origenWkt, destinoWkt, origenDireccion, destinoDireccion, destinoNombre,
+                precioSugerido, metodoPago, datosEntrega, null, null, null, null);
+    }
+
+    public boolean esParaOtraPersona() {
+        return Boolean.TRUE.equals(paraOtraPersona);
+    }
 }

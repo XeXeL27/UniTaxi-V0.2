@@ -130,6 +130,25 @@ public class Viaje extends EntidadAuditable {
     @Column(name = "calificacion_ofrecida_pasajero")
     private Boolean calificacionOfrecidaPasajero = false;
 
+    /** Quien pidio el viaje para otra persona avisa que ya pago por QR ("Ya pague"). */
+    @Column(name = "pago_avisado_en")
+    private LocalDateTime pagoAvisadoEn;
+
+    /** El conductor confirma que recibio el pago por QR (de quien pidio o de la persona que viaja). */
+    @Column(name = "pago_recibido_en")
+    private LocalDateTime pagoRecibidoEn;
+
+    /** Veces que el conductor aviso "te estoy esperando" ("Llegue" es la primera; maximo 3). */
+    @Column(name = "avisos_espera", nullable = false, columnDefinition = "integer default 0 not null")
+    private Integer avisosEspera = 0;
+
+    @Column(name = "ultimo_aviso_espera")
+    private LocalDateTime ultimoAvisoEspera;
+
+    /** Cancelado porque el pasajero no se presento tras los 3 avisos (no se republica; hay reporte). */
+    @Column(name = "pasajero_no_se_presento", nullable = false, columnDefinition = "boolean default false not null")
+    private Boolean pasajeroNoSePresento = false;
+
     @Column(name = "fecha_inicio")
     private LocalDateTime fechaInicio;
 

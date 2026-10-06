@@ -74,6 +74,16 @@ class ControladorMapa extends ChangeNotifier {
   /// Si es true, el punto A se mueve con el GPS (pasajero eligiendo su viaje).
   bool aSigueGps = false;
 
+  /// No dibujar el punto azul del GPS ni centrar el mapa en el (taxi pedido para otra persona: la
+  /// ubicacion de quien lo pide no tiene que ver con el viaje).
+  bool ocultarMiUbicacion = false;
+
+  void cambiarOcultarMiUbicacion(bool ocultar) {
+    if (ocultarMiUbicacion == ocultar) return;
+    ocultarMiUbicacion = ocultar;
+    _avisar();
+  }
+
   /// Posicion del conductor asignado al viaje del pasajero (solo en la app del pasajero).
   LatLng? conductorUbicacion;
   double? conductorRumbo;
@@ -168,7 +178,7 @@ class ControladorMapa extends ChangeNotifier {
     final gps = miUbicacion;
     if (a != null && b != null) {
       encuadrar();
-    } else if (gps != null) {
+    } else if (gps != null && !ocultarMiUbicacion) {
       _mover(gps, zoomCalle);
     }
   }
@@ -188,7 +198,7 @@ class ControladorMapa extends ChangeNotifier {
         _trazarAcercamiento();
       }
     }
-    if (centrar) _mover(posicion, zoomCalle);
+    if (centrar && !ocultarMiUbicacion) _mover(posicion, zoomCalle);
     alMoverseGps?.call(posicion);
     _avisar();
   }
@@ -390,6 +400,11 @@ class ControladorMapa extends ChangeNotifier {
 
   /// Centra el mapa en la ubicacion del telefono; false si no hay GPS.
   Future<bool> centrarEnMiUbicacion() async {
+    if (ocultarMiUbicacion) {
+      // Con el punto azul oculto, el boton muestra el viaje (partida, destino y conductor).
+      encuadrar();
+      return true;
+    }
     final gps = miUbicacion ?? await ServiciosMapa.ubicacionActual();
     if (_cerrado || gps == null) return false;
     if (miUbicacion == null) {

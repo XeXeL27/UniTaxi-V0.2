@@ -135,3 +135,159 @@ class SelectorTipoEntrega extends StatelessWidget {
     );
   }
 }
+
+/// "Para mí | Para otra persona", debajo del segmentado de servicio cuando se pide un viaje. Va en la
+/// cabecera (y no solo en el panel) para que se vea antes de elegir los puntos.
+class SelectorParaQuien extends StatelessWidget {
+  final bool paraOtra;
+  final ValueChanged<bool> onCambiar;
+
+  const SelectorParaQuien({super.key, required this.paraOtra, required this.onCambiar});
+
+  @override
+  Widget build(BuildContext context) {
+    Widget opcion(FaIconData icono, String texto, bool valor) {
+      final elegido = paraOtra == valor;
+      return Expanded(
+        child: InkWell(
+          borderRadius: BorderRadius.circular(altoSelectorServicio / 2),
+          onTap: () => onCambiar(valor),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            height: altoSelectorServicio - 6,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: elegido ? ColoresApp.azul : Colors.transparent,
+              borderRadius: BorderRadius.circular(altoSelectorServicio / 2),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                FaIcon(icono, size: 13, color: elegido ? ColoresApp.blanco : ColoresApp.azul),
+                const SizedBox(width: 7),
+                Text(
+                  texto,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: elegido ? ColoresApp.blanco : ColoresApp.azul),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Container(
+      height: altoSelectorServicio,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: ColoresApp.blanco,
+        borderRadius: BorderRadius.circular(altoSelectorServicio / 2),
+        boxShadow: const [BoxShadow(color: Color(0x1F000000), blurRadius: 10, offset: Offset(0, 3))],
+      ),
+      child: Row(
+        children: [
+          opcion(FontAwesomeIcons.user, 'Para mí', false),
+          opcion(FontAwesomeIcons.userGroup, 'Para otra persona', true),
+        ],
+      ),
+    );
+  }
+}
+
+/// Taxi para otra persona: los dos lugares en lugar del buscador "¿A donde vas?". Cada fila abre el
+/// buscador (escribir la direccion) o deja tocar el mapa; la fila que se esta marcando va resaltada.
+class BarraDosPuntos extends StatelessWidget {
+  final String? partida;
+  final String? llegada;
+
+  /// true: se esta marcando la partida; false: la llegada; null: ninguna.
+  final bool? marcandoPartida;
+  final VoidCallback onPartida;
+  final VoidCallback onLlegada;
+
+  const BarraDosPuntos({
+    super.key,
+    required this.partida,
+    required this.llegada,
+    required this.marcandoPartida,
+    required this.onPartida,
+    required this.onLlegada,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget fila({
+      required Color color,
+      required String vacio,
+      required String? valor,
+      required bool activa,
+      required VoidCallback onTap,
+    }) =>
+        InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            height: 48,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: activa ? ColoresApp.azulSuave : Colors.transparent,
+              borderRadius: BorderRadius.circular(14),
+              border: activa ? Border.all(color: ColoresApp.azul, width: 1.4) : null,
+            ),
+            child: Row(
+              children: [
+                Container(width: 12, height: 12, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    valor ?? vacio,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: valor == null ? ColoresApp.grisTexto : ColoresApp.tinta,
+                      fontSize: 15,
+                      fontWeight: valor == null ? FontWeight.w500 : FontWeight.w600,
+                    ),
+                  ),
+                ),
+                FaIcon(
+                  valor == null ? FontAwesomeIcons.magnifyingGlass : FontAwesomeIcons.pen,
+                  size: 13,
+                  color: ColoresApp.grisTexto,
+                ),
+              ],
+            ),
+          ),
+        );
+
+    return Material(
+      color: ColoresApp.blanco,
+      elevation: 5,
+      shadowColor: const Color(0x55000000),
+      borderRadius: BorderRadius.circular(18),
+      child: Padding(
+        padding: const EdgeInsets.all(5),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            fila(
+              color: ColoresApp.azul,
+              vacio: 'Punto de partida: dónde lo recogen',
+              valor: partida,
+              activa: marcandoPartida == true,
+              onTap: onPartida,
+            ),
+            fila(
+              color: ColoresApp.rojo,
+              vacio: 'Punto de llegada: dónde lo dejan',
+              valor: llegada,
+              activa: marcandoPartida == false,
+              onTap: onLlegada,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

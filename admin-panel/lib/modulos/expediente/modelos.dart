@@ -202,6 +202,11 @@ class ViajeExpediente {
   /// Datos del pedido si el viaje es DELIVERY (null en un viaje de taxi).
   final EntregaExpediente? entrega;
 
+  /// Taxi pedido para otra persona: quien viajo, su celular y si pago quien lo pidio.
+  final String? nombreTercero;
+  final String? telefonoTercero;
+  final bool pagaSolicitante;
+
   ViajeExpediente({
     required this.id,
     required this.nombrePasajero,
@@ -218,6 +223,9 @@ class ViajeExpediente {
     this.fechaInicio,
     this.fechaFin,
     this.entrega,
+    this.nombreTercero,
+    this.telefonoTercero,
+    this.pagaSolicitante = false,
   });
 
   DateTime? get fecha => fechaInicio ?? fechaFin;
@@ -237,6 +245,9 @@ class ViajeExpediente {
     canceladoPor: json['canceladoPor'] as String?,
     fechaInicio: Formato.leerFecha(json['fechaInicio']),
     fechaFin: Formato.leerFecha(json['fechaFin']),
+    nombreTercero: json['paraOtraPersona'] == true ? json['nombrePasajeroTercero'] as String? : null,
+    telefonoTercero: json['paraOtraPersona'] == true ? json['telefonoPasajeroTercero'] as String? : null,
+    pagaSolicitante: json['pagaSolicitante'] as bool? ?? false,
     entrega: json['datosEntrega'] is Map<String, dynamic>
         ? EntregaExpediente.desdeJson(json['datosEntrega'] as Map<String, dynamic>)
         : null,

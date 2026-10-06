@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../comun/carnet_observado.dart';
 import 'cliente_api.dart';
 import 'notificador.dart';
+import 'sonido.dart';
 import 'preferencias_aviso.dart';
 
 /// Notificaciones push (Firebase Cloud Messaging): el backend avisa al pasajero que aceptaron su
@@ -93,9 +94,12 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
   final idViaje = int.tryParse('${datos['idViaje'] ?? ''}');
   final evento = switch (datos['tipo']) {
     'VIAJE_ACEPTADO' => 1,
-    'CONDUCTOR_LLEGO' || 'REPARTIDOR_LLEGO' => 2,
+    'VIAJE_COMPLETADO' => 5,
+    'CONDUCTOR_LLEGO' => eventoLlegada(int.tryParse('${datos['aviso'] ?? ''}') ?? 1),
+    'REPARTIDOR_LLEGO' => 2,
     'PAQUETE_RECOGIDO' => 3,
     'PAQUETE_ENTREGADO' => 4,
+    'VIAJE_CANCELADO' => 8,
     _ => null,
   };
   if (idViaje == null || evento == null) return;
@@ -104,9 +108,22 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
     '${datos['cuerpo'] ?? ''}',
     id: idNotificacionViaje(idViaje, evento),
     pedirPermiso: false,
-    sonidoPropio: evento == 1,
+    sonido: sonidoDeEvento(evento),
   );
 }
+
+/// Eventos del viaje (ultimo digito del id de la notificacion): 1 aceptado, 2 el conductor llego,
+/// 3 paquete recogido, 4 paquete entregado, 5 viaje terminado, 6 y 7 segundo y tercer aviso de que el
+/// conductor espera, 8 cancelado porque el pasajero no se presento.
+int eventoLlegada(int aviso) => aviso <= 1 ? 2 : 4 + aviso.clamp(2, 3);
+
+/// Audio de cada evento: aceptado, el taxi llego (cada aviso) y viaje finalizado.
+SonidoAviso? sonidoDeEvento(int evento) => switch (evento) {
+      1 => SonidoAviso.viajeAceptado,
+      2 || 6 || 7 => SonidoAviso.llegoTaxi,
+      5 => SonidoAviso.viajeFinalizado,
+      _ => null,
+    };
 
 /// Id de la notificacion de un aviso del viaje: el mismo en la app y en el push.
 int idNotificacionViaje(int idViaje, int evento) => 100000 + (idViaje % 100000) * 10 + evento;

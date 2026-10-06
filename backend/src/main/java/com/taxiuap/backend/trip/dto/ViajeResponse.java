@@ -44,7 +44,20 @@ public record ViajeResponse(
         boolean calificacionOfrecida,
          /** Nombre del favorito elegido como destino: solo en las respuestas al pasajero (si no, null). */
          String destinoNombre,
-         DatosEntregaResponse datosEntrega) {
+         DatosEntregaResponse datosEntrega,
+         /** Viaje para otra persona: quien viaja, si paga quien pidio y el estado del pago por QR. */
+         boolean paraOtraPersona,
+         String nombrePasajeroTercero,
+         String telefonoPasajeroTercero,
+         boolean pagaSolicitante,
+         LocalDateTime pagoAvisadoEn,
+         LocalDateTime pagoRecibidoEn,
+         /** Avisos "te estoy esperando" del conductor (maximo 3) y la hora del ultimo. */
+         int avisosEspera,
+         LocalDateTime ultimoAvisoEspera,
+         boolean pasajeroNoSePresento,
+         /** Celular de quien pidio el viaje, para que el conductor lo llame mientras lo espera. */
+         String telefonoPasajero) {
 
     /** El mismo viaje sin el nombre del favorito, para el conductor. */
     public ViajeResponse sinNombreDestino() {
@@ -53,6 +66,8 @@ public record ViajeResponse(
                 destinoWkt, origenDireccion, destinoDireccion, distanciaKm, duracionMin, precioOriginal,
                 montoDescuento, precioFinal, precioEstimado, situacionViaje, canceladoPor, fechaInicio, fechaFin,
                 calificadoPorPasajero, metodoPago, metodoPagoPedido, conductorTieneQr, calificacionOfrecida, null,
-                datosEntrega == null ? null : datosEntrega.paraConductor());
+                datosEntrega == null ? null : datosEntrega.paraConductor(), paraOtraPersona,
+                nombrePasajeroTercero, telefonoPasajeroTercero, pagaSolicitante, pagoAvisadoEn, pagoRecibidoEn,
+                avisosEspera, ultimoAvisoEspera, pasajeroNoSePresento, telefonoPasajero);
     }
 }

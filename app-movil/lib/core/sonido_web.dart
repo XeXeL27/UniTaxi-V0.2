@@ -1,12 +1,12 @@
 import 'package:web/web.dart' as web;
 
-web.HTMLAudioElement? _audio;
+final _audios = <String, web.HTMLAudioElement>{};
 
 /// Navegador: el mismo MP3 servido con la app. Si el navegador bloquea el audio, no pasa nada.
-Future<void> sonarAviso() async {
+Future<void> sonarAviso(String archivo) async {
   try {
-    final audio = _audio ??= web.HTMLAudioElement()
-      ..src = 'assets/assets/sonidos/viaje_aceptado.mp3'
+    final audio = _audios[archivo] ??= web.HTMLAudioElement()
+      ..src = 'assets/assets/sonidos/$archivo.mp3'
       ..loop = false;
     audio.pause();
     audio.currentTime = 0;

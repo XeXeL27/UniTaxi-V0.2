@@ -328,6 +328,9 @@ class ListaViajes extends StatelessWidget {
                           mostrarPasajero ? 'Pasajero: ${viaje.nombrePasajero}' : 'Conductor: ${viaje.nombreConductor}',
                           if (!mostrarPasajero && viaje.placa != null) 'Placa ${viaje.placa}',
                           'Precio ${monedaBs(viaje.precioFinal)}',
+                          if (viaje.nombreTercero != null)
+                            'Para ${viaje.nombreTercero}${viaje.telefonoTercero == null ? '' : ' (${viaje.telefonoTercero})'}, '
+                                '${viaje.pagaSolicitante ? 'pagó quien lo pidió' : 'pagó quien viajó'}',
                           if (viaje.canceladoPor != null) 'Cancelado por ${Formato.enumTexto(viaje.canceladoPor).toLowerCase()}',
                         ].join('   |   '),
                         style: const TextStyle(fontSize: 13, color: ColoresApp.texto),

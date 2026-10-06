@@ -13,7 +13,8 @@ typedef DestinoElegido = ({LatLng posicion, String nombre});
 
 /// Abre el buscador "¿A donde quieres ir?": sin texto muestra los favoritos; al escribir busca
 /// lugares cerca de [cerca]. Devuelve el lugar elegido o null (tambien si prefiere tocar el mapa).
-Future<DestinoElegido?> buscarDestino(BuildContext context, {required List<Favorito> favoritos, LatLng? cerca}) {
+Future<DestinoElegido?> buscarDestino(BuildContext context,
+    {required List<Favorito> favoritos, LatLng? cerca, String titulo = '¿A dónde quieres ir?'}) {
   return showModalBottomSheet<DestinoElegido>(
     context: context,
     isScrollControlled: true,
@@ -23,7 +24,7 @@ Future<DestinoElegido?> buscarDestino(BuildContext context, {required List<Favor
     shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
     builder: (_) => FractionallySizedBox(
       heightFactor: 0.9,
-      child: _Buscador(favoritos: favoritos, cerca: cerca),
+      child: _Buscador(favoritos: favoritos, cerca: cerca, titulo: titulo),
     ),
   );
 }
@@ -31,8 +32,9 @@ Future<DestinoElegido?> buscarDestino(BuildContext context, {required List<Favor
 class _Buscador extends StatefulWidget {
   final List<Favorito> favoritos;
   final LatLng? cerca;
+  final String titulo;
 
-  const _Buscador({required this.favoritos, this.cerca});
+  const _Buscador({required this.favoritos, this.cerca, required this.titulo});
 
   @override
   State<_Buscador> createState() => _BuscadorState();
@@ -101,10 +103,10 @@ class _BuscadorState extends State<_Buscador> {
           padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
           child: Row(
             children: [
-              const Expanded(
+              Expanded(
                 child: Text(
-                  '¿A dónde quieres ir?',
-                  style: TextStyle(color: ColoresApp.azul, fontSize: 20, fontWeight: FontWeight.w700),
+                  widget.titulo,
+                  style: const TextStyle(color: ColoresApp.azul, fontSize: 20, fontWeight: FontWeight.w700),
                 ),
               ),
               IconButton(

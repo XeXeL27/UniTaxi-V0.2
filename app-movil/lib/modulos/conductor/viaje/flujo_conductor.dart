@@ -6,6 +6,9 @@ import 'package:latlong2/latlong.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/chat.dart';
 import '../../../core/notificador.dart';
+import '../../../core/vibracion.dart';
+import '../../../core/sonido.dart';
+import '../../../core/preferencias_aviso.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/controlador_mapa.dart';
 import 'conductor_api.dart';
@@ -335,6 +338,26 @@ class FlujoConductor extends ChangeNotifier {
   /// El conductor cambia el metodo de pago (efectivo o QR) sin que el pasajero lo pida.
   Future<void> cambiarMetodoPago(String metodoPago) => _accionViaje((id) => api.cambiarMetodoPago(id, metodoPago));
 
+  /// Avisar de nuevo al pasajero "te estoy esperando" (hasta 3 avisos, 1 minuto entre cada uno).
+  Future<void> avisarEspera() => _accionViaje((id) => api.avisarEspera(id));
+
+  /// Tras los 3 avisos: cancela el viaje (sin republicarlo) y reporta al pasajero para el admin.
+  Future<void> pasajeroNoSePresento(String comentario) async {
+    final actual = viaje;
+    if (actual == null || ocupado) return;
+    ocupado = true;
+    _avisar();
+    try {
+      _aplicar(await api.pasajeroNoSePresento(actual.id, comentario));
+    } finally {
+      ocupado = false;
+      _avisar();
+    }
+  }
+
+  /// Le llego el pago por QR (de quien pidio el viaje o de quien viaja).
+  Future<void> confirmarPagoRecibido() => _accionViaje((id) => api.pagoRecibido(id));
+
   /// Acepta o rechaza el cambio de metodo de pago que pidio el pasajero.
   Future<void> responderCambioPago(bool aceptar) => _accionViaje((id) => api.responderCambioPago(id, aceptar));
 
@@ -432,14 +455,19 @@ class FlujoConductor extends ChangeNotifier {
 
   void _aplicar(Viaje nuevo) {
     if (nuevo.situacion == SituacionViaje.completado) {
+      // Viaje finalizado (con el boton o solo, a 50 m del destino): su audio y vibracion.
+      if (PreferenciasAviso.sonido.value) unawaited(Sonido.aviso(SonidoAviso.viajeFinalizado));
+      unawaited(Vibracion.corta());
       chat?.cerrar();
       finalizado = nuevo;
       _entrarLista();
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
       chat?.cerrar();
-      aviso = nuevo.datosEntrega?.estadoEntrega == EstadoEntrega.noEntregado
-          ? 'La entrega fue reportada como no entregada.'
-          : 'El pedido fue reportado y cancelado.';
+      aviso = nuevo.pasajeroNoSePresento
+          ? 'Viaje cancelado. El administrador revisará tu reporte del pasajero.'
+          : nuevo.datosEntrega?.estadoEntrega == EstadoEntrega.noEntregado
+              ? 'La entrega fue reportada como no entregada.'
+              : 'El pedido fue reportado y cancelado.';
       _entrarLista();
     } else {
       _entrarViaje(nuevo);

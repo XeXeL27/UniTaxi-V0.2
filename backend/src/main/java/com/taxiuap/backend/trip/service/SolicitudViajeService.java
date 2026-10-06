@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
+import com.taxiuap.backend.identity.dto.ReglasRegistro;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
@@ -97,6 +98,10 @@ public class SolicitudViajeService {
 
         CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
         validarDatosEntrega(categoriaServicio, request.datosEntrega());
+        boolean paraOtra = request.esParaOtraPersona();
+        if (paraOtra) {
+            validarPasajeroTercero(categoriaServicio, request);
+        }
         Point origen = PuntoDesdeWkt.convertir(request.origenWkt());
         Point destino = PuntoDesdeWkt.convertir(request.destinoWkt());
         boolean esDelivery = categoriaServicio.esDeliveryCompatible();
@@ -113,6 +118,7 @@ public class SolicitudViajeService {
             cotizacion = calculoPrecioService.cotizar(pasajero, origen, destino);
             precioSolicitud = cotizacion.precioNormal();
         }
+        boolean pagaSolicitante = paraOtra && Boolean.TRUE.equals(request.pagaSolicitante());
 
         SolicitudViaje solicitud = new SolicitudViaje();
         solicitud.setPasajero(pasajero);
@@ -126,9 +132,18 @@ public class SolicitudViajeService {
         solicitud.setPrecioSugerido(precioSolicitud);
         if (cotizacion != null) {
             solicitud.setDistanciaKm(cotizacion.distanciaKm());
-            solicitud.setDescuentoEstudiante(cotizacion.descuentoEstudiante());
+            // El descuento de estudiante es para que viaje el estudiante: no para otra persona.
+            solicitud.setDescuentoEstudiante(paraOtra ? BigDecimal.ZERO.setScale(2) : cotizacion.descuentoEstudiante());
         }
-        solicitud.setMetodoPago(metodoPagoPermitido(request.metodoPago()));
+        // Quien paga desde lejos solo puede hacerlo por el QR del conductor.
+        solicitud.setMetodoPago(pagaSolicitante ? MetodoPago.QR : metodoPagoPermitido(request.metodoPago()));
+        solicitud.setParaOtraPersona(paraOtra);
+        if (paraOtra) {
+            solicitud.setNombrePasajeroTercero(request.nombrePasajeroTercero().trim().replaceAll("\\s+", " ")
+                    .toUpperCase(java.util.Locale.forLanguageTag("es")));
+            solicitud.setTelefonoPasajeroTercero(request.telefonoPasajeroTercero().trim());
+        }
+        solicitud.setPagaSolicitante(pagaSolicitante);
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         solicitud.setFechaSolicitud(LocalDateTime.now());
         solicitud.setEstadoSolViaje(EstadoRegistro.A);
@@ -147,14 +162,37 @@ public class SolicitudViajeService {
         return new PrecioViajeResponse(calculoPrecioService.precioBase(), "Bs", porcentajeComision);
     }
 
-    /** Precio del viaje elegido por el pasajero, con su descuento de estudiante, antes de pedirlo. */
-    public CotizacionViajeResponse cotizar(double origenLat, double origenLng, double destinoLat, double destinoLng) {
+    /**
+     * Precio del viaje elegido por el pasajero, con su descuento de estudiante, antes de pedirlo. Para
+     * otra persona no hay descuento: se muestra el precio normal.
+     */
+    public CotizacionViajeResponse cotizar(double origenLat, double origenLng, double destinoLat, double destinoLng,
+            boolean paraOtraPersona) {
         Pasajero pasajero = buscarPasajero();
         Point origen = PuntoDesdeWkt.convertir(String.format(java.util.Locale.ROOT, "POINT(%.7f %.7f)", origenLng, origenLat));
         Point destino = PuntoDesdeWkt.convertir(String.format(java.util.Locale.ROOT, "POINT(%.7f %.7f)", destinoLng, destinoLat));
         CotizacionViaje cotizacion = calculoPrecioService.cotizar(pasajero, origen, destino);
+        if (paraOtraPersona) {
+            return new CotizacionViajeResponse(cotizacion.distanciaKm(), cotizacion.duracionMin(), cotizacion.porCalles(),
+                    cotizacion.precioNormal(), BigDecimal.ZERO.setScale(2), cotizacion.precioNormal(), "Bs");
+        }
         return new CotizacionViajeResponse(cotizacion.distanciaKm(), cotizacion.duracionMin(), cotizacion.porCalles(),
                 cotizacion.precioNormal(), cotizacion.descuentoEstudiante(), cotizacion.precioFinal(), "Bs");
+    }
+
+    /** Viaje para otra persona: solo taxi, con el nombre y el celular de quien viaja. */
+    private static void validarPasajeroTercero(CategoriaServicio categoria, SolicitudViajeRequest request) {
+        if (categoria.esDeliveryCompatible()) {
+            throw new NegocioException("Un pedido de entrega no se pide para otra persona");
+        }
+        String nombre = request.nombrePasajeroTercero();
+        if (nombre == null || nombre.isBlank() || !nombre.trim().matches("[\\p{L} ]{3,150}")) {
+            throw new NegocioException("Escribe el nombre de la persona que va a viajar");
+        }
+        String telefono = request.telefonoPasajeroTercero();
+        if (telefono == null || !telefono.trim().matches(ReglasRegistro.PATRON_CELULAR)) {
+            throw new NegocioException(ReglasRegistro.MENSAJE_CELULAR);
+        }
     }
 
     public List<SolicitudViajeResponse> listarPropias() {
@@ -353,7 +391,12 @@ public class SolicitudViajeService {
                         esDelUsuarioActual(solicitud.getPasajero())),
                 solicitud.getPrecioSugerido(),
                 solicitud.getDescuentoEstudiante() != null ? solicitud.getDescuentoEstudiante() : BigDecimal.ZERO,
-                solicitud.getDistanciaKm());
+                solicitud.getDistanciaKm(),
+                solicitud.esParaOtraPersona(),
+                solicitud.getNombrePasajeroTercero(),
+                // El celular de quien viaja solo lo ve quien pidio; el conductor lo recibe al aceptar (viaje).
+                esDelUsuarioActual(solicitud.getPasajero()) ? solicitud.getTelefonoPasajeroTercero() : null,
+                Boolean.TRUE.equals(solicitud.getPagaSolicitante()));
     }
 
     private static boolean esDelUsuarioActual(Pasajero pasajero) {

@@ -17,8 +17,8 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        // Vibracion y sonido de aviso para el pasajero (viaje aceptado, conductor llego). El sonido
-        // propio esta apagado por ahora en la app (Sonido.activo).
+        // Vibracion y sonidos de aviso: viaje aceptado, el taxi llego (puede repetirse) y viaje
+        // finalizado (pasajero al opinar, conductor al finalizar). "sonar" recibe el nombre del audio.
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "unitaxi/vibracion").setMethodCallHandler { llamada, resultado ->
             when (llamada.method) {
                 "vibrar" -> {
@@ -26,7 +26,7 @@ class MainActivity : FlutterFragmentActivity() {
                     resultado.success(null)
                 }
                 "sonar" -> {
-                    sonar()
+                    sonar(llamada.argument<String>("sonido") ?: "viaje_aceptado")
                     resultado.success(null)
                 }
                 else -> resultado.notImplemented()
@@ -38,7 +38,12 @@ class MainActivity : FlutterFragmentActivity() {
 
     // Sonido de aviso una sola vez (sin bucle). Como sonido de notificacion: respeta el modo silencio.
     // Si ya estaba sonando se corta, asi nunca se superponen.
-    private fun sonar() {
+    private fun sonar(sonido: String) {
+        val recurso = when (sonido) {
+            "llego_taxi" -> R.raw.llego_taxi
+            "viaje_finalizado" -> R.raw.viaje_finalizado
+            else -> R.raw.viaje_aceptado
+        }
         try {
             reproductor?.release()
             reproductor = null
@@ -46,7 +51,7 @@ class MainActivity : FlutterFragmentActivity() {
                 .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
-            val nuevo = MediaPlayer.create(this, R.raw.viaje_aceptado, atributos, 0) ?: return
+            val nuevo = MediaPlayer.create(this, recurso, atributos, 0) ?: return
             nuevo.isLooping = false
             nuevo.setOnCompletionListener {
                 it.release()

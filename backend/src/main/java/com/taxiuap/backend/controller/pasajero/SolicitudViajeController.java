@@ -57,9 +57,10 @@ public class SolicitudViajeController {
     @GetMapping("/cotizacion")
     public ResponseEntity<ApiResponse<CotizacionViajeResponse>> cotizacion(
             @RequestParam double origenLat, @RequestParam double origenLng,
-            @RequestParam double destinoLat, @RequestParam double destinoLng) {
+            @RequestParam double destinoLat, @RequestParam double destinoLng,
+            @RequestParam(defaultValue = "false") boolean paraOtraPersona) {
         return ResponseEntity.ok(ApiResponse.exito(
-                solicitudViajeService.cotizar(origenLat, origenLng, destinoLat, destinoLng)));
+                solicitudViajeService.cotizar(origenLat, origenLng, destinoLat, destinoLng, paraOtraPersona)));
     }
 
     @GetMapping("/{id}")

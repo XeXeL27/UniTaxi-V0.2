@@ -1,3 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- El sonido de aviso se usa por nombre (canal de notificacion y MainActivity): que R8 no lo quite. -->
-<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@raw/viaje_aceptado" />
+<!-- Los sonidos de aviso se usan por nombre (canales de notificacion y MainActivity): que R8 no los quite. -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@raw/viaje_aceptado,@raw/llego_taxi,@raw/viaje_finalizado" />

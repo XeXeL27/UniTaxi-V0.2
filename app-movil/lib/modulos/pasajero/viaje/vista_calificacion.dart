@@ -103,13 +103,17 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                         Text(
                           viaje.datosEntrega != null
                               ? '¿Cómo fue tu entrega con ${viaje.primerNombreConductor}?'
-                              : '¿Cómo fue tu viaje con ${viaje.primerNombreConductor}?',
+                              : viaje.tercero != null
+                                  ? '¿Cómo fue el viaje de ${viaje.tercero!.primerNombre} con ${viaje.primerNombreConductor}?'
+                                  : '¿Cómo fue tu viaje con ${viaje.primerNombreConductor}?',
                           style: const TextStyle(color: ColoresApp.azul, fontSize: 16.5, fontWeight: FontWeight.w700),
                         ),
                         Text(
                           viaje.datosEntrega != null
                               ? 'Servicio de entrega: ${formatoBs(viaje.precioFinal)}.'
-                              : 'Llegaste a tu destino. ${MetodoPago.frase('Pagas ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)}.',
+                              : viaje.tercero != null
+                                  ? '${viaje.tercero!.primerNombre} llegó a su destino. Viaje de ${formatoBs(viaje.precioFinal)}.'
+                                  : 'Llegaste a tu destino. ${MetodoPago.frase('Pagas ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)}.',
                           style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
                         ),
                       ],

@@ -296,6 +296,38 @@ class CotizacionViaje {
   bool get conDescuento => descuentoEstudiante > 0;
 }
 
+/// Persona que viaja cuando el taxi se pidio para otra persona (no tiene cuenta en la app).
+/// [pagaSolicitante]: paga quien pidio, por QR desde su app; si no, paga quien viaja al subir.
+class PasajeroTercero {
+  final String nombre;
+  final String? telefono;
+  final bool pagaSolicitante;
+
+  const PasajeroTercero({required this.nombre, this.telefono, this.pagaSolicitante = false});
+
+  /// null si el viaje es de quien lo pidio.
+  static PasajeroTercero? desdeJson(Map<String, dynamic> json) => json['paraOtraPersona'] == true
+      ? PasajeroTercero(
+          nombre: json['nombrePasajeroTercero'] as String? ?? 'Pasajero',
+          telefono: json['telefonoPasajeroTercero'] as String?,
+          pagaSolicitante: json['pagaSolicitante'] as bool? ?? false,
+        )
+      : null;
+
+  Map<String, dynamic> aJson() => {
+        'paraOtraPersona': true,
+        'nombrePasajeroTercero': nombre.trim(),
+        'telefonoPasajeroTercero': ?telefono?.trim(),
+        'pagaSolicitante': pagaSolicitante,
+      };
+
+  /// "Juan" (para los textos: "Avisale a Juan").
+  String get primerNombre {
+    final primero = nombre.trim().split(RegExp(r'\s+')).first.toLowerCase();
+    return primero.isEmpty ? 'la persona' : primero[0].toUpperCase() + primero.substring(1);
+  }
+}
+
 /// Solicitud de viaje (SolicitudViajeResponse).
 class Solicitud {
   final int id;
@@ -319,6 +351,9 @@ class Solicitud {
   final double descuentoEstudiante;
   final double? precioNormal;
 
+  /// Quien viaja, si el taxi se pidio para otra persona.
+  final PasajeroTercero? tercero;
+
   const Solicitud({
     required this.id,
     required this.nombrePasajero,
@@ -334,9 +369,11 @@ class Solicitud {
     this.descuentoEstudiante = 0,
     this.precioNormal,
     this.datosEntrega,
+    this.tercero,
   });
 
   factory Solicitud.desdeJson(Map<String, dynamic> json) => Solicitud(
+    tercero: PasajeroTercero.desdeJson(json),
     id: (json['idSolicitud'] as num).toInt(),
     nombrePasajero: json['nombrePasajero'] as String? ?? 'Pasajero',
     origen: puntoDesdeWkt(json['origenWkt'] as String?),
@@ -403,6 +440,23 @@ class Viaje {
   final bool conductorTieneQr;
   final DatosEntrega? datosEntrega;
 
+  /// Quien viaja, si el taxi se pidio para otra persona.
+  final PasajeroTercero? tercero;
+
+  /// Quien pidio avisó que pagó por QR ("Ya pagué") y el conductor confirmó que le llegó.
+  final DateTime? pagoAvisadoEn;
+  final DateTime? pagoRecibidoEn;
+
+  /// Avisos "te estoy esperando" del conductor (Llegue es el primero; maximo 3) y la hora del ultimo.
+  final int avisosEspera;
+  final DateTime? ultimoAvisoEspera;
+
+  /// Cancelado porque el pasajero no se presento tras los 3 avisos.
+  final bool pasajeroNoSePresento;
+
+  /// Celular de quien pidio el viaje (para el conductor, mientras el viaje esta activo).
+  final String? telefonoPasajero;
+
   const Viaje({
     required this.id,
     required this.nombrePasajero,
@@ -430,9 +484,23 @@ class Viaje {
     this.metodoPagoPedido,
     this.conductorTieneQr = false,
     this.datosEntrega,
+    this.tercero,
+    this.pagoAvisadoEn,
+    this.pagoRecibidoEn,
+    this.avisosEspera = 0,
+    this.ultimoAvisoEspera,
+    this.pasajeroNoSePresento = false,
+    this.telefonoPasajero,
   });
 
   factory Viaje.desdeJson(Map<String, dynamic> json) => Viaje(
+    tercero: PasajeroTercero.desdeJson(json),
+    pagoAvisadoEn: fechaDesdeJson(json['pagoAvisadoEn']),
+    pagoRecibidoEn: fechaDesdeJson(json['pagoRecibidoEn']),
+    avisosEspera: (json['avisosEspera'] as num?)?.toInt() ?? 0,
+    ultimoAvisoEspera: fechaDesdeJson(json['ultimoAvisoEspera']),
+    pasajeroNoSePresento: json['pasajeroNoSePresento'] as bool? ?? false,
+    telefonoPasajero: json['telefonoPasajero'] as String?,
     id: (json['idViaje'] as num).toInt(),
     nombrePasajero: json['nombrePasajero'] as String? ?? 'Pasajero',
     nombreConductor: json['nombreConductor'] as String? ?? 'Conductor',
@@ -464,6 +532,12 @@ class Viaje {
   );
 
   bool get pagaConQr => metodoPago == MetodoPago.qr;
+
+  /// Viaje pedido para otra persona y pagado por quien lo pidio (por QR desde su app).
+  bool get pagaSolicitante => tercero?.pagaSolicitante ?? false;
+
+  /// Nombre de quien viaja: la otra persona o el pasajero de la cuenta.
+  String get nombreQuienViaja => tercero?.nombre ?? nombrePasajero;
 
   bool get tieneRuta => origen != null && destino != null;
 

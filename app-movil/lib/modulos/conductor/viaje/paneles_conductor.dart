@@ -1,5 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import '../../../widgets/dialogos.dart';
+import '../../../core/api_excepcion.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/formato.dart';
 import '../../../core/tema.dart';
@@ -172,11 +177,11 @@ class _TarjetaSolicitud extends StatelessWidget {
                       solicitud.datosEntrega!.tipoEnvio.nombre,
                       style: const TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w700, fontSize: 12),
                     ),
-                  AvatarIniciales(nombre: solicitud.nombrePasajero, radio: 16),
+                  AvatarIniciales(nombre: solicitud.tercero?.nombre ?? solicitud.nombrePasajero, radio: 16),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      solicitud.nombrePasajero,
+                      solicitud.tercero == null ? solicitud.nombrePasajero : 'Para: ${solicitud.tercero!.nombre}',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 15),
@@ -201,6 +206,8 @@ class _TarjetaSolicitud extends StatelessWidget {
                   if (metrosViaje != null)
                     DatoRuta(icono: FontAwesomeIcons.route, texto: 'Viaje de ${_km(metrosViaje)} aprox.'),
                   _DatoPago(solicitud.metodoPago),
+                  if (solicitud.tercero?.pagaSolicitante ?? false)
+                    const DatoRuta(icono: FontAwesomeIcons.userCheck, texto: 'Paga quien pidió'),
                 ],
               ),
               const SizedBox(height: 8),
@@ -243,17 +250,23 @@ class PanelDetalleSolicitud extends StatelessWidget {
       children: [
         Row(
           children: [
-            AvatarIniciales(nombre: solicitud.nombrePasajero, radio: 22),
+            AvatarIniciales(nombre: solicitud.tercero?.nombre ?? solicitud.nombrePasajero, radio: 22),
             const SizedBox(width: 12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    solicitud.nombrePasajero,
+                    solicitud.tercero?.nombre ?? solicitud.nombrePasajero,
                     style: const TextStyle(color: ColoresApp.azul, fontSize: 17, fontWeight: FontWeight.w700),
                   ),
-                  const Text('Pasajero', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
+                  Text(
+                    solicitud.tercero == null
+                        ? 'Pasajero'
+                        : 'Pasajero. Lo pidió ${solicitud.nombrePasajero}'
+                            '${solicitud.tercero!.pagaSolicitante ? ', que paga por QR' : ''}',
+                    style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                  ),
                 ],
               ),
             ),
@@ -373,14 +386,30 @@ class PanelViajeConductor extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            AvatarIniciales(nombre: viaje.nombrePasajero, radio: 22),
+            AvatarIniciales(nombre: viaje.nombreQuienViaja, radio: 22),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                viaje.nombrePasajero,
-                style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    viaje.nombreQuienViaja,
+                    style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  if (viaje.tercero != null)
+                    Text(
+                      'Lo pidió ${viaje.nombrePasajero}',
+                      style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                    ),
+                ],
               ),
             ),
+            if (viaje.tercero?.telefono != null)
+              IconButton(
+                onPressed: () => launchUrl(Uri(scheme: 'tel', path: viaje.tercero!.telefono)),
+                tooltip: 'Llamar a ${viaje.tercero!.primerNombre}',
+                icon: const FaIcon(FontAwesomeIcons.phone, size: 16, color: ColoresApp.azul),
+              ),
             BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
           ],
         ),
@@ -401,7 +430,14 @@ class PanelViajeConductor extends StatelessWidget {
           _PedidoCambioPago(viaje: viaje, ocupado: flujo.ocupado, onResponder: onResponderPago),
           const SizedBox(height: 10),
         ],
-        RecuadroPrecio(etiqueta: MetodoPago.frase('Cobra', viaje.metodoPago), monto: formatoBs(viaje.precioFinal)),
+        RecuadroPrecio(
+          etiqueta: viaje.pagaSolicitante ? 'Lo paga quien pidió (QR)' : MetodoPago.frase('Cobra', viaje.metodoPago),
+          monto: formatoBs(viaje.precioFinal),
+        ),
+        if (viaje.pagaConQr) ...[
+          const SizedBox(height: 8),
+          _EstadoPagoQr(viaje: viaje, ocupado: flujo.ocupado, onConfirmar: flujo.confirmarPagoRecibido),
+        ],
         if (viaje.pagaConQr && !viaje.conductorTieneQr) ...[
           const SizedBox(height: 8),
           const _Mensaje(
@@ -421,6 +457,10 @@ class PanelViajeConductor extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 4),
+        if (viaje.situacion == SituacionViaje.llego) ...[
+          _EsperaPasajero(viaje: viaje, flujo: flujo),
+          const SizedBox(height: 8),
+        ],
         if (boton.isNotEmpty)
           BotonPrincipal(texto: boton, color: colorBoton, cargando: flujo.ocupado, onPressed: onAvanzar),
         if (SituacionViaje.cancelables.contains(viaje.situacion)) ...[
@@ -433,6 +473,219 @@ class PanelViajeConductor extends StatelessWidget {
         ],
       ],
     );
+  }
+}
+
+/// El conductor llego y espera: puede avisar de nuevo al pasajero (hasta 3 avisos, 1 minuto entre
+/// cada uno), llamarlo y, un minuto despues del tercer aviso, marcar que no se presento (cancela sin
+/// republicar y deja un reporte para el admin).
+class _EsperaPasajero extends StatefulWidget {
+  final Viaje viaje;
+  final FlujoConductor flujo;
+
+  const _EsperaPasajero({required this.viaje, required this.flujo});
+
+  @override
+  State<_EsperaPasajero> createState() => _EsperaPasajeroState();
+}
+
+class _EsperaPasajeroState extends State<_EsperaPasajero> {
+  static const _maximo = 3;
+  static const _espera = Duration(minutes: 1);
+  Timer? _reloj;
+
+  @override
+  void initState() {
+    super.initState();
+    // Cada segundo, para la cuenta regresiva del proximo aviso.
+    _reloj = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _reloj?.cancel();
+    super.dispose();
+  }
+
+  int get _faltan {
+    final ultimo = widget.viaje.ultimoAvisoEspera;
+    if (ultimo == null) return 0;
+    final resto = _espera - DateTime.now().difference(ultimo);
+    return resto.isNegative ? 0 : resto.inSeconds + 1;
+  }
+
+  Future<void> _ejecutar(Future<void> Function() accion) async {
+    try {
+      await accion();
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
+  }
+
+  Future<void> _noSePresento() async {
+    final comentario = await _pedirComentario(context);
+    if (comentario == null || !mounted) return;
+    await _ejecutar(() => widget.flujo.pasajeroNoSePresento(comentario));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final viaje = widget.viaje;
+    final avisos = viaje.avisosEspera < 1 ? 1 : viaje.avisosEspera;
+    final faltan = _faltan;
+    final telefono = viaje.tercero?.telefono ?? viaje.telefonoPasajero;
+    final quien = viaje.tercero?.primerNombre ?? viaje.primerNombrePasajero;
+    const naranja = Color(0xFFE67E22);
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      decoration: BoxDecoration(
+        color: naranja.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: naranja.withValues(alpha: 0.35)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            'Esperando a $quien: aviso $avisos de $_maximo',
+            style: const TextStyle(color: naranja, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            avisos < _maximo
+                ? (faltan > 0 ? 'Podrás avisar de nuevo en $faltan s.' : 'Si no aparece, avísale de nuevo.')
+                : (faltan > 0
+                    ? 'Llámalo. Si no aparece, en $faltan s podrás marcar que no se presentó.'
+                    : 'Si no aparece, marca que no se presentó: el administrador revisará el caso.'),
+            style: const TextStyle(color: ColoresApp.texto, fontSize: 12.5),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              if (telefono != null)
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => launchUrl(Uri(scheme: 'tel', path: telefono)),
+                    icon: const FaIcon(FontAwesomeIcons.phone, size: 13),
+                    label: Text('Llamar a $quien', overflow: TextOverflow.ellipsis),
+                  ),
+                ),
+              if (telefono != null) const SizedBox(width: 8),
+              Expanded(
+                child: avisos < _maximo
+                    ? OutlinedButton.icon(
+                        onPressed: widget.flujo.ocupado || faltan > 0
+                            ? null
+                            : () => _ejecutar(widget.flujo.avisarEspera),
+                        icon: const FaIcon(FontAwesomeIcons.bell, size: 13),
+                        label: const Text('Avisar de nuevo'),
+                      )
+                    : OutlinedButton.icon(
+                        onPressed: widget.flujo.ocupado || faltan > 0 ? null : _noSePresento,
+                        style: OutlinedButton.styleFrom(foregroundColor: ColoresApp.rojo),
+                        icon: const FaIcon(FontAwesomeIcons.userXmark, size: 13),
+                        label: const Text('No se presentó', overflow: TextOverflow.ellipsis),
+                      ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Comentario obligatorio al reportar que el pasajero no se presento (lo lee el admin).
+Future<String?> _pedirComentario(BuildContext context) {
+  final controlador = TextEditingController();
+  return showDialog<String>(
+    context: context,
+    builder: (contexto) => StatefulBuilder(
+      builder: (contexto, actualizar) => AlertDialog(
+        title: const Text('El pasajero no se presentó'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'El viaje se cancelará y quedará un reporte para que el administrador lo revise. '
+              'Cuenta qué pasó (por ejemplo, si lo llamaste).',
+              style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controlador,
+              maxLines: 3,
+              maxLength: 500,
+              onChanged: (_) => actualizar(() {}),
+              decoration: const InputDecoration(labelText: 'Comentario'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(contexto).pop(), child: const Text('Volver')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: ColoresApp.rojo),
+            onPressed: controlador.text.trim().isEmpty ? null : () => Navigator.of(contexto).pop(controlador.text.trim()),
+            child: const Text('Cancelar y reportar'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// Pago por QR del viaje: el conductor confirma cuando le llega (lo pague quien pidio o quien viaja).
+class _EstadoPagoQr extends StatelessWidget {
+  final Viaje viaje;
+  final bool ocupado;
+  final Future<void> Function() onConfirmar;
+
+  const _EstadoPagoQr({required this.viaje, required this.ocupado, required this.onConfirmar});
+
+  @override
+  Widget build(BuildContext context) {
+    if (viaje.pagoRecibidoEn != null) {
+      return const _Mensaje(
+        icono: FontAwesomeIcons.circleCheck,
+        texto: 'Confirmaste que recibiste el pago por QR.',
+        color: ColoresApp.exito,
+      );
+    }
+    final texto = viaje.pagaSolicitante
+        ? viaje.pagoAvisadoEn != null
+            ? '${viaje.primerNombrePasajero} avisó que ya pagó por QR. Revisa tu banco y confírmalo.'
+            : '${viaje.primerNombrePasajero} pagará por QR desde su app. Todavía no avisó el pago.'
+        : 'Cobra por QR. Confirma cuando te llegue el pago.';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _Mensaje(icono: FontAwesomeIcons.qrcode, texto: texto, color: const Color(0xFFE67E22)),
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: ocupado ? null : () => _confirmar(context),
+          icon: const FaIcon(FontAwesomeIcons.check, size: 14),
+          label: const Text('Confirmar pago recibido'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _confirmar(BuildContext context) async {
+    final confirmado = await confirmarAccion(
+      context,
+      titulo: '¿Recibiste el pago?',
+      mensaje: 'Confirma que te llegaron ${formatoBs(viaje.precioFinal)} por QR.',
+      textoConfirmar: 'Sí, lo recibí',
+    );
+    if (!confirmado) return;
+    try {
+      await onConfirmar();
+    } on ApiExcepcion catch (e) {
+      if (context.mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+    }
   }
 }
 

@@ -6,6 +6,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../comun/modelos_viaje.dart';
 import 'formato.dart';
 import 'preferencias_aviso.dart';
+import 'sonido.dart';
 import 'vibracion.dart';
 
 /// Notificaciones del telefono (y del navegador) para el conductor: avisan que llego una solicitud
@@ -43,21 +44,27 @@ class Notificador {
     );
   }
 
-  /// Aviso del viaje del pasajero, una sola vez. [sonidoPropio] (viaje aceptado): con el sonido de la
-  /// app (res/raw/viaje_aceptado); si no, con el sonido de notificacion del telefono. Cada variante
-  /// tiene su canal ("tel" = sonido del telefono) porque el sonido de un canal no cambia despues de creado.
-  static AndroidNotificationDetails _canalViaje(bool sonidoPropio) {
+  /// Aviso del viaje. Con [sonido], el audio de la app (res/raw, mismo nombre); sin el, el sonido de
+  /// notificacion del telefono. Cada audio tiene su canal (v3; "tel" = sonido del telefono) porque el
+  /// sonido de un canal no cambia despues de creado.
+  static AndroidNotificationDetails _canalViaje(SonidoAviso? sonido) {
     final sufijo = _sufijo();
+    final (nombre, descripcion) = switch (sonido) {
+      SonidoAviso.viajeAceptado => ('Viaje aceptado', 'Cuando un conductor acepta tu viaje'),
+      SonidoAviso.llegoTaxi => ('Tu taxi llegó', 'Cuando el conductor llega y te espera'),
+      SonidoAviso.viajeFinalizado => ('Viaje finalizado', 'Cuando termina el viaje'),
+      null => ('Avisos del viaje', 'Otros avisos del viaje'),
+    };
     return AndroidNotificationDetails(
-      'aviso_viaje_${sonidoPropio ? '' : 'tel_'}${sufijo.isEmpty ? 'mudo' : sufijo}',
-      sonidoPropio ? 'Viaje aceptado' : 'Avisos del viaje',
-      channelDescription: sonidoPropio ? 'Cuando un conductor acepta tu viaje' : 'Cuando el conductor llega y otros avisos',
+      'aviso_v3_${sonido?.archivo ?? 'tel'}_${sufijo.isEmpty ? 'mudo' : sufijo}',
+      nombre,
+      channelDescription: descripcion,
       importance: Importance.max,
       priority: Priority.high,
       category: AndroidNotificationCategory.status,
       visibility: NotificationVisibility.public,
       playSound: PreferenciasAviso.sonido.value,
-      sound: sonidoPropio ? const RawResourceAndroidNotificationSound('viaje_aceptado') : null,
+      sound: sonido == null ? null : RawResourceAndroidNotificationSound(sonido.archivo),
       enableVibration: PreferenciasAviso.vibracion.value,
       vibrationPattern: PreferenciasAviso.vibracion.value ? _vibracionCorta : null,
       onlyAlertOnce: true,
@@ -138,7 +145,7 @@ class Notificador {
     String cuerpo, {
     required int id,
     bool pedirPermiso = true,
-    bool sonidoPropio = false,
+    SonidoAviso? sonido,
   }) async {
     await iniciar(pedirPermiso: pedirPermiso);
     if (!_listo) return;
@@ -147,7 +154,7 @@ class Notificador {
         id: id,
         title: titulo,
         body: cuerpo,
-        notificationDetails: NotificationDetails(android: _canalViaje(sonidoPropio), web: const WebNotificationDetails()),
+        notificationDetails: NotificationDetails(android: _canalViaje(sonido), web: const WebNotificationDetails()),
       );
     } catch (e) {
       debugPrint('No se pudo mostrar el aviso del viaje: $e');

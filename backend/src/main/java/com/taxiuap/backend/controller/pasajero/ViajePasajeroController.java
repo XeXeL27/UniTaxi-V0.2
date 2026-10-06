@@ -95,6 +95,12 @@ public class ViajePasajeroController {
         return ResponseEntity.ok(ApiResponse.exito("Compra confirmada", entregaService.confirmarCompra(id)));
     }
 
+    /** Viaje pedido para otra persona y pagado por quien lo pidio: "Ya pague" por el QR del conductor. */
+    @PostMapping("/{id}/pago-avisado")
+    public ResponseEntity<ApiResponse<ViajeResponse>> pagoAvisado(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito("Avisamos al conductor que ya pagaste", viajeService.avisarPago(id)));
+    }
+
     /** Foto que tomo el repartidor al entregar el paquete: la confirmacion de que llego. */
     @GetMapping("/{id}/entrega/foto-entrega")
     public ResponseEntity<Resource> fotoEntrega(@PathVariable Long id) {

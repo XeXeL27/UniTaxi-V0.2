@@ -28,12 +28,20 @@ public class ReporteService {
 
     @Transactional(readOnly = true)
     public List<ReporteResponse> listar() {
-        return reporteRepository.findAll().stream().map(ReporteResponse::de).toList();
+        return reporteRepository.findAll().stream().map(this::aRespuesta).toList();
     }
 
     @Transactional(readOnly = true)
     public ReporteResponse obtener(Long id) {
-        return ReporteResponse.de(buscar(id));
+        return aRespuesta(buscar(id));
+    }
+
+    /** Con cuantas veces el pasajero de ese viaje fue reportado por no presentarse. */
+    private ReporteResponse aRespuesta(Reporte reporte) {
+        var pasajero = reporte.getViaje() == null ? null : reporte.getViaje().getPasajero();
+        long veces = pasajero == null ? 0 : reporteRepository.countByMotivoAndViajePasajeroId(
+                com.taxiuap.backend.trip.service.EsperaPasajeroService.MOTIVO_REPORTE, pasajero.getId());
+        return ReporteResponse.de(reporte, veces);
     }
 
     @Transactional
@@ -54,7 +62,7 @@ public class ReporteService {
         reporte.setSituacionReporte(request.situacion());
         reporte.setFechaResolucion(LocalDateTime.now());
         reporte.setUsuarioAdminResolvio(usuario);
-        return ReporteResponse.de(reporteRepository.save(reporte));
+        return aRespuesta(reporteRepository.save(reporte));
     }
 
     private Reporte buscar(Long id) {

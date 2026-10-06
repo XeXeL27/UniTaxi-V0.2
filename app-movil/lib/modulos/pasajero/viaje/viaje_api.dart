@@ -88,9 +88,10 @@ class ViajeApi {
       PrecioViaje.desdeJson(await cliente.get('/api/pasajero/solicitudes/precio') as Map<String, dynamic>);
 
   /// Precio de ir de [a] a [b] para este pasajero (con su descuento de estudiante, si tiene).
-  Future<CotizacionViaje> cotizar(LatLng a, LatLng b) async => CotizacionViaje.desdeJson(
+  /// [paraOtraPersona]: sin el descuento de estudiante de quien pide.
+  Future<CotizacionViaje> cotizar(LatLng a, LatLng b, {bool paraOtraPersona = false}) async => CotizacionViaje.desdeJson(
     await cliente.get('/api/pasajero/solicitudes/cotizacion?origenLat=${a.latitude}&origenLng=${a.longitude}'
-        '&destinoLat=${b.latitude}&destinoLng=${b.longitude}') as Map<String, dynamic>,
+        '&destinoLat=${b.latitude}&destinoLng=${b.longitude}&paraOtraPersona=$paraOtraPersona') as Map<String, dynamic>,
   );
 
   /// [destinoNombre]: nombre del favorito elegido como destino (solo lo ve el pasajero).
@@ -98,7 +99,8 @@ class ViajeApi {
       {String metodoPago = MetodoPago.efectivo,
       String? destinoNombre,
       int? idCategoriaServicio,
-      DatosEntregaForm? datosEntrega}) async {
+      DatosEntregaForm? datosEntrega,
+      PasajeroTercero? tercero}) async {
     final datos = await cliente.post('/api/pasajero/solicitudes', {
       'origenWkt': wktDesdePunto(origen.posicion),
       'destinoWkt': wktDesdePunto(destino.posicion),
@@ -108,6 +110,7 @@ class ViajeApi {
       'metodoPago': metodoPago,
       'idCategoriaServicio': ?idCategoriaServicio,
       'datosEntrega': ?datosEntrega?.aJson(),
+      ...?tercero?.aJson(),
     });
     return Solicitud.desdeJson(datos as Map<String, dynamic>);
   }
@@ -132,6 +135,10 @@ class ViajeApi {
     final datos = await cliente.get('/api/pasajero/viajes/en-curso');
     return datos == null ? null : Viaje.desdeJson(datos as Map<String, dynamic>);
   }
+
+  /// Viaje para otra persona pagado por quien lo pidio: "Ya pagué" por el QR del conductor.
+  Future<Viaje> avisarPago(int id) async =>
+      Viaje.desdeJson(await cliente.post('/api/pasajero/viajes/$id/pago-avisado', {}) as Map<String, dynamic>);
 
   /// Foto que tomo el repartidor al entregar el paquete (solo con el pedido ya entregado).
   Future<Uint8List?> fotoEntrega(int id) => cliente.bytes('/api/pasajero/viajes/$id/entrega/foto-entrega');

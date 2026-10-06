@@ -208,6 +208,9 @@ public class ViajeService {
 
         if (esDelivery) {
             avisarPasajero(viaje, "VIAJE_ACEPTADO", "Tu pedido fue aceptado", " va a recoger tu paquete.");
+        } else if (solicitud.esParaOtraPersona()) {
+            avisarPasajero(viaje, "VIAJE_ACEPTADO", "El taxi para " + primerNombre(solicitud.getNombrePasajeroTercero())
+                    + " fue aceptado", " va en camino a recogerlo.");
         } else {
             avisarPasajero(viaje, "VIAJE_ACEPTADO", "Tu viaje fue aceptado", " va en camino a recogerte.");
         }
@@ -219,13 +222,44 @@ public class ViajeService {
      * con su sonido; si ademas la app estaba abierta y ya aviso, no suena dos veces (mismo id).
      */
     void avisarPasajero(Viaje viaje, String tipo, String titulo, String resto) {
+        avisarPasajero(viaje, tipo, titulo, resto, Map.of());
+    }
+
+    /** [extra]: datos para la app (por ejemplo "aviso": numero del aviso de espera del conductor). */
+    void avisarPasajero(Viaje viaje, String tipo, String titulo, String resto, Map<String, String> extra) {
         String nombre = viaje.getConductor().getUsuario().getPersona().getNombres();
         String primerNombre = nombre == null || nombre.isBlank() ? "Tu conductor" : nombre.trim().split("\\s+")[0];
-        notificacionPushService.enviar(viaje.getPasajero().getUsuario().getId(), Map.of(
-                "tipo", tipo,
-                "idViaje", String.valueOf(viaje.getId()),
-                "titulo", titulo,
-                "cuerpo", primerNombre + resto));
+        Map<String, String> datos = new java.util.HashMap<>(extra);
+        datos.put("tipo", tipo);
+        datos.put("idViaje", String.valueOf(viaje.getId()));
+        datos.put("titulo", titulo);
+        datos.put("cuerpo", primerNombre + resto);
+        notificacionPushService.enviar(viaje.getPasajero().getUsuario().getId(), datos);
+    }
+
+    /** Aviso "te estoy esperando" numero [aviso] (1 = "Llegue"): push con el sonido del taxi que llego. */
+    void avisarEspera(Viaje viaje, int aviso) {
+        Map<String, String> extra = Map.of("aviso", String.valueOf(aviso));
+        if (viaje.getSolicitud().esParaOtraPersona()) {
+            String persona = primerNombre(viaje.getSolicitud().getNombrePasajeroTercero());
+            avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Avísale a " + persona + ": su taxi lo está esperando",
+                    " llegó al punto de recogida.", extra);
+        } else if (aviso == 1) {
+            avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Tu conductor llegó", " te espera en el punto de partida.", extra);
+        } else {
+            avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Tu conductor te está esperando",
+                    " te espera en el punto de partida (aviso " + aviso + " de 3).", extra);
+        }
+    }
+
+    /** Guarda un cambio sin cambio de situacion y avisa a las dos partes (lo usan otros servicios). */
+    ViajeResponse guardarCambio(Viaje viaje) {
+        return guardarYNotificar(viaje);
+    }
+
+    /** Guarda un cambio de situacion: historial (regla 6) y aviso a las dos partes. */
+    ViajeResponse registrarCambioSituacion(Viaje viaje) {
+        return registrarYNotificar(viaje);
     }
 
     @Transactional
@@ -240,8 +274,11 @@ public class ViajeService {
     public ViajeResponse llegue(Long idViaje) {
         Viaje viaje = obtenerViajeDelConductor(idViaje);
         validarTransicion(viaje, SituacionViaje.CONDUCTOR_EN_CAMINO, SituacionViaje.CONDUCTOR_LLEGO);
+        // "Llegue" es el primer aviso de espera; el conductor puede repetirlo hasta 3 (EsperaPasajeroService).
+        viaje.setAvisosEspera(1);
+        viaje.setUltimoAvisoEspera(LocalDateTime.now());
         viaje = viajeRepository.save(viaje);
-        avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Tu conductor llegó", " te espera en el punto de partida.");
+        avisarEspera(viaje, 1);
         return registrarYNotificar(viaje);
     }
 
@@ -348,6 +385,12 @@ public class ViajeService {
         viaje.setMetodoPago(metodoPago);
         viaje.setMetodoPagoPedido(null);
         procesarPagoYComision(viaje, metodoPago);
+        if (viaje.getSolicitud().esParaOtraPersona()) {
+            avisarPasajero(viaje, "VIAJE_COMPLETADO", primerNombre(viaje.getSolicitud().getNombrePasajeroTercero())
+                    + " llegó a su destino", " completó el viaje.");
+        } else if (!esDelivery(viaje)) {
+            avisarPasajero(viaje, "VIAJE_COMPLETADO", "Tu viaje terminó", " completó el viaje. Califícalo en la app.");
+        }
 
         return registrarYNotificar(viaje);
     }
@@ -399,6 +442,48 @@ public class ViajeService {
         viaje.setMetodoPago(nuevo);
         viaje.setMetodoPagoPedido(null);
         return guardarYNotificar(viaje);
+    }
+
+    /**
+     * Viaje para otra persona pagado por quien lo pidio: avisa desde su app que ya pago por el QR del
+     * conductor ("Ya pague"). El conductor lo ve y confirma con {@link #confirmarPagoRecibido}.
+     */
+    @Transactional
+    public ViajeResponse avisarPago(Long idViaje) {
+        Viaje viaje = obtenerViajeDelPasajero(idViaje);
+        validarViajeActivo(viaje);
+        if (!Boolean.TRUE.equals(viaje.getSolicitud().getPagaSolicitante())) {
+            throw new NegocioException("Este viaje lo paga la persona que viaja");
+        }
+        if (metodoPagoDe(viaje) != MetodoPago.QR) {
+            throw new NegocioException("El viaje se paga en efectivo");
+        }
+        if (viaje.getPagoAvisadoEn() == null) {
+            viaje.setPagoAvisadoEn(LocalDateTime.now());
+        }
+        return guardarYNotificar(viaje);
+    }
+
+    /** El conductor confirma que le llego el pago por QR (lo haya pagado quien pidio o quien viaja). */
+    @Transactional
+    public ViajeResponse confirmarPagoRecibido(Long idViaje) {
+        Viaje viaje = obtenerViajeDelConductor(idViaje);
+        validarViajeActivo(viaje);
+        if (metodoPagoDe(viaje) != MetodoPago.QR) {
+            throw new NegocioException("El viaje se cobra en efectivo");
+        }
+        if (viaje.getPagoRecibidoEn() == null) {
+            viaje.setPagoRecibidoEn(LocalDateTime.now());
+        }
+        return guardarYNotificar(viaje);
+    }
+
+    static String primerNombre(String nombre) {
+        if (nombre == null || nombre.isBlank()) {
+            return "la persona";
+        }
+        String primero = nombre.trim().split("\\s+")[0].toLowerCase(java.util.Locale.forLanguageTag("es"));
+        return Character.toUpperCase(primero.charAt(0)) + primero.substring(1);
     }
 
     @Transactional
@@ -489,6 +574,10 @@ public class ViajeService {
         nueva.setDistanciaKm(anterior.getDistanciaKm());
         nueva.setDescuentoEstudiante(anterior.getDescuentoEstudiante());
         nueva.setMetodoPago(metodoPagoDe(viaje));
+        nueva.setParaOtraPersona(anterior.esParaOtraPersona());
+        nueva.setNombrePasajeroTercero(anterior.getNombrePasajeroTercero());
+        nueva.setTelefonoPasajeroTercero(anterior.getTelefonoPasajeroTercero());
+        nueva.setPagaSolicitante(anterior.getPagaSolicitante());
         nueva.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
         nueva.setFechaSolicitud(LocalDateTime.now());
         nueva.setEstadoSolViaje(EstadoRegistro.A);
@@ -776,7 +865,19 @@ public class ViajeService {
                 Boolean.TRUE.equals(viaje.getCalificacionOfrecidaPasajero()),
                 // El nombre del favorito solo se devuelve al propio pasajero.
                 esPasajero ? viaje.getSolicitud().getDestinoNombrePasajero() : null,
-                datosEntregaPara(viaje.getSolicitud().getDatosEntrega(), esPasajero));
+                datosEntregaPara(viaje.getSolicitud().getDatosEntrega(), esPasajero),
+                viaje.getSolicitud().esParaOtraPersona(),
+                viaje.getSolicitud().getNombrePasajeroTercero(),
+                viaje.getSolicitud().getTelefonoPasajeroTercero(),
+                Boolean.TRUE.equals(viaje.getSolicitud().getPagaSolicitante()),
+                viaje.getPagoAvisadoEn(),
+                viaje.getPagoRecibidoEn(),
+                viaje.getAvisosEspera() == null ? 0 : viaje.getAvisosEspera(),
+                viaje.getUltimoAvisoEspera(),
+                Boolean.TRUE.equals(viaje.getPasajeroNoSePresento()),
+                // Solo mientras el viaje esta activo: terminado, el conductor ya no necesita llamarlo.
+                ESTADOS_FINALES.contains(viaje.getSituacionViaje()) ? null
+                        : usuarioPasajero.getPersona().getTelefono());
     }
 
     /**

@@ -102,6 +102,26 @@ public class SolicitudViaje extends EntidadAuditable {
     @OneToOne(mappedBy = "solicitud", fetch = FetchType.LAZY)
     private DatosEntrega datosEntrega;
 
+    // ------------------------------------------------ viaje pedido para otra persona
+
+    /** El que pide (pasajero de la cuenta) no viaja: viaja otra persona, sin cuenta en la app. */
+    @Column(name = "para_otra_persona", nullable = false, columnDefinition = "boolean default false not null")
+    private Boolean paraOtraPersona = false;
+
+    @Column(name = "nombre_pasajero_tercero", length = 150)
+    private String nombrePasajeroTercero;
+
+    @Column(name = "telefono_pasajero_tercero", length = 20)
+    private String telefonoPasajeroTercero;
+
+    /** true: paga quien pidio (por QR desde su app); false: paga la persona que viaja al subir. */
+    @Column(name = "paga_solicitante", nullable = false, columnDefinition = "boolean default false not null")
+    private Boolean pagaSolicitante = false;
+
+    public boolean esParaOtraPersona() {
+        return Boolean.TRUE.equals(paraOtraPersona);
+    }
+
     @Column(name = "fecha_solicitud")
     private LocalDateTime fechaSolicitud;
 

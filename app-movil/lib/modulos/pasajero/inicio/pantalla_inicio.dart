@@ -47,6 +47,7 @@ import '../viaje/paneles_pasajero.dart';
 import '../viaje/viaje_api.dart';
 import '../viaje/vista_calificacion.dart';
 import '../viaje/formulario_entrega.dart';
+import '../viaje/formulario_tercero.dart';
 import 'buscador_destino.dart';
 
 /// Vista principal del pasajero, con la barra inferior Inicio / Actividad / Perfil.
@@ -165,8 +166,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (aviso != null) mostrarMensaje(context, aviso, error: true);
     final novedad = _flujo.tomarNovedad();
     if (novedad != null) mostrarMensaje(context, novedad);
+    final llegada = _flujo.tomarAlertaLlegada();
+    if (llegada != null) {
+      // Cada aviso del conductor (llego y hasta 2 mas) sale en pantalla; el sonido y la vibracion ya
+      // los dio el flujo.
+      mostrarAviso(
+        context,
+        titulo: llegada.titulo,
+        mensaje: llegada.mensaje,
+        textoBoton: _flujo.viaje?.tercero != null ? 'Ya le avisé' : 'Ya voy',
+      );
+    }
     if (_flujo.etapa == EtapaPasajero.calificando && !_calificando) {
       _calificando = true;
+      _flujo.avisarFinDelViaje();
       _irA(_seccionInicio);
       mostrarCalificacion(context, _flujo).whenComplete(() {
         _calificando = false;
@@ -517,6 +530,28 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _flujo.irAFavorito(elegido.posicion, elegido.nombre);
   }
 
+  /// Taxi para otra persona: el campo tocado (partida o llegada) recibe el lugar del buscador; con
+  /// "Elegir en el mapa" el buscador se cierra y el proximo toque en el mapa marca ese punto.
+  Future<void> _buscarPunto(PuntoPorMarcar punto) async {
+    if (_flujo.etapa != EtapaPasajero.eligiendo) return;
+    _flujo.marcar(punto);
+    final elegido = await buscarDestino(
+      context,
+      favoritos: _favoritos,
+      cerca: _mapa.miUbicacion,
+      titulo: punto == PuntoPorMarcar.partida ? '¿Dónde lo recogen?' : '¿Dónde lo dejan?',
+    );
+    if (elegido == null || !mounted) return;
+    _flujo.irAFavorito(elegido.posicion, elegido.nombre);
+  }
+
+  /// "Para mí" / "Para otra persona": para otra persona el panel se minimiza para dejar el mapa libre
+  /// y se marcan los dos puntos.
+  void _cambiarParaQuien(bool otra) {
+    _flujo.cambiarParaOtraPersona(otra);
+    if (otra && _panelAbierto) setState(() => _panelAbierto = false);
+  }
+
   Future<void> _guardarLugar(LatLng punto, String? texto) async {
     final direccion = texto ?? await ServiciosMapa.direccionDe(punto) ?? '';
     if (!mounted) return;
@@ -542,7 +577,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       EtapaPasajero.buscando =>
         entrega ? 'Ya estamos buscando un repartidor para tu envío.' : 'Ya estamos buscando un conductor para ti.',
       EtapaPasajero.enViaje => entrega ? 'Tienes un envío en curso.' : 'Tienes un viaje en curso.',
+      _ when _flujo.paraOtraPersona && (_mapa.a == null || _mapa.b == null) =>
+        'Elige los dos puntos: dónde recogen a la persona y dónde la dejan.',
       _ when _mapa.b == null => 'Primero elige tu destino: búscalo arriba o tócalo en el mapa.',
+      _ when _flujo.eligiendoPartida => 'Toca el mapa donde recogerán a la persona o búscalo arriba.',
       _ when _flujo.modo.faltaElegirTipo => 'Elige qué quieres enviar: encomienda o compra y entrega.',
       _ => entrega ? 'Espera a que termine de trazarse la ruta de tu envío.' : 'Espera a que termine de trazarse la ruta.',
     };
@@ -562,9 +600,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       if (datos == null || !mounted) return;
       _flujo.guardarDatosEntrega(datos);
     }
+    // Taxi para otra persona: sin sus datos (nombre, celular y quien paga) no se puede pedir.
+    if (_flujo.servicio == ServicioActivo.viaje && _flujo.paraOtraPersona && _flujo.tercero == null) {
+      if (!await _editarTercero() || !mounted) return;
+    }
     final confirmado = await confirmarViaje(
       context,
-      titulo: textoConfirmacion(_flujo.servicio),
+      titulo: _flujo.paraOtraPersona && _flujo.tercero != null && _flujo.servicio == ServicioActivo.viaje
+          ? '¿Confirmas el viaje de ${_flujo.tercero!.primerNombre}?'
+          : textoConfirmacion(_flujo.servicio),
       contenido: DetalleSolicitudViaje(flujo: _flujo),
     );
     if (!confirmado || !mounted) return;
@@ -582,6 +626,32 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
       if (mounted) setState(() => _enviando = false);
+    }
+  }
+
+  /// Formulario de quien viaja (taxi para otra persona). true si se guardaron los datos.
+  Future<bool> _editarTercero() async {
+    final datos = await abrirFormularioTercero(context, _flujo.tercero);
+    if (datos == null || !mounted) return false;
+    _flujo.guardarTercero(datos);
+    return true;
+  }
+
+  Future<void> _avisarPago() async {
+    final viaje = _flujo.viaje;
+    if (viaje == null) return;
+    final confirmado = await confirmarAccion(
+      context,
+      titulo: '¿Ya pagaste por QR?',
+      mensaje: 'Le avisaremos al conductor que pagaste ${formatoBs(viaje.precioFinal)} con su QR. Él confirmará que le llegó.',
+      textoConfirmar: 'Sí, ya pagué',
+    );
+    if (!confirmado || !mounted) return;
+    try {
+      await _flujo.avisarPago();
+      if (mounted) mostrarMensaje(context, 'Le avisamos al conductor que ya pagaste.');
+    } on ApiExcepcion catch (e) {
+      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
   }
 
@@ -684,8 +754,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   }
 
   String _ubicacionCabecera() => switch (_flujo.etapa) {
+    EtapaPasajero.buscando when _flujo.solicitud?.tercero != null =>
+      'Buscando un conductor para ${_flujo.solicitud!.tercero!.primerNombre}',
     EtapaPasajero.buscando => 'Buscando un conductor para ti',
+    EtapaPasajero.enViaje when _flujo.viaje?.tercero != null => 'Viaje de ${_flujo.viaje!.tercero!.primerNombre}',
     EtapaPasajero.enViaje => SituacionViaje.nombre(_flujo.viaje?.situacion ?? ''),
+    // Para otra persona la partida no es la ubicacion de quien pide.
+    EtapaPasajero.eligiendo when _flujo.paraOtraPersona => 'Viaje para otra persona',
     _ when _flujo.direccionOrigen != null => _flujo.direccionOrigen!,
     _ when _mapa.gpsDisponible == false => 'Ubicación no disponible',
     _ => 'Buscando tu ubicación...',
@@ -853,12 +928,25 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
                         child: Column(
                           children: [
-                            BarraDestino(
-                              key: _guiaDestino,
-                              destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
-                              onBuscar: _abrirBuscador,
-                              onQuitar: _flujo.quitarDestino,
-                            ),
+                            if (_flujo.paraOtraPersona && _flujo.servicio == ServicioActivo.viaje)
+                              BarraDosPuntos(
+                                partida: _mapa.a == null ? null : (_flujo.direccionOrigen ?? _mapa.a!.texto),
+                                llegada: _mapa.b?.texto,
+                                marcandoPartida: switch (_flujo.marcando) {
+                                  PuntoPorMarcar.partida => true,
+                                  PuntoPorMarcar.llegada => false,
+                                  null => null,
+                                },
+                                onPartida: () => _buscarPunto(PuntoPorMarcar.partida),
+                                onLlegada: () => _buscarPunto(PuntoPorMarcar.llegada),
+                              )
+                            else
+                              BarraDestino(
+                                key: _guiaDestino,
+                                destino: _flujo.guardandoLugar ? null : _mapa.b?.texto,
+                                onBuscar: _abrirBuscador,
+                                onQuitar: _flujo.quitarDestino,
+                              ),
                             // El servicio se elige acá y no en el panel del pedido: el panel nace
                             // plegado, así que un selector dentro de él no se ve y el pasajero no
                             // sabe que puede mandar.
@@ -868,6 +956,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                               activo: _flujo.modo.activo,
                               onCambiar: _flujo.cambiarServicio,
                             ),
+                            if (_flujo.servicio == ServicioActivo.viaje) ...[
+                              const SizedBox(height: margenSelectorServicio),
+                              SelectorParaQuien(
+                                paraOtra: _flujo.paraOtraPersona,
+                                onCambiar: _cambiarParaQuien,
+                              ),
+                            ],
                             if (_flujo.modo.selectorVisible) ...[
                               const SizedBox(height: margenSelectorServicio),
                               SelectorTipoEntrega(
@@ -921,6 +1016,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// Panel sobre la barra; sin destino elegido no hace falta (el buscador ya invita a elegirlo).
   Widget? _panel(EtapaPasajero etapa) => switch (etapa) {
     EtapaPasajero.cargando => PanelRecuperando(sinRed: _flujo.recuperandoSinRed),
+    // Para otra persona, hasta tener los dos puntos solo se ve el aviso de que hay que elegirlos.
+    EtapaPasajero.eligiendo when _flujo.paraOtraPersona && _flujo.servicio == ServicioActivo.viaje &&
+        (_mapa.a == null || _mapa.b == null || _flujo.marcando != null) && !_flujo.guardandoLugar =>
+      PanelDosPuntos(flujo: _flujo),
     EtapaPasajero.eligiendo when _mapa.a != null && _mapa.b == null && !_flujo.guardandoLugar => null,
     EtapaPasajero.eligiendo when !_panelEsPlegable => _panelEligiendo(),
     EtapaPasajero.eligiendo => PanelPlegable(
@@ -968,6 +1067,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     flujo: _flujo,
     enviando: _enviando,
     onSolicitar: _solicitar,
+    onEditarTercero: _editarTercero,
     onGuardarDestino: () {
       final b = _mapa.b;
       if (b != null) _guardarLugar(b.posicion, b.texto);
@@ -976,7 +1076,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   );
 
   Widget _panelViaje() {
-    final (icono, texto, color) = estadoViajePasajero(_flujo.viaje?.situacion ?? '', _flujo.servicio);
+    final (icono, texto, color) =
+        estadoViajePasajero(_flujo.viaje?.situacion ?? '', _flujo.servicio, _flujo.viaje?.tercero);
     return PanelPlegable(
       abierto: _panelAbierto,
       onAlternar: _alternarPanel,
@@ -989,6 +1090,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
          onCancelar: _cancelarViaje,
          onPedirCambioPago: _pedirCambioPago,
          onConfirmarCompra: _confirmarCompra,
+         onAvisarPago: _avisarPago,
        ),
     );
   }

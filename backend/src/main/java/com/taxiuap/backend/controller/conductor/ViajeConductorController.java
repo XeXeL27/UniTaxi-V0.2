@@ -29,6 +29,7 @@ import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.enums.PeriodoHistorial;
 import com.taxiuap.backend.trip.service.EntregaService;
+import com.taxiuap.backend.trip.service.EsperaPasajeroService;
 import com.taxiuap.backend.trip.service.ViajeService;
 
 import jakarta.validation.Valid;
@@ -42,6 +43,7 @@ public class ViajeConductorController {
 
     private final ViajeService viajeService;
     private final EntregaService entregaService;
+    private final EsperaPasajeroService esperaPasajeroService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ViajeResponse>>> listar() {
@@ -91,6 +93,27 @@ public class ViajeConductorController {
     public ResponseEntity<ApiResponse<ViajeResponse>> cancelar(
             @PathVariable Long id, @RequestBody(required = false) CancelarViajeRequest request) {
         return ResponseEntity.ok(ApiResponse.exito("Viaje cancelado", viajeService.cancelar(id, request)));
+    }
+
+    /** Vuelve a avisar al pasajero "te estoy esperando" (hasta 3 avisos, 1 minuto entre cada uno). */
+    @PostMapping("/{id}/avisar-espera")
+    public ResponseEntity<ApiResponse<ViajeResponse>> avisarEspera(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito("Avisamos al pasajero que lo estás esperando",
+                esperaPasajeroService.avisarDeNuevo(id)));
+    }
+
+    /** Tras los 3 avisos: cancela sin republicar y reporta al pasajero con un comentario para el admin. */
+    @PostMapping("/{id}/pasajero-no-se-presento")
+    public ResponseEntity<ApiResponse<ViajeResponse>> pasajeroNoSePresento(
+            @PathVariable Long id, @RequestBody(required = false) CancelarViajeRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Viaje cancelado y pasajero reportado",
+                esperaPasajeroService.pasajeroNoSePresento(id, request == null ? null : request.motivo())));
+    }
+
+    /** Confirma que recibio el pago por QR (de quien pidio el viaje o de quien viaja). */
+    @PostMapping("/{id}/pago-recibido")
+    public ResponseEntity<ApiResponse<ViajeResponse>> pagoRecibido(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito("Pago confirmado", viajeService.confirmarPagoRecibido(id)));
     }
 
     /** Cambia el metodo de pago directamente (sin que el pasajero lo pida). */

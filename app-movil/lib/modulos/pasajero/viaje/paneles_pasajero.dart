@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/formato.dart';
 import '../../../core/tema.dart';
@@ -30,6 +31,9 @@ class PanelEligiendo extends StatelessWidget {
   final VoidCallback onSolicitar;
   final VoidCallback onGuardarDestino;
 
+  /// Abre el formulario de quien viaja (taxi para otra persona).
+  final Future<bool> Function()? onEditarTercero;
+
   /// Mototaxistas libres en linea (null mientras no se consulto).
   final int? libres;
 
@@ -39,6 +43,7 @@ class PanelEligiendo extends StatelessWidget {
     required this.enviando,
     required this.onSolicitar,
     required this.onGuardarDestino,
+    this.onEditarTercero,
     this.libres,
   });
 
@@ -63,6 +68,9 @@ class PanelEligiendo extends StatelessWidget {
       );
     }
 
+    final esTaxi = flujo.servicio == ServicioActivo.viaje;
+    final paraOtra = esTaxi && flujo.paraOtraPersona;
+    final tercero = flujo.tercero;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -77,7 +85,17 @@ class PanelEligiendo extends StatelessWidget {
             monto: flujo.textoPrecio,
           ),
           const SizedBox(height: 10),
-          _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
+          if (paraOtra) ...[
+            _DatosQuienViaja(tercero: tercero, onEditar: onEditarTercero),
+            const SizedBox(height: 10),
+          ],
+          if (paraOtra && (tercero?.pagaSolicitante ?? false))
+            const _Indicacion(
+              icono: FontAwesomeIcons.qrcode,
+              texto: 'Pagas tú con el QR del conductor, desde tu app, cuando acepte el viaje.',
+            )
+          else
+            _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
           const SizedBox(height: 12),
         ],
         if (a == null)
@@ -89,10 +107,19 @@ class PanelEligiendo extends StatelessWidget {
               : const _Indicacion(icono: FontAwesomeIcons.satelliteDish, texto: 'Obteniendo tu ubicación...')
         else
           FilaLugar.partida(
-            etiqueta: mapa.aSigueGps && a.texto == 'Mi ubicación actual'
-                ? 'Mi ubicación actual (A)'
-                : 'Punto de partida (A)',
+            etiqueta: paraOtra
+                ? 'Recoger en (A)'
+                : mapa.aSigueGps && a.texto == 'Mi ubicación actual'
+                    ? 'Mi ubicación actual (A)'
+                    : 'Punto de partida (A)',
             texto: flujo.direccionOrigen ?? a.texto,
+            accion: paraOtra && !flujo.eligiendoPartida
+                ? IconButton(
+                    onPressed: () => flujo.elegirPartida(true),
+                    tooltip: 'Cambiar el punto de recogida',
+                    icon: const FaIcon(FontAwesomeIcons.pen, color: ColoresApp.textoSuave, size: 15),
+                  )
+                : null,
           ),
         if (a != null && b == null) ...[
           const SizedBox(height: 10),
@@ -224,9 +251,35 @@ class DetalleSolicitudViaje extends StatelessWidget {
             texto: ruta?.distanciaTexto ?? 'A calcular',
           ),
         ),
+        if (flujo.paraOtraPersona && flujo.tercero != null) ...[
+          const Divider(height: 18, color: ColoresApp.borde),
+          _FilaDato(etiqueta: 'Viaja', valor: _Valor(flujo.tercero!.nombre)),
+          _FilaDato(etiqueta: 'Celular', valor: _Valor(flujo.tercero!.telefono ?? '')),
+          _FilaDato(
+            etiqueta: 'Paga',
+            valor: _Valor(flujo.tercero!.pagaSolicitante ? 'Tú, por QR' : 'Quien viaja'),
+          ),
+          FilaLugar.partida(etiqueta: 'Recoger en', texto: flujo.direccionOrigen ?? flujo.mapa.a?.texto ?? ''),
+          FilaLugar.destino(etiqueta: 'Dejar en', texto: flujo.mapa.b?.texto ?? ''),
+        ],
       ],
     );
   }
+}
+
+class _Valor extends StatelessWidget {
+  final String texto;
+
+  const _Valor(this.texto);
+
+  @override
+  Widget build(BuildContext context) => Flexible(
+        child: Text(
+          texto,
+          textAlign: TextAlign.right,
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+        ),
+      );
 }
 
 /// Fila con la etiqueta a la izquierda y el dato a la derecha, para el detalle de una solicitud.
@@ -395,8 +448,14 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
 
 /// Icono, texto y color del estado del viaje tal como lo ve el pasajero. El texto cambia con el
 /// servicio para que en un reparto no salga "conductor" cuando el que llega es un repartidor.
-(FaIconData, String, Color) estadoViajePasajero(String situacion, [ServicioActivo servicio = ServicioActivo.viaje]) {
+(FaIconData, String, Color) estadoViajePasajero(String situacion,
+    [ServicioActivo servicio = ServicioActivo.viaje, PasajeroTercero? tercero]) {
+  final quien = tercero?.primerNombre;
   final texto = switch (situacion) {
+    _ when quien != null && (situacion == SituacionViaje.confirmado || situacion == SituacionViaje.enCamino) =>
+      'El taxi va a recoger a $quien',
+    _ when quien != null && situacion == SituacionViaje.llego => 'El taxi está esperando a $quien',
+    _ when quien != null && situacion == SituacionViaje.enCurso => '$quien va en viaje a su destino',
     SituacionViaje.confirmado || SituacionViaje.enCamino =>
       servicio == ServicioActivo.entrega ? 'Tu repartidor va a recoger tu paquete' : (situacion == SituacionViaje.confirmado ? 'Tu conductor aceptó el viaje' : 'Tu conductor va en camino'),
     SituacionViaje.llego => servicio == ServicioActivo.entrega
@@ -425,13 +484,23 @@ class PanelViaje extends StatelessWidget {
   final ValueChanged<String> onPedirCambioPago;
   final VoidCallback onConfirmarCompra;
 
-  const PanelViaje({super.key, required this.flujo, required this.onCancelar, required this.onPedirCambioPago, required this.onConfirmarCompra});
+  /// "Ya pagué" (taxi para otra persona pagado por quien lo pidio).
+  final VoidCallback? onAvisarPago;
+
+  const PanelViaje({
+    super.key,
+    required this.flujo,
+    required this.onCancelar,
+    required this.onPedirCambioPago,
+    required this.onConfirmarCompra,
+    this.onAvisarPago,
+  });
 
   @override
   Widget build(BuildContext context) {
     final viaje = flujo.viaje;
     if (viaje == null) return const SizedBox.shrink();
-    final (icono, texto, color) = estadoViajePasajero(viaje.situacion, flujo.servicio);
+    final (icono, texto, color) = estadoViajePasajero(viaje.situacion, flujo.servicio, viaje.tercero);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -451,7 +520,7 @@ class PanelViaje extends StatelessWidget {
             ],
           ),
         ),
-        if (flujo.llegandoDestino && viaje.datosEntrega == null) ...[
+        if (flujo.llegandoDestino && viaje.datosEntrega == null && viaje.tercero == null) ...[
           const SizedBox(height: 8),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -505,6 +574,10 @@ class PanelViaje extends StatelessWidget {
             BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombreConductor),
           ],
         ),
+        if (viaje.tercero != null) ...[
+          const SizedBox(height: 12),
+          _ViajaTercero(viaje: viaje, onAvisarPago: onAvisarPago),
+        ],
         const SizedBox(height: 12),
         TarjetaMoto(viaje: viaje),
         const Divider(height: 26, color: ColoresApp.borde),
@@ -528,7 +601,9 @@ class PanelViaje extends StatelessWidget {
             ),
         ],
         const SizedBox(height: 6),
-        if (viaje.metodoPagoPedido != null)
+        if (viaje.pagaSolicitante)
+          const SizedBox.shrink()
+        else if (viaje.metodoPagoPedido != null)
           _Aviso(
             icono: FontAwesomeIcons.hourglassHalf,
             texto:
@@ -668,6 +743,174 @@ class LineaTiempoEntrega extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+/// Taxi para otra persona: avisa que hay que elegir dos puntos y cuales ya estan.
+class PanelDosPuntos extends StatelessWidget {
+  final FlujoPasajero flujo;
+
+  const PanelDosPuntos({super.key, required this.flujo});
+
+  @override
+  Widget build(BuildContext context) {
+    final a = flujo.mapa.a;
+    final b = flujo.mapa.b;
+    Widget paso(bool hecho, bool activo, String texto, String? valor) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: FaIcon(
+                  hecho ? FontAwesomeIcons.solidCircleCheck : FontAwesomeIcons.circle,
+                  size: 15,
+                  color: hecho ? ColoresApp.exito : activo ? ColoresApp.azul : ColoresApp.borde,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text.rich(TextSpan(children: [
+                  TextSpan(
+                    text: texto,
+                    style: TextStyle(color: ColoresApp.texto, fontWeight: activo ? FontWeight.w700 : FontWeight.w500),
+                  ),
+                  if (valor != null)
+                    TextSpan(text: '\n$valor', style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+                ])),
+              ),
+            ],
+          ),
+        );
+    final marcandoPartida = flujo.eligiendoPartida || (flujo.marcando == null && a == null);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Viaje para otra persona: elige dos puntos',
+          style: TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        const Text(
+          'Toca un campo de arriba para escribir la dirección o toca el mapa.',
+          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+        ),
+        const SizedBox(height: 8),
+        paso(a != null, marcandoPartida, '1. Punto de partida: dónde el taxista recoge a la persona',
+            a == null ? null : (flujo.direccionOrigen ?? a.texto)),
+        paso(b != null, !marcandoPartida, '2. Punto de llegada: dónde el taxista deja a la persona', b?.texto),
+        if (a != null && b != null && flujo.marcando != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(onPressed: () => flujo.marcar(null), child: const Text('Listo, ver precio')),
+          ),
+      ],
+    );
+  }
+}
+
+/// Quien viaja y quien paga, antes de pedir el taxi para otra persona.
+class _DatosQuienViaja extends StatelessWidget {
+  final PasajeroTercero? tercero;
+  final Future<bool> Function()? onEditar;
+
+  const _DatosQuienViaja({required this.tercero, required this.onEditar});
+
+  @override
+  Widget build(BuildContext context) {
+    final datos = tercero;
+    final editar = onEditar;
+    if (datos == null) {
+      return OutlinedButton.icon(
+        onPressed: editar == null ? null : () => editar(),
+        icon: const FaIcon(FontAwesomeIcons.userPlus, size: 15),
+        label: const Text('Agregar datos de quien viaja'),
+      );
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
+      decoration: BoxDecoration(color: ColoresApp.gris, borderRadius: BorderRadius.circular(12)),
+      child: Row(
+        children: [
+          const FaIcon(FontAwesomeIcons.userGroup, size: 15, color: ColoresApp.azul),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Viaja: ${datos.nombre}', style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
+                Text(
+                  '${datos.telefono ?? ''} - ${datos.pagaSolicitante ? 'Pagas tú (QR)' : 'Paga quien viaja'}',
+                  style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                ),
+              ],
+            ),
+          ),
+          TextButton(onPressed: editar == null ? null : () => editar(), child: const Text('Editar')),
+        ],
+      ),
+    );
+  }
+}
+
+/// En el viaje pedido para otra persona: quien viaja, llamarlo y el estado del pago por QR.
+class _ViajaTercero extends StatelessWidget {
+  final Viaje viaje;
+  final VoidCallback? onAvisarPago;
+
+  const _ViajaTercero({required this.viaje, required this.onAvisarPago});
+
+  @override
+  Widget build(BuildContext context) {
+    final tercero = viaje.tercero!;
+    final telefono = tercero.telefono;
+    final String estadoPago;
+    if (!viaje.pagaConQr) {
+      estadoPago = '${tercero.primerNombre} paga en efectivo al conductor.';
+    } else if (viaje.pagoRecibidoEn != null) {
+      estadoPago = 'El conductor confirmó que recibió el pago.';
+    } else if (viaje.pagaSolicitante && viaje.pagoAvisadoEn != null) {
+      estadoPago = 'Avisaste que pagaste. Falta que el conductor lo confirme.';
+    } else if (viaje.pagaSolicitante) {
+      estadoPago = 'Pagas tú con el QR del conductor (abajo).';
+    } else {
+      estadoPago = '${tercero.primerNombre} paga por QR al conductor.';
+    }
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 10, 6, 10),
+      decoration: BoxDecoration(color: ColoresApp.azulSuave, borderRadius: BorderRadius.circular(14)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              const FaIcon(FontAwesomeIcons.userGroup, size: 15, color: ColoresApp.azul),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Viaja: ${tercero.nombre}',
+                  style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
+                ),
+              ),
+              if (telefono != null)
+                IconButton(
+                  onPressed: () => launchUrl(Uri(scheme: 'tel', path: telefono)),
+                  tooltip: 'Llamar a ${tercero.primerNombre}',
+                  icon: const FaIcon(FontAwesomeIcons.phone, size: 15, color: ColoresApp.azul),
+                ),
+            ],
+          ),
+          Text(estadoPago, style: const TextStyle(color: ColoresApp.texto, fontSize: 13)),
+          if (viaje.pagaSolicitante && viaje.pagaConQr && viaje.pagoAvisadoEn == null && viaje.pagoRecibidoEn == null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8, right: 6),
+              child: BotonPrincipal(texto: 'Ya pagué', onPressed: onAvisarPago),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -891,9 +1134,32 @@ class OpcionesEligiendo extends StatelessWidget {
             style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
           ),
         ),
-        pago(MetodoPago.efectivo, FontAwesomeIcons.moneyBill1, 'Efectivo'),
-        const SizedBox(width: 6),
-        pago(MetodoPago.qr, FontAwesomeIcons.qrcode, 'QR'),
+        if (flujo.servicio == ServicioActivo.viaje) ...[
+          // Pedir el taxi para otra persona (abre el detalle para elegir la partida y sus datos).
+          Tooltip(
+            message: flujo.paraOtraPersona ? 'Viaje para otra persona' : 'Pedir para otra persona',
+            child: InkWell(
+              borderRadius: BorderRadius.circular(20),
+              onTap: () => flujo.cambiarParaOtraPersona(!flujo.paraOtraPersona),
+              child: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: flujo.paraOtraPersona ? ColoresApp.azul : ColoresApp.blanco,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: flujo.paraOtraPersona ? ColoresApp.azul : ColoresApp.borde),
+                ),
+                child: FaIcon(FontAwesomeIcons.userGroup, size: 12,
+                    color: flujo.paraOtraPersona ? ColoresApp.blanco : ColoresApp.azul),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+        if (!flujo.paraOtraPersona || !(flujo.tercero?.pagaSolicitante ?? false)) ...[
+          pago(MetodoPago.efectivo, FontAwesomeIcons.moneyBill1, 'Efectivo'),
+          const SizedBox(width: 6),
+          pago(MetodoPago.qr, FontAwesomeIcons.qrcode, 'QR'),
+        ],
       ],
     );
   }

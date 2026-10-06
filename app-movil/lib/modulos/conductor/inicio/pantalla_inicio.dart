@@ -435,9 +435,12 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       final confirmado = await confirmarAccion(
         context,
         titulo: '¿Finalizar el viaje?',
-        mensaje:
-            'Confirma que ${viaje.primerNombrePasajero} llegó a su destino y cobra el viaje '
-            '${viaje.pagaConQr ? 'por QR' : 'en efectivo'}.',
+        mensaje: [
+          'Confirma que ${viaje.tercero?.primerNombre ?? viaje.primerNombrePasajero} llegó a su destino y cobra el viaje '
+              '${viaje.pagaConQr ? 'por QR' : 'en efectivo'}.',
+          if (viaje.pagaConQr && viaje.pagoRecibidoEn == null)
+            'El pago por QR aún no fue confirmado: revisa que te haya llegado o cobra en efectivo.',
+        ].join('\n\n'),
         textoConfirmar: 'Sí, finalizar',
       );
       if (!confirmado) return;

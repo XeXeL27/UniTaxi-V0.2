@@ -30,15 +30,21 @@ public record SolicitudViajeResponse(
         /** Precio sin descuento, descuento de estudiante (0 si no tiene) y km por calles. */
         BigDecimal precioNormal,
         BigDecimal descuentoEstudiante,
-        BigDecimal distanciaKm) {
+        BigDecimal distanciaKm,
+        /** Viaje para otra persona: quien viaja y si paga quien pidio. */
+        boolean paraOtraPersona,
+        String nombrePasajeroTercero,
+        String telefonoPasajeroTercero,
+        boolean pagaSolicitante) {
 
-    /** La misma solicitud sin el nombre del favorito, para los conductores. */
+    /** La misma solicitud sin el nombre del favorito ni el celular de quien viaja, para los conductores. */
     public SolicitudViajeResponse sinNombreDestino() {
         return new SolicitudViajeResponse(idSolicitud, idPasajero, nombrePasajero, idCategoriaServicio,
                 nombreCategoriaServicio, origenWkt, destinoWkt, origenDireccion, destinoDireccion, precioSugerido,
                 precioEstimado,
                 situacionSolicitud, fechaSolicitud, cantidadOfertas, metodoPago, null, datosEntrega == null
                         ? null : datosEntrega.paraConductor(),
-                precioNormal, descuentoEstudiante, distanciaKm);
+                precioNormal, descuentoEstudiante, distanciaKm, paraOtraPersona, nombrePasajeroTercero,
+                null, pagaSolicitante);
     }
 }

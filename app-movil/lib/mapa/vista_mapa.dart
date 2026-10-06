@@ -120,7 +120,8 @@ class MapaBase extends StatelessWidget {
                 if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
                 if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
                 // El GPS va encima de los pines: es lo que se mueve en vivo.
-                if (gps != null) Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
+                if (gps != null && !c.ocultarMiUbicacion)
+                  Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
                 // Marcador del conductor asignado al viaje del pasajero.
                 if (conductorPos != null)
                   Marker(

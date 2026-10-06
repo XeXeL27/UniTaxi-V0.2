@@ -21,6 +21,13 @@ class ReporteEntrega {
   final String? detalleCompra;
   final String? observacionCompra;
 
+  /// Pasajero del viaje: en "Pasajero no se presento" el admin lo puede suspender desde el reporte.
+  final int? idUsuarioPasajero;
+  final String? nombrePasajero;
+  final String? telefonoPasajero;
+  final int vecesNoSePresento;
+  final bool pasajeroSuspendido;
+
   const ReporteEntrega({
     required this.id,
     required this.idViaje,
@@ -38,6 +45,11 @@ class ReporteEntrega {
     this.telefonoContacto,
     this.tipoEnvio,
     this.descripcionEntrega,
+    this.idUsuarioPasajero,
+    this.nombrePasajero,
+    this.telefonoPasajero,
+    this.vecesNoSePresento = 0,
+    this.pasajeroSuspendido = false,
     this.fotoComprobanteUrl,
     this.detalleCompra,
     this.observacionCompra,
@@ -63,5 +75,13 @@ class ReporteEntrega {
     fotoComprobanteUrl: json['fotoComprobanteUrl'] as String?,
     detalleCompra: json['detalleCompra'] as String?,
     observacionCompra: json['observacionCompra'] as String?,
+    idUsuarioPasajero: Formato.leerEntero(json['idUsuarioPasajero']),
+    nombrePasajero: json['nombrePasajero'] as String?,
+    telefonoPasajero: json['telefonoPasajero'] as String?,
+    vecesNoSePresento: Formato.leerEntero(json['vecesNoSePresento']) ?? 0,
+    pasajeroSuspendido: json['pasajeroSuspendido'] as bool? ?? false,
   );
+
+  /// Reporte del conductor: el pasajero no se presento tras los 3 avisos.
+  bool get esPasajeroAusente => motivo == 'PASAJERO_NO_SE_PRESENTO';
 }

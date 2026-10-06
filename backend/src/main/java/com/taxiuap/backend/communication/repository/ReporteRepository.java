@@ -13,4 +13,7 @@ public interface ReporteRepository extends JpaRepository<Reporte, Long> {
     List<Reporte> findBySituacionReporte(SituacionReporte situacionReporte);
 
     List<Reporte> findByViajeId(Long idViaje);
+
+    /** Reportes de un motivo sobre los viajes de un pasajero (por ejemplo, cuantas veces no se presento). */
+    long countByMotivoAndViajePasajeroId(String motivo, Long idPasajero);
 }

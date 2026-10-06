@@ -12,7 +12,6 @@ import '../../../core/notificador.dart';
 import '../../../core/push.dart';
 import '../../../core/receptor_ubicacion.dart';
 import '../../../core/sesion.dart';
-import '../../../core/vibracion.dart';
 import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../comun/modelos_viaje.dart';
@@ -21,6 +20,9 @@ import 'viaje_api.dart';
 
 /// Etapas de la pantalla del pasajero.
 enum EtapaPasajero { cargando, eligiendo, buscando, enViaje, calificando }
+
+/// Taxi para otra persona: que punto marca el proximo toque en el mapa o lugar del buscador.
+enum PuntoPorMarcar { partida, llegada }
 
 /// Flujo del pasajero estilo Uber: A sale del GPS, el pasajero toca el mapa para marcar B, ve el
 /// precio y solicita; luego espera a que un conductor acepte, sigue el viaje y al terminar
@@ -79,6 +81,24 @@ class FlujoPasajero extends ChangeNotifier {
   /// El pasajero toco "Añadir lugar": el proximo toque en el mapa guarda ese punto.
   bool guardandoLugar = false;
 
+  // ---------------------------------------------------------------- taxi para otra persona
+
+  /// El taxi es para otra persona: la partida no sigue el GPS y hacen falta los datos de quien viaja.
+  bool paraOtraPersona = false;
+
+  /// Nombre, celular y quien paga (solo con [paraOtraPersona]).
+  PasajeroTercero? tercero;
+
+  /// Que punto marca el proximo toque en el mapa (o lugar del buscador) en un taxi para otra persona.
+  PuntoPorMarcar? marcando;
+
+  /// El proximo toque marca la partida (donde recogen a la persona).
+  bool get eligiendoPartida => marcando == PuntoPorMarcar.partida;
+
+  /// "Avisale a Juan: su taxi lo esta esperando", para mostrar una vez como alerta.
+  ({String titulo, String mensaje})? _alertaLlegada;
+  final Set<int> _alertasLlegada = {};
+
   /// El GPS del pasajero esta a menos de [metrosLlegada] del destino durante el viaje.
   bool llegandoDestino = false;
 
@@ -120,10 +140,13 @@ class FlujoPasajero extends ChangeNotifier {
       }
       return;
     }
-    if (_puntosCotizados == (a, b)) return;
+    if (_puntosCotizados == (a, b) && _cotizadoParaOtra == paraOtraPersona) return;
+    _cotizadoParaOtra = paraOtraPersona;
     _puntosCotizados = (a, b);
     unawaited(_cotizar(a, b));
   }
+
+  bool _cotizadoParaOtra = false;
 
   Future<void> _cotizar(LatLng a, LatLng b) async {
     final consulta = ++_consultaCotizacion;
@@ -131,7 +154,7 @@ class FlujoPasajero extends ChangeNotifier {
     cotizando = true;
     _avisar();
     try {
-      final resultado = await api.cotizar(a, b);
+      final resultado = await api.cotizar(a, b, paraOtraPersona: paraOtraPersona);
       if (_cerrado || consulta != _consultaCotizacion) return;
       cotizacion = resultado;
     } catch (_) {
@@ -256,6 +279,9 @@ class FlujoPasajero extends ChangeNotifier {
     // en modo entrega con los datos del pedido anterior cargados en silencio.
     modo.limpiar();
     datosEntregaForm = null;
+    paraOtraPersona = false;
+    tercero = null;
+    marcando = null;
 
     mapa.limpiar();
     mapa.aSigueGps = true;
@@ -273,7 +299,7 @@ class FlujoPasajero extends ChangeNotifier {
   }
 
   void _alMoverseGps(LatLng posicion) {
-    if (etapa == EtapaPasajero.eligiendo && mapa.a == null) {
+    if (etapa == EtapaPasajero.eligiendo && mapa.a == null && !paraOtraPersona) {
       _ponerOrigenGps(posicion);
     }
     if (etapa == EtapaPasajero.enViaje && viaje?.situacion == SituacionViaje.enCurso) {
@@ -289,19 +315,45 @@ class FlujoPasajero extends ChangeNotifier {
   /// Toque en el mapa: sin GPS el primer toque marca la partida; despues, el destino.
   void tocarMapa(LatLng punto) {
     if (etapa != EtapaPasajero.eligiendo || guardandoLugar) return;
-    if (mapa.a == null) {
-      mapa.ponerA(PuntoRuta(punto, 'Buscando dirección...'));
-      _resolverDireccion(punto, esOrigen: true);
+    if (paraOtraPersona && _siguientePunto == PuntoPorMarcar.partida) {
+      _ponerPartida(punto, 'Buscando dirección...');
+      return;
+    }
+    if (!paraOtraPersona && mapa.a == null) {
+      _ponerPartida(punto, 'Buscando dirección...');
       return;
     }
     mapa.ponerB(PuntoRuta(punto, 'Buscando dirección...'));
     _resolverDireccion(punto, esOrigen: false);
+    _despuesDeLlegada();
+  }
+
+  /// Para otra persona: lo que falta marcar (lo elegido con [marcar], o el primero que falte).
+  PuntoPorMarcar get _siguientePunto =>
+      marcando ?? (mapa.a == null ? PuntoPorMarcar.partida : PuntoPorMarcar.llegada);
+
+  /// Despues de marcar la llegada, si falta la partida se pide esa; si no, ya no se marca nada.
+  void _despuesDeLlegada() {
+    if (!paraOtraPersona) return;
+    marcando = mapa.a == null ? PuntoPorMarcar.partida : null;
+    _avisar();
+  }
+
+  /// El pasajero toco un campo (partida o llegada): el proximo lugar elegido o toque en el mapa va ahi.
+  void marcar(PuntoPorMarcar? punto) {
+    marcando = punto;
+    _avisar();
   }
 
   /// Un favorito pasa a ser el destino. El pasajero ve su nombre; al conductor le llega la
   /// direccion real del punto, que se busca aparte.
   void irAFavorito(LatLng posicion, String nombre) {
     if (etapa != EtapaPasajero.eligiendo) return;
+    if (paraOtraPersona && _siguientePunto == PuntoPorMarcar.partida) {
+      // Pidiendo para otra persona: el lugar elegido es donde la recogen.
+      _ponerPartida(posicion, nombre);
+      return;
+    }
     guardandoLugar = false;
     mapa.ponerB(PuntoRuta(posicion, nombre));
     _favorito = (posicion: posicion, nombre: nombre);
@@ -310,6 +362,7 @@ class FlujoPasajero extends ChangeNotifier {
       if (_favorito?.posicion == posicion) _direccionFavorito = texto;
     }));
     if (mapa.a == null) mapa.centrarEn(posicion);
+    _despuesDeLlegada();
     _avisar();
   }
 
@@ -318,6 +371,99 @@ class FlujoPasajero extends ChangeNotifier {
 
   /// Direccion real del favorito (Nominatim), la que ve el conductor.
   String? _direccionFavorito;
+
+  /// Partida elegida a mano (taxi para otra persona o sin GPS).
+  void _ponerPartida(LatLng punto, String texto) {
+    mapa.aSigueGps = false;
+    marcando = paraOtraPersona && mapa.b == null ? PuntoPorMarcar.llegada : null;
+    direccionOrigen = null;
+    mapa.ponerA(PuntoRuta(punto, texto));
+    _resolverDireccion(punto, esOrigen: true);
+    _avisar();
+  }
+
+  /// "Para mi" o "Para otra persona". Para otra persona la partida se elige a mano (el proximo toque
+  /// en el mapa o el buscador) y el precio va sin el descuento de estudiante.
+  void cambiarParaOtraPersona(bool otra) {
+    if (etapa != EtapaPasajero.eligiendo || otra == paraOtraPersona) return;
+    paraOtraPersona = otra;
+    if (otra) {
+      // La partida ya no es la ubicacion de quien pide: se elige a mano, igual que la llegada.
+      mapa.aSigueGps = false;
+      direccionOrigen = null;
+      mapa.ponerA(null);
+      marcando = PuntoPorMarcar.partida;
+    } else {
+      tercero = null;
+      marcando = null;
+      mapa.aSigueGps = true;
+      final gps = mapa.miUbicacion;
+      if (gps != null) _ponerOrigenGps(gps);
+    }
+    _revisarCotizacion();
+    _avisar();
+  }
+
+  void elegirPartida(bool valor) => marcar(valor ? PuntoPorMarcar.partida : null);
+
+  void guardarTercero(PasajeroTercero datos) {
+    tercero = datos;
+    // Quien paga desde lejos solo puede hacerlo por el QR del conductor.
+    if (datos.pagaSolicitante) metodoPago = MetodoPago.qr;
+    _avisar();
+  }
+
+  /// "Ya pagué": quien pidio el viaje para otra persona pago por el QR del conductor.
+  Future<void> avisarPago() async {
+    final actual = viaje;
+    if (actual == null) return;
+    final nuevo = await api.avisarPago(actual.id);
+    if (_cerrado || etapa != EtapaPasajero.enViaje) return;
+    viaje = nuevo;
+    _avisar();
+  }
+
+  /// La alerta "Avisale a ...: su taxi lo esta esperando" (una vez por viaje).
+  ({String titulo, String mensaje})? tomarAlertaLlegada() {
+    final alerta = _alertaLlegada;
+    _alertaLlegada = null;
+    return alerta;
+  }
+
+  /// El conductor llego o volvio a avisar que espera (hasta 3 avisos): cuadro en pantalla, sonido del
+  /// taxi que llego y vibracion, una vez por aviso. Tambien al retomar el viaje al abrir la app.
+  void _revisarAlertaLlegada(Viaje viaje) {
+    if (viaje.datosEntrega != null || viaje.situacion != SituacionViaje.llego) return;
+    final aviso = viaje.avisosEspera < 1 ? 1 : viaje.avisosEspera;
+    final evento = eventoLlegada(aviso);
+    if (!_alertasLlegada.add(idNotificacionViaje(viaje.id, evento))) return;
+    final quien = viaje.tercero?.primerNombre;
+    final conductor = viaje.primerNombreConductor;
+    final titulo = quien != null
+        ? 'Avísale a $quien: su taxi lo está esperando'
+        : aviso == 1
+            ? 'Tu conductor llegó'
+            : 'Tu conductor te está esperando';
+    final cuerpo = quien != null
+        ? '$conductor llegó al punto de recogida${aviso > 1 ? ' (aviso $aviso de 3)' : ''}.'
+        : '$conductor te espera en el punto de partida${aviso > 1 ? ' (aviso $aviso de 3)' : ''}.';
+    _alertaLlegada = (
+      titulo: titulo,
+      mensaje: [
+        cuerpo,
+        if (viaje.vehiculo.isNotEmpty) 'Moto: ${viaje.vehiculo}.',
+        if (viaje.placa != null) 'Placa: ${viaje.placa}.',
+      ].join(' '),
+    );
+    _avisarUnaVez(viaje.id, evento, titulo, cuerpo);
+  }
+
+  /// Se abre el cuadro para opinar del viaje terminado: sonido de viaje finalizado y vibracion.
+  void avisarFinDelViaje() {
+    final actual = viaje;
+    if (actual == null) return;
+    _avisarUnaVez(actual.id, 5, 'Tu viaje terminó', 'Cuéntanos cómo te fue con ${actual.primerNombreConductor}.');
+  }
 
   void quitarDestino() {
     mapa.ponerB(null);
@@ -352,7 +498,8 @@ class FlujoPasajero extends ChangeNotifier {
 
   bool get puedeSolicitar =>
       etapa == EtapaPasajero.eligiendo && mapa.a != null && mapa.b != null && !mapa.calculandoRuta &&
-      !modo.faltaElegirTipo && (tipoEnvio == null || datosEntregaForm?.error == null);
+      !modo.faltaElegirTipo && (tipoEnvio == null || datosEntregaForm?.error == null) &&
+      (!paraOtraPersona || marcando == null);
 
   /// Toca el segmentado de servicio de la cabecera.
   void cambiarServicio(ServicioActivo servicio) {
@@ -405,7 +552,8 @@ class FlujoPasajero extends ChangeNotifier {
         metodoPago: metodoPago,
         destinoNombre: esFavorito ? favorito.nombre : null,
         idCategoriaServicio: idCategoriaDelivery,
-        datosEntrega: datosEntregaForm);
+        datosEntrega: datosEntregaForm,
+        tercero: paraOtraPersona && tipoEnvio == null ? tercero : null);
     _entrarBuscando(creada);
   }
 
@@ -441,8 +589,8 @@ class FlujoPasajero extends ChangeNotifier {
   void _avisarUnaVez(int idViaje, int evento, String titulo, String cuerpo) {
     final id = idNotificacionViaje(idViaje, evento);
     if (!_avisados.add(id)) return;
-    // Solo el viaje aceptado suena (assets/sonidos); el resto vibra.
-    unawaited(AvisoViaje.avisar(titulo: titulo, cuerpo: cuerpo, idNotificacion: id, conSonido: evento == 1));
+    // Aceptado, el taxi llego (cada aviso) y viaje terminado tienen su audio; el resto solo vibra.
+    unawaited(AvisoViaje.avisar(titulo: titulo, cuerpo: cuerpo, idNotificacion: id, sonido: sonidoDeEvento(evento)));
   }
 
   void _entrarBuscando(Solicitud nueva) {
@@ -469,6 +617,9 @@ class FlujoPasajero extends ChangeNotifier {
         if (asignado.datosEntrega != null) {
           _avisarUnaVez(asignado.id, 1, 'Tu pedido fue aceptado',
               '${asignado.primerNombreConductor} va a recoger tu paquete.');
+        } else if (asignado.tercero != null) {
+          _avisarUnaVez(asignado.id, 1, 'El taxi para ${asignado.tercero!.primerNombre} fue aceptado',
+              '${asignado.primerNombreConductor} va en camino a recogerlo.');
         } else {
           _avisarUnaVez(asignado.id, 1, 'Tu viaje fue aceptado',
               '${asignado.primerNombreConductor} va en camino a recogerte.');
@@ -502,6 +653,7 @@ class FlujoPasajero extends ChangeNotifier {
     final cambioDeViaje = viaje?.id != nuevo.id || etapa != EtapaPasajero.enViaje;
     viaje = nuevo;
     etapa = EtapaPasajero.enViaje;
+    _revisarAlertaLlegada(nuevo);
     mapa.aSigueGps = false;
     if (cambioDeViaje && nuevo.tieneRuta) mapa.ponerRuta(nuevo.puntoA, nuevo.puntoB);
     _iniciarSondeo(_consultarViaje);
@@ -561,21 +713,19 @@ class FlujoPasajero extends ChangeNotifier {
 
     // Si cambio la situacion, actualizar el punto de referencia del seguimiento. El conductor que
     // llega al punto de partida se avisa (vibracion y, minimizada, notificacion); el fin del viaje, solo con vibracion.
+    // Cada aviso "te estoy esperando" del conductor (llego y hasta 2 mas) sale en pantalla con sonido.
+    _revisarAlertaLlegada(nuevo);
     if (nuevo.situacion != actual.situacion) {
       final entrega = nuevo.datosEntrega != null;
-      if (nuevo.situacion == SituacionViaje.llego) {
-        _avisarUnaVez(nuevo.id, 2, entrega ? 'Tu repartidor llegó' : 'Tu conductor llegó',
-            entrega
-                ? '${nuevo.primerNombreConductor} llegó al punto de recogida de tu paquete.'
-                : '${nuevo.primerNombreConductor} te espera en el punto de partida.');
+      if (entrega && nuevo.situacion == SituacionViaje.llego) {
+        _avisarUnaVez(nuevo.id, 2, 'Tu repartidor llegó',
+            '${nuevo.primerNombreConductor} llegó al punto de recogida de tu paquete.');
       } else if (entrega && nuevo.situacion == SituacionViaje.enCurso) {
         _avisarUnaVez(nuevo.id, 3, 'Tu paquete fue recogido',
             '${nuevo.primerNombreConductor} ya tiene tu paquete y va en camino al destino.');
       } else if (entrega && nuevo.situacion == SituacionViaje.completado) {
         _avisarUnaVez(nuevo.id, 4, 'Tu paquete fue entregado',
             '${nuevo.primerNombreConductor} confirmó la entrega con una foto.');
-      } else if (nuevo.situacion == SituacionViaje.completado) {
-        unawaited(Vibracion.corta());
       }
       final referencia = nuevo.situacion == SituacionViaje.enCurso ? nuevo.destino : nuevo.origen;
       if (referencia != null) {
@@ -598,6 +748,14 @@ class FlujoPasajero extends ChangeNotifier {
       unawaited(_marcarOfrecida(nuevo.id));
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
       chat?.cerrar();
+      if (nuevo.pasajeroNoSePresento) {
+        // El conductor espero los 3 avisos: el viaje no se vuelve a publicar.
+        aviso = 'Tu viaje se canceló: el conductor te esperó y no te presentaste.';
+        _avisarUnaVez(nuevo.id, 8, 'Tu viaje fue cancelado', 'El conductor te esperó y no te presentaste.');
+        _detenerSeguimientoConductor();
+        _entrarEligiendo();
+        return;
+      }
       if (nuevo.canceladoPor == 'CONDUCTOR') {
         // El backend vuelve a publicar el pedido para otro conductor: se sigue buscando.
         final republicada = (await api.misSolicitudes()).where((s) => s.activa).firstOrNull;
@@ -752,8 +910,18 @@ class FlujoPasajero extends ChangeNotifier {
     return texto;
   }
 
+  /// El punto azul de quien pide no se ve mientras el taxi es para otra persona (eligiendo los puntos,
+  /// buscando conductor o en el viaje). Vuelve al pedir para si mismo, al cancelar o al terminar.
+  bool get _ocultarMiUbicacion => switch (etapa) {
+        EtapaPasajero.eligiendo => paraOtraPersona,
+        EtapaPasajero.buscando => solicitud?.tercero != null,
+        EtapaPasajero.enViaje => viaje?.tercero != null,
+        _ => false,
+      };
+
   void _avisar() {
     if (_cerrado) return;
+    mapa.cambiarOcultarMiUbicacion(_ocultarMiUbicacion);
     _revisarSeguimiento();
     notifyListeners();
   }

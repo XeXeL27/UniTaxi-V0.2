@@ -105,6 +105,18 @@ class ConductorApi {
   Future<CalificacionesRecibidas> calificaciones() async =>
       CalificacionesRecibidas.desdeJson(await cliente.get('/api/conductor/calificaciones') as Map<String, dynamic>);
 
+  /// Vuelve a avisar al pasajero que lo espera (hasta 3 avisos, 1 minuto entre cada uno).
+  Future<Viaje> avisarEspera(int id) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/avisar-espera', {}));
+
+  /// Tras los 3 avisos: cancela sin republicar y reporta al pasajero con [comentario] para el admin.
+  Future<Viaje> pasajeroNoSePresento(int id, String comentario) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/pasajero-no-se-presento', {'motivo': comentario.trim()}));
+
+  /// Confirma que le llego el pago por QR (de quien pidio el viaje o de quien viaja).
+  Future<Viaje> pagoRecibido(int id) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/pago-recibido', {}));
+
   Future<Viaje> llegueRecogida(int id) async =>
       _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/llegue-recogida', {}));
 
