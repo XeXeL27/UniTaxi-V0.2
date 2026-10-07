@@ -4,8 +4,8 @@
 #
 # En el servidor basta con: git pull && ./iniciar.sh
 #   - El .env se crea solo la primera vez (contrasenas aleatorias) y git pull nunca lo toca.
-#   - Base de datos: PostGIS en Docker (puerto 5436), salvo que el .env tenga DB_URL hacia una BD
-#     externa: entonces no se levanta ningun contenedor de BD.
+#   - Base de datos: PostGIS en Docker (puerto 5436), salvo BD externa: DB_URL hacia otro servidor o
+#     BD_EXTERNA=1 en el .env, o un PostgreSQL de la maquina que ya escucha en el 5436.
 #   - Backend: con Java 21 en la maquina corre ahi; sin Java corre en un contenedor Docker con Java 21
 #     (mismas rutas, mismo puerto, mismo .env). BACKEND_EN_DOCKER=1 lo fuerza.
 #   - Sin Flutter se sirven el panel y la app ya compilados que vienen en el repositorio.
@@ -69,8 +69,15 @@ export TZ=America/La_Paz
 
 # DB_URL en el .env (o en el entorno) hacia otro servidor = BD externa: no se levanta la de Docker.
 DB_URL_ENV="${DB_URL:-$(grep -E '^DB_URL=' "$ENV" | tail -1 | cut -d= -f2- | tr -d '"' || true)}"
-if [[ -n "$DB_URL_ENV" && "$DB_URL_ENV" != *"localhost:5436"* && "$DB_URL_ENV" != *"127.0.0.1:5436"* ]]; then
-  echo "== Base de datos externa (DB_URL del .env): no se levanta la de Docker"
+BD_EXTERNA="${BD_EXTERNA:-$(grep -E '^BD_EXTERNA=' "$ENV" | tail -1 | cut -d= -f2- | tr -d '"' || true)}"
+CONTENEDOR_BD=false
+$HAY_DOCKER && docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx taxiuap-db && CONTENEDOR_BD=true
+if [[ "$BD_EXTERNA" == 1 ]] \
+    || [[ -n "$DB_URL_ENV" && "$DB_URL_ENV" != *"localhost:5436"* && "$DB_URL_ENV" != *"127.0.0.1:5436"* ]]; then
+  echo "== Base de datos externa (DB_URL / BD_EXTERNA del .env): no se levanta la de Docker"
+elif ! $CONTENEDOR_BD && (exec 3<>/dev/tcp/127.0.0.1/5436) 2>/dev/null; then
+  # Ya hay un PostgreSQL propio en el 5436 (instalado en la maquina): se usa ese, sin contenedor.
+  echo "== Base de datos ya activa en el puerto 5436 (fuera de Docker): se usa esa"
 else
   $HAY_DOCKER || falta "no se encontro Docker para la base de datos. Instala Docker o pon DB_URL de una BD externa en .env."
   echo "== Base de datos (PostGIS en Docker)"
