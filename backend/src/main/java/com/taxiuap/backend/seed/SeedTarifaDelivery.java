@@ -35,14 +35,14 @@ public class SeedTarifaDelivery implements CommandLineRunner {
     @Value("${taxiuap.seed.habilitado:false}")
     private boolean seedHabilitado;
 
-    @Value("${taxiuap.delivery.tarifa-base:4.00}")
-    private BigDecimal tarifaBase = new BigDecimal("4.00");
+    @Value("${taxiuap.delivery.tarifa-base:8.00}")
+    private BigDecimal tarifaBase = new BigDecimal("8.00");
 
-    @Value("${taxiuap.delivery.precio-km:1.80}")
-    private BigDecimal precioKm = new BigDecimal("1.80");
+    @Value("${taxiuap.delivery.precio-km:2.00}")
+    private BigDecimal precioKm = new BigDecimal("2.00");
 
-    @Value("${taxiuap.delivery.precio-minuto:0.20}")
-    private BigDecimal precioMinuto = new BigDecimal("0.20");
+    @Value("${taxiuap.delivery.precio-minuto:0.00}")
+    private BigDecimal precioMinuto = BigDecimal.ZERO;
 
     @Override
     @Transactional
@@ -69,6 +69,7 @@ public class SeedTarifaDelivery implements CommandLineRunner {
                 .filter(tarifa -> tarifa.getEstadoTarifa() == EstadoRegistro.A)
                 .filter(tarifa -> tarifa.getVigenteDesde() != null && !tarifa.getVigenteDesde().isAfter(hoy))
                 .filter(tarifa -> tarifa.getVigenteHasta() == null || !tarifa.getVigenteHasta().isBefore(hoy))
+                .filter(tarifa -> tarifa.getTarifaBase() != null && tarifa.getTarifaBase().signum() > 0)
                 .findFirst();
         if (vigente.isPresent()) return vigente.get();
 

@@ -27,7 +27,12 @@ class DatosPerfil extends StatefulWidget {
   /// Se llama despues de guardar, para volver a cargar el perfil.
   final VoidCallback alGuardar;
 
-  const DatosPerfil({super.key, required this.perfil, required this.esConductor, required this.alGuardar});
+  const DatosPerfil({
+    super.key,
+    required this.perfil,
+    required this.esConductor,
+    required this.alGuardar,
+  });
 
   @override
   State<DatosPerfil> createState() => _DatosPerfilState();
@@ -42,8 +47,12 @@ class _DatosPerfilState extends State<DatosPerfil> {
   bool _editando = false;
   bool _guardando = false;
 
-  List<TextEditingController> get _controladores =>
-      [_correo, _telefono, _licencia, _categoria];
+  List<TextEditingController> get _controladores => [
+    _correo,
+    _telefono,
+    _licencia,
+    _categoria,
+  ];
 
   @override
   void dispose() {
@@ -63,8 +72,11 @@ class _DatosPerfilState extends State<DatosPerfil> {
   }
 
   /// La licencia (numero o categoria) solo se puede poner desde la app mientras este en blanco.
-  bool get _licenciaEditable => widget.esConductor && (widget.perfil.numeroLicencia ?? '').trim().isEmpty;
-  bool get _categoriaEditable => widget.esConductor && (widget.perfil.categoriaLicencia ?? '').trim().isEmpty;
+  bool get _licenciaEditable =>
+      widget.esConductor && (widget.perfil.numeroLicencia ?? '').trim().isEmpty;
+  bool get _categoriaEditable =>
+      widget.esConductor &&
+      (widget.perfil.categoriaLicencia ?? '').trim().isEmpty;
 
   Future<void> _guardar() async {
     FocusScope.of(context).unfocus();
@@ -81,7 +93,8 @@ class _DatosPerfilState extends State<DatosPerfil> {
         'correo': _correo.text.trim(),
         'telefono': _telefono.text.trim(),
         if (_licenciaEditable) 'numeroLicencia': _licencia.text.trim(),
-        if (_categoriaEditable) 'categoriaLicencia': _categoria.text.trim().toUpperCase(),
+        if (_categoriaEditable)
+          'categoriaLicencia': _categoria.text.trim().toUpperCase(),
         'password': contrasena,
       });
     } on ApiExcepcion catch (e) {
@@ -97,11 +110,18 @@ class _DatosPerfilState extends State<DatosPerfil> {
     if (!mounted) return;
     setState(() => _editando = false);
     widget.alGuardar();
-    await mostrarExito(context, titulo: '¡Datos actualizados!', mensaje: 'Tus datos se guardaron correctamente.');
+    await mostrarExito(
+      context,
+      titulo: '¡Datos actualizados!',
+      mensaje: 'Tus datos se guardaron correctamente.',
+    );
   }
 
   /// Si el login recordaba el correo o el telefono que se acaba de cambiar, pasa al nuevo.
-  Future<void> _actualizarRecordadas(Perfil anterior, Map<String, dynamic> usuario) async {
+  Future<void> _actualizarRecordadas(
+    Perfil anterior,
+    Map<String, dynamic> usuario,
+  ) async {
     final recordadas = await Credenciales.leer();
     if (recordadas == null) return;
     final String? nuevo = switch (recordadas.usuario) {
@@ -122,19 +142,30 @@ class _DatosPerfilState extends State<DatosPerfil> {
     final datos = <(FaIconData, String, String)>[
       (FontAwesomeIcons.solidUser, 'Nombre completo', p.nombreCompleto),
       (FontAwesomeIcons.idCard, 'Carnet de identidad', p.ciCompleto),
-      (FontAwesomeIcons.cakeCandles, 'Fecha de nacimiento', p.fechaNacimiento == null ? '' : formatoFecha(p.fechaNacimiento)),
+      (
+        FontAwesomeIcons.cakeCandles,
+        'Fecha de nacimiento',
+        p.fechaNacimiento == null ? '' : formatoFecha(p.fechaNacimiento),
+      ),
       (FontAwesomeIcons.envelope, 'Correo', p.correo ?? ''),
       (FontAwesomeIcons.phone, 'Teléfono', p.telefono ?? ''),
       if (widget.esConductor) ...[
         (FontAwesomeIcons.idBadge, 'Licencia', p.numeroLicencia ?? ''),
-        (FontAwesomeIcons.layerGroup, 'Categoría de licencia', p.categoriaLicencia ?? ''),
+        (
+          FontAwesomeIcons.layerGroup,
+          'Categoría de licencia',
+          p.categoriaLicencia ?? '',
+        ),
       ],
       // La calificacion solo se muestra al conductor.
-      if (widget.esConductor) (
-        FontAwesomeIcons.solidStar,
-        'Tu calificación',
-        p.calificacionPromedio == null ? '' : '${p.calificacionPromedio!.toStringAsFixed(1).replaceAll('.', ',')} de 5',
-      ),
+      if (widget.esConductor)
+        (
+          FontAwesomeIcons.solidStar,
+          'Tu calificación',
+          p.calificacionPromedio == null
+              ? ''
+              : '${p.calificacionPromedio!.toStringAsFixed(1).replaceAll('.', ',')} de 5',
+        ),
     ];
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -145,22 +176,49 @@ class _DatosPerfilState extends State<DatosPerfil> {
             onPressed: _editar,
             style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
             icon: const FaIcon(FontAwesomeIcons.pen, size: 13),
-            label: const Text('Editar', style: TextStyle(fontWeight: FontWeight.w700)),
+            label: const Text(
+              'Editar',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
           children: [
             for (var i = 0; i < datos.length; i++) ...[
               if (i > 0) const Divider(height: 1, color: ColoresApp.borde),
               ListTile(
-                leading: SizedBox(width: 24, child: Center(child: FaIcon(datos[i].$1, color: ColoresApp.rojo, size: 17))),
-                title: Text(datos[i].$2, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+                leading: SizedBox(
+                  width: 24,
+                  child: Center(
+                    child: FaIcon(
+                      datos[i].$1,
+                      color: ColoresApp.rojo,
+                      size: 17,
+                    ),
+                  ),
+                ),
+                title: Text(
+                  datos[i].$2,
+                  style: const TextStyle(
+                    color: ColoresApp.textoSuave,
+                    fontSize: 12.5,
+                  ),
+                ),
                 subtitle: Text(
                   datos[i].$3.isEmpty ? 'Sin dato' : datos[i].$3,
-                  style: TextStyle(color: datos[i].$3.isEmpty ? ColoresApp.textoSuave : ColoresApp.texto, fontSize: 15.5),
+                  style: TextStyle(
+                    color: datos[i].$3.isEmpty
+                        ? ColoresApp.textoSuave
+                        : ColoresApp.texto,
+                    fontSize: 15.5,
+                  ),
                 ),
               ),
             ],
           ],
         ),
+        if (widget.esConductor) ...[
+          const SizedBox(height: 14),
+          _LimiteAdelantoCompra(perfil: p, alGuardar: widget.alGuardar),
+        ],
         const SizedBox(height: 14),
         const Text(
           'Con "Editar" puedes cambiar tu correo y tu teléfono. Te enviaremos un código a tu correo actual '
@@ -194,7 +252,10 @@ class _DatosPerfilState extends State<DatosPerfil> {
                       validar: (v) {
                         final texto = v?.trim() ?? '';
                         if (texto.isEmpty) return 'Campo obligatorio';
-                        if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(texto)) return 'Correo no válido';
+                        if (!RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
+                            .hasMatch(texto)) {
+                          return 'Correo no válido';
+                        }
                         return null;
                       },
                     ),
@@ -203,11 +264,20 @@ class _DatosPerfilState extends State<DatosPerfil> {
                       widget.esConductor ? 'Celular *' : 'Teléfono',
                       FontAwesomeIcons.phone,
                       teclado: TextInputType.phone,
-                      formatos: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
+                      formatos: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(8),
+                      ],
                       validar: (v) {
                         final texto = v?.trim() ?? '';
-                        if (texto.isEmpty) return widget.esConductor ? 'Campo obligatorio' : null;
-                        return RegExp(r'^[67]\d{7}$').hasMatch(texto) ? null : '8 dígitos que empiezan con 6 o 7';
+                        if (texto.isEmpty) {
+                          return widget.esConductor
+                              ? 'Campo obligatorio'
+                              : null;
+                        }
+                        return RegExp(r'^[67]\d{7}$').hasMatch(texto)
+                            ? null
+                            : '8 dígitos que empiezan con 6 o 7';
                       },
                     ),
                     if (_licenciaEditable)
@@ -225,12 +295,17 @@ class _DatosPerfilState extends State<DatosPerfil> {
                         FontAwesomeIcons.layerGroup,
                         formatos: [
                           LengthLimitingTextInputFormatter(1),
-                          FilteringTextInputFormatter.allow(RegExp('[PMABCpmabc]')),
+                          FilteringTextInputFormatter.allow(
+                            RegExp('[PMABCpmabc]'),
+                          ),
                           MayusculasFormatter(),
                         ],
                         validar: (v) {
                           final texto = v?.trim() ?? '';
-                          return texto.isEmpty || RegExp(r'^[PMABC]$').hasMatch(texto) ? null : 'Una letra: P, M, A, B o C';
+                          return texto.isEmpty ||
+                                  RegExp(r'^[PMABC]$').hasMatch(texto)
+                              ? null
+                              : 'Una letra: P, M, A, B o C';
                         },
                       ),
                   ],
@@ -239,11 +314,21 @@ class _DatosPerfilState extends State<DatosPerfil> {
             ],
           ),
           const SizedBox(height: 16),
-          BotonPrincipal(texto: 'Guardar cambios', color: ColoresApp.azul, cargando: _guardando, onPressed: _guardar),
+          BotonPrincipal(
+            texto: 'Guardar cambios',
+            color: ColoresApp.azul,
+            cargando: _guardando,
+            onPressed: _guardar,
+          ),
           const SizedBox(height: 6),
           TextButton(
-            onPressed: _guardando ? null : () => setState(() => _editando = false),
-            child: const Text('Cancelar', style: TextStyle(color: ColoresApp.textoSuave)),
+            onPressed: _guardando
+                ? null
+                : () => setState(() => _editando = false),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: ColoresApp.textoSuave),
+            ),
           ),
         ],
       ),
@@ -265,11 +350,154 @@ class _DatosPerfilState extends State<DatosPerfil> {
         controller: controlador,
         keyboardType: teclado,
         inputFormatters: formatos,
-        textCapitalization: mayusculaInicial ? TextCapitalization.words : TextCapitalization.none,
+        textCapitalization: mayusculaInicial
+            ? TextCapitalization.words
+            : TextCapitalization.none,
         textInputAction: TextInputAction.next,
-        decoration: InputDecoration(labelText: etiqueta, prefixIcon: _IconoCampo(icono)),
+        decoration: InputDecoration(
+          labelText: etiqueta,
+          prefixIcon: _IconoCampo(icono),
+        ),
         validator: validar,
       ),
+    );
+  }
+}
+
+class _LimiteAdelantoCompra extends StatefulWidget {
+  final Perfil perfil;
+  final VoidCallback alGuardar;
+
+  const _LimiteAdelantoCompra({required this.perfil, required this.alGuardar});
+
+  @override
+  State<_LimiteAdelantoCompra> createState() => _LimiteAdelantoCompraState();
+}
+
+class _LimiteAdelantoCompraState extends State<_LimiteAdelantoCompra> {
+  final _monto = TextEditingController();
+  bool _editando = false;
+  bool _guardando = false;
+
+  @override
+  void dispose() {
+    _monto.dispose();
+    super.dispose();
+  }
+
+  void _editar() {
+    _monto.text = widget.perfil.limiteAdelantoCompra?.toStringAsFixed(2) ?? '';
+    setState(() => _editando = true);
+  }
+
+  Future<void> _guardar() async {
+    final valor = double.tryParse(_monto.text.trim().replaceAll(',', '.'));
+    if (valor == null || valor < 0) {
+      await mostrarErrorDialogo(
+        context,
+        mensaje: 'Indica un monto válido igual o mayor que cero.',
+      );
+      return;
+    }
+    final password = await confirmarIdentidad(
+      context,
+      accion: 'actualizar tu límite de compras',
+    );
+    if (password == null || !mounted) return;
+    setState(() => _guardando = true);
+    try {
+      await PerfilApi(context.read<ClienteApi>())
+          .actualizarLimiteAdelantoCompra(valor, password);
+    } on ApiExcepcion catch (e) {
+      if (!mounted) return;
+      setState(() => _guardando = false);
+      await mostrarErrorDialogo(context, mensaje: e.mensaje);
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _guardando = false;
+      _editando = false;
+    });
+    widget.alGuardar();
+    await mostrarExito(
+      context,
+      titulo: 'Límite actualizado',
+      mensaje: 'Tu límite para compras se guardó correctamente.',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_editando) {
+      return _Tarjeta(
+        titulo: 'Límite para compras',
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: _monto,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Monto máximo que adelantarás (Bs)',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                BotonPrincipal(
+                  texto: 'Guardar límite',
+                  color: ColoresApp.azul,
+                  cargando: _guardando,
+                  onPressed: _guardar,
+                ),
+                TextButton(
+                  onPressed: _guardando
+                      ? null
+                      : () => setState(() => _editando = false),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+    return _Tarjeta(
+      titulo: 'Límite para compras',
+      accion: TextButton.icon(
+        onPressed: _editar,
+        icon: const FaIcon(FontAwesomeIcons.pen, size: 13),
+        label: const Text(
+          'Editar',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      children: [
+        ListTile(
+          leading: const SizedBox(
+            width: 24,
+            child: Center(
+              child: FaIcon(
+                FontAwesomeIcons.wallet,
+                color: ColoresApp.rojo,
+                size: 17,
+              ),
+            ),
+          ),
+          title: const Text(
+            'Máximo que adelantarás',
+            style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+          ),
+          subtitle: Text(
+            formatoBs(widget.perfil.limiteAdelantoCompra),
+            style: const TextStyle(color: ColoresApp.texto, fontSize: 15.5),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -294,11 +522,23 @@ class _Tarjeta extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(16, accion == null ? 14 : 6, 6, accion == null ? 10 : 2),
+            padding: EdgeInsets.fromLTRB(
+              16,
+              accion == null ? 14 : 6,
+              6,
+              accion == null ? 10 : 2,
+            ),
             child: Row(
               children: [
                 Expanded(
-                  child: Text(titulo, style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700)),
+                  child: Text(
+                    titulo,
+                    style: const TextStyle(
+                      color: ColoresApp.azul,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                 ),
                 ?accion,
               ],
@@ -319,6 +559,11 @@ class _IconoCampo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: 44, child: Center(child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave)));
+    return SizedBox(
+      width: 44,
+      child: Center(
+        child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave),
+      ),
+    );
   }
 }

@@ -230,9 +230,9 @@ class ViajeDeliveryPricingTest {
         assertSame(viaje.getTarifa(), tarifaReutilizada);
         verify(tarifaRepository, times(1)).save(any(Tarifa.class));
         assertNull(viaje.getTarifa().getZona());
-        assertEquals(new BigDecimal("4.00"), viaje.getTarifa().getTarifaBase());
-        assertEquals(new BigDecimal("1.80"), viaje.getTarifa().getPrecioKm());
-        assertEquals(new BigDecimal("0.20"), viaje.getTarifa().getPrecioMinuto());
+        assertEquals(new BigDecimal("8.00"), viaje.getTarifa().getTarifaBase());
+        assertEquals(new BigDecimal("2.00"), viaje.getTarifa().getPrecioKm());
+        assertEquals(BigDecimal.ZERO, viaje.getTarifa().getPrecioMinuto());
     }
 
     @Test
@@ -346,11 +346,7 @@ class ViajeDeliveryPricingTest {
                 ArgumentCaptor.forClass(com.taxiuap.backend.pricing.entity.Pago.class);
         verify(pagoRepository).save(pago.capture());
         assertEquals(new BigDecimal("21.25"), pago.getValue().getMonto());
-        ArgumentCaptor<com.taxiuap.backend.pricing.entity.Comision> comision =
-                ArgumentCaptor.forClass(com.taxiuap.backend.pricing.entity.Comision.class);
-        verify(comisionRepository).save(comision.capture());
-        assertEquals(new BigDecimal("0"), comision.getValue().getPorcentaje());
-        assertEquals(new BigDecimal("0.00"), comision.getValue().getMonto());
+        verify(comisionRepository, never()).save(any(com.taxiuap.backend.pricing.entity.Comision.class));
     }
 
     private SolicitudViaje solicitud(TipoEnvio tipo, BigDecimal precio) {

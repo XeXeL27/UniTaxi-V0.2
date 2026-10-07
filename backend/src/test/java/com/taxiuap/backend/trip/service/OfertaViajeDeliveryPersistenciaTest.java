@@ -110,7 +110,7 @@ class OfertaViajeDeliveryPersistenciaTest {
         assertTrue(viajePersistido.getVehiculo().esMotoDelivery());
         assertNotNull(viajePersistido.getTarifa());
         assertNull(viajePersistido.getTarifa().getZona());
-        assertEquals(new BigDecimal("4.00"), viajePersistido.getTarifa().getTarifaBase());
+        assertEquals(new BigDecimal("8.00"), viajePersistido.getTarifa().getTarifaBase());
         assertEquals(new BigDecimal("17.50"), viajePersistido.getPrecioFinal());
         assertEquals("654321", viajePersistido.getSolicitud().getDatosEntrega().getCodigoEntrega());
         assertNull(respuesta.datosEntrega().codigoRecogida());

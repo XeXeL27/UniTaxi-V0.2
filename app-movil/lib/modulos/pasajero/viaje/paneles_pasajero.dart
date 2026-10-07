@@ -16,9 +16,13 @@ import '../../../comun/vista_chat.dart';
 /// hasta que el backend fija el precio desde el comercio real.
 String etiquetaPrecioDelivery(Viaje viaje) {
   final datos = viaje.datosEntrega;
-  if (datos?.tipoEnvio == TipoEnvio.encomienda) return 'Precio fijo del servicio';
+  if (datos?.tipoEnvio == TipoEnvio.encomienda) {
+    return 'Precio fijo del servicio';
+  }
   if (datos?.tipoEnvio == TipoEnvio.compraYEntrega) {
-    return viaje.precioEstimado ? 'Precio estimado del servicio' : 'Precio definitivo del servicio';
+    return viaje.precioEstimado
+        ? 'Precio estimado del servicio'
+        : 'Precio definitivo del servicio';
   }
   return 'Precio del viaje';
 }
@@ -63,7 +67,10 @@ class PanelEligiendo extends StatelessWidget {
             texto: 'Toca el mapa en el lugar que quieres guardar como favorito',
           ),
           const SizedBox(height: 14),
-          BotonSecundario(texto: 'Cancelar', onPressed: () => flujo.cambiarGuardandoLugar(false)),
+          BotonSecundario(
+            texto: 'Cancelar',
+            onPressed: () => flujo.cambiarGuardandoLugar(false),
+          ),
         ],
       );
     }
@@ -74,15 +81,22 @@ class PanelEligiendo extends StatelessWidget {
         // Con el destino elegido o en una compra, lo primero que se ve es el precio y como se paga.
         if (verPedido) ...[
           RecuadroPrecio(
-            etiqueta: flujo.servicio == ServicioActivo.entrega ? 'Precio del servicio' : 'Precio del viaje',
+            etiqueta: flujo.servicio == ServicioActivo.entrega
+                ? 'Precio del servicio'
+                : 'Precio del viaje',
             detalle: [
               ?flujo.detalleDescuento,
-              flujo.metodoPago == MetodoPago.qr ? 'Pagas con el QR del conductor' : 'Pagas en efectivo al conductor',
+              flujo.metodoPago == MetodoPago.qr
+                  ? 'Pagas con el QR del conductor'
+                  : 'Pagas en efectivo al conductor',
             ].join('\n'),
             monto: flujo.textoPrecio,
           ),
           const SizedBox(height: 10),
-          _SelectorPago(metodo: flujo.metodoPago, onElegir: flujo.elegirMetodoPago),
+          _SelectorPago(
+            metodo: flujo.metodoPago,
+            onElegir: flujo.elegirMetodoPago,
+          ),
           const SizedBox(height: 12),
         ],
         if (a == null)
@@ -91,7 +105,10 @@ class PanelEligiendo extends StatelessWidget {
                   icono: FontAwesomeIcons.locationCrosshairs,
                   texto: 'No pudimos obtener tu ubicación. Toca el mapa para marcar tu punto de partida.',
                 )
-              : const _Indicacion(icono: FontAwesomeIcons.satelliteDish, texto: 'Obteniendo tu ubicación...')
+              : const _Indicacion(
+                  icono: FontAwesomeIcons.satelliteDish,
+                  texto: 'Obteniendo tu ubicación...',
+                )
         else
           FilaLugar.partida(
             etiqueta: mapa.aSigueGps && a.texto == 'Mi ubicación actual'
@@ -101,10 +118,16 @@ class PanelEligiendo extends StatelessWidget {
           ),
         if (esCompra) ...[
           const SizedBox(height: 10),
-          const _Indicacion(icono: FontAwesomeIcons.locationDot, texto: 'Se entrega donde estas'),
+          const _Indicacion(
+            icono: FontAwesomeIcons.locationDot,
+            texto: 'Se entrega donde estas',
+          ),
         ] else if (a != null && b == null) ...[
           const SizedBox(height: 10),
-          const _Indicacion(icono: FontAwesomeIcons.handPointer, texto: 'Busca tu destino arriba o tócalo en el mapa.'),
+          const _Indicacion(
+            icono: FontAwesomeIcons.handPointer,
+            texto: 'Busca tu destino arriba o tócalo en el mapa.',
+          ),
         ],
         if (b != null && !esCompra) ...[
           FilaLugar.destino(
@@ -115,12 +138,20 @@ class PanelEligiendo extends StatelessWidget {
                 IconButton(
                   onPressed: onGuardarDestino,
                   tooltip: 'Guardar como favorito',
-                  icon: const FaIcon(FontAwesomeIcons.star, color: ColoresApp.textoSuave, size: 17),
+                  icon: const FaIcon(
+                    FontAwesomeIcons.star,
+                    color: ColoresApp.textoSuave,
+                    size: 17,
+                  ),
                 ),
                 IconButton(
                   onPressed: flujo.quitarDestino,
                   tooltip: 'Quitar destino',
-                  icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.textoSuave, size: 18),
+                  icon: const FaIcon(
+                    FontAwesomeIcons.xmark,
+                    color: ColoresApp.textoSuave,
+                    size: 18,
+                  ),
                 ),
               ],
             ),
@@ -132,10 +163,16 @@ class PanelEligiendo extends StatelessWidget {
                 SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.ruta),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: ColoresApp.ruta,
+                  ),
                 ),
                 SizedBox(width: 10),
-                Text('Trazando la ruta...', style: TextStyle(color: ColoresApp.textoSuave)),
+                Text(
+                  'Trazando la ruta...',
+                  style: TextStyle(color: ColoresApp.textoSuave),
+                ),
               ],
             )
           else
@@ -143,10 +180,19 @@ class PanelEligiendo extends StatelessWidget {
               spacing: 18,
               runSpacing: 6,
               children: [
-                DatoRuta(icono: FontAwesomeIcons.route, texto: ruta.distanciaTexto),
-                DatoRuta(icono: FontAwesomeIcons.clock, texto: ruta.duracionTexto),
+                DatoRuta(
+                  icono: FontAwesomeIcons.route,
+                  texto: ruta.distanciaTexto,
+                ),
+                DatoRuta(
+                  icono: FontAwesomeIcons.clock,
+                  texto: ruta.duracionTexto,
+                ),
                 if (ruta.aproximada)
-                  const Text('Ruta aproximada', style: TextStyle(color: ColoresApp.rojo, fontSize: 12.5)),
+                  const Text(
+                    'Ruta aproximada',
+                    style: TextStyle(color: ColoresApp.rojo, fontSize: 12.5),
+                  ),
               ],
             ),
           const SizedBox(height: 12),
@@ -181,7 +227,9 @@ class DetalleSolicitudViaje extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         RecuadroPrecio(
-          etiqueta: flujo.servicio == ServicioActivo.entrega ? 'Precio del servicio' : 'Precio del viaje',
+          etiqueta: flujo.servicio == ServicioActivo.entrega
+              ? 'Precio del servicio'
+              : 'Precio del viaje',
           detalle: flujo.detalleDescuento,
           monto: flujo.textoPrecio,
         ),
@@ -192,14 +240,20 @@ class DetalleSolicitudViaje extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               FaIcon(
-                flujo.metodoPago == MetodoPago.qr ? FontAwesomeIcons.qrcode : FontAwesomeIcons.moneyBillWave,
+                flujo.metodoPago == MetodoPago.qr
+                    ? FontAwesomeIcons.qrcode
+                    : FontAwesomeIcons.moneyBillWave,
                 color: ColoresApp.ruta,
                 size: 14,
               ),
               const SizedBox(width: 6),
               Text(
                 MetodoPago.nombre(flujo.metodoPago),
-                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: ColoresApp.texto,
+                ),
               ),
             ],
           ),
@@ -210,18 +264,34 @@ class DetalleSolicitudViaje extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (flujo.servicio == ServicioActivo.entrega) ...[
-                const FaIcon(FontAwesomeIcons.boxOpen, color: ColoresApp.ruta, size: 14),
+                const FaIcon(
+                  FontAwesomeIcons.boxOpen,
+                  color: ColoresApp.ruta,
+                  size: 14,
+                ),
                 const SizedBox(width: 6),
                 Text(
                   flujo.tipoEnvio?.nombre ?? 'Entrega',
-                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+                  style: const TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: ColoresApp.texto,
+                  ),
                 ),
               ] else ...[
-                Image.asset('assets/mototaxi.png', height: 24, fit: BoxFit.contain),
+                Image.asset(
+                  'assets/mototaxi.png',
+                  height: 24,
+                  fit: BoxFit.contain,
+                ),
                 const SizedBox(width: 8),
                 const Text(
                   'Moto',
-                  style: TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+                  style: TextStyle(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w600,
+                    color: ColoresApp.texto,
+                  ),
                 ),
               ],
             ],
@@ -255,7 +325,10 @@ class _FilaDato extends StatelessWidget {
           Expanded(
             child: Text(
               etiqueta,
-              style: const TextStyle(fontSize: 13.5, color: ColoresApp.textoSuave),
+              style: const TextStyle(
+                fontSize: 13.5,
+                color: ColoresApp.textoSuave,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -288,9 +361,12 @@ class PanelBuscando extends StatefulWidget {
   State<PanelBuscando> createState() => _PanelBuscandoState();
 }
 
-class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProviderStateMixin {
-  late final AnimationController _pulso = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400))
-    ..repeat();
+class _PanelBuscandoState extends State<PanelBuscando>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulso = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1400),
+  )..repeat();
 
   @override
   void dispose() {
@@ -320,15 +396,24 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
                       height: 26 + 18 * _pulso.value,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: ColoresApp.rojo.withValues(alpha: 0.25 * (1 - _pulso.value)),
+                        color: ColoresApp.rojo.withValues(
+                          alpha: 0.25 * (1 - _pulso.value),
+                        ),
                       ),
                     ),
                     Container(
                       width: 32,
                       height: 32,
                       alignment: Alignment.center,
-                      decoration: const BoxDecoration(color: ColoresApp.rojo, shape: BoxShape.circle),
-                      child: const FaIcon(FontAwesomeIcons.taxi, color: ColoresApp.blanco, size: 14),
+                      decoration: const BoxDecoration(
+                        color: ColoresApp.rojo,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const FaIcon(
+                        FontAwesomeIcons.taxi,
+                        color: ColoresApp.blanco,
+                        size: 14,
+                      ),
                     ),
                   ],
                 ),
@@ -341,7 +426,11 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
                 children: [
                   Text(
                     textoBuscando(widget.flujo.servicio),
-                    style: const TextStyle(color: ColoresApp.azul, fontSize: 16.5, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: ColoresApp.azul,
+                      fontSize: 16.5,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   Text(
                     sinLibres
@@ -349,7 +438,9 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
                         : textoSolicitudEnviada(widget.flujo.servicio),
                     maxLines: 2,
                     style: TextStyle(
-                      color: sinLibres ? const Color(0xFFE67E22) : ColoresApp.textoSuave,
+                      color: sinLibres
+                          ? const Color(0xFFE67E22)
+                          : ColoresApp.textoSuave,
                       fontSize: 12.5,
                       fontWeight: sinLibres ? FontWeight.w600 : FontWeight.w400,
                     ),
@@ -383,18 +474,30 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
                           '${solicitud.metodoPago == MetodoPago.qr ? ' por QR' : ' en efectivo'}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                style: const TextStyle(
+                  color: ColoresApp.textoSuave,
+                  fontSize: 12.5,
+                ),
               ),
             ),
             widget.cancelando
                 ? const Padding(
                     padding: EdgeInsets.all(12),
-                    child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   )
                 : TextButton(
                     onPressed: widget.onCancelar,
-                    style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
-                    child: const Text('Cancelar', style: TextStyle(fontWeight: FontWeight.w700)),
+                    style: TextButton.styleFrom(
+                      foregroundColor: ColoresApp.rojo,
+                    ),
+                    child: const Text(
+                      'Cancelar',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
                   ),
           ],
         ),
@@ -405,20 +508,31 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
 
 /// Icono, texto y color del estado del viaje tal como lo ve el pasajero. El texto cambia con el
 /// servicio para que en un reparto no salga "conductor" cuando el que llega es un repartidor.
-(FaIconData, String, Color) estadoViajePasajero(String situacion, [ServicioActivo servicio = ServicioActivo.viaje]) {
+(FaIconData, String, Color) estadoViajePasajero(
+  String situacion, [
+  ServicioActivo servicio = ServicioActivo.viaje,
+]) {
   final texto = switch (situacion) {
     SituacionViaje.confirmado =>
-      servicio == ServicioActivo.entrega ? 'Tu repartidor aceptó el servicio' : 'Tu conductor aceptó el viaje',
+      servicio == ServicioActivo.entrega
+          ? 'Tu repartidor aceptó el servicio'
+          : 'Tu conductor aceptó el viaje',
     SituacionViaje.enCamino =>
-      servicio == ServicioActivo.entrega ? 'Tu repartidor va en camino' : 'Tu conductor va en camino',
-    SituacionViaje.llego => servicio == ServicioActivo.entrega
-        ? 'Tu repartidor llegó. Te está esperando'
-        : 'Tu conductor llegó. Te está esperando',
+      servicio == ServicioActivo.entrega
+          ? 'Tu repartidor va en camino'
+          : 'Tu conductor va en camino',
+    SituacionViaje.llego =>
+      servicio == ServicioActivo.entrega
+          ? 'Tu repartidor llegó. Te está esperando'
+          : 'Tu conductor llegó. Te está esperando',
     SituacionViaje.enCurso => 'En viaje a tu destino',
     _ => SituacionViaje.nombre(situacion),
   };
   final (icono, color) = switch (situacion) {
-    SituacionViaje.confirmado => (FontAwesomeIcons.circleCheck, ColoresApp.exito),
+    SituacionViaje.confirmado => (
+      FontAwesomeIcons.circleCheck,
+      ColoresApp.exito,
+    ),
     SituacionViaje.enCamino => (FontAwesomeIcons.carSide, ColoresApp.ruta),
     SituacionViaje.llego => (FontAwesomeIcons.locationDot, ColoresApp.rojo),
     SituacionViaje.enCurso => (FontAwesomeIcons.route, ColoresApp.azul),
@@ -436,19 +550,31 @@ class PanelViaje extends StatelessWidget {
   final ValueChanged<String> onPedirCambioPago;
   final VoidCallback onConfirmarCompra;
 
-  const PanelViaje({super.key, required this.flujo, required this.onCancelar, required this.onPedirCambioPago, required this.onConfirmarCompra});
+  const PanelViaje({
+    super.key,
+    required this.flujo,
+    required this.onCancelar,
+    required this.onPedirCambioPago,
+    required this.onConfirmarCompra,
+  });
 
   @override
   Widget build(BuildContext context) {
     final viaje = flujo.viaje;
     if (viaje == null) return const SizedBox.shrink();
-    final (icono, texto, color) = estadoViajePasajero(viaje.situacion, flujo.servicio);
+    final (icono, texto, color) = estadoViajePasajero(
+      viaje.situacion,
+      flujo.servicio,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: Row(
             children: [
               FaIcon(icono, color: color, size: 16),
@@ -456,7 +582,11 @@ class PanelViaje extends StatelessWidget {
               Expanded(
                 child: Text(
                   texto,
-                  style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15),
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 15,
+                  ),
                 ),
               ),
             ],
@@ -472,12 +602,19 @@ class PanelViaje extends StatelessWidget {
             ),
             child: const Row(
               children: [
-                FaIcon(FontAwesomeIcons.flagCheckered, color: ColoresApp.exito, size: 16),
+                FaIcon(
+                  FontAwesomeIcons.flagCheckered,
+                  color: ColoresApp.exito,
+                  size: 16,
+                ),
                 SizedBox(width: 10),
                 Expanded(
                   child: Text(
                     'Llegaste a tu destino. El conductor finalizará el viaje.',
-                    style: TextStyle(color: ColoresApp.exito, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: ColoresApp.exito,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -497,23 +634,38 @@ class PanelViaje extends StatelessWidget {
                     viaje.nombreConductor,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: ColoresApp.azul,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   const SizedBox(height: 3),
                   Row(
                     children: [
-                      Estrellas(valor: viaje.calificacionConductor ?? 0, tamano: 12),
+                      Estrellas(
+                        valor: viaje.calificacionConductor ?? 0,
+                        tamano: 12,
+                      ),
                       const SizedBox(width: 6),
                       Text(
-                        (viaje.calificacionConductor ?? 0).toStringAsFixed(1).replaceAll('.', ','),
-                        style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                        (viaje.calificacionConductor ?? 0)
+                            .toStringAsFixed(1)
+                            .replaceAll('.', ','),
+                        style: const TextStyle(
+                          color: ColoresApp.textoSuave,
+                          fontSize: 12.5,
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombreConductor),
+            BotonChat(
+              idViaje: viaje.id,
+              nombreContraparte: viaje.nombreConductor,
+            ),
           ],
         ),
         const SizedBox(height: 12),
@@ -523,13 +675,20 @@ class PanelViaje extends StatelessWidget {
         FilaLugar.destino(texto: viaje.destinoTexto),
         const SizedBox(height: 10),
         RecuadroPrecio(
-          etiqueta: viaje.datosEntrega == null ? MetodoPago.frase('Pagas', viaje.metodoPago) : etiquetaPrecioDelivery(viaje),
-          detalle: viaje.datosEntrega == null ? null : MetodoPago.frase('Pagas', viaje.metodoPago),
+          etiqueta: viaje.datosEntrega == null
+              ? MetodoPago.frase('Pagas', viaje.metodoPago)
+              : etiquetaPrecioDelivery(viaje),
+          detalle: viaje.datosEntrega == null
+              ? null
+              : MetodoPago.frase('Pagas', viaje.metodoPago),
           monto: formatoBs(viaje.precioFinal),
         ),
         if (viaje.datosEntrega != null) ...[
           const SizedBox(height: 8),
-          _ResumenEntrega(datos: viaje.datosEntrega!, precioServicio: viaje.precioFinal),
+          _ResumenEntrega(
+            datos: viaje.datosEntrega!,
+            precioServicio: viaje.precioFinal,
+          ),
           if (viaje.datosEntrega!.codigos.isNotEmpty) ...[
             const SizedBox(height: 10),
             TarjetaCodigoEntrega(fases: viaje.datosEntrega!.codigos),
@@ -539,7 +698,10 @@ class PanelViaje extends StatelessWidget {
               viaje.datosEntrega!.compraConfirmadaPorCliente != true)
             Padding(
               padding: const EdgeInsets.only(top: 8),
-              child: BotonPrincipal(texto: 'Confirmar comercio y monto', onPressed: onConfirmarCompra),
+              child: BotonPrincipal(
+                texto: 'Confirmar comercio y monto',
+                onPressed: onConfirmarCompra,
+              ),
             ),
         ],
         const SizedBox(height: 6),
@@ -554,17 +716,32 @@ class PanelViaje extends StatelessWidget {
           Align(
             alignment: Alignment.centerRight,
             child: TextButton.icon(
-              onPressed: () => onPedirCambioPago(viaje.pagaConQr ? MetodoPago.efectivo : MetodoPago.qr),
-              icon: FaIcon(viaje.pagaConQr ? FontAwesomeIcons.moneyBill1 : FontAwesomeIcons.qrcode, size: 14),
-              label: Text(viaje.pagaConQr ? 'Pedir pagar en efectivo' : 'Pedir pagar por QR'),
+              onPressed: () => onPedirCambioPago(
+                viaje.pagaConQr ? MetodoPago.efectivo : MetodoPago.qr,
+              ),
+              icon: FaIcon(
+                viaje.pagaConQr
+                    ? FontAwesomeIcons.moneyBill1
+                    : FontAwesomeIcons.qrcode,
+                size: 14,
+              ),
+              label: Text(
+                viaje.pagaConQr
+                    ? 'Pedir pagar en efectivo'
+                    : 'Pedir pagar por QR',
+              ),
             ),
           ),
         if (SituacionViaje.cancelables.contains(viaje.situacion) &&
-            (viaje.datosEntrega == null || viaje.datosEntrega!.muestraCancelacion))
+            (viaje.datosEntrega == null ||
+                viaje.datosEntrega!.muestraCancelacion))
           TextButton(
             onPressed: onCancelar,
             style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
-            child: const Text('Cancelar viaje', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Cancelar viaje',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         if (viaje.pagaConQr) ...[
           const Divider(height: 26, color: ColoresApp.borde),
@@ -574,7 +751,11 @@ class PanelViaje extends StatelessWidget {
               SizedBox(width: 10),
               Text(
                 'Paga con el QR del conductor',
-                style: TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: ColoresApp.azul,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ],
           ),
@@ -603,24 +784,80 @@ class _ResumenEntrega extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final producto = datos.costoProductoReal ?? datos.costoProductoEstimado;
-    final total = producto == null || precioServicio == null ? null : producto + precioServicio!;
+    final producto =
+        datos.costoProductoReal ??
+        datos.costoProductoConfirmado ??
+        datos.costoProductoEstimado;
+    final total = producto == null || precioServicio == null
+        ? null
+        : producto + precioServicio!;
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: ColoresApp.gris, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+        color: ColoresApp.gris,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Estado: ${EstadoEntrega.nombre(datos.estadoEntrega)}', style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
+          Text(
+            'Estado: ${EstadoEntrega.nombre(datos.estadoEntrega)}',
+            style: const TextStyle(
+              color: ColoresApp.azul,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
           const SizedBox(height: 6),
           if (datos.tipoEnvio == TipoEnvio.compraYEntrega)
-            _linea('Producto', producto == null ? 'Pendiente' : formatoBs(producto)),
-          _linea('Servicio', precioServicio == null ? 'Pendiente' : formatoBs(precioServicio)),
-          if (total != null) _linea('Total estimado', formatoBs(total), fuerte: true),
-          if (datos.tipoEnvio == TipoEnvio.encomienda && datos.estadoEntrega == EstadoEntrega.enMano)
+            _linea(
+              'Producto',
+              producto == null ? 'Pendiente' : formatoBs(producto),
+            ),
+          _linea(
+            'Servicio',
+            precioServicio == null ? 'Pendiente' : formatoBs(precioServicio),
+          ),
+          if (total != null)
+            _linea(
+              datos.costoProductoReal == null
+                  ? 'Total estimado'
+                  : 'Total a pagar',
+              formatoBs(total),
+              fuerte: true,
+            ),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
+              datos.detalleCompra != null)
+            _linea('Comercio', datos.detalleCompra!),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
+              datos.detalleCompra == null &&
+              datos.detalleCompraPropuesto != null)
+            _linea('Comercio propuesto', datos.detalleCompraPropuesto!),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
+              datos.costoProductoReal == null &&
+              datos.costoProductoConfirmado != null)
+            _linea(
+              'Monto confirmado',
+              formatoBs(datos.costoProductoConfirmado!),
+              fuerte: true,
+            ),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
+              datos.observacionCompra != null)
+            _linea('Observación del repartidor', datos.observacionCompra!),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
+              datos.montoPagoRecibido != null)
+            _linea(
+              'Pago confirmado',
+              formatoBs(datos.montoPagoRecibido),
+              fuerte: true,
+            ),
+          if (datos.tipoEnvio == TipoEnvio.encomienda &&
+              datos.estadoEntrega == EstadoEntrega.enMano)
             const Padding(
               padding: EdgeInsets.only(top: 5),
-              child: Text('El pedido está en manos del repartidor. Ya no puedes cancelarlo.', style: TextStyle(color: ColoresApp.rojo, fontSize: 12)),
+              child: Text(
+                'El pedido está en manos del repartidor. Ya no puedes cancelarlo.',
+                style: TextStyle(color: ColoresApp.rojo, fontSize: 12),
+              ),
             ),
           if (datos.tieneReporte)
             Padding(
@@ -636,9 +873,25 @@ class _ResumenEntrega extends StatelessWidget {
   }
 
   Widget _linea(String titulo, String valor, {bool fuerte = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [Expanded(child: Text(titulo, style: const TextStyle(color: ColoresApp.textoSuave))), Text(valor, style: TextStyle(color: ColoresApp.texto, fontWeight: fuerte ? FontWeight.w700 : FontWeight.w500))]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(
+            titulo,
+            style: const TextStyle(color: ColoresApp.textoSuave),
+          ),
+        ),
+        Text(
+          valor,
+          style: TextStyle(
+            color: ColoresApp.texto,
+            fontWeight: fuerte ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Los 6 digitos que el pasajero tiene que dictar en un pedido ENCOMIENDA: el de recogida en A y el
@@ -658,7 +911,11 @@ class TarjetaCodigoEntrega extends StatelessWidget {
   /// para no depender de la aplicacion de WhatsApp instalada.
   final ValueChanged<Uri>? abrirEnlace;
 
-  const TarjetaCodigoEntrega({super.key, required this.fases, this.abrirEnlace});
+  const TarjetaCodigoEntrega({
+    super.key,
+    required this.fases,
+    this.abrirEnlace,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -690,7 +947,9 @@ class TarjetaCodigoEntrega extends StatelessWidget {
   /// punta va en una sola linea: es de consulta rapida (mandarlo a quien recibe) y si ocupa lo mismo
   /// que el primero el panel del pasajero crece lo que no debe.
   Widget _bloque(BuildContext context, FaseCodigoEntrega fase) =>
-      fase.faseActual ? _bloqueGrande(context, fase) : _bloqueCompacto(context, fase);
+      fase.faseActual
+      ? _bloqueGrande(context, fase)
+      : _bloqueCompacto(context, fase);
 
   Widget _bloqueGrande(BuildContext context, FaseCodigoEntrega fase) {
     final nombre = fase.nombre;
@@ -699,12 +958,20 @@ class TarjetaCodigoEntrega extends StatelessWidget {
       children: [
         Row(
           children: [
-            const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.azul, size: 13),
+            const FaIcon(
+              FontAwesomeIcons.lock,
+              color: ColoresApp.azul,
+              size: 13,
+            ),
             const SizedBox(width: 8),
             Expanded(
               child: Text(
                 fase.titulo,
-                style: const TextStyle(color: ColoresApp.azul, fontSize: 15, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: ColoresApp.azul,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
@@ -720,16 +987,29 @@ class TarjetaCodigoEntrega extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 2),
                   child: Row(
                     children: [
-                      Flexible(child: _DigitosCodigo(codigo: fase.codigo, tamano: 28)),
+                      Flexible(
+                        child: _DigitosCodigo(codigo: fase.codigo, tamano: 28),
+                      ),
                       const SizedBox(width: 10),
-                      const FaIcon(FontAwesomeIcons.copy, color: ColoresApp.azul, size: 13),
-                      const Text('Toca para copiar', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5)),
+                      const FaIcon(
+                        FontAwesomeIcons.copy,
+                        color: ColoresApp.azul,
+                        size: 13,
+                      ),
+                      const Text(
+                        'Toca para copiar',
+                        style: TextStyle(
+                          color: ColoresApp.textoSuave,
+                          fontSize: 11.5,
+                        ),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
-            if (enlaceWhatsappCodigo(fase) != null) _botonWhatsapp(context, fase),
+            if (enlaceWhatsappCodigo(fase) != null)
+              _botonWhatsapp(context, fase),
           ],
         ),
         const SizedBox(height: 5),
@@ -748,7 +1028,11 @@ class TarjetaCodigoEntrega extends StatelessWidget {
           ? abrirEnlaceExterno(context, enlace, textoWhatsappCodigo(fase))
           : abrirEnlace!(enlace),
       tooltip: 'Mandarlo por WhatsApp',
-      icon: const FaIcon(FontAwesomeIcons.whatsapp, color: ColoresApp.azul, size: 16),
+      icon: const FaIcon(
+        FontAwesomeIcons.whatsapp,
+        color: ColoresApp.azul,
+        size: 16,
+      ),
     );
   }
 
@@ -757,39 +1041,50 @@ class TarjetaCodigoEntrega extends StatelessWidget {
     final nombre = fase.nombre;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [Row(
       children: [
-        Expanded(
-          child: InkWell(
-            onTap: () => copiarAlPortapapeles(context, fase.codigo),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 11),
-                  const SizedBox(width: 7),
-                  Text(fase.titulo, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      fase.codigo,
-                      style: const TextStyle(
-                        color: ColoresApp.azul,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2,
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => copiarAlPortapapeles(context, fase.codigo),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      const FaIcon(
+                        FontAwesomeIcons.lock,
+                        color: ColoresApp.textoSuave,
+                        size: 11,
                       ),
-                    ),
+                      const SizedBox(width: 7),
+                      Text(
+                        fase.titulo,
+                        style: const TextStyle(
+                          color: ColoresApp.textoSuave,
+                          fontSize: 12.5,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          fase.codigo,
+                          style: const TextStyle(
+                            color: ColoresApp.azul,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            if (enlace != null) _botonWhatsapp(context, fase),
+          ],
         ),
-        if (enlace != null) _botonWhatsapp(context, fase),
-        ],
-      ),
         Text(
           'Para ${nombre ?? 'quien recibe'} ${fase.donde}.',
           style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5),
@@ -841,7 +1136,9 @@ String textoWhatsappCodigo(FaseCodigoEntrega fase) {
 /// Enlace de WhatsApp con el codigo ya escrito, o null si no hay un numero usable.
 Uri? enlaceWhatsappCodigo(FaseCodigoEntrega fase) {
   final telefono = telefonoWhatsapp(fase.telefono);
-  return telefono == null ? null : Uri.https('wa.me', '/$telefono', {'text': textoWhatsappCodigo(fase)});
+  return telefono == null
+      ? null
+      : Uri.https('wa.me', '/$telefono', {'text': textoWhatsappCodigo(fase)});
 }
 
 /// Efectivo | QR, antes de solicitar el taxi.
@@ -866,16 +1163,25 @@ class _SelectorPago extends StatelessWidget {
               padding: const EdgeInsets.symmetric(vertical: 11),
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: elegido ? ColoresApp.azul : ColoresApp.borde),
+                border: Border.all(
+                  color: elegido ? ColoresApp.azul : ColoresApp.borde,
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  FaIcon(icono, size: 15, color: elegido ? ColoresApp.blanco : ColoresApp.azul),
+                  FaIcon(
+                    icono,
+                    size: 15,
+                    color: elegido ? ColoresApp.blanco : ColoresApp.azul,
+                  ),
                   const SizedBox(width: 8),
                   Text(
                     texto,
-                    style: TextStyle(color: elegido ? ColoresApp.blanco : ColoresApp.azul, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: elegido ? ColoresApp.blanco : ColoresApp.azul,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               ),
@@ -890,12 +1196,20 @@ class _SelectorPago extends StatelessWidget {
       children: [
         const Text(
           '¿Cómo vas a pagar?',
-          style: TextStyle(fontSize: 12.5, color: ColoresApp.textoSuave, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            fontSize: 12.5,
+            color: ColoresApp.textoSuave,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 6),
         Row(
           children: [
-            opcion(MetodoPago.efectivo, FontAwesomeIcons.moneyBill1, 'Efectivo'),
+            opcion(
+              MetodoPago.efectivo,
+              FontAwesomeIcons.moneyBill1,
+              'Efectivo',
+            ),
             const SizedBox(width: 10),
             opcion(MetodoPago.qr, FontAwesomeIcons.qrcode, 'QR'),
           ],
@@ -917,7 +1231,10 @@ class _Aviso extends StatelessWidget {
     const naranja = Color(0xFFE67E22);
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: naranja.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+        color: naranja.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(
         children: [
           FaIcon(icono, color: naranja, size: 15),
@@ -925,7 +1242,11 @@ class _Aviso extends StatelessWidget {
           Expanded(
             child: Text(
               texto,
-              style: const TextStyle(color: naranja, fontWeight: FontWeight.w600, fontSize: 13.5),
+              style: const TextStyle(
+                color: naranja,
+                fontWeight: FontWeight.w600,
+                fontSize: 13.5,
+              ),
             ),
           ),
         ],
@@ -944,13 +1265,19 @@ class _Indicacion extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondo,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(
         children: [
           FaIcon(icono, color: ColoresApp.azul, size: 16),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
+            child: Text(
+              texto,
+              style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
+            ),
           ),
         ],
       ),
@@ -963,14 +1290,21 @@ class DisponibilidadTaxis extends StatelessWidget {
   final int? libres;
   final ServicioActivo servicio;
 
-  const DisponibilidadTaxis({super.key, required this.libres, required this.servicio});
+  const DisponibilidadTaxis({
+    super.key,
+    required this.libres,
+    required this.servicio,
+  });
 
   @override
   Widget build(BuildContext context) {
     final n = libres;
     if (n == null) return const SizedBox.shrink();
     if (n == 0) {
-      return _Aviso(icono: FontAwesomeIcons.triangleExclamation, texto: textoSinLibresAviso(servicio));
+      return _Aviso(
+        icono: FontAwesomeIcons.triangleExclamation,
+        texto: textoSinLibresAviso(servicio),
+      );
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
@@ -981,7 +1315,9 @@ class DisponibilidadTaxis extends StatelessWidget {
       child: Row(
         children: [
           FaIcon(
-            servicio == ServicioActivo.entrega ? FontAwesomeIcons.boxOpen : FontAwesomeIcons.motorcycle,
+            servicio == ServicioActivo.entrega
+                ? FontAwesomeIcons.boxOpen
+                : FontAwesomeIcons.motorcycle,
             color: ColoresApp.exito,
             size: 15,
           ),
@@ -989,7 +1325,11 @@ class DisponibilidadTaxis extends StatelessWidget {
           Expanded(
             child: Text(
               textoLibres(n, servicio),
-              style: const TextStyle(color: ColoresApp.exito, fontWeight: FontWeight.w600, fontSize: 13.5),
+              style: const TextStyle(
+                color: ColoresApp.exito,
+                fontWeight: FontWeight.w600,
+                fontSize: 13.5,
+              ),
             ),
           ),
         ],
@@ -1004,7 +1344,11 @@ class OpcionesEligiendo extends StatelessWidget {
   final FlujoPasajero flujo;
   final int? libres;
 
-  const OpcionesEligiendo({super.key, required this.flujo, required this.libres});
+  const OpcionesEligiendo({
+    super.key,
+    required this.flujo,
+    required this.libres,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1026,12 +1370,18 @@ class OpcionesEligiendo extends StatelessWidget {
           decoration: BoxDecoration(
             color: elegido ? ColoresApp.azul : ColoresApp.blanco,
             borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: elegido ? ColoresApp.azul : ColoresApp.borde),
+            border: Border.all(
+              color: elegido ? ColoresApp.azul : ColoresApp.borde,
+            ),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              FaIcon(icono, size: 12, color: elegido ? ColoresApp.blanco : ColoresApp.azul),
+              FaIcon(
+                icono,
+                size: 12,
+                color: elegido ? ColoresApp.blanco : ColoresApp.azul,
+              ),
               const SizedBox(width: 6),
               Text(
                 nombre,
@@ -1060,7 +1410,11 @@ class OpcionesEligiendo extends StatelessWidget {
             texto,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
-            style: TextStyle(color: color, fontWeight: FontWeight.w600, fontSize: 13),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
           ),
         ),
         pago(MetodoPago.efectivo, FontAwesomeIcons.moneyBill1, 'Efectivo'),
@@ -1096,14 +1450,28 @@ class TarjetaMoto extends StatelessWidget {
         children: [
           Row(
             children: [
-              const FaIcon(FontAwesomeIcons.motorcycle, color: ColoresApp.tinta, size: 15),
+              const FaIcon(
+                FontAwesomeIcons.motorcycle,
+                color: ColoresApp.tinta,
+                size: 15,
+              ),
               const SizedBox(width: 8),
               const Expanded(
-                child: Text('Tu moto', style: TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700, fontSize: 14)),
+                child: Text(
+                  'Tu moto',
+                  style: TextStyle(
+                    color: ColoresApp.tinta,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                  ),
+                ),
               ),
               if (viaje.placa != null)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 5,
+                  ),
                   decoration: BoxDecoration(
                     color: ColoresApp.blanco,
                     border: Border.all(color: ColoresApp.tinta, width: 1.5),
@@ -1111,7 +1479,11 @@ class TarjetaMoto extends StatelessWidget {
                   ),
                   child: Text(
                     viaje.placa!,
-                    style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w800, letterSpacing: 1.2),
+                    style: const TextStyle(
+                      color: ColoresApp.tinta,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 1.2,
+                    ),
                   ),
                 ),
             ],
@@ -1127,13 +1499,23 @@ class TarjetaMoto extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(datos[i].$1, style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 11.5)),
+                        Text(
+                          datos[i].$1,
+                          style: const TextStyle(
+                            color: ColoresApp.grisTexto,
+                            fontSize: 11.5,
+                          ),
+                        ),
                         const SizedBox(height: 2),
                         Text(
                           datos[i].$2!.trim(),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700, fontSize: 14.5),
+                          style: const TextStyle(
+                            color: ColoresApp.tinta,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14.5,
+                          ),
                         ),
                       ],
                     ),

@@ -18,6 +18,8 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToOne;
+import jakarta.persistence.PrePersist;
+import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
@@ -84,4 +86,16 @@ public class Conductor extends EntidadAuditable {
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_conductor", length = 20, nullable = false)
     private EstadoRegistro estadoConductor = EstadoRegistro.A;
+
+    /**
+     * Compatibilidad con conductores creados antes de que existiera el campo de adelanto.
+     * La inicializacion Java no se aplica a entidades cargadas desde filas antiguas con NULL.
+     */
+    @PrePersist
+    @PreUpdate
+    void normalizarLimiteAdelantoCompra() {
+        if (limiteAdelantoCompra == null) {
+            limiteAdelantoCompra = BigDecimal.ZERO;
+        }
+    }
 }

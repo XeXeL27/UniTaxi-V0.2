@@ -4,6 +4,9 @@ import java.util.List;
 
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
+import org.springframework.core.io.Resource;
+import org.springframework.http.CacheControl;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +23,8 @@ import com.taxiuap.backend.pricing.entity.QrPagoConductor;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.response.ApiResponse;
+import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.dto.CambioMetodoPagoRequest;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
@@ -113,5 +118,17 @@ public class ViajePasajeroController {
     public ResponseEntity<Resource> imagenQr(@PathVariable Long id, @PathVariable Long idQr) {
         QrPagoConductor qr = qrPagoConductorService.obtenerDeViaje(UsuarioActual.idUsuario(), id, idQr);
         return QrPagoConductorController.imagenQr(almacenamientoArchivos.leer(qr.getImagenUrl()), "qr_conductor_" + idQr + ".png");
+    }
+
+    /** Comprobante de la compra, visible únicamente para el pasajero propietario del viaje. */
+    @GetMapping("/{id}/entrega/comprobante")
+    public ResponseEntity<Resource> comprobanteEntrega(@PathVariable Long id) {
+        DatosEntrega datos = viajeService.obtenerViajeDelPasajero(id).getSolicitud().getDatosEntrega();
+        if (datos == null || datos.getFotoComprobanteUrl() == null || datos.getFotoComprobanteUrl().isBlank()) {
+            throw new RecursoNoEncontradoException("El pedido no tiene comprobante");
+        }
+        return ResponseEntity.ok().cacheControl(CacheControl.noCache())
+                .contentType(MediaType.IMAGE_JPEG)
+                .body(almacenamientoArchivos.leer(datos.getFotoComprobanteUrl()));
     }
 }

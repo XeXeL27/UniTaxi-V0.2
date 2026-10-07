@@ -15,7 +15,11 @@ class Etiqueta {
   final String nombre;
   final bool positiva;
 
-  const Etiqueta({required this.id, required this.nombre, required this.positiva});
+  const Etiqueta({
+    required this.id,
+    required this.nombre,
+    required this.positiva,
+  });
 
   factory Etiqueta.desdeJson(Map<String, dynamic> json) => Etiqueta(
     id: (json['id'] as num).toInt(),
@@ -35,7 +39,10 @@ class ConductorEnLinea {
     final latitud = numeroDesdeJson(json['latitud']);
     final longitud = numeroDesdeJson(json['longitud']);
     if (latitud == null || longitud == null) return null;
-    return ConductorEnLinea(id: (json['idConductor'] as num).toInt(), posicion: LatLng(latitud, longitud));
+    return ConductorEnLinea(
+      id: (json['idConductor'] as num).toInt(),
+      posicion: LatLng(latitud, longitud),
+    );
   }
 }
 
@@ -63,9 +70,13 @@ class UbicacionConductorViaje {
     final idViaje = (json['idViaje'] as num).toInt();
     final latitud = numeroDesdeJson(json['latitud']);
     final longitud = numeroDesdeJson(json['longitud']);
-    final posicion = (latitud != null && longitud != null) ? LatLng(latitud, longitud) : null;
+    final posicion = (latitud != null && longitud != null)
+        ? LatLng(latitud, longitud)
+        : null;
     final actualizadoEnStr = json['actualizadoEn'] as String?;
-    final actualizadoEn = actualizadoEnStr != null ? DateTime.tryParse(actualizadoEnStr) : null;
+    final actualizadoEn = actualizadoEnStr != null
+        ? DateTime.tryParse(actualizadoEnStr)
+        : null;
     return UbicacionConductorViaje(
       idViaje: idViaje,
       posicion: posicion,
@@ -84,21 +95,31 @@ class ViajeApi {
 
   ViajeApi(this.cliente);
 
-  Future<PrecioViaje> precio() async =>
-      PrecioViaje.desdeJson(await cliente.get('/api/pasajero/solicitudes/precio') as Map<String, dynamic>);
+  Future<PrecioViaje> precio() async => PrecioViaje.desdeJson(
+    await cliente.get('/api/pasajero/solicitudes/precio')
+        as Map<String, dynamic>,
+  );
 
   /// Precio de ir de [a] a [b] para este pasajero (con su descuento de estudiante, si tiene).
-  Future<CotizacionViaje> cotizar(LatLng a, LatLng b) async => CotizacionViaje.desdeJson(
-    await cliente.get('/api/pasajero/solicitudes/cotizacion?origenLat=${a.latitude}&origenLng=${a.longitude}'
-        '&destinoLat=${b.latitude}&destinoLng=${b.longitude}') as Map<String, dynamic>,
+  Future<CotizacionViaje> cotizar(
+    LatLng a,
+    LatLng b,
+  ) async => CotizacionViaje.desdeJson(
+    await cliente.get(
+      '/api/pasajero/solicitudes/cotizacion?origenLat=${a.latitude}&origenLng=${a.longitude}'
+      '&destinoLat=${b.latitude}&destinoLng=${b.longitude}',
+    ) as Map<String, dynamic>,
   );
 
   /// [destinoNombre]: nombre del favorito elegido como destino (solo lo ve el pasajero).
-  Future<Solicitud> solicitar(PuntoRuta origen, PuntoRuta destino,
-      {String metodoPago = MetodoPago.efectivo,
-      String? destinoNombre,
-      int? idCategoriaServicio,
-      DatosEntregaForm? datosEntrega}) async {
+  Future<Solicitud> solicitar(
+    PuntoRuta origen,
+    PuntoRuta destino, {
+    String metodoPago = MetodoPago.efectivo,
+    String? destinoNombre,
+    int? idCategoriaServicio,
+    DatosEntregaForm? datosEntrega,
+  }) async {
     final datos = await cliente.post('/api/pasajero/solicitudes', {
       'origenWkt': wktDesdePunto(origen.posicion),
       'destinoWkt': wktDesdePunto(destino.posicion),
@@ -112,76 +133,115 @@ class ViajeApi {
     return Solicitud.desdeJson(datos as Map<String, dynamic>);
   }
 
-  Future<Solicitud> solicitud(int id) async =>
-      Solicitud.desdeJson(await cliente.get('/api/pasajero/solicitudes/$id') as Map<String, dynamic>);
+  Future<Solicitud> solicitud(int id) async => Solicitud.desdeJson(
+    await cliente.get('/api/pasajero/solicitudes/$id') as Map<String, dynamic>,
+  );
 
-  Future<List<Solicitud>> misSolicitudes() => cliente.lista('/api/pasajero/solicitudes', Solicitud.desdeJson);
+  Future<List<Solicitud>> misSolicitudes() =>
+      cliente.lista('/api/pasajero/solicitudes', Solicitud.desdeJson);
 
-  Future<void> cancelarSolicitud(int id) => cliente.delete('/api/pasajero/solicitudes/$id');
+  Future<void> cancelarSolicitud(int id) =>
+      cliente.delete('/api/pasajero/solicitudes/$id');
 
   /// Categoria publica DELIVERY. No se fija un id en la app porque el administrador puede cambiarlo.
   Future<int?> categoriaDelivery() => categoriaRepartoId(cliente);
 
   Future<Viaje> confirmarCompra(int idViaje) async => Viaje.desdeJson(
-        await cliente.post('/api/pasajero/viajes/$idViaje/entrega/confirmar-compra', const {})
-            as Map<String, dynamic>,
-      );
+    await cliente.post(
+      '/api/pasajero/viajes/$idViaje/entrega/confirmar-compra',
+      const {},
+    ) as Map<String, dynamic>,
+  );
 
   /// Viaje activo del pasajero, o null si no tiene.
   Future<Viaje?> viajeEnCurso() async {
     final datos = await cliente.get('/api/pasajero/viajes/en-curso');
-    return datos == null ? null : Viaje.desdeJson(datos as Map<String, dynamic>);
+    return datos == null
+        ? null
+        : Viaje.desdeJson(datos as Map<String, dynamic>);
   }
 
-  Future<Viaje> viaje(int id) async =>
-      Viaje.desdeJson(await cliente.get('/api/pasajero/viajes/$id') as Map<String, dynamic>);
+  Future<Viaje> viaje(int id) async => Viaje.desdeJson(
+    await cliente.get('/api/pasajero/viajes/$id') as Map<String, dynamic>,
+  );
 
   /// Posicion del conductor asignado, para que el pasajero vea de donde viene y cuanto tarda.
   Future<UbicacionConductorViaje?> ubicacionConductor(int idViaje) async {
-    final datos = await cliente.get('/api/pasajero/viajes/$idViaje/ubicacion-conductor');
-    return datos == null ? null : UbicacionConductorViaje.desdeJson(datos as Map<String, dynamic>);
+    final datos = await cliente.get(
+      '/api/pasajero/viajes/$idViaje/ubicacion-conductor',
+    );
+    return datos == null
+        ? null
+        : UbicacionConductorViaje.desdeJson(datos as Map<String, dynamic>);
   }
 
-  Future<List<Viaje>> misViajes() => cliente.lista('/api/pasajero/viajes', Viaje.desdeJson);
+  Future<List<Viaje>> misViajes() =>
+      cliente.lista('/api/pasajero/viajes', Viaje.desdeJson);
 
   /// Historial de viajes completados: los ultimos 10 o un mes, de a 10 por pagina.
-  Future<PaginaHistorial> historial(PeriodoHistorial periodo, int pagina) async => PaginaHistorial.desdeJson(
-    await cliente.get('/api/pasajero/viajes/historial?periodo=${periodo.codigo}&pagina=$pagina')
-        as Map<String, dynamic>,
+  Future<PaginaHistorial> historial(
+    PeriodoHistorial periodo,
+    int pagina,
+  ) async => PaginaHistorial.desdeJson(
+    await cliente.get(
+      '/api/pasajero/viajes/historial?periodo=${periodo.codigo}&pagina=$pagina',
+    ) as Map<String, dynamic>,
   );
 
   Future<Viaje> cancelarViaje(int id) async => Viaje.desdeJson(
-    await cliente.post('/api/pasajero/viajes/$id/cancelar', {'motivo': 'Cancelado por el pasajero'})
-        as Map<String, dynamic>,
+    await cliente.post('/api/pasajero/viajes/$id/cancelar', {
+      'motivo': 'Cancelado por el pasajero',
+    }) as Map<String, dynamic>,
   );
 
   /// Pide al conductor pagar de otra forma; vale cuando el conductor acepta.
-  Future<Viaje> pedirCambioPago(int idViaje, String metodoPago) async => Viaje.desdeJson(
-    await cliente.post('/api/pasajero/viajes/$idViaje/metodo-pago', {'metodoPago': metodoPago}) as Map<String, dynamic>,
-  );
+  Future<Viaje> pedirCambioPago(int idViaje, String metodoPago) async =>
+      Viaje.desdeJson(
+        await cliente.post('/api/pasajero/viajes/$idViaje/metodo-pago', {
+          'metodoPago': metodoPago,
+        }) as Map<String, dynamic>,
+      );
 
   /// QR de cobro del conductor del viaje.
-  Future<List<QrPago>> qrConductor(int idViaje) => cliente.lista('/api/pasajero/viajes/$idViaje/qr', QrPago.desdeJson);
+  Future<List<QrPago>> qrConductor(int idViaje) =>
+      cliente.lista('/api/pasajero/viajes/$idViaje/qr', QrPago.desdeJson);
 
-  Future<Uint8List?> imagenQr(int idViaje, int idQr) => cliente.bytes('/api/pasajero/viajes/$idViaje/qr/$idQr/imagen');
+  Future<Uint8List?> imagenQr(int idViaje, int idQr) =>
+      cliente.bytes('/api/pasajero/viajes/$idViaje/qr/$idQr/imagen');
+
+  Future<Uint8List?> comprobanteEntrega(int idViaje) =>
+      cliente.bytes('/api/pasajero/viajes/$idViaje/entrega/comprobante');
 
   Future<List<ConductorEnLinea>> conductoresEnLinea() async {
-    final datos = await cliente.get('/api/pasajero/conductores-en-linea') as List<dynamic>;
-    return datos.map((e) => ConductorEnLinea.desdeJson(e as Map<String, dynamic>)).nonNulls.toList();
+    final datos = await cliente.get(
+      '/api/pasajero/conductores-en-linea',
+    ) as List<dynamic>;
+    return datos
+        .map((e) => ConductorEnLinea.desdeJson(e as Map<String, dynamic>))
+        .nonNulls
+        .toList();
   }
 
-  Future<List<Etiqueta>> etiquetasConductor() =>
-      cliente.lista('/api/publico/etiquetas-calificacion?aplicaA=CONDUCTOR', Etiqueta.desdeJson);
+  Future<List<Etiqueta>> etiquetasConductor() => cliente.lista(
+    '/api/publico/etiquetas-calificacion?aplicaA=CONDUCTOR',
+    Etiqueta.desdeJson,
+  );
 
   /// Marca en el servidor que ya se le ofrecio calificar este viaje: no vuelve a salir aunque
   /// cierre sesion o entre desde otro telefono.
-  Future<void> marcarCalificacionOfrecida(int idViaje) =>
-      cliente.post('/api/pasajero/viajes/$idViaje/calificacion/ofrecida', const {});
+  Future<void> marcarCalificacionOfrecida(int idViaje) => cliente.post(
+    '/api/pasajero/viajes/$idViaje/calificacion/ofrecida',
+    const {},
+  );
 
-  Future<void> calificar(int idViaje, {required int puntuacion, String? comentario, List<int> etiquetas = const []}) =>
-      cliente.post('/api/pasajero/viajes/$idViaje/calificacion', {
-        'puntuacion': puntuacion,
-        'comentario': comentario,
-        'idsEtiquetas': etiquetas,
-      });
+  Future<void> calificar(
+    int idViaje, {
+    required int puntuacion,
+    String? comentario,
+    List<int> etiquetas = const [],
+  }) => cliente.post('/api/pasajero/viajes/$idViaje/calificacion', {
+    'puntuacion': puntuacion,
+    'comentario': comentario,
+    'idsEtiquetas': etiquetas,
+  });
 }

@@ -13,8 +13,6 @@ void main() {
     const datos = DatosEntregaForm(
       tipoEnvio: TipoEnvio.encomienda,
       descripcion: 'Documentos',
-      nombreRemitente: 'Ana',
-      telefonoRemitente: '70000000',
       nombreReceptor: 'Luis',
       telefonoReceptor: '71111111',
       aceptaPoliticaArticulos: true,
@@ -23,6 +21,8 @@ void main() {
     expect(datos.error, isNull);
     expect(datos.aJson()['tipoEnvio'], 'ENCOMIENDA');
     expect(datos.aJson()['aceptaPoliticaArticulos'], true);
+    expect(datos.aJson().containsKey('nombreRemitente'), isFalse);
+    expect(datos.aJson().containsKey('telefonoRemitente'), isFalse);
   });
 
   test('serializa la aceptación de prohibiciones también para compra y entrega', () {

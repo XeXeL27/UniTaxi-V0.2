@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import 'package:taxiuap_movil/comun/modelos_viaje.dart';
 import 'package:taxiuap_movil/core/cliente_api.dart';
+import 'package:taxiuap_movil/core/chat.dart';
 import 'package:taxiuap_movil/core/sesion.dart';
 import 'package:taxiuap_movil/mapa/controlador_mapa.dart';
 import 'package:taxiuap_movil/modulos/pasajero/viaje/flujo_pasajero.dart';
@@ -120,16 +122,19 @@ void main() {
   });
 
   group('la cotizacion de la ruta', () {
-    test('en una compra no se pide, ni siquiera con A y B en el mapa', () async {
-      final api = _ApiEspia();
-      final flujo = _flujo(api, servicio: TipoEnvio.compraYEntrega);
-      _ponerPuntos(flujo);
+    test(
+      'en una compra no se pide, ni siquiera con A y B en el mapa',
+      () async {
+        final api = _ApiEspia();
+        final flujo = _flujo(api, servicio: TipoEnvio.compraYEntrega);
+        _ponerPuntos(flujo);
 
-      await Future<void>.delayed(Duration.zero);
+        await Future<void>.delayed(Duration.zero);
 
-      expect(api.cotizaciones, isEmpty);
-      expect(flujo.cotizando, isFalse);
-    });
+        expect(api.cotizaciones, isEmpty);
+        expect(flujo.cotizando, isFalse);
+      },
+    );
 
     test('en una encomienda tampoco se pide: su precio lo calcula el servidor de delivery', () async {
       final api = _ApiEspia();
@@ -154,12 +159,15 @@ void main() {
   });
 
   group('textoPrecio', () {
-    test('en una compra dice A calcular aunque el precio base ya este cargado', () {
-      final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.compraYEntrega);
-      flujo.precio = const PrecioViaje(precio: 8);
+    test(
+      'en una compra dice A calcular aunque el precio base ya este cargado',
+      () {
+        final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.compraYEntrega);
+        flujo.precio = const PrecioViaje(precio: 8);
 
-      expect(flujo.textoPrecio, 'A calcular');
-    });
+        expect(flujo.textoPrecio, 'A calcular');
+      },
+    );
 
     test('en una encomienda muestra la tarifa del servicio', () {
       final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.encomienda);
@@ -197,18 +205,51 @@ void main() {
     const elegido = PuntoRuta(_alla, 'Mercado');
 
     test('la compra se entrega en la partida, con o sin destino elegido', () {
-      expect(destinoAlSolicitar(partida: partida, destinoElegido: null, esCompra: true), partida);
-      expect(destinoAlSolicitar(partida: partida, destinoElegido: elegido, esCompra: true), partida);
+      expect(
+        destinoAlSolicitar(
+          partida: partida,
+          destinoElegido: null,
+          esCompra: true,
+        ),
+        partida,
+      );
+      expect(
+        destinoAlSolicitar(
+          partida: partida,
+          destinoElegido: elegido,
+          esCompra: true,
+        ),
+        partida,
+      );
     });
 
-    test('en viaje y encomienda manda el destino elegido, o nada si no lo hay', () {
-      expect(destinoAlSolicitar(partida: partida, destinoElegido: elegido, esCompra: false), elegido);
-      expect(destinoAlSolicitar(partida: partida, destinoElegido: null, esCompra: false), isNull);
-    });
+    test(
+      'en viaje y encomienda manda el destino elegido, o nada si no lo hay',
+      () {
+        expect(
+          destinoAlSolicitar(
+            partida: partida,
+            destinoElegido: elegido,
+            esCompra: false,
+          ),
+          elegido,
+        );
+        expect(
+          destinoAlSolicitar(
+            partida: partida,
+            destinoElegido: null,
+            esCompra: false,
+          ),
+          isNull,
+        );
+      },
+    );
   });
 
   group('el panel eligiendo de una compra', () {
-    testWidgets('muestra el precio, el pago y el boton de pedir sin destino', (tester) async {
+    testWidgets('muestra el precio, el pago y el boton de pedir sin destino', (
+      tester,
+    ) async {
       final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.compraYEntrega)
         ..precio = const PrecioViaje(precio: 8)
         ..mapa.ponerA(const PuntoRuta(_aqui, 'Mi ubicación actual'));
@@ -220,10 +261,23 @@ void main() {
       expect(find.text('¿Cómo vas a pagar?'), findsOneWidget);
       expect(find.text('Se entrega donde estas'), findsOneWidget);
       // El boton existe y esta habilitado: se puede pedir sin haber elegido destino.
-      expect(find.widgetWithText(FilledButton, 'Solicitar entrega'), findsOneWidget);
-      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Solicitar entrega')).onPressed, isNotNull);
+      expect(
+        find.widgetWithText(FilledButton, 'Solicitar entrega'),
+        findsOneWidget,
+      );
+      expect(
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Solicitar entrega'),
+            )
+            .onPressed,
+        isNotNull,
+      );
       // Sin busqueda de destino, sin favoritos y sin quitar destino.
-      expect(find.text('Busca tu destino arriba o tócalo en el mapa.'), findsNothing);
+      expect(
+        find.text('Busca tu destino arriba o tócalo en el mapa.'),
+        findsNothing,
+      );
       expect(find.text('Destino (B)'), findsNothing);
       expect(find.byTooltip('Quitar destino'), findsNothing);
     });
@@ -234,9 +288,58 @@ void main() {
 
       await tester.pumpWidget(_envolver(_panel(flujo)));
 
-      expect(find.widgetWithText(FilledButton, 'Solicitar entrega'), findsNothing);
-      expect(find.text('Busca tu destino arriba o tócalo en el mapa.'), findsOneWidget);
+      expect(
+        find.widgetWithText(FilledButton, 'Solicitar entrega'),
+        findsNothing,
+      );
+      expect(
+        find.text('Busca tu destino arriba o tócalo en el mapa.'),
+        findsOneWidget,
+      );
       expect(find.text('Se entrega donde estas'), findsNothing);
+    });
+  });
+
+  group('el panel de una compra asignada', () {
+    testWidgets('muestra la propuesta de comercio y monto antes de confirmar', (
+      tester,
+    ) async {
+      final flujo = _flujo(_ApiEspia())
+        ..etapa = EtapaPasajero.enViaje
+        ..viaje = Viaje.desdeJson({
+          'idViaje': 12,
+          'situacionViaje': 'CONFIRMADO',
+          'nombreConductor': 'Carlos',
+          'nombrePasajero': 'Ana',
+          'origenDireccion': 'Punto de partida',
+          'destinoDireccion': 'Punto de entrega',
+          'precioFinal': 18,
+          'datosEntrega': {
+            'tipoEnvio': TipoEnvio.compraYEntrega.codigo,
+            'descripcion': 'Medicamentos',
+            'estadoEntrega': EstadoEntrega.enCaminoRecogida,
+            'detalleCompraPropuesto': 'Farmacia Central',
+            'costoProductoConfirmado': 25,
+          },
+        });
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ChatEstado>.value(
+          value: ChatEstado(sesion: Sesion(), api: ClienteApi(Sesion())),
+          child: _envolver(
+            PanelViaje(
+              flujo: flujo,
+              onCancelar: () {},
+              onPedirCambioPago: (_) {},
+              onConfirmarCompra: () {},
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Farmacia Central'), findsOneWidget);
+      expect(find.text('25 Bs'), findsWidgets);
+      expect(find.text('Confirmar comercio y monto'), findsOneWidget);
     });
   });
 }
@@ -251,7 +354,8 @@ void _ponerPuntos(FlujoPasajero flujo) {
 /// Flujo del pasajero recien empezado a elegir, con su mapa y sin salir de la pantalla.
 FlujoPasajero _flujo(_ApiEspia api, {TipoEnvio? servicio}) {
   final mapa = ControladorMapa();
-  final flujo = FlujoPasajero(api: api, mapa: mapa)..etapa = EtapaPasajero.eligiendo;
+  final flujo = FlujoPasajero(api: api, mapa: mapa)
+    ..etapa = EtapaPasajero.eligiendo;
   if (servicio != null) flujo.modo.elegir(servicio);
   addTearDown(() {
     flujo.dispose();
@@ -261,14 +365,15 @@ FlujoPasajero _flujo(_ApiEspia api, {TipoEnvio? servicio}) {
 }
 
 Widget _panel(FlujoPasajero flujo) => PanelEligiendo(
-      flujo: flujo,
-      enviando: false,
-      onSolicitar: () {},
-      onGuardarDestino: () {},
-    );
+  flujo: flujo,
+  enviando: false,
+  onSolicitar: () {},
+  onGuardarDestino: () {},
+);
 
-Widget _envolver(Widget hijo) =>
-    MaterialApp(home: Scaffold(body: SingleChildScrollView(child: hijo)));
+Widget _envolver(Widget hijo) => MaterialApp(
+  home: Scaffold(body: SingleChildScrollView(child: hijo)),
+);
 
 /// ViajeApi de mentira: guarda lo que le piden y responde sin tocar la red.
 class _ApiEspia extends ViajeApi {
@@ -282,7 +387,12 @@ class _ApiEspia extends ViajeApi {
   @override
   Future<CotizacionViaje> cotizar(LatLng a, LatLng b) async {
     cotizaciones.add((a, b));
-    return const CotizacionViaje(distanciaKm: 1, precioNormal: 8, descuentoEstudiante: 0, precio: 8);
+    return const CotizacionViaje(
+      distanciaKm: 1,
+      precioNormal: 8,
+      descuentoEstudiante: 0,
+      precio: 8,
+    );
   }
 
   @override
@@ -298,7 +408,10 @@ class _ApiEspia extends ViajeApi {
     destino = d;
     this.destinoNombre = destinoNombre;
     // Sin WKT la solicitud no tiene ruta que dibujar: el trazado lo prueba otra tarea.
-    return Solicitud.desdeJson({'idSolicitud': 1, 'situacionSolicitud': 'PENDIENTE'});
+    return Solicitud.desdeJson({
+      'idSolicitud': 1,
+      'situacionSolicitud': 'PENDIENTE',
+    });
   }
 
   @override

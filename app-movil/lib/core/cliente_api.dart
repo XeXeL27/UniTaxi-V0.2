@@ -17,25 +17,38 @@ class ClienteApi {
 
   Future<dynamic> get(String ruta) => _enviar('GET', ruta);
 
-  Future<dynamic> post(String ruta, Map<String, dynamic> cuerpo) => _enviar('POST', ruta, cuerpo);
+  Future<dynamic> post(String ruta, Map<String, dynamic> cuerpo) =>
+      _enviar('POST', ruta, cuerpo);
 
-  Future<dynamic> put(String ruta, Map<String, dynamic> cuerpo) => _enviar('PUT', ruta, cuerpo);
+  Future<dynamic> put(String ruta, Map<String, dynamic> cuerpo) =>
+      _enviar('PUT', ruta, cuerpo);
+
+  Future<dynamic> patch(String ruta, Map<String, dynamic> cuerpo) =>
+      _enviar('PATCH', ruta, cuerpo);
 
   Future<dynamic> delete(String ruta) => _enviar('DELETE', ruta);
 
   /// Lista del backend convertida con [desdeJson].
-  Future<List<T>> lista<T>(String ruta, T Function(Map<String, dynamic>) desdeJson) async {
+  Future<List<T>> lista<T>(
+    String ruta,
+    T Function(Map<String, dynamic>) desdeJson,
+  ) async {
     final datos = await get(ruta) as List<dynamic>;
     return datos.map((e) => desdeJson(e as Map<String, dynamic>)).toList();
   }
 
   /// Descarga un archivo (foto, PDF). Devuelve null si el servidor responde 404 (no existe).
   Future<Uint8List?> bytes(String ruta) async {
-    final respuesta = await _conReintento(() => http.Request('GET', Uri.parse('${Config.apiUrl}$ruta')));
+    final respuesta = await _conReintento(
+      () => http.Request('GET', Uri.parse('${Config.apiUrl}$ruta')),
+    );
     if (respuesta.statusCode == 404) return null;
     if (respuesta.statusCode >= 400) {
       final json = _decodificar(respuesta);
-      throw ApiExcepcion(json['mensaje'] as String? ?? 'Error ${respuesta.statusCode}', codigo: respuesta.statusCode);
+      throw ApiExcepcion(
+        json['mensaje'] as String? ?? 'Error ${respuesta.statusCode}',
+        codigo: respuesta.statusCode,
+      );
     }
     return respuesta.bodyBytes;
   }
@@ -51,8 +64,18 @@ class ClienteApi {
     Map<String, String> campos = const {},
   }) async {
     final respuesta = await _conReintento(() {
-      final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
-      peticion.files.add(http.MultipartFile.fromBytes(campo, contenido, filename: nombre, contentType: tipo));
+      final peticion = http.MultipartRequest(
+        metodo,
+        Uri.parse('${Config.apiUrl}$ruta'),
+      );
+      peticion.files.add(
+        http.MultipartFile.fromBytes(
+          campo,
+          contenido,
+          filename: nombre,
+          contentType: tipo,
+        ),
+      );
       peticion.fields.addAll(campos);
       return peticion;
     });
@@ -63,16 +86,31 @@ class ClienteApi {
   Future<dynamic> enviarFormulario(
     String ruta,
     Map<String, dynamic> datos,
-    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})> archivos, {
+    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})>
+    archivos, {
     String metodo = 'POST',
   }) async {
     final respuesta = await _conReintento(() {
-      final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
+      final peticion = http.MultipartRequest(
+        metodo,
+        Uri.parse('${Config.apiUrl}$ruta'),
+      );
       peticion.files.add(
-        http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
+        http.MultipartFile.fromString(
+          'datos',
+          jsonEncode(datos),
+          contentType: MediaType('application', 'json'),
+        ),
       );
       for (final a in archivos) {
-        peticion.files.add(http.MultipartFile.fromBytes(a.campo, a.bytes, filename: a.nombre, contentType: a.tipo));
+        peticion.files.add(
+          http.MultipartFile.fromBytes(
+            a.campo,
+            a.bytes,
+            filename: a.nombre,
+            contentType: a.tipo,
+          ),
+        );
       }
       return peticion;
     });
@@ -84,14 +122,31 @@ class ClienteApi {
     String ruta,
     String parteJson,
     Map<String, dynamic> datos,
-    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})> archivos, {
+    List<({String campo, Uint8List bytes, String nombre, MediaType tipo})>
+    archivos, {
     String metodo = 'POST',
   }) async {
     final respuesta = await _conReintento(() {
-      final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
-      peticion.files.add(http.MultipartFile.fromString(parteJson, jsonEncode(datos), contentType: MediaType('application', 'json')));
+      final peticion = http.MultipartRequest(
+        metodo,
+        Uri.parse('${Config.apiUrl}$ruta'),
+      );
+      peticion.files.add(
+        http.MultipartFile.fromString(
+          parteJson,
+          jsonEncode(datos),
+          contentType: MediaType('application', 'json'),
+        ),
+      );
       for (final a in archivos) {
-        peticion.files.add(http.MultipartFile.fromBytes(a.campo, a.bytes, filename: a.nombre, contentType: a.tipo));
+        peticion.files.add(
+          http.MultipartFile.fromBytes(
+            a.campo,
+            a.bytes,
+            filename: a.nombre,
+            contentType: a.tipo,
+          ),
+        );
       }
       return peticion;
     });
@@ -100,7 +155,11 @@ class ClienteApi {
 
   /// Envia la peticion y desempaqueta ApiResponse. La peticion se arma de nuevo en cada intento
   /// porque una peticion http ya enviada no se puede reenviar.
-  Future<dynamic> _enviar(String metodo, String ruta, [Map<String, dynamic>? cuerpo]) async {
+  Future<dynamic> _enviar(
+    String metodo,
+    String ruta, [
+    Map<String, dynamic>? cuerpo,
+  ]) async {
     http.Request crear() {
       final peticion = http.Request(metodo, Uri.parse('${Config.apiUrl}$ruta'));
       if (cuerpo != null) {
@@ -123,11 +182,17 @@ class ClienteApi {
       if (respuesta.statusCode == 401) {
         // Si la administracion suspendio o elimino la cuenta, el backend dice por que.
         final mensaje = _decodificar(respuesta)['mensaje'] as String?;
-        final motivo = mensaje != null && (mensaje.startsWith('Tu cuenta') || mensaje.startsWith('No pudimos aprobar'))
+        final motivo =
+            mensaje != null &&
+                (mensaje.startsWith('Tu cuenta') ||
+                    mensaje.startsWith('No pudimos aprobar'))
             ? mensaje
             : null;
         await sesion.cerrar(motivo: motivo);
-        throw ApiExcepcion(motivo ?? 'La sesion expiro, vuelva a iniciar sesion', codigo: 401);
+        throw ApiExcepcion(
+          motivo ?? 'La sesion expiro, vuelva a iniciar sesion',
+          codigo: 401,
+        );
       }
     }
     return respuesta;
@@ -137,7 +202,9 @@ class ClienteApi {
     final json = _decodificar(respuesta);
     if (respuesta.statusCode >= 400 || json['ok'] == false) {
       final errores =
-          (json['errores'] as Map<String, dynamic>?)?.map((clave, valor) => MapEntry(clave, valor.toString())) ??
+          (json['errores'] as Map<String, dynamic>?)?.map(
+            (clave, valor) => MapEntry(clave, valor.toString()),
+          ) ??
           const <String, String>{};
       throw ApiExcepcion(
         json['mensaje'] as String? ?? 'Error ${respuesta.statusCode}',
@@ -154,11 +221,15 @@ class ClienteApi {
     final token = sesion.tokenAcceso;
     if (token != null) peticion.headers['Authorization'] = 'Bearer $token';
     // Subir fotos o PDF con internet lento tarda mas que una consulta.
-    final espera = Duration(seconds: peticion is http.MultipartRequest ? 90 : 20);
+    final espera = Duration(
+      seconds: peticion is http.MultipartRequest ? 90 : 20,
+    );
     try {
       // El envio tambien tiene limite: si Android congelo la app a mitad de una peticion, al volver
       // no queda colgada para siempre (y la consulta periodica sigue).
-      return await http.Response.fromStream(await peticion.send().timeout(espera)).timeout(espera);
+      return await http.Response.fromStream(
+        await peticion.send().timeout(espera),
+      ).timeout(espera);
     } catch (_) {
       throw ApiExcepcion('No se pudo conectar con el servidor');
     }
@@ -167,9 +238,13 @@ class ClienteApi {
   Map<String, dynamic> _decodificar(http.Response respuesta) {
     if (respuesta.bodyBytes.isEmpty) return {'ok': respuesta.statusCode < 400};
     try {
-      return jsonDecode(utf8.decode(respuesta.bodyBytes)) as Map<String, dynamic>;
+      return jsonDecode(utf8.decode(respuesta.bodyBytes))
+          as Map<String, dynamic>;
     } catch (_) {
-      return {'ok': false, 'mensaje': 'Respuesta invalida del servidor (${respuesta.statusCode})'};
+      return {
+        'ok': false,
+        'mensaje': 'Respuesta invalida del servidor (${respuesta.statusCode})',
+      };
     }
   }
 }

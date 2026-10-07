@@ -28,7 +28,12 @@ class PanelSolicitudes extends StatelessWidget {
   /// Abre Mis documentos para subir los que faltan (cuenta bloqueada por documentos).
   final VoidCallback? onSubirDocumentos;
 
-  const PanelSolicitudes({super.key, required this.flujo, this.onRevisarAprobacion, this.onSubirDocumentos});
+  const PanelSolicitudes({
+    super.key,
+    required this.flujo,
+    this.onRevisarAprobacion,
+    this.onSubirDocumentos,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +65,11 @@ class PanelSolicitudes extends StatelessWidget {
                     padding: EdgeInsets.symmetric(vertical: 8),
                     child: Text(
                       'Solicitudes de viaje',
-                      style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        color: ColoresApp.azul,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ),
@@ -68,26 +77,45 @@ class PanelSolicitudes extends StatelessWidget {
             ),
             if (nuevas > 0)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(color: ColoresApp.rojo, borderRadius: BorderRadius.circular(20)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: ColoresApp.rojo,
+                  borderRadius: BorderRadius.circular(20),
+                ),
                 child: Text(
                   '$nuevas',
-                  style: const TextStyle(color: ColoresApp.blanco, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    color: ColoresApp.blanco,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             IconButton(
               onPressed: flujo.refrescarLista,
               tooltip: 'Actualizar',
-              icon: const FaIcon(FontAwesomeIcons.arrowsRotate, color: ColoresApp.textoSuave, size: 16),
+              icon: const FaIcon(
+                FontAwesomeIcons.arrowsRotate,
+                color: ColoresApp.textoSuave,
+                size: 16,
+              ),
             ),
             IconButton(
               onPressed: onAlternar,
               tooltip: abierto ? 'Esconder solicitudes' : 'Ver solicitudes',
-              style: IconButton.styleFrom(backgroundColor: ColoresApp.azulSuave),
+              style: IconButton.styleFrom(
+                backgroundColor: ColoresApp.azulSuave,
+              ),
               icon: AnimatedRotation(
                 turns: abierto ? 0.5 : 0,
                 duration: const Duration(milliseconds: 200),
-                child: const FaIcon(FontAwesomeIcons.chevronUp, color: ColoresApp.azul, size: 15),
+                child: const FaIcon(
+                  FontAwesomeIcons.chevronUp,
+                  color: ColoresApp.azul,
+                  size: 15,
+                ),
               ),
             ),
           ],
@@ -105,10 +133,16 @@ class PanelSolicitudes extends StatelessWidget {
           else if (!flujo.listaCargada)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 18),
-              child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+              child: Center(
+                child: CircularProgressIndicator(color: ColoresApp.azul),
+              ),
             )
           else if (flujo.errorLista != null)
-            _Mensaje(icono: FontAwesomeIcons.circleExclamation, texto: flujo.errorLista!, color: ColoresApp.rojo)
+            _Mensaje(
+              icono: FontAwesomeIcons.circleExclamation,
+              texto: flujo.errorLista!,
+              color: ColoresApp.rojo,
+            )
           else if (lista.isEmpty)
             const _Mensaje(
               icono: FontAwesomeIcons.hourglassHalf,
@@ -136,13 +170,18 @@ class _TarjetaSolicitud extends StatelessWidget {
   final double? distanciaAMi;
   final VoidCallback onTap;
 
-  const _TarjetaSolicitud({required this.solicitud, required this.distanciaAMi, required this.onTap});
+  const _TarjetaSolicitud({
+    required this.solicitud,
+    required this.distanciaAMi,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     // En una compra todavia sin comercio no hay partida: sin ella no hay distancia que mostrar.
-    final metrosViaje =
-        solicitud.tieneRuta ? ServiciosMapa.metros(solicitud.partida!.posicion, solicitud.destino!) : null;
+    final metrosViaje = solicitud.tieneRuta
+        ? ServiciosMapa.metros(solicitud.partida!.posicion, solicitud.destino!)
+        : null;
     return Material(
       color: ColoresApp.blanco,
       shape: RoundedRectangleBorder(
@@ -160,9 +199,27 @@ class _TarjetaSolicitud extends StatelessWidget {
               Row(
                 children: [
                   if (solicitud.datosEntrega != null)
-                    Text(
-                      solicitud.datosEntrega!.tipoEnvio.nombre,
-                      style: const TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w700, fontSize: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Container(
+                        key: const ValueKey('tipo-envio-solicitud'),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: ColoresApp.rojoSuave,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          solicitud.datosEntrega!.tipoEnvio.nombre,
+                          style: const TextStyle(
+                            color: ColoresApp.rojo,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
                     ),
                   AvatarIniciales(nombre: solicitud.nombrePasajero, radio: 16),
                   const SizedBox(width: 10),
@@ -171,27 +228,47 @@ class _TarjetaSolicitud extends StatelessWidget {
                       solicitud.nombrePasajero,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 15),
+                      style: const TextStyle(
+                        color: ColoresApp.azul,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
                   Text(
                     formatoBs(solicitud.precio),
-                    style: const TextStyle(color: ColoresApp.exito, fontWeight: FontWeight.w800, fontSize: 18),
+                    style: const TextStyle(
+                      color: ColoresApp.exito,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 6),
-              FilaLugar.partida(etiqueta: 'Recoger en (A)', texto: solicitud.origenDireccion),
-              FilaLugar.destino(etiqueta: 'Llevar a (B)', texto: solicitud.destinoDireccion),
+              FilaLugar.partida(
+                etiqueta: 'Recoger en (A)',
+                texto: solicitud.origenDireccion,
+              ),
+              FilaLugar.destino(
+                etiqueta: 'Llevar a (B)',
+                texto: solicitud.destinoDireccion,
+              ),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 16,
                 runSpacing: 4,
                 children: [
                   if (distanciaAMi != null)
-                    DatoRuta(icono: FontAwesomeIcons.locationArrow, texto: 'A ${_km(distanciaAMi)} de ti'),
+                    DatoRuta(
+                      icono: FontAwesomeIcons.locationArrow,
+                      texto: 'A ${_km(distanciaAMi)} de ti',
+                    ),
                   if (metrosViaje != null)
-                    DatoRuta(icono: FontAwesomeIcons.route, texto: 'Viaje de ${_km(metrosViaje)} aprox.'),
+                    DatoRuta(
+                      icono: FontAwesomeIcons.route,
+                      texto: 'Viaje de ${_km(metrosViaje)} aprox.',
+                    ),
                   _DatoPago(solicitud.metodoPago),
                 ],
               ),
@@ -201,10 +278,17 @@ class _TarjetaSolicitud extends StatelessWidget {
                 children: [
                   Text(
                     'Ver ruta',
-                    style: TextStyle(color: ColoresApp.ruta, fontWeight: FontWeight.w700),
+                    style: TextStyle(
+                      color: ColoresApp.ruta,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                   SizedBox(width: 6),
-                  FaIcon(FontAwesomeIcons.chevronRight, color: ColoresApp.ruta, size: 12),
+                  FaIcon(
+                    FontAwesomeIcons.chevronRight,
+                    color: ColoresApp.ruta,
+                    size: 12,
+                  ),
                 ],
               ),
             ],
@@ -220,7 +304,11 @@ class PanelDetalleSolicitud extends StatelessWidget {
   final FlujoConductor flujo;
   final VoidCallback onAceptar;
 
-  const PanelDetalleSolicitud({super.key, required this.flujo, required this.onAceptar});
+  const PanelDetalleSolicitud({
+    super.key,
+    required this.flujo,
+    required this.onAceptar,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -228,8 +316,11 @@ class PanelDetalleSolicitud extends StatelessWidget {
     if (solicitud == null) return const SizedBox.shrink();
     final ruta = flujo.mapa.ruta;
     final acercamiento = flujo.mapa.acercamiento;
+    final esDelivery = solicitud.datosEntrega != null;
     final comision = flujo.precio?.comisionPorcentaje ?? 0;
-    final ganancia = solicitud.precio == null ? null : solicitud.precio! * (1 - comision / 100);
+    final ganancia = solicitud.precio == null
+        ? null
+        : solicitud.precio! * (1 - comision / 100);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -243,17 +334,33 @@ class PanelDetalleSolicitud extends StatelessWidget {
                 children: [
                   Text(
                     solicitud.nombrePasajero,
-                    style: const TextStyle(color: ColoresApp.azul, fontSize: 17, fontWeight: FontWeight.w700),
+                    style: const TextStyle(
+                      color: ColoresApp.azul,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
-                  const Text('Pasajero', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
+                  const Text(
+                    'Pasajero',
+                    style: TextStyle(
+                      color: ColoresApp.textoSuave,
+                      fontSize: 13,
+                    ),
+                  ),
                 ],
               ),
             ),
           ],
         ),
         const SizedBox(height: 10),
-        FilaLugar.partida(etiqueta: 'Recoger en (A)', texto: solicitud.origenDireccion),
-        FilaLugar.destino(etiqueta: 'Llevar a (B)', texto: solicitud.destinoDireccion),
+        FilaLugar.partida(
+          etiqueta: 'Recoger en (A)',
+          texto: solicitud.origenDireccion,
+        ),
+        FilaLugar.destino(
+          etiqueta: 'Llevar a (B)',
+          texto: solicitud.destinoDireccion,
+        ),
         const SizedBox(height: 8),
         Wrap(
           spacing: 16,
@@ -262,12 +369,19 @@ class PanelDetalleSolicitud extends StatelessWidget {
             if (acercamiento != null)
               DatoRuta(
                 icono: FontAwesomeIcons.locationArrow,
-                texto: 'Hasta el pasajero: ${acercamiento.distanciaTexto}, ${acercamiento.duracionTexto}',
+                texto:
+                    'Hasta el pasajero: ${acercamiento.distanciaTexto}, ${acercamiento.duracionTexto}',
               ),
             if (ruta != null)
-              DatoRuta(icono: FontAwesomeIcons.route, texto: 'Viaje: ${ruta.distanciaTexto}, ${ruta.duracionTexto}')
+              DatoRuta(
+                icono: FontAwesomeIcons.route,
+                texto: 'Viaje: ${ruta.distanciaTexto}, ${ruta.duracionTexto}',
+              )
             else
-              const Text('Trazando la ruta...', style: TextStyle(color: ColoresApp.textoSuave)),
+              const Text(
+                'Trazando la ruta...',
+                style: TextStyle(color: ColoresApp.textoSuave),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -276,7 +390,8 @@ class PanelDetalleSolicitud extends StatelessWidget {
           detalle: [
             if (solicitud.descuentoEstudiante > 0)
               'Estudiante UAP: ${formatoBs(solicitud.precioNormal)} menos ${formatoBs(solicitud.descuentoEstudiante)}',
-            if (ganancia != null) 'Tu ganancia: ${formatoBs(ganancia)} (comisión ${comision.toStringAsFixed(0)}%)',
+            if (!esDelivery && ganancia != null)
+              'Tu ganancia: ${formatoBs(ganancia)} (comisión ${comision.toStringAsFixed(0)}%)',
           ].join('\n'),
           monto: formatoBs(solicitud.precio),
         ),
@@ -285,12 +400,19 @@ class PanelDetalleSolicitud extends StatelessWidget {
           children: [
             Expanded(
               flex: 2,
-              child: BotonSecundario(texto: 'Volver', onPressed: flujo.ocupado ? null : flujo.volverALista),
+              child: BotonSecundario(
+                texto: 'Volver',
+                onPressed: flujo.ocupado ? null : flujo.volverALista,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
               flex: 3,
-              child: BotonPrincipal(texto: 'Aceptar viaje', cargando: flujo.ocupado, onPressed: onAceptar),
+              child: BotonPrincipal(
+                texto: 'Aceptar viaje',
+                cargando: flujo.ocupado,
+                onPressed: onAceptar,
+              ),
             ),
           ],
         ),
@@ -300,28 +422,39 @@ class PanelDetalleSolicitud extends StatelessWidget {
 }
 
 /// Texto y color del estado del viaje para el conductor, y el boton del siguiente paso ('' si no hay).
-(String, Color, String, Color) estadoViajeConductor(Viaje viaje) => switch (viaje.situacion) {
-  SituacionViaje.confirmado => (
-    'Viaje aceptado. Avisa que vas en camino.',
-    ColoresApp.exito,
-    'Voy en camino',
-    ColoresApp.azul,
-  ),
-  SituacionViaje.enCamino => (
-    'Ve a recoger a ${viaje.primerNombrePasajero} (punto A)',
-    ColoresApp.ruta,
-    'Llegué al punto de partida',
-    ColoresApp.azul,
-  ),
-  SituacionViaje.llego => (
-    'Esperando a ${viaje.primerNombrePasajero}',
-    ColoresApp.rojo,
-    'Iniciar viaje',
-    ColoresApp.azul,
-  ),
-  SituacionViaje.enCurso => ('En viaje hacia el destino (B)', ColoresApp.azul, 'Finalizar viaje', ColoresApp.rojo),
-  _ => (SituacionViaje.nombre(viaje.situacion), ColoresApp.textoSuave, '', ColoresApp.azul),
-};
+(String, Color, String, Color) estadoViajeConductor(Viaje viaje) =>
+    switch (viaje.situacion) {
+      SituacionViaje.confirmado => (
+        'Viaje aceptado. Avisa que vas en camino.',
+        ColoresApp.exito,
+        'Voy en camino',
+        ColoresApp.azul,
+      ),
+      SituacionViaje.enCamino => (
+        'Ve a recoger a ${viaje.primerNombrePasajero} (punto A)',
+        ColoresApp.ruta,
+        'Llegué al punto de partida',
+        ColoresApp.azul,
+      ),
+      SituacionViaje.llego => (
+        'Esperando a ${viaje.primerNombrePasajero}',
+        ColoresApp.rojo,
+        'Iniciar viaje',
+        ColoresApp.azul,
+      ),
+      SituacionViaje.enCurso => (
+        'En viaje hacia el destino (B)',
+        ColoresApp.azul,
+        'Finalizar viaje',
+        ColoresApp.rojo,
+      ),
+      _ => (
+        SituacionViaje.nombre(viaje.situacion),
+        ColoresApp.textoSuave,
+        '',
+        ColoresApp.azul,
+      ),
+    };
 
 /// Viaje en curso del conductor: estado, pasajero, lugares y el boton del siguiente paso.
 class PanelViajeConductor extends StatelessWidget {
@@ -358,7 +491,10 @@ class PanelViajeConductor extends StatelessWidget {
             viaje: viaje,
             onCancelar: onCancelar,
             ocupado: flujo.ocupado,
-            botonChat: BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
+            botonChat: BotonChat(
+              idViaje: viaje.id,
+              nombreContraparte: viaje.nombrePasajero,
+            ),
           ),
           const Padding(
             padding: EdgeInsets.symmetric(vertical: 14),
@@ -375,10 +511,17 @@ class PanelViajeConductor extends StatelessWidget {
       children: [
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-          decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(10),
+          ),
           child: Text(
             texto,
-            style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 15),
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+            ),
           ),
         ),
         const SizedBox(height: 12),
@@ -389,30 +532,53 @@ class PanelViajeConductor extends StatelessWidget {
             Expanded(
               child: Text(
                 viaje.nombrePasajero,
-                style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+                style: const TextStyle(
+                  color: ColoresApp.azul,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
-            BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
+            BotonChat(
+              idViaje: viaje.id,
+              nombreContraparte: viaje.nombrePasajero,
+            ),
           ],
         ),
         const SizedBox(height: 8),
-        FilaLugar.partida(etiqueta: 'Recoger en (A)', texto: viaje.origenDireccion),
-        FilaLugar.destino(etiqueta: 'Llevar a (B)', texto: viaje.destinoDireccion),
+        FilaLugar.partida(
+          etiqueta: 'Recoger en (A)',
+          texto: viaje.origenDireccion,
+        ),
+        FilaLugar.destino(
+          etiqueta: 'Llevar a (B)',
+          texto: viaje.destinoDireccion,
+        ),
         if (viaje.situacion == SituacionViaje.enCurso) ...[
           const SizedBox(height: 6),
           Text(
             distanciaDestino == null
                 ? 'El viaje se finaliza solo al llegar a menos de 50 m del destino.'
                 : 'Faltan ${_km(distanciaDestino)} en línea recta. Se finaliza solo a menos de 50 m del destino.',
-            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+            style: const TextStyle(
+              color: ColoresApp.textoSuave,
+              fontSize: 12.5,
+            ),
           ),
         ],
         const SizedBox(height: 10),
         if (viaje.metodoPagoPedido != null) ...[
-          _PedidoCambioPago(viaje: viaje, ocupado: flujo.ocupado, onResponder: onResponderPago),
+          _PedidoCambioPago(
+            viaje: viaje,
+            ocupado: flujo.ocupado,
+            onResponder: onResponderPago,
+          ),
           const SizedBox(height: 10),
         ],
-        RecuadroPrecio(etiqueta: MetodoPago.frase('Cobra', viaje.metodoPago), monto: formatoBs(viaje.precioFinal)),
+        RecuadroPrecio(
+          etiqueta: MetodoPago.frase('Cobra', viaje.metodoPago),
+          monto: formatoBs(viaje.precioFinal),
+        ),
         if (viaje.pagaConQr && !viaje.conductorTieneQr) ...[
           const SizedBox(height: 8),
           const _Mensaje(
@@ -426,20 +592,37 @@ class PanelViajeConductor extends StatelessWidget {
           child: TextButton.icon(
             onPressed: flujo.ocupado
                 ? null
-                : () => onCambiarPago(viaje.pagaConQr ? MetodoPago.efectivo : MetodoPago.qr),
-            icon: FaIcon(viaje.pagaConQr ? FontAwesomeIcons.moneyBill1 : FontAwesomeIcons.qrcode, size: 14),
-            label: Text(viaje.pagaConQr ? 'Cobrar en efectivo' : 'Cobrar por QR'),
+                : () => onCambiarPago(
+                    viaje.pagaConQr ? MetodoPago.efectivo : MetodoPago.qr,
+                  ),
+            icon: FaIcon(
+              viaje.pagaConQr
+                  ? FontAwesomeIcons.moneyBill1
+                  : FontAwesomeIcons.qrcode,
+              size: 14,
+            ),
+            label: Text(
+              viaje.pagaConQr ? 'Cobrar en efectivo' : 'Cobrar por QR',
+            ),
           ),
         ),
         const SizedBox(height: 4),
         if (boton.isNotEmpty)
-          BotonPrincipal(texto: boton, color: colorBoton, cargando: flujo.ocupado, onPressed: onAvanzar),
+          BotonPrincipal(
+            texto: boton,
+            color: colorBoton,
+            cargando: flujo.ocupado,
+            onPressed: onAvanzar,
+          ),
         if (SituacionViaje.cancelables.contains(viaje.situacion)) ...[
           const SizedBox(height: 4),
           TextButton(
             onPressed: flujo.ocupado ? null : onCancelar,
             style: TextButton.styleFrom(foregroundColor: ColoresApp.rojo),
-            child: const Text('Cancelar viaje', style: TextStyle(fontWeight: FontWeight.w600)),
+            child: const Text(
+              'Cancelar viaje',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
           ),
         ],
       ],
@@ -455,7 +638,9 @@ class _DatoPago extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => DatoRuta(
-    icono: metodoPago == MetodoPago.qr ? FontAwesomeIcons.qrcode : FontAwesomeIcons.moneyBill1,
+    icono: metodoPago == MetodoPago.qr
+        ? FontAwesomeIcons.qrcode
+        : FontAwesomeIcons.moneyBill1,
     texto: metodoPago == MetodoPago.qr ? 'Paga por QR' : 'Paga en efectivo',
   );
 }
@@ -466,7 +651,11 @@ class _PedidoCambioPago extends StatelessWidget {
   final bool ocupado;
   final ValueChanged<bool> onResponder;
 
-  const _PedidoCambioPago({required this.viaje, required this.ocupado, required this.onResponder});
+  const _PedidoCambioPago({
+    required this.viaje,
+    required this.ocupado,
+    required this.onResponder,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -484,7 +673,11 @@ class _PedidoCambioPago extends StatelessWidget {
         children: [
           Text(
             '${viaje.primerNombrePasajero} pide pagar ${pedido == MetodoPago.qr ? 'por QR' : 'en efectivo'}',
-            style: const TextStyle(color: naranja, fontWeight: FontWeight.w700, fontSize: 14.5),
+            style: const TextStyle(
+              color: naranja,
+              fontWeight: FontWeight.w700,
+              fontSize: 14.5,
+            ),
           ),
           const SizedBox(height: 4),
           Row(
@@ -498,7 +691,9 @@ class _PedidoCambioPago extends StatelessWidget {
               const SizedBox(width: 6),
               FilledButton(
                 onPressed: ocupado ? null : () => onResponder(true),
-                style: FilledButton.styleFrom(backgroundColor: ColoresApp.exito),
+                style: FilledButton.styleFrom(
+                  backgroundColor: ColoresApp.exito,
+                ),
                 child: const Text('Aceptar'),
               ),
             ],
@@ -524,7 +719,12 @@ class _EnRevision extends StatelessWidget {
   final VoidCallback? onRevisar;
   final VoidCallback? onSubirDocumentos;
 
-  const _EnRevision({required this.situacion, required this.faltantes, required this.onRevisar, this.onSubirDocumentos});
+  const _EnRevision({
+    required this.situacion,
+    required this.faltantes,
+    required this.onRevisar,
+    this.onSubirDocumentos,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -558,10 +758,15 @@ class _EnRevision extends StatelessWidget {
             Container(
               width: 44,
               height: 44,
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.14), shape: BoxShape.circle),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.14),
+                shape: BoxShape.circle,
+              ),
               child: Center(
                 child: FaIcon(
-                  faltantes.isNotEmpty ? FontAwesomeIcons.fileCircleExclamation : FontAwesomeIcons.hourglassHalf,
+                  faltantes.isNotEmpty
+                      ? FontAwesomeIcons.fileCircleExclamation
+                      : FontAwesomeIcons.hourglassHalf,
                   color: color,
                   size: 18,
                 ),
@@ -571,13 +776,24 @@ class _EnRevision extends StatelessWidget {
             Expanded(
               child: Text(
                 titulo,
-                style: TextStyle(color: color, fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: color,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
           ],
         ),
         const SizedBox(height: 10),
-        Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14, height: 1.4)),
+        Text(
+          texto,
+          style: const TextStyle(
+            color: ColoresApp.texto,
+            fontSize: 14,
+            height: 1.4,
+          ),
+        ),
         if (faltantes.isNotEmpty && onSubirDocumentos != null) ...[
           const SizedBox(height: 14),
           FilledButton.icon(
@@ -585,10 +801,15 @@ class _EnRevision extends StatelessWidget {
             style: FilledButton.styleFrom(
               backgroundColor: ColoresApp.rojo,
               minimumSize: const Size.fromHeight(46),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             icon: const FaIcon(FontAwesomeIcons.fileArrowUp, size: 15),
-            label: const Text('Subir mis documentos', style: TextStyle(fontWeight: FontWeight.w700)),
+            label: const Text(
+              'Subir mis documentos',
+              style: TextStyle(fontWeight: FontWeight.w700),
+            ),
           ),
         ] else if (onRevisar != null) ...[
           const SizedBox(height: 12),
@@ -611,19 +832,33 @@ class _Mensaje extends StatelessWidget {
   final String texto;
   final Color color;
 
-  const _Mensaje({required this.icono, required this.texto, required this.color});
+  const _Mensaje({
+    required this.icono,
+    required this.texto,
+    required this.color,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: ColoresApp.fondo, borderRadius: BorderRadius.circular(10)),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondo,
+        borderRadius: BorderRadius.circular(10),
+      ),
       child: Row(
         children: [
           FaIcon(icono, color: color, size: 18),
           const SizedBox(width: 12),
           Expanded(
-            child: Text(texto, style: TextStyle(color: color == ColoresApp.textoSuave ? ColoresApp.texto : color)),
+            child: Text(
+              texto,
+              style: TextStyle(
+                color: color == ColoresApp.textoSuave
+                    ? ColoresApp.texto
+                    : color,
+              ),
+            ),
           ),
         ],
       ),

@@ -83,6 +83,9 @@ class SolicitudViajeDeliveryFlowTest {
     void setUp() {
         Persona persona = new Persona();
         persona.setId(20L);
+        persona.setNombres("Ana");
+        persona.setApellidos("Remitente");
+        persona.setTelefono("70000000");
         Usuario usuario = new Usuario();
         usuario.setId(10L);
         usuario.setPersona(persona);
@@ -101,7 +104,9 @@ class SolicitudViajeDeliveryFlowTest {
         SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
                 new JwtUser(10L, "pasajero", "PASAJERO"), null));
         lenient().when(pasajeroRepository.findByUsuarioId(10L)).thenReturn(Optional.of(pasajero));
-        lenient().when(solicitudRepository.existsByPasajeroIdAndSituacionSolicitudIn(any(), any())).thenReturn(false);
+        lenient().when(solicitudRepository
+                .existsByPasajeroIdAndSituacionSolicitudInAndEstadoSolViaje(any(), any(), any()))
+                .thenReturn(false);
         lenient().when(viajeService.pasajeroTieneViajeActivo(30L)).thenReturn(false);
         // Taxi: precio por tramos de km (8 Bs, sin descuento de estudiante).
         lenient().when(precioService.cotizar(any(), any(), any())).thenReturn(new CotizacionViaje(
@@ -131,7 +136,7 @@ class SolicitudViajeDeliveryFlowTest {
         lenient().when(precioDeliveryService.calcularEncomienda(any(Point.class), any(Point.class)))
                 .thenReturn(new DesglosePrecioDelivery(new BigDecimal("17.50"), new BigDecimal("4.25"), 13, false));
         SolicitudViajeRequest request = request(new DatosEntregaRequest(TipoEnvio.ENCOMIENDA,
-                "Documentos", BigDecimal.ZERO, "Ana", "70000000", "Luis", "71111111", null, true),
+                "Documentos", BigDecimal.ZERO, null, null, "Luis", "71111111", null, true),
                 new BigDecimal("99.00"));
 
         var respuesta = service.crear(request);
@@ -144,6 +149,9 @@ class SolicitudViajeDeliveryFlowTest {
         assertNotNull(respuesta.datosEntrega().codigoRecogida());
         assertNotNull(respuesta.datosEntrega().codigoEntrega());
         assertTrue(!respuesta.datosEntrega().codigoRecogida().equals(respuesta.datosEntrega().codigoEntrega()));
+        assertEquals("ANA REMITENTE", solicitudGuardada.getValue().getDatosEntrega().getNombreRemitente());
+        assertEquals("70000000", solicitudGuardada.getValue().getDatosEntrega().getTelefonoRemitente());
+        assertEquals("Luis", solicitudGuardada.getValue().getDatosEntrega().getNombreReceptor());
         verify(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class));
     }
 

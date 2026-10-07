@@ -45,7 +45,8 @@ public class VehiculoService {
         validarPlacaDisponible(request.placa(), null);
 
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
-        CategoriaServicio categoriaServicio = resolverCategoriaServicio(tipoVehiculo, request.idCategoriaServicio());
+        CategoriaServicio categoriaServicio = resolverCategoriaServicioParaConductor(tipoVehiculo,
+                request.idCategoriaServicio(), false);
 
         Vehiculo vehiculo = new Vehiculo();
         vehiculo.setConductor(conductor);
@@ -68,7 +69,9 @@ public class VehiculoService {
         validarPlacaDisponible(request.placa(), vehiculo.getId());
 
         TipoVehiculo tipoVehiculo = buscarTipoVehiculo(request.idTipoVehiculo());
-        CategoriaServicio categoriaServicio = resolverCategoriaServicio(tipoVehiculo, request.idCategoriaServicio());
+        CategoriaServicio categoriaServicio = resolverCategoriaServicioParaConductor(tipoVehiculo,
+                request.idCategoriaServicio(), vehiculo.getCategoriaServicio() != null
+                        && vehiculo.getCategoriaServicio().esDeliveryCompatible());
 
         vehiculo.setTipoVehiculo(tipoVehiculo);
         vehiculo.setCategoriaServicio(categoriaServicio);
@@ -128,6 +131,15 @@ public class VehiculoService {
                 .orElseThrow(() -> RecursoNoEncontradoException.de("CategoriaServicio", idCategoriaServicio));
         validarCategoriaDelTipo(tipoVehiculo, categoriaServicio);
         return categoriaServicio;
+    }
+
+    private CategoriaServicio resolverCategoriaServicioParaConductor(TipoVehiculo tipoVehiculo,
+            Integer idCategoriaServicio, boolean yaEsDelivery) {
+        CategoriaServicio categoria = resolverCategoriaServicio(tipoVehiculo, idCategoriaServicio);
+        if (categoria.esDeliveryCompatible() && !yaEsDelivery) {
+            throw new NegocioException("La categoria DELIVERY solo puede asignarla un administrador");
+        }
+        return categoria;
     }
 
     private Conductor buscarConductor(Long idUsuario) {

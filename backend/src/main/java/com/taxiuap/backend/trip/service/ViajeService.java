@@ -115,8 +115,6 @@ public class ViajeService {
     @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
 
-    @Value("${taxiuap.delivery.comision-porcentaje:0}")
-    private BigDecimal porcentajeComisionDelivery = BigDecimal.ZERO;
 
     /**
      * Crea el viaje a partir de una solicitud y su oferta aceptada. Se anota con propagacion
@@ -711,6 +709,7 @@ public class ViajeService {
                 viaje.getSolicitud().getId(),
                 viaje.getPasajero().getId(),
                 usuarioPasajero.getPersona().getNombres() + " " + usuarioPasajero.getPersona().getApellidos(),
+                esCompraEntrega(viaje) ? usuarioPasajero.getPersona().getTelefono() : null,
                 viaje.getConductor().getId(),
                 usuarioConductor.getPersona().getNombres() + " " + usuarioConductor.getPersona().getApellidos(),
                 viaje.getVehiculo().getPlaca(),
@@ -741,6 +740,12 @@ public class ViajeService {
                 esPasajero ? viaje.getSolicitud().getDestinoNombrePasajero() : null,
                 com.taxiuap.backend.trip.dto.DatosEntregaResponse.desde(viaje.getSolicitud().getDatosEntrega(),
                         esPasajero));
+    }
+
+    private static boolean esCompraEntrega(Viaje viaje) {
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        return viaje.getCategoriaServicio() != null && viaje.getCategoriaServicio().esDeliveryCompatible()
+                && datos != null && datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
     }
 
     private static boolean precioDeliveryEstimado(Viaje viaje) {
@@ -800,26 +805,30 @@ public class ViajeService {
         pago.setFechaPago(ahora);
         pagoRepository.save(pago);
 
-        BigDecimal porcentajeAplicado = viaje.getCategoriaServicio() != null
-                && viaje.getCategoriaServicio().esDeliveryCompatible()
-                        ? porcentajeComisionDelivery : porcentajeComision;
+        boolean esDelivery = viaje.getCategoriaServicio() != null
+                && viaje.getCategoriaServicio().esDeliveryCompatible();
+        BigDecimal porcentajeAplicado = esDelivery ? BigDecimal.ZERO : porcentajeComision;
         BigDecimal montoComision = viaje.getPrecioFinal()
                 .multiply(porcentajeAplicado)
                 .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
 
-        Comision comision = new Comision();
-        comision.setViaje(viaje);
-        comision.setPorcentaje(porcentajeAplicado);
-        comision.setMonto(montoComision);
-        comisionRepository.save(comision);
+        if (!esDelivery) {
+            Comision comision = new Comision();
+            comision.setViaje(viaje);
+            comision.setPorcentaje(porcentajeAplicado);
+            comision.setMonto(montoComision);
+            comisionRepository.save(comision);
+        }
 
         BilleteraConductor billetera = billeteraConductorRepository.findByConductorId(viaje.getConductor().getId())
                 .orElseThrow(() -> RecursoNoEncontradoException.de("BilleteraConductor", viaje.getConductor().getId()));
 
         if (directoAlConductor) {
             // El conductor ya cobro el viaje: le queda pendiente pagar la comision a la plataforma.
-            billetera.setDeudaComision(
-                    billetera.getDeudaComision().add(montoComision).setScale(2, RoundingMode.HALF_UP));
+            if (!esDelivery) {
+                billetera.setDeudaComision(
+                        billetera.getDeudaComision().add(montoComision).setScale(2, RoundingMode.HALF_UP));
+            }
         } else {
             // El pago paso por la plataforma (tarjeta): se le acredita el neto (precio final menos comision).
             BigDecimal neto = viaje.getPrecioFinal().subtract(montoComision);

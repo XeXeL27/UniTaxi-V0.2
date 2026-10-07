@@ -1,5 +1,6 @@
 package com.taxiuap.backend.identity.entity;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import java.math.BigDecimal;
@@ -18,5 +19,15 @@ class ConductorEntregaTest {
 
         conductor.setLimiteAdelantoCompra(null);
         assertFalse(Validation.buildDefaultValidatorFactory().getValidator().validate(conductor).isEmpty());
+    }
+
+    @Test
+    void normalizaElLimiteNuloDeConductoresAntiguosAntesDePersistir() {
+        Conductor conductor = new Conductor();
+        conductor.setLimiteAdelantoCompra(null);
+
+        conductor.normalizarLimiteAdelantoCompra();
+
+        assertEquals(BigDecimal.ZERO, conductor.getLimiteAdelantoCompra());
     }
 }

@@ -14,19 +14,31 @@ class BotonChat extends StatelessWidget {
   final int idViaje;
   final String nombreContraparte;
 
-  const BotonChat({super.key, required this.idViaje, required this.nombreContraparte});
+  const BotonChat({
+    super.key,
+    required this.idViaje,
+    required this.nombreContraparte,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final noLeidos = context.select<ChatEstado, int>((chat) => chat.idViaje == idViaje ? chat.noLeidos : 0);
+    final noLeidos = context.select<ChatEstado, int>(
+      (chat) => chat.idViaje == idViaje ? chat.noLeidos : 0,
+    );
     return IconButton(
       onPressed: () => showDialog<void>(
         context: context,
         builder: (_) => Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 20,
+            vertical: 24,
+          ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 420, maxHeight: 520),
-            child: VistaChat(idViaje: idViaje, nombreContraparte: nombreContraparte),
+            child: VistaChat(
+              idViaje: idViaje,
+              nombreContraparte: nombreContraparte,
+            ),
           ),
         ),
       ),
@@ -34,8 +46,14 @@ class BotonChat extends StatelessWidget {
       icon: Badge(
         isLabelVisible: noLeidos > 0,
         backgroundColor: ColoresApp.rojo,
-        label: Text('$noLeidos', style: const TextStyle(color: ColoresApp.blanco, fontSize: 10)),
-        child: const FaIcon(FontAwesomeIcons.commentDots, color: ColoresApp.azul),
+        label: Text(
+          '$noLeidos',
+          style: const TextStyle(color: ColoresApp.blanco, fontSize: 10),
+        ),
+        child: const FaIcon(
+          FontAwesomeIcons.commentDots,
+          color: ColoresApp.azul,
+        ),
       ),
     );
   }
@@ -50,7 +68,11 @@ class VistaChat extends StatefulWidget {
   final int idViaje;
   final String nombreContraparte;
 
-  const VistaChat({super.key, required this.idViaje, required this.nombreContraparte});
+  const VistaChat({
+    super.key,
+    required this.idViaje,
+    required this.nombreContraparte,
+  });
 
   @override
   State<VistaChat> createState() => _VistaChatState();
@@ -60,13 +82,17 @@ class _VistaChatState extends State<VistaChat> {
   final _controladorTexto = TextEditingController();
   final _scroll = ScrollController();
   bool _enviando = false;
+  String? _avisoEnvio;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      context.read<ChatEstado>().abrir(widget.idViaje, widget.nombreContraparte);
+      context.read<ChatEstado>().abrir(
+        widget.idViaje,
+        widget.nombreContraparte,
+      );
     });
   }
 
@@ -83,8 +109,15 @@ class _VistaChatState extends State<VistaChat> {
     if (texto.trim().isEmpty || _enviando) return;
     setState(() => _enviando = true);
     _controladorTexto.clear();
-    chat.enviar(texto).whenComplete(() {
-      if (mounted) setState(() => _enviando = false);
+    chat.enviar(texto).then((enviado) {
+      if (!mounted) return;
+      setState(() {
+        _enviando = false;
+        _avisoEnvio = enviado ? 'Mensaje enviado' : 'Sin conexión: no se envió';
+      });
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (mounted && _avisoEnvio != null) setState(() => _avisoEnvio = null);
+      });
     });
     _irAlFinal();
   }
@@ -109,7 +142,10 @@ class _VistaChatState extends State<VistaChat> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Cabecera(nombre: widget.nombreContraparte, conectado: chat.conectado),
+          _Cabecera(
+            nombre: widget.nombreContraparte,
+            estado: chat.estadoConexion,
+          ),
           const Divider(height: 1),
           Flexible(
             child: ConstrainedBox(
@@ -128,11 +164,17 @@ class _VistaChatState extends State<VistaChat> {
                   : ListView.builder(
                       controller: _scroll,
                       shrinkWrap: true,
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       itemCount: chat.mensajes.length,
                       itemBuilder: (context, indice) {
                         final mensaje = chat.mensajes[indice];
-                        return _Burbuja(mensaje: mensaje, propio: mensaje.esDe(idUsuario));
+                        return _Burbuja(
+                          mensaje: mensaje,
+                          propio: mensaje.esDe(idUsuario),
+                        );
                       },
                     ),
             ),
@@ -142,6 +184,19 @@ class _VistaChatState extends State<VistaChat> {
             enviando: _enviando,
             alEnviar: () => _enviar(chat),
           ),
+          if (_avisoEnvio != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                _avisoEnvio!,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: _avisoEnvio!.startsWith('Sin')
+                      ? ColoresApp.rojo
+                      : ColoresApp.exito,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -150,26 +205,63 @@ class _VistaChatState extends State<VistaChat> {
 
 class _Cabecera extends StatelessWidget {
   final String nombre;
-  final bool conectado;
+  final EstadoConexionChat estado;
 
-  const _Cabecera({required this.nombre, required this.conectado});
+  const _Cabecera({required this.nombre, required this.estado});
 
   @override
   Widget build(BuildContext context) {
+    // CAMBIO CODEX 2026-10-07: estado visual real del socket para que ambas sesiones sepan si el chat esta activo.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
       child: Row(
         children: [
-          const FaIcon(FontAwesomeIcons.commentDots, size: 16, color: ColoresApp.azul),
+          const FaIcon(
+            FontAwesomeIcons.commentDots,
+            size: 16,
+            color: ColoresApp.azul,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(nombre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
                 Text(
-                  conectado ? 'En linea' : 'Conectando...',
-                  style: const TextStyle(fontSize: 11, color: ColoresApp.textoSuave),
+                  nombre,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Row(
+                  children: [
+                    if (estado == EstadoConexionChat.conectando)
+                      const SizedBox(
+                        width: 10,
+                        height: 10,
+                        child: CircularProgressIndicator(strokeWidth: 1.5),
+                      )
+                    else
+                      Icon(
+                        Icons.circle,
+                        size: 9,
+                        color: estado == EstadoConexionChat.conectado
+                            ? ColoresApp.exito
+                            : ColoresApp.rojo,
+                      ),
+                    const SizedBox(width: 5),
+                    Text(
+                      estado == EstadoConexionChat.conectado
+                          ? 'Chat activo'
+                          : estado == EstadoConexionChat.desconectado
+                          ? 'Sin conexión'
+                          : 'Chat',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: ColoresApp.textoSuave,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -199,7 +291,9 @@ class _Burbuja extends StatelessWidget {
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 3),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.of(context).size.width * 0.65,
+        ),
         decoration: BoxDecoration(
           color: propio ? ColoresApp.ruta : ColoresApp.fondo,
           borderRadius: BorderRadius.only(
@@ -211,8 +305,11 @@ class _Burbuja extends StatelessWidget {
           border: propio ? null : Border.all(color: ColoresApp.borde),
         ),
         child: Text(
-          mensaje.contenido,
-          style: TextStyle(color: propio ? ColoresApp.blanco : ColoresApp.texto),
+          '${mensaje.contenido}\n${propio ? '✓ Enviado' : '• Recibido'}',
+          style: TextStyle(
+            color: propio ? ColoresApp.blanco : ColoresApp.texto,
+            height: 1.35,
+          ),
         ),
       ),
     );
@@ -224,7 +321,11 @@ class _BarraEnvio extends StatelessWidget {
   final bool enviando;
   final VoidCallback alEnviar;
 
-  const _BarraEnvio({required this.controlador, required this.enviando, required this.alEnviar});
+  const _BarraEnvio({
+    required this.controlador,
+    required this.enviando,
+    required this.alEnviar,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -245,7 +346,10 @@ class _BarraEnvio extends StatelessWidget {
                 hintText: 'Mensaje...',
                 border: OutlineInputBorder(),
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
               ),
             ),
           ),

@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
+import com.taxiuap.backend.shared.enums.EstadoRegistro;
 
 /** Repositorio de solicitudes de viaje. */
 public interface SolicitudViajeRepository extends JpaRepository<SolicitudViaje, Long> {
@@ -19,6 +20,9 @@ public interface SolicitudViajeRepository extends JpaRepository<SolicitudViaje, 
     List<SolicitudViaje> findBySituacionSolicitud(SituacionSolicitud situacionSolicitud);
 
     boolean existsByPasajeroIdAndSituacionSolicitudIn(Long idPasajero, Collection<SituacionSolicitud> situaciones);
+
+    boolean existsByPasajeroIdAndSituacionSolicitudInAndEstadoSolViaje(
+            Long idPasajero, Collection<SituacionSolicitud> situaciones, EstadoRegistro estado);
 
     /**
      * Aceptar una oferta es la operacion critica de la regla de negocio 5: dos ofertas no pueden

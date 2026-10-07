@@ -9,6 +9,8 @@ import 'config.dart';
 import 'notificador.dart';
 import 'sesion.dart';
 
+enum EstadoConexionChat { conectando, conectado, desconectado }
+
 /// Mensaje de chat entre el pasajero y el conductor de un viaje.
 class MensajeChat {
   final int idMensaje;
@@ -55,7 +57,7 @@ class ChatEstado extends ChangeNotifier {
   int? _idViaje;
   String _nombreContraparte = '';
   final List<MensajeChat> _mensajes = [];
-  bool _conectado = false;
+  EstadoConexionChat _estadoConexion = EstadoConexionChat.desconectado;
   int _noLeidos = 0;
   bool _pantallaAbierta = false;
   CanalChat? _canal;
@@ -65,7 +67,8 @@ class ChatEstado extends ChangeNotifier {
   int? get idViaje => _idViaje;
   String get nombreContraparte => _nombreContraparte;
   List<MensajeChat> get mensajes => List.unmodifiable(_mensajes);
-  bool get conectado => _conectado;
+  bool get conectado => _estadoConexion == EstadoConexionChat.conectado;
+  EstadoConexionChat get estadoConexion => _estadoConexion;
   int get noLeidos => _noLeidos;
   bool get pantallaAbierta => _pantallaAbierta;
 
@@ -83,10 +86,17 @@ class ChatEstado extends ChangeNotifier {
     _pantallaAbierta = true;
     _mensajes.clear();
     _noLeidos = 0;
+    _estadoConexion = EstadoConexionChat.conectando;
     notifyListeners();
 
     _canal?.dispose();
-    _canal = CanalChat(sesion: sesion, alRecibir: _alRecibir)..iniciar();
+    _canal = CanalChat(
+      sesion: sesion,
+      alRecibir: _alRecibir,
+      alConectar: () => _cambiarConexion(EstadoConexionChat.conectado),
+      alDesconectar: () => _cambiarConexion(EstadoConexionChat.desconectado),
+      alError: () => _cambiarConexion(EstadoConexionChat.desconectado),
+    )..iniciar();
 
     try {
       final historial = await api.lista(_rutaMensajes, MensajeChat.desdeJson);
@@ -114,14 +124,19 @@ class ChatEstado extends ChangeNotifier {
     _idViaje = null;
     _mensajes.clear();
     _noLeidos = 0;
-    _conectado = false;
+    _estadoConexion = EstadoConexionChat.desconectado;
     notifyListeners();
   }
 
-  Future<void> enviar(String contenido) async {
+  Future<bool> enviar(String contenido) async {
     final texto = contenido.trim();
-    if (texto.isEmpty || _idViaje == null) return;
-    _canal?.enviar(_idViaje!, texto);
+    if (texto.isEmpty || _idViaje == null) return false;
+    return _canal?.enviar(_idViaje!, texto) ?? false;
+  }
+
+  void _cambiarConexion(EstadoConexionChat estado) {
+    _estadoConexion = estado;
+    notifyListeners();
   }
 
   void _alRecibir(MensajeChat mensaje) {
@@ -160,11 +175,20 @@ class CanalChat {
 
   final Sesion sesion;
   final void Function(MensajeChat mensaje) alRecibir;
+  final VoidCallback alConectar;
+  final VoidCallback alDesconectar;
+  final VoidCallback alError;
 
   StompClient? _cliente;
   bool _cerrando = false;
 
-  CanalChat({required this.sesion, required this.alRecibir});
+  CanalChat({
+    required this.sesion,
+    required this.alRecibir,
+    required this.alConectar,
+    required this.alDesconectar,
+    required this.alError,
+  });
 
   void iniciar() {
     _cerrando = false;
@@ -182,6 +206,9 @@ class CanalChat {
         heartbeatOutgoing: const Duration(seconds: 10),
         connectionTimeout: const Duration(seconds: 10),
         onConnect: (_) => _suscribir(),
+        onDisconnect: (_) => alDesconectar(),
+        onWebSocketError: (_) => alError(),
+        onStompError: (_) => alError(),
       ),
     );
     _cliente!.activate();
@@ -190,6 +217,7 @@ class CanalChat {
   void _suscribir() {
     final cliente = _cliente;
     if (cliente == null || !cliente.connected) return;
+    alConectar();
     cliente.subscribe(
       destination: _destino,
       callback: (frame) {
@@ -205,13 +233,14 @@ class CanalChat {
     );
   }
 
-  void enviar(int idViaje, String contenido) {
+  bool enviar(int idViaje, String contenido) {
     final cliente = _cliente;
-    if (cliente == null || !cliente.connected) return;
+    if (cliente == null || !cliente.connected) return false;
     cliente.send(
       destination: '/app/chat/enviar',
       body: jsonEncode({'idViaje': idViaje, 'contenido': contenido}),
     );
+    return true;
   }
 
   void dispose() {

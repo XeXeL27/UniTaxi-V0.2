@@ -13,6 +13,7 @@ public record ViajeResponse(
         Long idSolicitud,
         Long idPasajero,
         String nombrePasajero,
+        String telefonoPasajero,
         Long idConductor,
         String nombreConductor,
         String placaVehiculo,
@@ -48,7 +49,7 @@ public record ViajeResponse(
 
     /** El mismo viaje sin el nombre del favorito, para el conductor. */
     public ViajeResponse sinNombreDestino() {
-        return new ViajeResponse(idViaje, idSolicitud, idPasajero, nombrePasajero, idConductor, nombreConductor,
+        return new ViajeResponse(idViaje, idSolicitud, idPasajero, nombrePasajero, telefonoPasajero, idConductor, nombreConductor,
                 placaVehiculo, marcaVehiculo, modeloVehiculo, colorVehiculo, calificacionConductor, origenWkt,
                 destinoWkt, origenDireccion, destinoDireccion, distanciaKm, duracionMin, precioOriginal,
                 montoDescuento, precioFinal, precioEstimado, situacionViaje, canceladoPor, fechaInicio, fechaFin,

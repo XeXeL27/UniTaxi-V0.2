@@ -5,7 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -21,6 +26,8 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 import com.taxiuap.backend.communication.dto.MensajeEnvioRequest;
 import com.taxiuap.backend.communication.dto.MensajeResponse;
+import com.taxiuap.backend.communication.entity.Mensaje;
+import com.taxiuap.backend.communication.repository.MensajeRepository;
 import com.taxiuap.backend.config.security.JwtUser;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
@@ -44,13 +51,45 @@ class ChatServiceTest {
     private UsuarioRepository usuarioRepository;
     @Mock
     private ViajeService viajeService;
+    @Mock
+    private MensajeRepository mensajeRepository;
 
     @InjectMocks
     private ChatService chatService;
 
+    private final List<Mensaje> almacen = new ArrayList<>();
+
     /** Los metodos que no reciben el id de usuario lo sacan del SecurityContext, como en produccion. */
     @BeforeEach
     void autenticar() {
+        almacen.clear();
+        lenient().when(mensajeRepository.save(any(Mensaje.class))).thenAnswer(invocacion -> {
+            Mensaje mensaje = invocacion.getArgument(0);
+            mensaje.setId((long) almacen.size() + 1);
+            almacen.add(mensaje);
+            return mensaje;
+        });
+        lenient().when(mensajeRepository.findByViajeIdOrderByFechaAsc(anyLong())).thenAnswer(invocacion -> almacen.stream()
+                .filter(mensaje -> mensaje.getViaje().getId().equals(invocacion.getArgument(0)))
+                .toList());
+        lenient().when(mensajeRepository.countByViajeIdAndLeidoFalseAndUsuarioEmisorIdNot(anyLong(), anyLong()))
+                .thenAnswer(invocacion -> almacen.stream()
+                        .filter(mensaje -> mensaje.getViaje().getId().equals(invocacion.getArgument(0)))
+                        .filter(mensaje -> !Boolean.TRUE.equals(mensaje.getLeido()))
+                        .filter(mensaje -> !mensaje.getUsuarioEmisor().getId().equals(invocacion.getArgument(1)))
+                        .count());
+        lenient().when(mensajeRepository.marcarLeidosDelOtro(anyLong(), anyLong())).thenAnswer(invocacion -> {
+            int marcados = 0;
+            for (Mensaje mensaje : almacen) {
+                if (mensaje.getViaje().getId().equals(invocacion.getArgument(0))
+                        && !mensaje.getUsuarioEmisor().getId().equals(invocacion.getArgument(1))
+                        && !Boolean.TRUE.equals(mensaje.getLeido())) {
+                    mensaje.setLeido(true);
+                    marcados++;
+                }
+            }
+            return marcados;
+        });
         SecurityContextHolder.getContext().setAuthentication(
                 new UsernamePasswordAuthenticationToken(new JwtUser(ID_PASAJERO, "ana", "PASAJERO"), null));
     }
@@ -111,6 +150,15 @@ class ChatServiceTest {
 
         when(viajeService.obtenerViajeDelUsuario(ID_VIAJE)).thenReturn(viajeActivo());
         assertEquals(1, chatService.historial(ID_VIAJE).size());
+    }
+
+    @Test
+    void enviarPersisteElMensajeEnLaBaseDeDatos() {
+        comoPasajero();
+
+        chatService.enviar(ID_PASAJERO, new MensajeEnvioRequest(ID_VIAJE, "Persistir este mensaje"));
+
+        verify(mensajeRepository).save(any(Mensaje.class));
     }
 
     @Test

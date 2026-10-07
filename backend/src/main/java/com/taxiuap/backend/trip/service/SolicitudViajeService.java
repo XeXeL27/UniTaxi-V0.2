@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
+import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
@@ -86,8 +87,10 @@ public class SolicitudViajeService {
         pasajeroRepository.bloquear(pasajero.getId());
 
         // Regla de negocio 4: un pasajero solo puede tener una solicitud activa a la vez.
-        boolean tieneSolicitudActiva = solicitudViajeRepository.existsByPasajeroIdAndSituacionSolicitudIn(
-                pasajero.getId(), List.of(SituacionSolicitud.PENDIENTE, SituacionSolicitud.CON_OFERTAS));
+        boolean tieneSolicitudActiva = solicitudViajeRepository
+                .existsByPasajeroIdAndSituacionSolicitudInAndEstadoSolViaje(
+                        pasajero.getId(), List.of(SituacionSolicitud.PENDIENTE, SituacionSolicitud.CON_OFERTAS),
+                        EstadoRegistro.A);
         if (tieneSolicitudActiva) {
             throw new NegocioException("Ya tiene una solicitud de viaje activa");
         }
@@ -248,8 +251,9 @@ public class SolicitudViajeService {
         datos.setTipoEnvio(request.tipoEnvio());
         datos.setDescripcion(request.descripcion());
         datos.setCostoProductoEstimado(request.costoProductoEstimado());
-        datos.setNombreRemitente(request.nombreRemitente());
-        datos.setTelefonoRemitente(request.telefonoRemitente());
+        Persona personaRemitente = solicitud.getPasajero().getUsuario().getPersona();
+        datos.setNombreRemitente(nombreCompleto(personaRemitente));
+        datos.setTelefonoRemitente(personaRemitente.getTelefono());
         datos.setNombreReceptor(request.nombreReceptor());
         datos.setTelefonoReceptor(request.telefonoReceptor());
         datos.setFotoPaqueteUrl(request.fotoPaqueteUrl());
@@ -263,6 +267,10 @@ public class SolicitudViajeService {
             datos.setCodigoEntrega(entrega);
         }
         return datos;
+    }
+
+    private String nombreCompleto(Persona persona) {
+        return (persona.getNombres() + " " + persona.getApellidos()).trim();
     }
 
     /**
