@@ -433,6 +433,24 @@ class FlujoPasajero extends ChangeNotifier {
 
   void elegirPartida(bool valor) => marcar(valor ? PuntoPorMarcar.partida : null);
 
+  /// Para otra persona: borra un punto ya marcado (la X de su fila) y queda listo para marcarlo de
+  /// nuevo tocando el mapa o el buscador. Sin uno de los dos puntos se quitan la ruta y el precio.
+  void borrarPunto(PuntoPorMarcar punto) {
+    if (etapa != EtapaPasajero.eligiendo) return;
+    if (punto == PuntoPorMarcar.partida) {
+      direccionOrigen = null;
+      mapa.aSigueGps = false;
+      mapa.ponerA(null);
+    } else {
+      _favorito = null;
+      _direccionFavorito = null;
+      mapa.ponerB(null);
+    }
+    marcando = punto;
+    _revisarCotizacion();
+    _avisar();
+  }
+
   void guardarTercero(PasajeroTercero datos) {
     tercero = datos;
     // Quien paga desde lejos solo puede hacerlo por el QR del conductor.

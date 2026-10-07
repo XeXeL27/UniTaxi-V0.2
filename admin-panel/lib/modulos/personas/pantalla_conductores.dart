@@ -90,7 +90,7 @@ class PantallaConductores extends StatelessWidget {
             formulario: FormularioHabilitarUsuario(
               api: api,
               titulo: 'Agregar conductor',
-              tiposPermitidos: const [TipoRegistro.conductor, TipoRegistro.ambos],
+              tiposPermitidos: const [TipoRegistro.conductor, TipoRegistro.delivery, TipoRegistro.pasajero],
             ),
             tituloExito: '¡Conductor registrado!',
             mensajeExito: (resultado) => '${(resultado as UsuarioHabilitado).mensaje} Queda pendiente de aprobación.',

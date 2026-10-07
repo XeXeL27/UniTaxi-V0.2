@@ -197,6 +197,7 @@ class SelectorParaQuien extends StatelessWidget {
 
 /// Taxi para otra persona: los dos lugares en lugar del buscador "¿A donde vas?". Cada fila abre el
 /// buscador (escribir la direccion) o deja tocar el mapa; la fila que se esta marcando va resaltada.
+/// Un punto ya marcado se cambia con el lapiz o se borra con la X.
 class BarraDosPuntos extends StatelessWidget {
   final String? partida;
   final String? llegada;
@@ -205,6 +206,8 @@ class BarraDosPuntos extends StatelessWidget {
   final bool? marcandoPartida;
   final VoidCallback onPartida;
   final VoidCallback onLlegada;
+  final VoidCallback onBorrarPartida;
+  final VoidCallback onBorrarLlegada;
 
   const BarraDosPuntos({
     super.key,
@@ -213,6 +216,8 @@ class BarraDosPuntos extends StatelessWidget {
     required this.marcandoPartida,
     required this.onPartida,
     required this.onLlegada,
+    required this.onBorrarPartida,
+    required this.onBorrarLlegada,
   });
 
   @override
@@ -223,6 +228,7 @@ class BarraDosPuntos extends StatelessWidget {
       required String? valor,
       required bool activa,
       required VoidCallback onTap,
+      required VoidCallback onBorrar,
     }) =>
         InkWell(
           onTap: onTap,
@@ -256,6 +262,15 @@ class BarraDosPuntos extends StatelessWidget {
                   size: 13,
                   color: ColoresApp.grisTexto,
                 ),
+                if (valor != null)
+                  IconButton(
+                    onPressed: onBorrar,
+                    tooltip: 'Borrar este punto',
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                    icon: const FaIcon(FontAwesomeIcons.xmark, size: 16, color: ColoresApp.rojo),
+                  ),
               ],
             ),
           ),
@@ -277,6 +292,7 @@ class BarraDosPuntos extends StatelessWidget {
               valor: partida,
               activa: marcandoPartida == true,
               onTap: onPartida,
+              onBorrar: onBorrarPartida,
             ),
             fila(
               color: ColoresApp.rojo,
@@ -284,6 +300,7 @@ class BarraDosPuntos extends StatelessWidget {
               valor: llegada,
               activa: marcandoPartida == false,
               onTap: onLlegada,
+              onBorrar: onBorrarLlegada,
             ),
           ],
         ),

@@ -2,6 +2,14 @@
 # Levanta TaxiUAP completo con un solo comando: base de datos, frontends compilados y backend.
 # El backend sirve el panel en /admin y la app (pasajeros y conductores) en /app.
 #
+# En el servidor basta con: git pull && ./iniciar.sh
+#   - El .env se crea solo la primera vez (contrasenas aleatorias) y git pull nunca lo toca.
+#   - Base de datos: PostGIS en Docker (puerto 5436), salvo que el .env tenga DB_URL hacia una BD
+#     externa: entonces no se levanta ningun contenedor de BD.
+#   - Backend: con Java 21 en la maquina corre ahi; sin Java corre en un contenedor Docker con Java 21
+#     (mismas rutas, mismo puerto, mismo .env). BACKEND_EN_DOCKER=1 lo fuerza.
+#   - Sin Flutter se sirven el panel y la app ya compilados que vienen en el repositorio.
+#
 # Uso:
 #   ./iniciar.sh              recompila un frontend solo si cambio su codigo
 #   ./iniciar.sh --compilar   recompila los dos frontends siempre
@@ -17,11 +25,17 @@ FORZAR=false
 
 # --- Requisitos -------------------------------------------------------------------------------
 falta() { echo "ERROR: $1" >&2; exit 1; }
-command -v docker >/dev/null || falta "no se encontro docker. Instala Docker con el plugin compose."
-docker compose version >/dev/null 2>&1 || falta "falta 'docker compose' (plugin compose de Docker)."
-command -v java >/dev/null || falta "no se encontro java. Instala Java 21 (por ejemplo openjdk-21-jdk)."
-VERSION_JAVA="$(java -version 2>&1 | awk -F'"' '/version/ {split($2, v, "."); print v[1]; exit}')"
-[[ "${VERSION_JAVA:-0}" -ge 21 ]] || falta "el backend necesita Java 21 o superior (hay Java ${VERSION_JAVA:-?})."
+HAY_DOCKER=false
+command -v docker >/dev/null && docker compose version >/dev/null 2>&1 && HAY_DOCKER=true
+VERSION_JAVA=0
+command -v java >/dev/null && VERSION_JAVA="$(java -version 2>&1 | awk -F'"' '/version/ {split($2, v, "."); print v[1]; exit}')"
+BACKEND_EN_DOCKER="${BACKEND_EN_DOCKER:-}"
+if [[ -z "$BACKEND_EN_DOCKER" ]]; then
+  [[ "${VERSION_JAVA:-0}" -ge 21 ]] && BACKEND_EN_DOCKER=0 || BACKEND_EN_DOCKER=1
+fi
+if [[ "$BACKEND_EN_DOCKER" == 1 ]] && ! $HAY_DOCKER; then
+  falta "no hay Java 21 ni Docker. Instala Docker con el plugin compose (o Java 21, por ejemplo openjdk-21-jdk)."
+fi
 
 # --- .env: si no existe se crea con contrasenas aleatorias (maquina nueva) -------------------
 # Texto aleatorio de letras y numeros: [1] bytes de /dev/urandom, recortado a [2] caracteres.
@@ -46,9 +60,22 @@ if ! grep -qE '^JWT_SECRET=.+' "$ENV"; then
   echo "JWT_SECRET=$(aleatorio 96 86)" >> "$ENV"
   echo "== Se agrego un JWT_SECRET nuevo al .env"
 fi
+# Integraciones sin configurar: quedan apagadas hasta completar el .env y volver a iniciar.
+for VAR in SIGSE_URL SIGSE_API_KEY GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET GEMINI_API_KEY; do
+  grep -qE "^$VAR=.+" "$ENV" || echo "   AVISO: falta $VAR en .env (esa funcion no andara en este servidor)"
+done
+# Hora de Bolivia aunque la maquina este en UTC (el backend tambien la fija al arrancar).
+export TZ=America/La_Paz
 
-echo "== Base de datos (PostGIS en Docker)"
-(cd "$RAIZ" && docker compose up -d --wait)
+# DB_URL en el .env (o en el entorno) hacia otro servidor = BD externa: no se levanta la de Docker.
+DB_URL_ENV="${DB_URL:-$(grep -E '^DB_URL=' "$ENV" | tail -1 | cut -d= -f2- | tr -d '"' || true)}"
+if [[ -n "$DB_URL_ENV" && "$DB_URL_ENV" != *"localhost:5436"* && "$DB_URL_ENV" != *"127.0.0.1:5436"* ]]; then
+  echo "== Base de datos externa (DB_URL del .env): no se levanta la de Docker"
+else
+  $HAY_DOCKER || falta "no se encontro Docker para la base de datos. Instala Docker o pon DB_URL de una BD externa en .env."
+  echo "== Base de datos (PostGIS en Docker)"
+  (cd "$RAIZ" && docker compose up -d --wait)
+fi
 
 # Compila un proyecto Flutter web con la ruta base con que lo sirve el backend.
 compilar() {
@@ -88,6 +115,27 @@ echo "   App:          http://localhost:$PUERTO/app"
 echo "   Produccion:   https://uni-taxi.uap.edu.bo/app  y  /admin (proxy con certificado hacia el $PUERTO)"
 echo
 
-echo "== Backend"
+# Logs en archivo (ademas de la consola): logs/taxiuap.log y logs/taxiuap-errores.log en la raiz.
+export LOG_DIR="${LOG_DIR:-$RAIZ/logs}"
+echo "   Logs:         $LOG_DIR/taxiuap.log  (solo errores: $LOG_DIR/taxiuap-errores.log)"
+echo
+
 cd "$RAIZ/backend"
-exec ./gradlew bootRun
+if [[ "$BACKEND_EN_DOCKER" != 1 ]]; then
+  echo "== Backend (Java ${VERSION_JAVA} de esta maquina)"
+  exec ./gradlew bootRun
+fi
+
+# Sin Java 21: el mismo ./gradlew bootRun dentro de un contenedor con Java 21. Red del anfitrion (la BD en
+# localhost:5436 y el puerto quedan igual) y las mismas rutas y usuario: los archivos subidos
+# (~/Documentos Unitaxi), los logs, el cache de Gradle (~/.gradle) y el .env son los de esta maquina.
+echo "== Backend (Docker con Java 21: esta maquina no tiene Java 21)"
+MONTAJES=(-v "$HOME:$HOME")
+[[ "$RAIZ" == "$HOME"/* ]] || MONTAJES+=(-v "$RAIZ:$RAIZ")
+[[ "$LOG_DIR" == "$HOME"/* || "$LOG_DIR" == "$RAIZ"/* ]] || { mkdir -p "$LOG_DIR"; MONTAJES+=(-v "$LOG_DIR:$LOG_DIR"); }
+docker rm -f taxiuap-backend >/dev/null 2>&1 || true
+exec docker run --rm --name taxiuap-backend --network host \
+  -u "$(id -u):$(id -g)" "${MONTAJES[@]}" -w "$RAIZ/backend" \
+  -e HOME="$HOME" -e GRADLE_USER_HOME="$HOME/.gradle" -e JAVA_TOOL_OPTIONS="-Duser.home=$HOME" \
+  -e TZ -e SERVER_PORT -e LOG_DIR -e SPRING_PROFILES_ACTIVE -e LOG_SQL -e LOG_NIVEL \
+  eclipse-temurin:21-jdk ./gradlew bootRun

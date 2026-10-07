@@ -1,0 +1,91 @@
+<configuration>
+
+    <!-- Carpeta de logs: taxiuap.log.dir en application.properties (variable LOG_DIR; en Docker, un volumen) -->
+    <springProperty scope="context" name="LOG_DIR" source="taxiuap.log.dir" defaultValue="logs"/>
+
+    <!-- usuario: lo pone JwtAuthFilter en el MDC (nombre de usuario y rol); sin sesion, "sistema" -->
+    <property name="LOG_PATTERN"
+              value="%d{yyyy-MM-dd HH:mm:ss} [%-5level] %logger{36} [%X{usuario:-sistema}] - %msg%n"/>
+
+    <!-- Consola: lo que se ve al correr ./iniciar.sh o con docker logs. El nivel va en color para ubicar los ERROR -->
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss} [%highlight(%-5level)] %cyan(%logger{36}) [%X{usuario:-sistema}] - %msg%n</pattern>
+        </encoder>
+    </appender>
+
+    <!-- Archivo rotativo con todo (INFO o mas):
+         taxiuap.log                        archivo del dia
+         taxiuap-AAAA-MM-DD.N.log.gz        dias anteriores comprimidos (N > 0 si un dia paso de 50 MB)
+         30 dias y 300 MB como maximo: lo mas viejo se borra solo -->
+    <appender name="FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/taxiuap.log</file>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/taxiuap-%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+            <maxFileSize>50MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>300MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Solo advertencias y errores (con la traza completa): lo primero que se revisa cuando algo falla -->
+    <appender name="ERRORES" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_DIR}/taxiuap-errores.log</file>
+        <filter class="ch.qos.logback.classic.filter.ThresholdFilter">
+            <level>WARN</level>
+        </filter>
+        <encoder>
+            <pattern>${LOG_PATTERN}</pattern>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_DIR}/taxiuap-errores-%d{yyyy-MM-dd}.log.gz</fileNamePattern>
+            <maxHistory>60</maxHistory>
+            <totalSizeCap>100MB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+
+    <!-- Asincronos: escribir el archivo no frena la peticion. neverBlock: con la cola llena se pierde una
+         linea antes que trabar el servidor; discardingThreshold 0: nunca descarta por nivel -->
+    <appender name="ASYNC_FILE" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="FILE"/>
+        <queueSize>512</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+    </appender>
+    <appender name="ASYNC_ERRORES" class="ch.qos.logback.classic.AsyncAppender">
+        <appender-ref ref="ERRORES"/>
+        <queueSize>256</queueSize>
+        <discardingThreshold>0</discardingThreshold>
+        <neverBlock>true</neverBlock>
+    </appender>
+
+    <!-- Ruido de los frameworks: solo advertencias y errores -->
+    <logger name="org.hibernate" level="WARN"/>
+    <logger name="org.springframework" level="WARN"/>
+    <logger name="com.zaxxer.hikari" level="WARN"/>
+    <logger name="org.apache.catalina" level="WARN"/>
+    <logger name="org.apache.tomcat" level="WARN"/>
+    <!-- Arranque: perfil activo, puerto de Tomcat y "APPLICATION FAILED TO START" con su motivo -->
+    <logger name="org.springframework.boot" level="INFO"/>
+    <logger name="org.springframework.boot.devtools" level="WARN"/>
+    <logger name="org.springframework.boot.autoconfigure.logging.ConditionEvaluationReportLogger" level="INFO"/>
+    <!-- "Resolved [...]" repite cada excepcion ya manejada (tambien los 422 de negocio). Las que importan las
+         registra ManejadorGlobalExcepciones: "Peticion invalida" (WARN) y "Fallo no controlado" (ERROR con traza) -->
+    <logger name="org.springframework.web.servlet.mvc.method.annotation.ExceptionHandlerExceptionResolver" level="ERROR"/>
+
+    <!-- Consultas SQL: apagadas. Para verlas: LOG_SQL=DEBUG ./iniciar.sh -->
+    <logger name="org.hibernate.SQL" level="${LOG_SQL:-WARN}"/>
+
+    <!-- App propia -->
+    <logger name="com.taxiuap.backend" level="${LOG_NIVEL:-INFO}"/>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="ASYNC_FILE"/>
+        <appender-ref ref="ASYNC_ERRORES"/>
+    </root>
+
+</configuration>

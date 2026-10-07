@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
@@ -32,6 +33,12 @@ public class ClienteSigse {
 
     private static final String NO_DISPONIBLE =
             "No pudimos consultar el sistema de la UAP en este momento. Intenta de nuevo en unos minutos.";
+    private static final String SIN_CONFIGURAR =
+            "La verificacion de estudiantes UAP no esta habilitada en este servidor. Avisa al administrador.";
+    private static final String SIN_CONEXION =
+            "El servidor no pudo conectarse con el sistema de la UAP. Intenta de nuevo en unos minutos.";
+    private static final String LLAVE_RECHAZADA =
+            "El sistema de la UAP rechazo la consulta del servidor. Avisa al administrador.";
 
     private final RestClient cliente;
     private final String url;
@@ -48,6 +55,10 @@ public class ClienteSigse {
         JdkClientHttpRequestFactory fabrica = new JdkClientHttpRequestFactory(http);
         fabrica.setReadTimeout(Duration.ofSeconds(segundosEspera));
         this.cliente = RestClient.builder().requestFactory(fabrica).build();
+        if (!configurado()) {
+            log.warn("SIGSE sin configurar: falta SIGSE_URL o SIGSE_API_KEY en el .env. El registro y la "
+                    + "verificacion de estudiantes UAP no funcionaran hasta agregarlas y reiniciar");
+        }
     }
 
     public boolean configurado() {
@@ -61,7 +72,7 @@ public class ClienteSigse {
     public Optional<DatosSigse> consultar(String ru) {
         if (!configurado()) {
             log.warn("SIGSE sin configurar (SIGSE_URL / SIGSE_API_KEY)");
-            throw new NegocioException(NO_DISPONIBLE);
+            throw new NegocioException(SIN_CONFIGURAR);
         }
         Map<?, ?> respuesta;
         try {
@@ -72,6 +83,10 @@ public class ClienteSigse {
                     .body(Map.of("ru", ru))
                     .retrieve()
                     .body(Map.class);
+        } catch (ResourceAccessException e) {
+            // DNS, conexion rechazada, certificado o tiempo de espera: el servidor no llega al SIGSE.
+            log.warn("SIGSE sin conexion desde el servidor: {}", e.getMessage());
+            throw new NegocioException(SIN_CONEXION);
         } catch (RestClientException e) {
             log.warn("SIGSE no respondio: {}", e.getMessage());
             throw new NegocioException(NO_DISPONIBLE);
@@ -83,7 +98,7 @@ public class ClienteSigse {
         }
         if (estado == 401 || estado == 403) {
             log.warn("SIGSE rechazo la llave: {} {}", estado, respuesta.get("mensaje"));
-            throw new NegocioException(NO_DISPONIBLE);
+            throw new NegocioException(LLAVE_RECHAZADA);
         }
         // Un RU que no existe tambien llega como status 500 ("posiblemente el enlace no sea valido").
         log.info("SIGSE sin datos para el RU: {} {}", estado, respuesta.get("mensaje"));

@@ -154,6 +154,20 @@ public class RegistroMotoConductorService {
      * DELIVERY. El orden y el filtro los trae el repositorio porque en MOTO hay varias categorias
      * activas (DELIVERY entre ellas) y la base podria devolver cualquiera sin ellos.
      */
+    /** Categoria DELIVERY activa de la moto, para el repartidor que habilita el admin. */
+    @Transactional(readOnly = true)
+    public Integer idCategoriaDelivery() {
+        TipoVehiculo moto = tipoVehiculoRepository.findByCodigo(CODIGO_MOTO)
+                .orElseThrow(() -> new NegocioException("El tipo de vehiculo MOTO no esta configurado"));
+        return categoriaServicioRepository.findByTipoVehiculoIdAndEstadoCategoriaServicio(moto.getId(), EstadoRegistro.A)
+                .stream()
+                .filter(categoria -> NOMBRE_CATEGORIA_DELIVERY.equalsIgnoreCase(categoria.getNombre()))
+                .map(CategoriaServicio::getId)
+                .findFirst()
+                .orElseThrow(() -> new NegocioException(
+                        "No hay una categoria de servicio DELIVERY activa para MOTO. Creela en Vehiculos > Categorias"));
+    }
+
     private CategoriaServicio categoriaEstandarDeMoto(TipoVehiculo moto) {
         return categoriaServicioRepository
                 .findFirstByTipoVehiculoIdAndEstadoCategoriaServicioAndNombreNotIgnoreCaseOrderByIdAsc(

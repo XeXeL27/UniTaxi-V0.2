@@ -12,11 +12,13 @@ import 'modelos.dart';
 import 'personas_api.dart';
 import 'selector_persona.dart';
 
-/// Tipo de cuenta que el administrador habilita (TipoRegistroUsuario del backend).
+/// Tipo de cuenta que el administrador habilita (TipoRegistroUsuario del backend). Se pueden elegir
+/// varios a la vez; conductor de taxi y delivery no van juntos: la persona tiene una sola cuenta de
+/// conductor y la categoria de su moto decide si hace viajes o entregas.
 enum TipoRegistro {
   pasajero('PASAJERO', 'Pasajero', Iconos.userCheck),
-  conductor('CONDUCTOR', 'Conductor', Iconos.motorcycle),
-  ambos('AMBOS', 'Pasajero y conductor', Iconos.users),
+  conductor('CONDUCTOR', 'Conductor de taxi', Iconos.motorcycle),
+  delivery('DELIVERY', 'Delivery', Iconos.paquete),
   admin('ADMIN', 'Administrador', Iconos.userShield);
 
   final String codigo;
@@ -25,16 +27,15 @@ enum TipoRegistro {
 
   const TipoRegistro(this.codigo, this.etiqueta, this.icono);
 
-  bool get incluyeConductor => this == conductor || this == ambos;
+  bool get incluyeConductor => this == conductor || this == delivery;
 
   /// Tipos que aun se pueden habilitar para la persona (una cuenta por rol).
   static List<TipoRegistro> disponiblesPara(Persona persona) {
-    final pasajero = persona.tieneTipo('PASAJERO');
     final conductor = persona.tieneTipo('CONDUCTOR');
     return [
-      if (!pasajero) TipoRegistro.pasajero,
+      if (!persona.tieneTipo('PASAJERO')) TipoRegistro.pasajero,
       if (!conductor) TipoRegistro.conductor,
-      if (!pasajero && !conductor) TipoRegistro.ambos,
+      if (!conductor) TipoRegistro.delivery,
       if (!persona.tieneTipo('ADMIN')) TipoRegistro.admin,
     ];
   }
@@ -48,11 +49,19 @@ const _tamanoMaximoPdf = 5 * 1024 * 1024;
 /// Resultado del alta, para el mensaje del modal de exito.
 class UsuarioHabilitado {
   final Persona persona;
-  final TipoRegistro tipo;
+  final List<TipoRegistro> tipos;
 
-  const UsuarioHabilitado(this.persona, this.tipo);
+  const UsuarioHabilitado(this.persona, this.tipos);
 
-  String get mensaje => 'Se habilitó el usuario ${tipo.etiqueta.toLowerCase()} para ${persona.nombreCompleto}.';
+  String get mensaje {
+    final nombres = tipos.map((t) => t.etiqueta.toLowerCase()).toList();
+    final lista = nombres.length == 1
+        ? nombres.first
+        : '${nombres.sublist(0, nombres.length - 1).join(', ')} y ${nombres.last}';
+    return nombres.length == 1
+        ? 'Se habilitó el usuario $lista para ${persona.nombreCompleto}.'
+        : 'Se habilitaron los usuarios $lista para ${persona.nombreCompleto}.';
+  }
 }
 
 /// Formulario para habilitar cuentas de usuario a una persona registrada. Si [persona] es null
@@ -88,17 +97,19 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
   final _modelo = TextEditingController();
   final _color = TextEditingController();
   final _anio = TextEditingController();
+  final _limiteAdelanto = TextEditingController();
 
   late final Future<List<Persona>>? _personas = widget.persona == null ? widget.api.listarPersonas() : null;
   late Persona? _persona = widget.persona;
-  TipoRegistro? _tipo;
+  final Set<TipoRegistro> _tipos = {};
   final Map<String, ArchivoSubida> _documentos = {};
   bool _ocultarPassword = true;
 
   @override
   void initState() {
     super.initState();
-    _tipo = _tiposDisponibles.firstOrNull;
+    final primero = _tiposDisponibles.firstOrNull;
+    if (primero != null) _tipos.add(primero);
   }
 
   @override
@@ -115,6 +126,7 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
       _modelo,
       _color,
       _anio,
+      _limiteAdelanto,
     ]) {
       control.dispose();
     }
@@ -128,14 +140,27 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
   }
 
   /// Las cuentas de pasajero y conductor de una persona comparten credenciales: si ya tiene una,
-  /// no se piden de nuevo.
-  bool get _reutilizaCredenciales => _tipo != TipoRegistro.admin && _persona?.nombreUsuario != null;
+  /// no se piden de nuevo. La de administrador siempre usa las del formulario.
+  bool get _tieneCredenciales => _persona?.nombreUsuario != null;
+  bool get _pideCredenciales => !_tieneCredenciales || _tipos.contains(TipoRegistro.admin);
+  bool get _incluyeConductor => _tipos.any((t) => t.incluyeConductor);
 
   void _elegirPersona(Persona? persona) {
     setState(() {
       _persona = persona;
       final disponibles = _tiposDisponibles;
-      if (!disponibles.contains(_tipo)) _tipo = disponibles.firstOrNull;
+      _tipos.removeWhere((t) => !disponibles.contains(t));
+      if (_tipos.isEmpty && disponibles.isNotEmpty) _tipos.add(disponibles.first);
+    });
+  }
+
+  /// Marca o desmarca un tipo. Conductor de taxi y delivery se excluyen entre si.
+  void _alternarTipo(TipoRegistro tipo) {
+    setState(() {
+      if (!_tipos.remove(tipo)) {
+        if (tipo.incluyeConductor) _tipos.removeWhere((t) => t.incluyeConductor);
+        _tipos.add(tipo);
+      }
     });
   }
 
@@ -162,17 +187,21 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
 
   Future<Object?> _guardar() async {
     final persona = _persona;
-    final tipo = _tipo;
-    if (persona == null || tipo == null) {
-      throw ApiExcepcion('Elija una persona y un tipo de usuario disponible');
+    // En el orden del menu, no en el de los toques.
+    final tipos = TipoRegistro.values.where(_tipos.contains).toList();
+    if (persona == null || tipos.isEmpty) {
+      throw ApiExcepcion('Elija una persona y al menos un tipo de usuario');
     }
-    final datos = <String, dynamic>{'tipo': tipo.codigo};
-    if (!_reutilizaCredenciales) {
+    final datos = <String, dynamic>{'tipos': [for (final t in tipos) t.codigo]};
+    if (_pideCredenciales) {
       datos['nombreUsuario'] = _usuario.text.trim();
       datos['password'] = _password.text;
     }
-    if (tipo == TipoRegistro.admin) datos['cargo'] = _cargo.text.trim();
-    if (tipo.incluyeConductor) {
+    if (tipos.contains(TipoRegistro.admin)) datos['cargo'] = _cargo.text.trim();
+    if (tipos.contains(TipoRegistro.delivery)) {
+      datos['limiteAdelantoCompra'] = num.tryParse(_limiteAdelanto.text.trim().replaceAll(',', '.'));
+    }
+    if (_incluyeConductor) {
       datos['conductor'] = {
         'numeroLicencia': _licencia.text.trim(),
         'categoriaLicencia': _categoria.text.trim().isEmpty ? null : _categoria.text.trim().toUpperCase(),
@@ -183,8 +212,8 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
         'anio': int.tryParse(_anio.text.trim()),
       };
     }
-    await widget.api.habilitarUsuario(persona.idPersona, datos, tipo.incluyeConductor ? _documentos : const {});
-    return UsuarioHabilitado(persona, tipo);
+    await widget.api.habilitarUsuario(persona.idPersona, datos, _incluyeConductor ? _documentos : const {});
+    return UsuarioHabilitado(persona, tipos);
   }
 
   String? _requerido(String? valor) => (valor == null || valor.trim().isEmpty) ? 'Campo obligatorio' : null;
@@ -192,7 +221,6 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
   @override
   Widget build(BuildContext context) {
     final tipos = _tiposDisponibles;
-    final tipo = _tipo;
     return ModalFormulario(
       titulo: widget.titulo,
       icono: Iconos.userPlus,
@@ -222,37 +250,62 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
               return SelectorPersona(personas: candidatas, alElegir: _elegirPersona);
             },
           ),
-        const _Seccion('Tipo de usuario'),
+        const _Seccion('Tipos de usuario'),
         if (tipos.isEmpty)
           const Text(
             'La persona ya tiene todos los tipos de usuario permitidos.',
             style: TextStyle(color: ColoresApp.rojo),
           )
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (final opcion in tipos)
-                ChoiceChip(
-                  selected: opcion == tipo,
-                  onSelected: (_) => setState(() => _tipo = opcion),
-                  avatar: Icon(opcion.icono, size: 14, color: opcion == tipo ? Colors.white : ColoresApp.azul),
-                  label: Text(opcion.etiqueta),
-                  showCheckmark: false,
-                  selectedColor: ColoresApp.azul,
-                  labelStyle: TextStyle(color: opcion == tipo ? Colors.white : ColoresApp.azul),
-                ),
-            ],
+        else ...[
+          const Text(
+            'Puede marcar varios. Conductor de taxi y delivery no van juntos: elija uno de los dos.',
+            style: TextStyle(color: Colors.black54, fontSize: 13),
           ),
-        if (tipo != null) ..._camposCredenciales(tipo),
-        if (tipo != null && tipo.incluyeConductor) ..._camposConductor(),
+          FormField<Set<TipoRegistro>>(
+            // La clave incluye la eleccion para que el validador vea el valor actual.
+            key: ValueKey('tipos_${_tipos.map((t) => t.codigo).join()}'),
+            initialValue: _tipos,
+            validator: (_) => _tipos.isEmpty ? 'Elija al menos un tipo de usuario' : null,
+            builder: (estado) => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final opcion in tipos)
+                      FilterChip(
+                        selected: _tipos.contains(opcion),
+                        onSelected: (_) => _alternarTipo(opcion),
+                        avatar: Icon(opcion.icono,
+                            size: 14, color: _tipos.contains(opcion) ? Colors.white : ColoresApp.azul),
+                        label: Text(opcion.etiqueta),
+                        showCheckmark: false,
+                        selectedColor: ColoresApp.azul,
+                        labelStyle: TextStyle(color: _tipos.contains(opcion) ? Colors.white : ColoresApp.azul),
+                      ),
+                  ],
+                ),
+                if (estado.hasError)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(estado.errorText!, style: const TextStyle(color: ColoresApp.rojo, fontSize: 12)),
+                  ),
+              ],
+            ),
+          ),
+        ],
+        if (_tipos.isNotEmpty) ..._camposCredenciales(),
+        if (_incluyeConductor) ..._camposConductor(),
       ],
     );
   }
 
-  List<Widget> _camposCredenciales(TipoRegistro tipo) {
-    if (_reutilizaCredenciales) {
+  List<Widget> _camposCredenciales() {
+    final admin = _tipos.contains(TipoRegistro.admin);
+    final soloAdmin = _tipos.length == 1 && admin;
+    final comparte = _tipos.where((t) => t != TipoRegistro.admin).length > 1;
+    if (!_pideCredenciales) {
       return [
         const _Seccion('Credenciales'),
         _Aviso(
@@ -263,6 +316,11 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
     }
     return [
       const _Seccion('Credenciales'),
+      if (admin && _tieneCredenciales && !soloAdmin)
+        _Aviso(
+          'Pasajero y conductor usarán su usuario actual (${_persona!.nombreUsuario}). '
+          'El usuario y la contraseña de abajo son para la cuenta de administrador.',
+        ),
       TextFormField(
         controller: _usuario,
         maxLength: 50,
@@ -287,8 +345,8 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
         decoration: InputDecoration(
           labelText: 'Contraseña *',
           counterText: '',
-          helperText: tipo == TipoRegistro.ambos
-              ? 'Mínimo 8 caracteres. La misma para pasajero y conductor'
+          helperText: comparte || (admin && !_tieneCredenciales && !soloAdmin)
+              ? 'Mínimo 8 caracteres. La misma para todos los usuarios marcados'
               : 'Mínimo 8 caracteres',
           suffixIcon: IconButton(
             onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
@@ -303,7 +361,7 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
         decoration: const InputDecoration(labelText: 'Confirmar contraseña *'),
         validator: (v) => v != _password.text ? 'Las contraseñas no coinciden' : null,
       ),
-      if (tipo == TipoRegistro.admin)
+      if (admin)
         TextFormField(
           controller: _cargo,
           maxLength: 100,
@@ -331,7 +389,9 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
         ),
       ]),
       const _Seccion('Motocicleta'),
-      const _Aviso('En esta primera etapa todos los conductores trabajan en motocicleta.'),
+      _Aviso(_tipos.contains(TipoRegistro.delivery)
+          ? 'La moto queda con la categoría DELIVERY: solo verá y aceptará entregas, no viajes.'
+          : 'En esta primera etapa todos los conductores trabajan en motocicleta.'),
       _Fila([
         TextFormField(
           controller: _placa,
@@ -383,6 +443,24 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
           },
         ),
       ]),
+      if (_tipos.contains(TipoRegistro.delivery))
+        TextFormField(
+          controller: _limiteAdelanto,
+          maxLength: 8,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))],
+          decoration: const InputDecoration(
+            labelText: 'Límite para adelantar compras (Bs)',
+            counterText: '',
+            helperText: 'Cuánto puede pagar de su bolsillo en un pedido de compra. Vacío = 0',
+          ),
+          validator: (v) {
+            final texto = v?.trim() ?? '';
+            if (texto.isEmpty) return null;
+            final valor = num.tryParse(texto.replaceAll(',', '.'));
+            return valor == null || valor < 0 ? 'Monto no válido' : null;
+          },
+        ),
       const _Seccion('Documentos (PDF, máximo 5 MB cada uno)'),
       for (final tipoDocumento in _documentosConductor)
         FormField<ArchivoSubida>(

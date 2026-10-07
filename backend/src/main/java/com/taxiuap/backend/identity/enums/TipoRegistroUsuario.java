@@ -6,5 +6,7 @@ public enum TipoRegistroUsuario {
     CONDUCTOR,
     /** Pasajero y conductor, con el mismo nombre de usuario y contrasena. */
     AMBOS,
+    /** Conductor que solo hace entregas: su moto queda con la categoria DELIVERY. */
+    DELIVERY,
     ADMIN
 }

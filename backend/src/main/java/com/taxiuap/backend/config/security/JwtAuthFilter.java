@@ -3,6 +3,7 @@ package com.taxiuap.backend.config.security;
 import java.io.IOException;
 import java.util.List;
 
+import org.slf4j.MDC;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -24,7 +25,7 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Lee el header {@code Authorization: Bearer <token>}, valida el JWT de ACCESO y coloca el
- * usuario en el SecurityContext. No es un @Component: se instancia a mano en SecurityConfig
+ * usuario en el SecurityContext y en el MDC del log ("usuario": nombre y rol, ver logback-spring.xml). No es un @Component: se instancia a mano en SecurityConfig
  * porque solo hay una cadena de seguridad y no hace falta que Spring lo gestione como bean.
  */
 @RequiredArgsConstructor
@@ -37,8 +38,21 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     private final UsuarioRepository usuarioRepository;
     private final PersonaRepository personaRepository;
 
+    /** Clave del MDC con quien hizo la peticion; cada linea del log la muestra. */
+    public static final String MDC_USUARIO = "usuario";
+
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
+            throws ServletException, IOException {
+        try {
+            autenticar(request, response, chain);
+        } finally {
+            // El hilo vuelve al pool de Tomcat: sin esto la siguiente peticion heredaria el usuario.
+            MDC.remove(MDC_USUARIO);
+        }
+    }
+
+    private void autenticar(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String header = request.getHeader("Authorization");
         if (header != null && header.startsWith("Bearer ")) {
@@ -60,6 +74,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 var auth = new UsernamePasswordAuthenticationToken(
                         usuario, null, List.of(new SimpleGrantedAuthority("ROLE_" + usuario.rol())));
                 SecurityContextHolder.getContext().setAuthentication(auth);
+                MDC.put(MDC_USUARIO, usuario.sujeto() + "/" + usuario.rol());
             } catch (Exception e) {
                 // Token invalido, expirado o de tipo distinto a ACCESO: se continua sin
                 // autenticacion; el endpoint protegido respondera 401/403 mas adelante.

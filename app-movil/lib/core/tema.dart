@@ -72,20 +72,27 @@ ThemeData temaApp() {
 /// Estilo de la barra de estado del telefono (hora, bateria, senal) y de la barra de navegacion.
 /// Casi todas las pantallas tienen la cabecera azul detras de la barra de estado: iconos blancos.
 /// Las pocas de fondo claro arriba (pedir el correo, activar el GPS) usan [sobreClaro].
+///
+/// La barra de navegacion va transparente y sin el velo que Android pone a los 3 botones: asi la
+/// app se ve igual con botones o con gestos (la app ya deja libre su alto con MediaQuery.padding).
 class BarraSistema {
   static const sobreAzul = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.light,
     statusBarBrightness: Brightness.dark,
-    systemNavigationBarColor: ColoresApp.blanco,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarContrastEnforced: false,
   );
 
   static const sobreClaro = SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
     statusBarBrightness: Brightness.light,
-    systemNavigationBarColor: ColoresApp.blanco,
+    systemNavigationBarColor: Colors.transparent,
+    systemNavigationBarDividerColor: Colors.transparent,
     systemNavigationBarIconBrightness: Brightness.dark,
+    systemNavigationBarContrastEnforced: false,
   );
 }

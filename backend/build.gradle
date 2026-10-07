@@ -52,6 +52,8 @@ tasks.named('test') {
 // bootRun carga las variables del .env de la raiz del monorepo (la misma que usa docker compose),
 // para que el backend lea GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET sin exportarlas a mano.
 tasks.named('bootRun') {
+	// Hora de Bolivia aunque el servidor este en UTC (tambien la fija TaxiuapApplication.main).
+	jvmArgs '-Duser.timezone=America/La_Paz'
 	def archivoEnv = file('../.env')
 	if (archivoEnv.exists()) {
 		def vars = [:]
@@ -64,7 +66,8 @@ tasks.named('bootRun') {
 				if (valor.length() >= 2 && ((valor.startsWith('"') && valor.endsWith('"')) || (valor.startsWith("'") && valor.endsWith("'")))) {
 					valor = valor.substring(1, valor.length() - 1)
 				}
-				vars[partes[0].trim()] = valor
+				// Vacia (DB_URL=, SIGSE_URL=) = sin definir: rige el valor por defecto de application.properties.
+				if (valor) vars[partes[0].trim()] = valor
 			}
 		}
 		environment vars

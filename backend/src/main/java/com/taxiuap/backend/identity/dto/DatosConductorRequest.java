@@ -38,4 +38,10 @@ public record DatosConductorRequest(
          * Con los datos correctos el conductor queda APROBADO al registrarse.
          */
         Boolean licenciaVerificada) {
+
+    /** Los mismos datos con otra categoria de servicio (el admin habilita un repartidor DELIVERY). */
+    public DatosConductorRequest conCategoria(Integer idCategoria) {
+        return new DatosConductorRequest(numeroLicencia, categoriaLicencia, placa, marca, modelo, color, anio,
+                idCategoria, vencimientos, vencimientoLicencia, licenciaVerificada);
+    }
 }

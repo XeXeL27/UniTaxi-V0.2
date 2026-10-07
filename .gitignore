@@ -39,3 +39,7 @@ backend/out/
 *firebase*adminsdk*.json
 # Carpeta de llaves privadas (cuenta de servicio de Firebase): nunca al repositorio
 taxiuap-secretos/
+
+# Logs del backend (logback-spring.xml)
+logs/
+*.log.gz

@@ -38,6 +38,9 @@ class PanelEligiendo extends StatelessWidget {
   /// Mototaxistas libres en linea (null mientras no se consulto).
   final int? libres;
 
+  /// false: el boton de pedir va fijo en el pie del panel (siempre a la vista).
+  final bool conBoton;
+
   const PanelEligiendo({
     super.key,
     required this.flujo,
@@ -46,6 +49,7 @@ class PanelEligiendo extends StatelessWidget {
     required this.onGuardarDestino,
     this.onEditarTercero,
     this.libres,
+    this.conBoton = true,
   });
 
   @override
@@ -180,12 +184,14 @@ class PanelEligiendo extends StatelessWidget {
         ],
         if (verPedido) ...[
           DisponibilidadTaxis(libres: libres, servicio: flujo.servicio),
-          const SizedBox(height: 14),
-          BotonPrincipal(
-            texto: textoSolicitar(flujo.servicio),
-            cargando: enviando,
-            onPressed: flujo.puedeSolicitar ? onSolicitar : null,
-          ),
+          if (conBoton) ...[
+            const SizedBox(height: 14),
+            BotonPrincipal(
+              texto: textoSolicitar(flujo.servicio),
+              cargando: enviando,
+              onPressed: flujo.puedeSolicitar ? onSolicitar : null,
+            ),
+          ],
         ],
       ],
     );
@@ -761,7 +767,8 @@ class LineaTiempoEntrega extends StatelessWidget {
   }
 }
 
-/// Taxi para otra persona: avisa que hay que elegir dos puntos y cuales ya estan.
+/// Taxi para otra persona: franja corta que dice que punto falta marcar. Los puntos elegidos ya se
+/// ven arriba (BarraDosPuntos), asi que aca no se repiten: el mapa queda casi entero a la vista.
 class PanelDosPuntos extends StatelessWidget {
   final FlujoPasajero flujo;
 
@@ -771,52 +778,60 @@ class PanelDosPuntos extends StatelessWidget {
   Widget build(BuildContext context) {
     final a = flujo.mapa.a;
     final b = flujo.mapa.b;
-    Widget paso(bool hecho, bool activo, String texto, String? valor) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 3),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: FaIcon(
-                  hecho ? FontAwesomeIcons.solidCircleCheck : FontAwesomeIcons.circle,
-                  size: 15,
-                  color: hecho ? ColoresApp.exito : activo ? ColoresApp.azul : ColoresApp.borde,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text.rich(TextSpan(children: [
-                  TextSpan(
-                    text: texto,
-                    style: TextStyle(color: ColoresApp.texto, fontWeight: activo ? FontWeight.w700 : FontWeight.w500),
-                  ),
-                  if (valor != null)
-                    TextSpan(text: '\n$valor', style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
-                ])),
-              ),
-            ],
-          ),
-        );
     final marcandoPartida = flujo.eligiendoPartida || (flujo.marcando == null && a == null);
+    final listos = a != null && b != null;
+    final texto = listos
+        ? 'Los dos puntos están marcados'
+        : marcandoPartida
+            ? 'Marca dónde recogen a la persona'
+            : 'Marca dónde dejan a la persona';
+    Widget paso(int numero, bool hecho) => Container(
+          width: 24,
+          height: 24,
+          margin: const EdgeInsets.only(left: 6),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: hecho ? ColoresApp.exito : ColoresApp.blanco,
+            shape: BoxShape.circle,
+            border: Border.all(color: hecho ? ColoresApp.exito : ColoresApp.borde, width: 1.5),
+          ),
+          child: hecho
+              ? const FaIcon(FontAwesomeIcons.check, size: 11, color: ColoresApp.blanco)
+              : Text('$numero',
+                  style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12, fontWeight: FontWeight.w700)),
+        );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Viaje para otra persona: elige dos puntos',
-          style: TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
+        Row(
+          children: [
+            FaIcon(
+              FontAwesomeIcons.locationDot,
+              size: 16,
+              color: listos ? ColoresApp.exito : marcandoPartida ? ColoresApp.azul : ColoresApp.rojo,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                texto,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: ColoresApp.tinta, fontSize: 15, fontWeight: FontWeight.w700),
+              ),
+            ),
+            paso(1, a != null),
+            paso(2, b != null),
+          ],
         ),
-        const SizedBox(height: 4),
-        const Text(
-          'Toca un campo de arriba para escribir la dirección o toca el mapa.',
-          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
-        ),
-        const SizedBox(height: 8),
-        paso(a != null, marcandoPartida, '1. Punto de partida: dónde el taxista recoge a la persona',
-            a == null ? null : (flujo.direccionOrigen ?? a.texto)),
-        paso(b != null, !marcandoPartida, '2. Punto de llegada: dónde el taxista deja a la persona', b?.texto),
-        if (a != null && b != null && flujo.marcando != null)
+        if (!listos) ...[
+          const SizedBox(height: 4),
+          const Text(
+            'Toca el mapa o escribe la dirección arriba.',
+            style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+          ),
+        ],
+        if (listos && flujo.marcando != null)
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(onPressed: () => flujo.marcar(null), child: const Text('Listo, ver precio')),

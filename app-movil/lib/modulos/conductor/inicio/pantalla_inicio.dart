@@ -601,9 +601,19 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
           ? 'Solicitud de viaje'
           : '${solicitud.nombrePasajero.split(' ').first} - ${formatoBs(solicitud.precio)}',
       tituloAbierto: 'Detalle de la solicitud',
-      accionPlegado: BotonPrincipal(texto: 'Aceptar viaje', cargando: _flujo.ocupado, onPressed: _aceptar),
-      child: PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar),
+      child: PanelDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar, conBotones: false),
     );
+  }
+
+  /// Boton del siguiente paso fijo bajo el panel (abierto o plegado), para que nunca quede tapado.
+  /// En un reparto las acciones piden codigo y foto dentro del panel: ahi solo va el boton plegado.
+  Widget? _pieDelPanel(EtapaConductor etapa) {
+    if (etapa == EtapaConductor.detalle) return BotonesDetalleSolicitud(flujo: _flujo, onAceptar: _aceptar);
+    final viaje = _flujo.viaje;
+    if (etapa != EtapaConductor.enViaje || viaje == null || viaje.datosEntrega != null) return null;
+    final (_, _, boton, colorBoton) = estadoViajeConductor(viaje);
+    if (boton.isEmpty) return null;
+    return BotonPrincipal(texto: boton, color: colorBoton, cargando: _flujo.ocupado, onPressed: _avanzar);
   }
 
   Widget _panelViaje() {
@@ -620,7 +630,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       color: color,
       resumen: texto,
       tituloAbierto: 'Detalle del viaje',
-      accionPlegado: boton.isEmpty
+      // Taxi: el boton va fijo en el pie (_pieDelPanel). Reparto: solo plegado, como antes.
+      accionPlegado: boton.isEmpty || viaje?.datosEntrega == null
           ? null
           : BotonPrincipal(texto: boton, color: colorBoton, cargando: _flujo.ocupado, onPressed: _avanzar),
       child: PanelViajeConductor(
@@ -629,6 +640,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         onCancelar: _cancelarViaje,
         onCambiarPago: _cambiarPago,
         onResponderPago: _responderPago,
+        conBotonPrincipal: false,
       ),
     );
   }
@@ -730,6 +742,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                       flotante: true,
                       // Con un viaje el panel no crece mas de un tercio: el resto se desplaza dentro.
                       altoMaximo: etapa == EtapaConductor.lista ? 0.34 : 0.38,
+                      pie: _pieDelPanel(etapa),
                       child: switch (etapa) {
                         EtapaConductor.cargando => PanelRecuperando(sinRed: _flujo.recuperandoSinRed),
                         EtapaConductor.lista => PanelSolicitudes(

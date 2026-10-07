@@ -27,6 +27,8 @@ import 'widgets/requiere_gps.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // De borde a borde en todos los Android (en 15+ ya lo es): mismo diseno con botones o gestos.
+  unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   SystemChrome.setSystemUIOverlayStyle(BarraSistema.sobreAzul);
   unawaited(Conexion.iniciar());
   await PreferenciasAviso.cargar();

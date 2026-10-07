@@ -28,6 +28,7 @@ import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
 import '../../../widgets/panel_recuperando.dart';
 import '../../../widgets/barra_inferior.dart';
+import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/inicio_mapa.dart';
@@ -941,6 +942,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                                 },
                                 onPartida: () => _buscarPunto(PuntoPorMarcar.partida),
                                 onLlegada: () => _buscarPunto(PuntoPorMarcar.llegada),
+                                onBorrarPartida: () => _flujo.borrarPunto(PuntoPorMarcar.partida),
+                                onBorrarLlegada: () => _flujo.borrarPunto(PuntoPorMarcar.llegada),
                               ),
                               const SizedBox(height: margenSelectorServicio),
                             ]
@@ -1009,6 +1012,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                       altoMaximo: _flujo.etapa == EtapaPasajero.enViaje && (_flujo.viaje?.pagaConQr ?? false)
                           ? 0.44
                           : 0.42,
+                      pie: panel is PanelDosPuntos ? null : _pieDelPanel(etapa),
                       child: panel,
                     ),
                 ],
@@ -1074,9 +1078,21 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     ].join(' - ');
   }
 
+  /// Boton de pedir fijo bajo el panel: no se va con el desplazamiento ni con el panel plegado.
+  Widget? _pieDelPanel(EtapaPasajero etapa) {
+    if (etapa != EtapaPasajero.eligiendo || _flujo.guardandoLugar) return null;
+    if (_mapa.a == null || (_mapa.b == null && !_flujo.esCompra)) return null;
+    return BotonPrincipal(
+      texto: textoSolicitar(_flujo.servicio),
+      cargando: _enviando,
+      onPressed: _flujo.puedeSolicitar ? _solicitar : null,
+    );
+  }
+
   Widget _panelEligiendo() => PanelEligiendo(
     flujo: _flujo,
     enviando: _enviando,
+    conBoton: false,
     onSolicitar: _solicitar,
     onEditarTercero: _editarTercero,
     onGuardarDestino: () {

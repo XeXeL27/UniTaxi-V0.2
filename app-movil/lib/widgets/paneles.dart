@@ -13,6 +13,10 @@ class PanelInferior extends StatelessWidget {
   /// Alto maximo como fraccion de la pantalla; el contenido se desplaza si no entra.
   final double altoMaximo;
   final bool flotante;
+
+  /// Boton del siguiente paso, fijo debajo del contenido: nunca se va con el desplazamiento, asi se
+  /// ve aunque el panel tenga muchos avisos (cobro por QR, espera del pasajero...).
+  final Widget? pie;
   static const double anchoMaximo = 560;
 
   const PanelInferior({
@@ -20,11 +24,14 @@ class PanelInferior extends StatelessWidget {
     required this.child,
     this.altoMaximo = 0.62,
     this.flotante = false,
+    this.pie,
   });
 
   @override
   Widget build(BuildContext context) {
     final medidas = MediaQuery.of(context);
+    final abajo = flotante ? 0.0 : medidas.viewPadding.bottom;
+    final pie = this.pie;
     final panel = ConstrainedBox(
       constraints: BoxConstraints(
         maxHeight: medidas.size.height * altoMaximo,
@@ -41,18 +48,22 @@ class PanelInferior extends StatelessWidget {
           boxShadow: const [BoxShadow(color: Color(0x22000000), blurRadius: 16, offset: Offset(0, -4))],
         ),
         clipBehavior: flotante ? Clip.antiAlias : Clip.none,
-        child: SingleChildScrollView(
-          padding: EdgeInsets.fromLTRB(
-            20,
-            18,
-            20,
-            18 + (flotante ? 0 : medidas.padding.bottom),
-          ),
-          child: AnimatedSize(
-            duration: const Duration(milliseconds: 200),
-            alignment: Alignment.topCenter,
-            child: child,
-          ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Flexible(
+              child: SingleChildScrollView(
+                padding: EdgeInsets.fromLTRB(20, 18, 20, pie == null ? 18 + abajo : 10),
+                child: AnimatedSize(
+                  duration: const Duration(milliseconds: 200),
+                  alignment: Alignment.topCenter,
+                  child: child,
+                ),
+              ),
+            ),
+            if (pie != null) Padding(padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + abajo), child: pie),
+          ],
         ),
       ),
     );

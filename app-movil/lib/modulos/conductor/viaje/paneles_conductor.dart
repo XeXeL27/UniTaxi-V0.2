@@ -237,7 +237,10 @@ class PanelDetalleSolicitud extends StatelessWidget {
   final FlujoConductor flujo;
   final VoidCallback onAceptar;
 
-  const PanelDetalleSolicitud({super.key, required this.flujo, required this.onAceptar});
+  /// false: los botones Volver / Aceptar van fijos en el pie del panel ([BotonesDetalleSolicitud]).
+  final bool conBotones;
+
+  const PanelDetalleSolicitud({super.key, required this.flujo, required this.onAceptar, this.conBotones = true});
 
   @override
   Widget build(BuildContext context) {
@@ -303,19 +306,34 @@ class PanelDetalleSolicitud extends StatelessWidget {
           ].join('\n'),
           monto: formatoBs(solicitud.precio),
         ),
-        const SizedBox(height: 14),
-        Row(
-          children: [
-            Expanded(
-              flex: 2,
-              child: BotonSecundario(texto: 'Volver', onPressed: flujo.ocupado ? null : flujo.volverALista),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              flex: 3,
-              child: BotonPrincipal(texto: 'Aceptar viaje', cargando: flujo.ocupado, onPressed: onAceptar),
-            ),
-          ],
+        if (conBotones) ...[
+          const SizedBox(height: 14),
+          BotonesDetalleSolicitud(flujo: flujo, onAceptar: onAceptar),
+        ],
+      ],
+    );
+  }
+}
+
+/// Volver a la lista o aceptar la solicitud elegida.
+class BotonesDetalleSolicitud extends StatelessWidget {
+  final FlujoConductor flujo;
+  final VoidCallback onAceptar;
+
+  const BotonesDetalleSolicitud({super.key, required this.flujo, required this.onAceptar});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          flex: 2,
+          child: BotonSecundario(texto: 'Volver', onPressed: flujo.ocupado ? null : flujo.volverALista),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          flex: 3,
+          child: BotonPrincipal(texto: 'Aceptar viaje', cargando: flujo.ocupado, onPressed: onAceptar),
         ),
       ],
     );
@@ -331,13 +349,13 @@ class PanelDetalleSolicitud extends StatelessWidget {
     ColoresApp.azul,
   ),
   SituacionViaje.enCamino => (
-    'Ve a recoger a ${viaje.primerNombrePasajero} (punto A)',
+    'Ve a recoger a ${viaje.tercero?.primerNombre ?? viaje.primerNombrePasajero} (punto A)',
     ColoresApp.ruta,
     'Llegué al punto de partida',
     ColoresApp.azul,
   ),
   SituacionViaje.llego => (
-    'Esperando a ${viaje.primerNombrePasajero}',
+    'Esperando a ${viaje.tercero?.primerNombre ?? viaje.primerNombrePasajero}',
     ColoresApp.rojo,
     'Iniciar viaje',
     ColoresApp.azul,
@@ -358,6 +376,9 @@ class PanelViajeConductor extends StatelessWidget {
   /// Aceptar (true) o rechazar el cambio de pago que pidio el pasajero.
   final ValueChanged<bool> onResponderPago;
 
+  /// false: el boton del siguiente paso va fijo en el pie del panel (siempre a la vista).
+  final bool conBotonPrincipal;
+
   const PanelViajeConductor({
     super.key,
     required this.flujo,
@@ -365,6 +386,7 @@ class PanelViajeConductor extends StatelessWidget {
     required this.onCancelar,
     required this.onCambiarPago,
     required this.onResponderPago,
+    this.conBotonPrincipal = true,
   });
 
   @override
@@ -482,7 +504,7 @@ class PanelViajeConductor extends StatelessWidget {
           _EsperaPasajero(viaje: viaje, flujo: flujo),
           const SizedBox(height: 8),
         ],
-        if (boton.isNotEmpty)
+        if (boton.isNotEmpty && conBotonPrincipal)
           BotonPrincipal(texto: boton, color: colorBoton, cargando: flujo.ocupado, onPressed: onAvanzar),
         if (SituacionViaje.cancelables.contains(viaje.situacion)) ...[
           const SizedBox(height: 4),

@@ -1,15 +1,19 @@
 package com.taxiuap.backend.identity.service;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.RolSistema;
+import com.taxiuap.backend.identity.dto.DatosConductorRequest;
 import com.taxiuap.backend.identity.dto.HabilitarUsuarioRequest;
 import com.taxiuap.backend.identity.dto.UsuarioAdminResponse;
 import com.taxiuap.backend.identity.entity.Administrador;
@@ -18,6 +22,7 @@ import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.enums.SituacionCarnet;
+import com.taxiuap.backend.identity.enums.TipoRegistroUsuario;
 import com.taxiuap.backend.identity.repository.AdministradorRepository;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
@@ -37,7 +42,8 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * Cuentas de usuario desde el panel admin: solo el administrador habilita cuentas de pasajero,
- * conductor (con su moto y documentos) o administrador para personas ya registradas.
+ * conductor de taxi o delivery (con su moto y documentos) y administrador, una o varias a la vez,
+ * para personas ya registradas.
  */
 @Service
 @RequiredArgsConstructor
@@ -64,12 +70,19 @@ public class GestionUsuarioService {
     public List<UsuarioAdminResponse> habilitar(Long idPersona, HabilitarUsuarioRequest datos,
             Map<String, MultipartFile> archivos) {
         Persona persona = gestionPersonaService.buscarActiva(idPersona);
-        List<RolSistema> roles = switch (datos.tipo()) {
-            case PASAJERO -> List.of(RolSistema.PASAJERO);
-            case CONDUCTOR -> List.of(RolSistema.CONDUCTOR);
-            case AMBOS -> List.of(RolSistema.PASAJERO, RolSistema.CONDUCTOR);
-            case ADMIN -> List.of(RolSistema.ADMIN);
-        };
+        Set<TipoRegistroUsuario> tipos = tiposPedidos(datos);
+        boolean delivery = tipos.contains(TipoRegistroUsuario.DELIVERY);
+        if (delivery && (tipos.contains(TipoRegistroUsuario.CONDUCTOR) || tipos.contains(TipoRegistroUsuario.AMBOS))) {
+            throw new NegocioException("Una persona tiene una sola cuenta de conductor: elija conductor de taxi o delivery");
+        }
+        List<RolSistema> roles = new ArrayList<>();
+        if (tipos.contains(TipoRegistroUsuario.PASAJERO) || tipos.contains(TipoRegistroUsuario.AMBOS)) {
+            roles.add(RolSistema.PASAJERO);
+        }
+        if (delivery || tipos.contains(TipoRegistroUsuario.CONDUCTOR) || tipos.contains(TipoRegistroUsuario.AMBOS)) {
+            roles.add(RolSistema.CONDUCTOR);
+        }
+        if (tipos.contains(TipoRegistroUsuario.ADMIN)) roles.add(RolSistema.ADMIN);
         for (RolSistema rol : roles) {
             if (cuentaUsuarioService.tieneCuenta(persona.getId(), rol)) {
                 throw new ConflictoException("La persona ya tiene un usuario de tipo " + rol.getCodigo());
@@ -78,27 +91,37 @@ public class GestionUsuarioService {
 
         // Todo se valida antes de crear registros o guardar archivos.
         boolean incluyeConductor = roles.contains(RolSistema.CONDUCTOR);
+        DatosConductorRequest datosConductor = datos.conductor();
         Map<TipoDocumento, MultipartFile> documentos = Map.of();
         if (incluyeConductor) {
-            if (datos.conductor() == null) {
+            if (datosConductor == null) {
                 throw new NegocioException("Faltan los datos del conductor (licencia y motocicleta)");
             }
-            documentos = registroMotoConductorService.validar(datos.conductor(), archivos);
+            if (delivery) datosConductor = datosConductor.conCategoria(registroMotoConductorService.idCategoriaDelivery());
+            documentos = registroMotoConductorService.validar(datosConductor, archivos);
         } else if (!archivos.isEmpty()) {
             throw new NegocioException("Solo se adjuntan documentos al habilitar un conductor");
         }
-        Credenciales credenciales = resolverCredenciales(persona, datos, roles.contains(RolSistema.ADMIN));
+        // Pasajero y conductor comparten credenciales (las de una cuenta anterior si la hay); la de
+        // administrador usa las del formulario.
+        Credenciales comunes = roles.stream().anyMatch(rol -> rol != RolSistema.ADMIN)
+                ? resolverCredenciales(persona, datos, false) : null;
+        Credenciales deAdmin = roles.contains(RolSistema.ADMIN) ? resolverCredenciales(persona, datos, true) : null;
 
         List<UsuarioAdminResponse> creados = new ArrayList<>();
         for (RolSistema rol : roles) {
+            Credenciales credenciales = rol == RolSistema.ADMIN ? deAdmin : comunes;
             Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol, credenciales.nombreUsuario(),
                     credenciales.passwordHash());
             switch (rol) {
                 case PASAJERO -> cuentaUsuarioService.crearPasajero(usuario);
                 case CONDUCTOR -> {
                     Conductor conductor = cuentaUsuarioService.crearConductor(usuario,
-                            datos.conductor().numeroLicencia().trim(), datos.conductor().categoriaLicencia());
-                    registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
+                            datosConductor.numeroLicencia().trim(), datosConductor.categoriaLicencia());
+                    if (delivery && datos.limiteAdelantoCompra() != null) {
+                        conductor.setLimiteAdelantoCompra(datos.limiteAdelantoCompra());
+                    }
+                    registroMotoConductorService.registrar(conductor, datosConductor, documentos);
                 }
                 case ADMIN -> {
                     Administrador administrador = new Administrador();
@@ -175,6 +198,15 @@ public class GestionUsuarioService {
     }
 
     private record Credenciales(String nombreUsuario, String passwordHash) {
+    }
+
+    /** tipos (varios) y tipo (uno, compatibilidad) juntos; al menos uno. */
+    private static Set<TipoRegistroUsuario> tiposPedidos(HabilitarUsuarioRequest datos) {
+        Set<TipoRegistroUsuario> tipos = EnumSet.noneOf(TipoRegistroUsuario.class);
+        if (datos.tipos() != null) datos.tipos().stream().filter(Objects::nonNull).forEach(tipos::add);
+        if (datos.tipo() != null) tipos.add(datos.tipo());
+        if (tipos.isEmpty()) throw new NegocioException("Elija al menos un tipo de usuario");
+        return tipos;
     }
 
     /**
