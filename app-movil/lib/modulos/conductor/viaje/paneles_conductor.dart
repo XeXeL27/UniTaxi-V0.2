@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+
 import '../../../widgets/dialogos.dart';
 import '../../../core/api_excepcion.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/formato.dart';
@@ -156,8 +158,9 @@ class _TarjetaSolicitud extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // En una compra todavia sin comercio no hay partida: sin ella no hay distancia que mostrar.
-    final metrosViaje =
-        solicitud.tieneRuta ? ServiciosMapa.metros(solicitud.partida!.posicion, solicitud.destino!) : null;
+    final metrosViaje = solicitud.tieneRuta
+        ? ServiciosMapa.metros(solicitud.partida!.posicion, solicitud.destino!)
+        : null;
     return Material(
       color: ColoresApp.blanco,
       shape: RoundedRectangleBorder(
@@ -175,9 +178,17 @@ class _TarjetaSolicitud extends StatelessWidget {
               Row(
                 children: [
                   if (solicitud.datosEntrega != null)
-                    Text(
-                      solicitud.datosEntrega!.tipoEnvio.nombre,
-                      style: const TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w700, fontSize: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Container(
+                        key: const ValueKey('tipo-envio-solicitud'),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(8)),
+                        child: Text(
+                          solicitud.datosEntrega!.tipoEnvio.nombre,
+                          style: const TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w700, fontSize: 12),
+                        ),
+                      ),
                     ),
                   AvatarIniciales(nombre: solicitud.tercero?.nombre ?? solicitud.nombrePasajero, radio: 16),
                   const SizedBox(width: 10),
@@ -248,6 +259,7 @@ class PanelDetalleSolicitud extends StatelessWidget {
     if (solicitud == null) return const SizedBox.shrink();
     final ruta = flujo.mapa.ruta;
     final acercamiento = flujo.mapa.acercamiento;
+    final esDelivery = solicitud.datosEntrega != null;
     final comision = flujo.precio?.comisionPorcentaje ?? 0;
     final ganancia = solicitud.precio == null ? null : solicitud.precio! * (1 - comision / 100);
     return Column(
@@ -269,7 +281,7 @@ class PanelDetalleSolicitud extends StatelessWidget {
                     solicitud.tercero == null
                         ? 'Pasajero'
                         : 'Pasajero. Lo pidió ${solicitud.nombrePasajero}'
-                            '${solicitud.tercero!.pagaSolicitante ? ', que paga por QR' : ''}',
+                              '${solicitud.tercero!.pagaSolicitante ? ', que paga por QR' : ''}',
                     style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
                   ),
                 ],
@@ -302,14 +314,12 @@ class PanelDetalleSolicitud extends StatelessWidget {
           detalle: [
             if (solicitud.descuentoEstudiante > 0)
               'Estudiante UAP: ${formatoBs(solicitud.precioNormal)} menos ${formatoBs(solicitud.descuentoEstudiante)}',
-            if (ganancia != null) 'Tu ganancia: ${formatoBs(ganancia)} (comisión ${comision.toStringAsFixed(0)}%)',
+            if (!esDelivery && ganancia != null)
+              'Tu ganancia: ${formatoBs(ganancia)} (comisión ${comision.toStringAsFixed(0)}%)',
           ].join('\n'),
           monto: formatoBs(solicitud.precio),
         ),
-        if (conBotones) ...[
-          const SizedBox(height: 14),
-          BotonesDetalleSolicitud(flujo: flujo, onAceptar: onAceptar),
-        ],
+        if (conBotones) ...[const SizedBox(height: 14), BotonesDetalleSolicitud(flujo: flujo, onAceptar: onAceptar)],
       ],
     );
   }
@@ -405,10 +415,7 @@ class PanelViajeConductor extends StatelessWidget {
             ocupado: flujo.ocupado,
             botonChat: BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
           ),
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 14),
-            child: Divider(height: 1),
-          ),
+          const Padding(padding: EdgeInsets.symmetric(vertical: 14), child: Divider(height: 1)),
           PanelDeliveryConductor(flujo: flujo),
         ],
       );
@@ -600,8 +607,8 @@ class _EsperaPasajeroState extends State<_EsperaPasajero> {
             avisos < _maximo
                 ? (faltan > 0 ? 'Podrás avisar de nuevo en $faltan s.' : 'Si no aparece, avísale de nuevo.')
                 : (faltan > 0
-                    ? 'Llámalo. Si no aparece, en $faltan s podrás marcar que no se presentó.'
-                    : 'Si no aparece, marca que no se presentó: el administrador revisará el caso.'),
+                      ? 'Llámalo. Si no aparece, en $faltan s podrás marcar que no se presentó.'
+                      : 'Si no aparece, marca que no se presentó: el administrador revisará el caso.'),
             style: const TextStyle(color: ColoresApp.texto, fontSize: 12.5),
           ),
           const SizedBox(height: 8),
@@ -671,7 +678,9 @@ Future<String?> _pedirComentario(BuildContext context) {
           TextButton(onPressed: () => Navigator.of(contexto).pop(), child: const Text('Volver')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: ColoresApp.rojo),
-            onPressed: controlador.text.trim().isEmpty ? null : () => Navigator.of(contexto).pop(controlador.text.trim()),
+            onPressed: controlador.text.trim().isEmpty
+                ? null
+                : () => Navigator.of(contexto).pop(controlador.text.trim()),
             child: const Text('Cancelar y reportar'),
           ),
         ],
@@ -699,8 +708,8 @@ class _EstadoPagoQr extends StatelessWidget {
     }
     final texto = viaje.pagaSolicitante
         ? viaje.pagoAvisadoEn != null
-            ? '${viaje.primerNombrePasajero} avisó que ya pagó por QR. Revisa tu banco y confírmalo.'
-            : '${viaje.primerNombrePasajero} pagará por QR desde su app. Todavía no avisó el pago.'
+              ? '${viaje.primerNombrePasajero} avisó que ya pagó por QR. Revisa tu banco y confírmalo.'
+              : '${viaje.primerNombrePasajero} pagará por QR desde su app. Todavía no avisó el pago.'
         : 'Cobra por QR. Confirma cuando te llegue el pago.';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -809,7 +818,12 @@ class _EnRevision extends StatelessWidget {
   final VoidCallback? onRevisar;
   final VoidCallback? onSubirDocumentos;
 
-  const _EnRevision({required this.situacion, required this.faltantes, required this.onRevisar, this.onSubirDocumentos});
+  const _EnRevision({
+    required this.situacion,
+    required this.faltantes,
+    required this.onRevisar,
+    this.onSubirDocumentos,
+  });
 
   @override
   Widget build(BuildContext context) {

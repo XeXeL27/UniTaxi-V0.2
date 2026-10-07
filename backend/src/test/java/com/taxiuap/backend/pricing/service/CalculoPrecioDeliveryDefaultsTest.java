@@ -27,7 +27,7 @@ class CalculoPrecioDeliveryDefaultsTest {
                     geometria.createPoint(new Coordinate(1, 2)),
                     geometria.createPoint(new Coordinate(3, 4)));
 
-            assertEquals(new BigDecimal("6.00"), resultado.precioServicio());
+            assertEquals(new BigDecimal("10.00"), resultado.precioServicio());
         }
     }
 

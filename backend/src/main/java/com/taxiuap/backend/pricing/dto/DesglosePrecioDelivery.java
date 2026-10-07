@@ -9,14 +9,11 @@ public record DesglosePrecioDelivery(
         Integer duracionMinutos,
         boolean estimado,
         BigDecimal costoProducto,
-        BigDecimal totalCliente,
-        BigDecimal comision,
-        BigDecimal gananciaPlataforma,
-        BigDecimal gananciaRepartidor) {
+        BigDecimal totalCliente) {
 
     public DesglosePrecioDelivery(BigDecimal precioServicio, BigDecimal distanciaKm,
             Integer duracionMinutos, boolean estimado) {
         this(precioServicio, distanciaKm, duracionMinutos, estimado, BigDecimal.ZERO,
-                precioServicio, BigDecimal.ZERO, BigDecimal.ZERO, precioServicio);
+                precioServicio);
     }
 }

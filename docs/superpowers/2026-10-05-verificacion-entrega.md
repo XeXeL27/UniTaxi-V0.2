@@ -460,6 +460,23 @@ que pasa la solicitud a `CANCELADA` (no la borra lógicamente), y la regla mira 
 `CON_OFERTAS`, así que no bloquea. Queda latente: cualquier borrado lógico futuro de una solicitud
 `PENDIENTE` bloquearía al pasajero para siempre. No se cambió por no ser de las Tasks 3 a 8.
 
+### 6.4 Correcciones aplicadas el 2026-10-07
+
+La revisión posterior cerró los tres huecos anteriores y los defectos de interfaz anotados en el
+plan de compra/mapa:
+
+- `limite_adelanto_compra` puede cambiarlo el repartidor sin permiso para modificar sus datos
+  personales; los demás datos del perfil siguen exigiendo permiso administrativo.
+- El endpoint del conductor para crear una moto ya no permite autoasignar `DELIVERY`; la categoría
+  sigue pudiendo elegirse durante el registro inicial y cambiarse desde administración.
+- La regla de solicitud activa filtra también `estado_sol_viaje = A`, y la misma condición se usa
+  al suspender o desactivar una cuenta.
+- El panel solo muestra "Rechazar paquete" durante la recogida, no reutiliza fotos si se cancela la
+  cámara y deshabilita "Registrar la falla" mientras otra acción está en curso.
+
+La prueba específica de Flutter y el análisis estático pasan. Las pruebas backend que levantan
+contexto PostgreSQL requieren cargar las variables de `.env`, tal como hace `iniciar.sh`.
+
 ---
 
 ## 7. Smoke en Chrome

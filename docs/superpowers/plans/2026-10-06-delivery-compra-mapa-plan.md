@@ -7,14 +7,15 @@
 **Goal:** que en COMPRA_Y_ENTREGA el punto de entrega sea donde esta el pasajero (no el destino que
 eligio), que el mapa dibujar lo que el repartidor tiene que hacer en cada momento (naranja
 punteado hasta el pasajero mientras no compro, ruta desde el comercio cuando compro) y que los datos
-que el backend ya envia y la app no pintaba (comercio real, observacion, comprobante, telefono del
-cliente) se vean.
+que el backend ya envia y la app no pintaba (comercio real, observacion y telefono del cliente) se
+vean. El comprobante queda reservado para una fase futura: su backend se conserva, pero no se activa
+en la UI por ahora.
 
 **Architecture:** no hay arquitectura nueva. El backend ya tiene `punto_compra`,
 `detalle_compra`, `costo_producto_real`, `observacion_compra` y `foto_comprobante_url`, y ya cobra
 `punto_compra -> destino`; lo que falta es (a) que en una compra el `destino` de la solicitud sea
 donde esta el pasajero, (b) que la app use `punto_compra` como punto de partida del mapa, y (c) dos
-campos de exposicion (telefono del cliente solo en compra, y el comprobante). Todo el grueso es
+campo de exposicion del telefono del cliente solo en compra. Todo el grueso es
 app; el backend crece en un campo del DTO y un endpoint.
 
 **Tech Stack:** Spring Boot 4.1.1, Java 21, JPA/PostGIS, Flutter (app movil), PostgreSQL/PostGIS
@@ -28,7 +29,11 @@ con cuatro huecos de datos que el backend ya tiene y la app no muestra. Al revis
 usuario aparecio uno mayor: en COMPRA_Y_ENTREGA el punto de entrega es donde esta el pasajero, pero
 la app lo pide como si fuera un destino mas, como en un viaje normal.
 
-**Estado de ejecucion (2026-10-06):** plan escrito, ninguna task implementada.
+**Estado de ejecucion (2026-10-07):** Tasks 1 a 5 fueron implementadas en los commits
+`92d1d65`, `50dd669` y `7c6fa7f`. La app ya usa el comercio real como partida, permite pedir
+COMPRA_Y_ENTREGA sin elegir destino, dibuja el tramo al pasajero antes de la compra, muestra
+la ruta desde el comercio después de registrarla y presenta el desglose operativo del pedido.
+La verificación manual completa en Chrome queda pendiente de ejecutarse con `./iniciar.sh`.
 
 ---
 
@@ -55,8 +60,8 @@ la app lo pide como si fuera un destino mas, como en un viaje normal.
 - **`Ruling 5: el telefono del cliente se expone solo en COMPRA_Y_ENTREGA`** — es el unico caso en
   que `validarReceptor` lo compara. En ENCOMIENDA el receptor es un tercero con codigo y el
   telefono no aporta nada.
-- **`Ruling 6: el comprobante de la compra lo puede ver el pasajero`** — endpoint nuevo, con la
-  seguridad de que el viaje sea suyo.
+- **`Ruling 6: el comprobante queda preparado para una fase futura`** — el backend y su endpoint se
+  conservan, pero la UI no lo carga ni lo muestra todavía.
 - **`Ruling 7: no tocar `application*.properties`** — hay una modificacion local ajena (perfil por
   defecto `appu` en vez de `xexel`).
 
@@ -151,12 +156,13 @@ luego A -> B.
 - `app-movil/lib/modulos/pasajero/viaje/flujo_pasajero.dart`: destino de la compra, `puedeSolicitar`,
   `solicitar`, `_revisarCotizacion`, `textoPrecio`, seguimiento del repartidor.
 - `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`: textos del panel y `_ResumenEntrega`.
-- `app-movil/lib/modulos/pasajero/viaje/viaje_api.dart`: cliente del comprobante.
+- `app-movil/lib/modulos/pasajero/viaje/viaje_api.dart`: cliente del comprobante reservado para una
+  fase futura.
 - `app-movil/lib/modulos/conductor/viaje/flujo_conductor.dart`: mapa del repartidor.
 - `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`: etiquetas de A y B, receptor.
 - `app-movil/lib/mapa/controlador_mapa.dart`: destino del tramo naranja.
 - `backend/.../trip/dto/ViajeResponse.java` y `trip/service/ViajeService.java`: telefono del cliente.
-- `backend/.../controller/pasajero/ViajePasajeroController.java`: endpoint del comprobante.
+- `backend/.../controller/pasajero/ViajePasajeroController.java`: endpoint del comprobante, sin cambios.
 - Tests junto al modulo correspondiente.
 
 ---
@@ -267,7 +273,7 @@ luego A -> B.
 - Pasajero, `_ResumenEntrega`: "Total a pagar" cuando hay `costoProductoReal`, "Total estimado"
   mientras no lo haya (H18); "Comercio" y "Observacion del repartidor" cuando llegan (H14);
   "Pago confirmado: Bs X" con `montoPagoRecibido`, que hoy no se pinta en ninguna parte.
-- La miniatura del comprobante llega en la Task 5.
+- El comprobante no se muestra todavía; queda como capacidad futura del backend.
 
 - [ ] Etiquetas de A y B del repartidor segun la fase de la compra.
 - [ ] El helper del receptor con el nombre del cliente.
@@ -276,36 +282,28 @@ luego A -> B.
 - [ ] `flutter test`, `flutter analyze`.
 - [ ] Commit: `fix: los paneles del reparto dicen el comercio, el total real y la observacion`.
 
-### Task 5: Telefono del cliente y comprobante (backend y app)
+### Task 5: Telefono del cliente y comprobante reservado
 
 **Files:**
 - Modify: `backend/src/main/java/com/taxiuap/backend/trip/dto/ViajeResponse.java`
 - Modify: `backend/src/main/java/com/taxiuap/backend/trip/service/ViajeService.java`
-- Modify: `backend/src/main/java/com/taxiuap/backend/controller/pasajero/ViajePasajeroController.java`
 - Modify: `app-movil/lib/comun/modelos_viaje.dart`
 - Modify: `app-movil/lib/modulos/conductor/viaje/panel_delivery_conductor.dart`
-- Modify: `app-movil/lib/modulos/pasajero/viaje/viaje_api.dart`
-- Modify: `app-movil/lib/modulos/pasajero/viaje/paneles_pasajero.dart`
-- Create: test del servicio y test de seguridad del endpoint
+- Create: test del servicio del telefono
 
 **Interfaces:**
 - `ViajeResponse.telefonoPasajero`: se llena **solo** si `tipoEnvio == COMPRA_Y_ENTREGA` (Ruling 5,
   H13). El record se reconstruye entero en `sinNombreDestino()`, que tambien lo lleva. La respuesta
   solo la reciben las dos partes del viaje, que es lo que hacen `obtenerViajeDelPasajero` y
   `obtenerViajeDelConductor`.
-- `GET /api/pasajero/viajes/{id}/entrega/comprobante`: valida que el viaje sea del pasajero y devuelve
-  la foto de `datos_entrega.foto_comprobante_url` como `image/jpeg`, con el patron de
-  `ReporteAdminController.java:51-57` y `QrPagoConductorController.java:67-72` (H17). Sin foto ->
-  404. Sin permiso -> 404, para no filtrar que existe el viaje.
-- App: `PasajeroApi.comprobanteEntrega(idViaje) -> Uint8List?` con `cliente.bytes`; miniatura con
-  `Image.memory` y lupa con el `verFoto` de `selector_carnet.dart:647`.
+- El backend del comprobante queda sin cambios y reservado para una fase futura. La app no debe
+  cargarlo, subirlo ni mostrarlo en este alcance.
 
 - [ ] `telefonoPasajero` en el DTO y en `aRespuesta`, condicionado al tipo de envio, mas
       `sinNombreDestino()`.
 - [ ] Test: en COMPRA_Y_ENTREGA llega el telefono; en ENCOMIENDA no; en un taxi no.
-- [ ] Endpoint del comprobante con su test de seguridad (otro pasajero, otro repartidor, sin foto).
-- [ ] App: el campo del cliente en el modelo, el helper del receptor, la miniatura del comprobante y
-      la lupa.
+- [x] Mantener el backend del comprobante disponible, sin activarlo en la UI.
+- [ ] Activar el comprobante en una fase futura, con pruebas de seguridad y vista ampliada.
 - [ ] `flutter test`, `flutter analyze`, `./gradlew test` y `./gradlew build`.
 - [ ] Commit: `feat: el cliente ve el comprobante y el repartidor su telefono en la compra`.
 
@@ -326,8 +324,8 @@ luego A -> B.
 
 - [ ] Spec actualizado en 4, 5, 6 y 10, con los rulings citados.
 - [ ] Recorrido completo en Chrome, de punta a punta, con el backend en `bootRun`: pedir una compra,
-      ver el naranja hasta el pasajero, aceptar, proponer, confirmar, registrar la compra con
-      comprobante, ver la ruta desde el comercio, ver el comprobante y el total real desde el
+      ver el naranja hasta el pasajero, aceptar, proponer, confirmar, registrar la compra, ver la ruta
+      desde el comercio y el total real desde el
       pasajero, confirmar el pago con el check, identificar el receptor y comprobar que el telefono
       aparece en el panel del repartidor.
 - [ ] Repetir el recorrido de una ENCOMIENDA para verificar que no cambio nada.

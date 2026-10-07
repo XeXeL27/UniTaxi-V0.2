@@ -60,6 +60,7 @@ class _VistaChatState extends State<VistaChat> {
   final _controladorTexto = TextEditingController();
   final _scroll = ScrollController();
   bool _enviando = false;
+  String? _avisoEnvio;
 
   @override
   void initState() {
@@ -83,8 +84,15 @@ class _VistaChatState extends State<VistaChat> {
     if (texto.trim().isEmpty || _enviando) return;
     setState(() => _enviando = true);
     _controladorTexto.clear();
-    chat.enviar(texto).whenComplete(() {
-      if (mounted) setState(() => _enviando = false);
+    chat.enviar(texto).then((enviado) {
+      if (!mounted) return;
+      setState(() {
+        _enviando = false;
+        _avisoEnvio = enviado ? 'Mensaje enviado' : 'Sin conexión: no se envió';
+      });
+      Future<void>.delayed(const Duration(seconds: 2), () {
+        if (mounted && _avisoEnvio != null) setState(() => _avisoEnvio = null);
+      });
     });
     _irAlFinal();
   }
@@ -109,7 +117,7 @@ class _VistaChatState extends State<VistaChat> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _Cabecera(nombre: widget.nombreContraparte, conectado: chat.conectado),
+          _Cabecera(nombre: widget.nombreContraparte, estado: chat.estadoConexion),
           const Divider(height: 1),
           Flexible(
             child: ConstrainedBox(
@@ -137,11 +145,18 @@ class _VistaChatState extends State<VistaChat> {
                     ),
             ),
           ),
-          _BarraEnvio(
-            controlador: _controladorTexto,
-            enviando: _enviando,
-            alEnviar: () => _enviar(chat),
-          ),
+          _BarraEnvio(controlador: _controladorTexto, enviando: _enviando, alEnviar: () => _enviar(chat)),
+          if (_avisoEnvio != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                _avisoEnvio!,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: _avisoEnvio!.startsWith('Sin') ? ColoresApp.rojo : ColoresApp.exito,
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -150,12 +165,13 @@ class _VistaChatState extends State<VistaChat> {
 
 class _Cabecera extends StatelessWidget {
   final String nombre;
-  final bool conectado;
+  final EstadoConexionChat estado;
 
-  const _Cabecera({required this.nombre, required this.conectado});
+  const _Cabecera({required this.nombre, required this.estado});
 
   @override
   Widget build(BuildContext context) {
+    // CAMBIO CODEX 2026-10-07: estado visual real del socket para que ambas sesiones sepan si el chat esta activo.
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
       child: Row(
@@ -167,9 +183,26 @@ class _Cabecera extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(nombre, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
-                Text(
-                  conectado ? 'En linea' : 'Conectando...',
-                  style: const TextStyle(fontSize: 11, color: ColoresApp.textoSuave),
+                Row(
+                  children: [
+                    if (estado == EstadoConexionChat.conectando)
+                      const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5))
+                    else
+                      Icon(
+                        Icons.circle,
+                        size: 9,
+                        color: estado == EstadoConexionChat.conectado ? ColoresApp.exito : ColoresApp.rojo,
+                      ),
+                    const SizedBox(width: 5),
+                    Text(
+                      estado == EstadoConexionChat.conectado
+                          ? 'Chat activo'
+                          : estado == EstadoConexionChat.desconectado
+                          ? 'Sin conexión'
+                          : 'Chat',
+                      style: const TextStyle(fontSize: 11, color: ColoresApp.textoSuave),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -211,8 +244,8 @@ class _Burbuja extends StatelessWidget {
           border: propio ? null : Border.all(color: ColoresApp.borde),
         ),
         child: Text(
-          mensaje.contenido,
-          style: TextStyle(color: propio ? ColoresApp.blanco : ColoresApp.texto),
+          '${mensaje.contenido}\n${propio ? '✓ Enviado' : '• Recibido'}',
+          style: TextStyle(color: propio ? ColoresApp.blanco : ColoresApp.texto, height: 1.35),
         ),
       ),
     );
@@ -250,11 +283,7 @@ class _BarraEnvio extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 6),
-          IconButton(
-            onPressed: enviando ? null : alEnviar,
-            icon: const Icon(Icons.send),
-            color: ColoresApp.ruta,
-          ),
+          IconButton(onPressed: enviando ? null : alEnviar, icon: const Icon(Icons.send), color: ColoresApp.ruta),
         ],
       ),
     );

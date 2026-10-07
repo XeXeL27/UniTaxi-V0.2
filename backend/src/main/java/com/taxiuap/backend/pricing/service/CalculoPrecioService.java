@@ -55,14 +55,14 @@ public class CalculoPrecioService {
     private final DistanciaRutaService distanciaRutaService;
 
     /** Tarifa de referencia DELIVERY (su precio real lo calcula CalculoPrecioDeliveryService). */
-    @Value("${taxiuap.delivery.tarifa-base:4.00}")
-    private BigDecimal tarifaBaseDelivery = new BigDecimal("4.00");
+    @Value("${taxiuap.delivery.tarifa-base:8.00}")
+    private BigDecimal tarifaBaseDelivery = new BigDecimal("8.00");
 
-    @Value("${taxiuap.delivery.precio-km:1.80}")
-    private BigDecimal precioKmDelivery = new BigDecimal("1.80");
+    @Value("${taxiuap.delivery.precio-km:2.00}")
+    private BigDecimal precioKmDelivery = new BigDecimal("2.00");
 
-    @Value("${taxiuap.delivery.precio-minuto:0.20}")
-    private BigDecimal precioMinutoDelivery = new BigDecimal("0.20");
+    @Value("${taxiuap.delivery.precio-minuto:0.00}")
+    private BigDecimal precioMinutoDelivery = BigDecimal.ZERO;
 
     /** Precio base vigente (el de los primeros km), para mostrar antes de elegir destino. */
     public BigDecimal precioBase() {
@@ -145,6 +145,7 @@ public class CalculoPrecioService {
                         .findByCategoriaServicioIdAndZonaId(idCategoriaServicio, zona.getId()).stream())
                 .filter(tarifa -> tarifa.getEstadoTarifa() == EstadoRegistro.A)
                 .filter(tarifa -> cubreVigencia(tarifa.getVigenteDesde(), tarifa.getVigenteHasta(), hoy))
+                .filter(tarifa -> tarifaUtilizable(tarifa, solicitud))
                 .findFirst();
 
         if (tarifaDeZona.isPresent()) return tarifaDeZona.get();
@@ -152,6 +153,7 @@ public class CalculoPrecioService {
         List<Tarifa> tarifasVigentes = tarifaRepository.findByCategoriaServicioId(idCategoriaServicio).stream()
                 .filter(tarifa -> tarifa.getEstadoTarifa() == EstadoRegistro.A)
                 .filter(tarifa -> cubreVigencia(tarifa.getVigenteDesde(), tarifa.getVigenteHasta(), hoy))
+                .filter(tarifa -> tarifaUtilizable(tarifa, solicitud))
                 .toList();
         Optional<Tarifa> tarifaAdministrativa = tarifasVigentes.stream()
                 .filter(tarifa -> tarifa.getZona() != null)
@@ -179,6 +181,17 @@ public class CalculoPrecioService {
 
     private boolean contieneOrigen(Zona zona, Point origen) {
         return zona.getPoligono() != null && zona.getPoligono().contains(origen);
+    }
+
+    /**
+     * Las tarifas DELIVERY antiguas creadas por pruebas o seeds incompletos pueden tener base 0.
+     * No deben ganar la seleccion frente a la tarifa configurada ni convertir el servicio en gratis.
+     */
+    private boolean tarifaUtilizable(Tarifa tarifa, SolicitudViaje solicitud) {
+        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) {
+            return true;
+        }
+        return tarifa.getTarifaBase() != null && tarifa.getTarifaBase().signum() > 0;
     }
 
     private boolean cubreVigencia(LocalDate desde, LocalDate hasta, LocalDate hoy) {

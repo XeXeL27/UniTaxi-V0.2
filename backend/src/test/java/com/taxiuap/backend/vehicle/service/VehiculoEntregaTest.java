@@ -57,6 +57,23 @@ class VehiculoEntregaTest {
     }
 
     @Test
+    void conductorNoPuedeConvertirSuMotoEnDeliveryDesdeVehiculos() {
+        Conductor conductor = new Conductor();
+        conductor.setId(1L);
+        TipoVehiculo moto = tipo(2, "MOTO");
+        CategoriaServicio delivery = categoria(3, "DELIVERY", moto);
+
+        when(conductorRepository.findByUsuarioId(10L)).thenReturn(Optional.of(conductor));
+        when(vehiculoRepository.findByPlaca("ABC123")).thenReturn(Optional.empty());
+        when(tipoVehiculoRepository.findById(2)).thenReturn(Optional.of(moto));
+        when(categoriaServicioRepository.findByIdAndEstadoCategoriaServicio(3, EstadoRegistro.A))
+                .thenReturn(Optional.of(delivery));
+
+        assertThrows(NegocioException.class, () -> service.crear(10L,
+                new VehiculoRequest("ABC123", "Honda", "CB", "Rojo", 2020, 2, 3)));
+    }
+
+    @Test
     void vehiculoDeliveryExigeTipoMotoYCategoriaDelivery() {
         TipoVehiculo sedan = tipo(1, "SEDAN");
         TipoVehiculo moto = tipo(2, "MOTO");

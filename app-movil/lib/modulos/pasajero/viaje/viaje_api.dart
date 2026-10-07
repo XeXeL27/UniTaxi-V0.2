@@ -89,18 +89,24 @@ class ViajeApi {
 
   /// Precio de ir de [a] a [b] para este pasajero (con su descuento de estudiante, si tiene).
   /// [paraOtraPersona]: sin el descuento de estudiante de quien pide.
-  Future<CotizacionViaje> cotizar(LatLng a, LatLng b, {bool paraOtraPersona = false}) async => CotizacionViaje.desdeJson(
-    await cliente.get('/api/pasajero/solicitudes/cotizacion?origenLat=${a.latitude}&origenLng=${a.longitude}'
-        '&destinoLat=${b.latitude}&destinoLng=${b.longitude}&paraOtraPersona=$paraOtraPersona') as Map<String, dynamic>,
-  );
+  Future<CotizacionViaje> cotizar(LatLng a, LatLng b, {bool paraOtraPersona = false}) async =>
+      CotizacionViaje.desdeJson(
+        await cliente.get(
+          '/api/pasajero/solicitudes/cotizacion?origenLat=${a.latitude}&origenLng=${a.longitude}'
+          '&destinoLat=${b.latitude}&destinoLng=${b.longitude}&paraOtraPersona=$paraOtraPersona',
+        ) as Map<String, dynamic>,
+      );
 
   /// [destinoNombre]: nombre del favorito elegido como destino (solo lo ve el pasajero).
-  Future<Solicitud> solicitar(PuntoRuta origen, PuntoRuta destino,
-      {String metodoPago = MetodoPago.efectivo,
-      String? destinoNombre,
-      int? idCategoriaServicio,
-      DatosEntregaForm? datosEntrega,
-      PasajeroTercero? tercero}) async {
+  Future<Solicitud> solicitar(
+    PuntoRuta origen,
+    PuntoRuta destino, {
+    String metodoPago = MetodoPago.efectivo,
+    String? destinoNombre,
+    int? idCategoriaServicio,
+    DatosEntregaForm? datosEntrega,
+    PasajeroTercero? tercero,
+  }) async {
     final datos = await cliente.post('/api/pasajero/solicitudes', {
       'origenWkt': wktDesdePunto(origen.posicion),
       'destinoWkt': wktDesdePunto(destino.posicion),
@@ -126,9 +132,8 @@ class ViajeApi {
   Future<int?> categoriaDelivery() => categoriaRepartoId(cliente);
 
   Future<Viaje> confirmarCompra(int idViaje) async => Viaje.desdeJson(
-        await cliente.post('/api/pasajero/viajes/$idViaje/entrega/confirmar-compra', const {})
-            as Map<String, dynamic>,
-      );
+    await cliente.post('/api/pasajero/viajes/$idViaje/entrega/confirmar-compra', const {}) as Map<String, dynamic>,
+  );
 
   /// Viaje activo del pasajero, o null si no tiene.
   Future<Viaje?> viajeEnCurso() async {
@@ -174,6 +179,9 @@ class ViajeApi {
   Future<List<QrPago>> qrConductor(int idViaje) => cliente.lista('/api/pasajero/viajes/$idViaje/qr', QrPago.desdeJson);
 
   Future<Uint8List?> imagenQr(int idViaje, int idQr) => cliente.bytes('/api/pasajero/viajes/$idViaje/qr/$idQr/imagen');
+
+  Future<Uint8List?> comprobanteEntrega(int idViaje) =>
+      cliente.bytes('/api/pasajero/viajes/$idViaje/entrega/comprobante');
 
   Future<List<ConductorEnLinea>> conductoresEnLinea() async {
     final datos = await cliente.get('/api/pasajero/conductores-en-linea') as List<dynamic>;

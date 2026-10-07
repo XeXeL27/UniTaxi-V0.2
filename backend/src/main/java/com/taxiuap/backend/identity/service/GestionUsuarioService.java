@@ -200,8 +200,9 @@ public class GestionUsuarioService {
     public boolean tieneViajeEnCurso(Usuario usuario) {
         List<SituacionViaje> finales = List.of(SituacionViaje.COMPLETADO, SituacionViaje.CANCELADO);
         return pasajeroRepository.findByUsuarioId(usuario.getId())
-                .map(p -> solicitudViajeRepository.existsByPasajeroIdAndSituacionSolicitudIn(p.getId(),
-                                List.of(SituacionSolicitud.PENDIENTE, SituacionSolicitud.CON_OFERTAS))
+                .map(p -> solicitudViajeRepository.existsByPasajeroIdAndSituacionSolicitudInAndEstadoSolViaje(
+                                p.getId(), List.of(SituacionSolicitud.PENDIENTE, SituacionSolicitud.CON_OFERTAS),
+                                EstadoRegistro.A)
                         || viajeRepository.findFirstByPasajeroIdAndSituacionViajeNotIn(p.getId(), finales).isPresent())
                 .orElse(false)
                 || conductorRepository.findByUsuarioId(usuario.getId())

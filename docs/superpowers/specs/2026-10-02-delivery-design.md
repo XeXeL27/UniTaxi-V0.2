@@ -15,7 +15,8 @@ DELIVERY permite solicitar una entrega con una moto habilitada para la categorí
 - `COMPRA_Y_ENTREGA`: el cliente solicita un producto, el repartidor coordina dónde
   comprarlo, lo adelanta con su propio dinero y lo entrega en B.
 
-La plataforma registra el pedido, el seguimiento, el costo del servicio, la comisión y
+La plataforma registra el pedido, el seguimiento y el costo del servicio. En DELIVERY no se muestra ni
+se aplica comisión mientras la pasarela de pagos no esté implementada, y
 los incidentes. El dinero se paga directamente al repartidor en la entrega, en efectivo
 o mediante el QR del repartidor. No existe pasarela de pagos en esta fase.
 
@@ -159,12 +160,11 @@ El precio de la plataforma se registra separado del costo del producto:
 
 ```text
 total_cliente = costo_producto_real + precio_servicio_final
-comision = precio_servicio_final * porcentaje_comision
-ganancia_repartidor = precio_servicio_final - comision
+ganancia_repartidor = precio_servicio_final
 ```
 
-La comisión inicial de DELIVERY es 0%, igual que la configuración actual. Debe quedar
-preparada para configurarse posteriormente, sin aplicar comisión al producto.
+La comisión no aplica actualmente a DELIVERY. La pasarela de pagos y cualquier regla futura de comisión
+quedan fuera de este módulo por ahora.
 
 ## 6. Flujo de COMPRA_Y_ENTREGA
 
@@ -308,7 +308,7 @@ automática; el admin puede revisar el patrón posteriormente.
 - Al registrar compra, calcula y fija comercio -> B.
 - Un fallo de OSRM impide crear o fijar el precio.
 - El GPS posterior no modifica el precio definitivo.
-- La comisión inicial es 0% y nunca se aplica al producto.
+- La comisión no aplica actualmente a DELIVERY y no se muestra en su UI.
 
 ### Códigos y entrega
 

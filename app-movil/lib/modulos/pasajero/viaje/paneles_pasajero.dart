@@ -17,7 +17,9 @@ import '../../../comun/vista_chat.dart';
 /// hasta que el backend fija el precio desde el comercio real.
 String etiquetaPrecioDelivery(Viaje viaje) {
   final datos = viaje.datosEntrega;
-  if (datos?.tipoEnvio == TipoEnvio.encomienda) return 'Precio fijo del servicio';
+  if (datos?.tipoEnvio == TipoEnvio.encomienda) {
+    return 'Precio fijo del servicio';
+  }
   if (datos?.tipoEnvio == TipoEnvio.compraYEntrega) {
     return viaje.precioEstimado ? 'Precio estimado del servicio' : 'Precio definitivo del servicio';
   }
@@ -94,10 +96,7 @@ class PanelEligiendo extends StatelessWidget {
             monto: flujo.textoPrecio,
           ),
           const SizedBox(height: 10),
-          if (paraOtra) ...[
-            _DatosQuienViaja(tercero: tercero, onEditar: onEditarTercero),
-            const SizedBox(height: 10),
-          ],
+          if (paraOtra) ...[_DatosQuienViaja(tercero: tercero, onEditar: onEditarTercero), const SizedBox(height: 10)],
           if (paraOtra && (tercero?.pagaSolicitante ?? false))
             const _Indicacion(
               icono: FontAwesomeIcons.qrcode,
@@ -119,8 +118,8 @@ class PanelEligiendo extends StatelessWidget {
             etiqueta: paraOtra
                 ? 'Recoger en (A)'
                 : mapa.aSigueGps && a.texto == 'Mi ubicación actual'
-                    ? 'Mi ubicación actual (A)'
-                    : 'Punto de partida (A)',
+                ? 'Mi ubicación actual (A)'
+                : 'Punto de partida (A)',
             texto: flujo.direccionOrigen ?? a.texto,
             accion: paraOtra && !flujo.eligiendoPartida
                 ? IconButton(
@@ -262,19 +261,13 @@ class DetalleSolicitudViaje extends StatelessWidget {
         ),
         _FilaDato(
           etiqueta: 'Distancia',
-          valor: DatoRuta(
-            icono: FontAwesomeIcons.route,
-            texto: ruta?.distanciaTexto ?? 'A calcular',
-          ),
+          valor: DatoRuta(icono: FontAwesomeIcons.route, texto: ruta?.distanciaTexto ?? 'A calcular'),
         ),
         if (flujo.paraOtraPersona && flujo.tercero != null) ...[
           const Divider(height: 18, color: ColoresApp.borde),
           _FilaDato(etiqueta: 'Viaja', valor: _Valor(flujo.tercero!.nombre)),
           _FilaDato(etiqueta: 'Celular', valor: _Valor(flujo.tercero!.telefono ?? '')),
-          _FilaDato(
-            etiqueta: 'Paga',
-            valor: _Valor(flujo.tercero!.pagaSolicitante ? 'Tú, por QR' : 'Quien viaja'),
-          ),
+          _FilaDato(etiqueta: 'Paga', valor: _Valor(flujo.tercero!.pagaSolicitante ? 'Tú, por QR' : 'Quien viaja')),
           FilaLugar.partida(etiqueta: 'Recoger en', texto: flujo.direccionOrigen ?? flujo.mapa.a?.texto ?? ''),
           FilaLugar.destino(etiqueta: 'Dejar en', texto: flujo.mapa.b?.texto ?? ''),
         ],
@@ -290,12 +283,12 @@ class _Valor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Flexible(
-        child: Text(
-          texto,
-          textAlign: TextAlign.right,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.texto),
-        ),
-      );
+    child: Text(
+      texto,
+      textAlign: TextAlign.right,
+      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+    ),
+  );
 }
 
 /// Fila con la etiqueta a la izquierda y el dato a la derecha, para el detalle de una solicitud.
@@ -312,10 +305,7 @@ class _FilaDato extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              etiqueta,
-              style: const TextStyle(fontSize: 13.5, color: ColoresApp.textoSuave),
-            ),
+            child: Text(etiqueta, style: const TextStyle(fontSize: 13.5, color: ColoresApp.textoSuave)),
           ),
           const SizedBox(width: 10),
           valor,
@@ -464,8 +454,11 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
 
 /// Icono, texto y color del estado del viaje tal como lo ve el pasajero. El texto cambia con el
 /// servicio para que en un reparto no salga "conductor" cuando el que llega es un repartidor.
-(FaIconData, String, Color) estadoViajePasajero(String situacion,
-    [ServicioActivo servicio = ServicioActivo.viaje, PasajeroTercero? tercero]) {
+(FaIconData, String, Color) estadoViajePasajero(
+  String situacion, [
+  ServicioActivo servicio = ServicioActivo.viaje,
+  PasajeroTercero? tercero,
+]) {
   final quien = tercero?.primerNombre;
   final texto = switch (situacion) {
     _ when quien != null && (situacion == SituacionViaje.confirmado || situacion == SituacionViaje.enCamino) =>
@@ -473,10 +466,13 @@ class _PanelBuscandoState extends State<PanelBuscando> with SingleTickerProvider
     _ when quien != null && situacion == SituacionViaje.llego => 'El taxi está esperando a $quien',
     _ when quien != null && situacion == SituacionViaje.enCurso => '$quien va en viaje a su destino',
     SituacionViaje.confirmado || SituacionViaje.enCamino =>
-      servicio == ServicioActivo.entrega ? 'Tu repartidor va a recoger tu paquete' : (situacion == SituacionViaje.confirmado ? 'Tu conductor aceptó el viaje' : 'Tu conductor va en camino'),
-    SituacionViaje.llego => servicio == ServicioActivo.entrega
-        ? 'Tu repartidor llegó al punto de recogida'
-        : 'Tu conductor llegó. Te está esperando',
+      servicio == ServicioActivo.entrega
+          ? 'Tu repartidor va a recoger tu paquete'
+          : (situacion == SituacionViaje.confirmado ? 'Tu conductor aceptó el viaje' : 'Tu conductor va en camino'),
+    SituacionViaje.llego =>
+      servicio == ServicioActivo.entrega
+          ? 'Tu repartidor llegó al punto de recogida'
+          : 'Tu conductor llegó. Te está esperando',
     SituacionViaje.enCurso =>
       servicio == ServicioActivo.entrega ? 'Paquete recogido: va en camino al destino' : 'En viaje a tu destino',
     _ => SituacionViaje.nombre(situacion),
@@ -601,7 +597,9 @@ class PanelViaje extends StatelessWidget {
         FilaLugar.destino(texto: viaje.destinoTexto),
         const SizedBox(height: 10),
         RecuadroPrecio(
-          etiqueta: viaje.datosEntrega == null ? MetodoPago.frase('Pagas', viaje.metodoPago) : etiquetaPrecioDelivery(viaje),
+          etiqueta: viaje.datosEntrega == null
+              ? MetodoPago.frase('Pagas', viaje.metodoPago)
+              : etiquetaPrecioDelivery(viaje),
           detalle: viaje.datosEntrega == null ? null : MetodoPago.frase('Pagas', viaje.metodoPago),
           monto: formatoBs(viaje.precioFinal),
         ),
@@ -683,7 +681,7 @@ class _ResumenEntrega extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final producto = datos.costoProductoReal ?? datos.costoProductoEstimado;
+    final producto = datos.costoProductoReal ?? datos.costoProductoConfirmado ?? datos.costoProductoEstimado;
     final total = producto == null || precioServicio == null ? null : producto + precioServicio!;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -691,18 +689,43 @@ class _ResumenEntrega extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Estado: ${EstadoEntrega.nombre(datos.estadoEntrega)}', style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
+          Text(
+            'Estado: ${EstadoEntrega.nombre(datos.estadoEntrega)}',
+            style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
+          ),
           const SizedBox(height: 6),
           LineaTiempoEntrega(datos: datos),
           const SizedBox(height: 6),
           if (datos.tipoEnvio == TipoEnvio.compraYEntrega)
             _linea('Producto', producto == null ? 'Pendiente' : formatoBs(producto)),
           _linea('Servicio', precioServicio == null ? 'Pendiente' : formatoBs(precioServicio)),
-          if (total != null) _linea('Total estimado', formatoBs(total), fuerte: true),
+          if (total != null)
+            _linea(
+              datos.costoProductoReal == null ? 'Total estimado' : 'Total a pagar',
+              formatoBs(total),
+              fuerte: true,
+            ),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega && datos.detalleCompra != null)
+            _linea('Comercio', datos.detalleCompra!),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
+              datos.detalleCompra == null &&
+              datos.detalleCompraPropuesto != null)
+            _linea('Comercio propuesto', datos.detalleCompraPropuesto!),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
+              datos.costoProductoReal == null &&
+              datos.costoProductoConfirmado != null)
+            _linea('Monto confirmado', formatoBs(datos.costoProductoConfirmado!), fuerte: true),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega && datos.observacionCompra != null)
+            _linea('Observación del repartidor', datos.observacionCompra!),
+          if (datos.tipoEnvio == TipoEnvio.compraYEntrega && datos.montoPagoRecibido != null)
+            _linea('Pago confirmado', formatoBs(datos.montoPagoRecibido), fuerte: true),
           if (datos.tipoEnvio == TipoEnvio.encomienda && datos.estadoEntrega == EstadoEntrega.enMano)
             const Padding(
               padding: EdgeInsets.only(top: 5),
-              child: Text('El pedido está en manos del repartidor. Ya no puedes cancelarlo.', style: TextStyle(color: ColoresApp.rojo, fontSize: 12)),
+              child: Text(
+                'El pedido está en manos del repartidor. Ya no puedes cancelarlo.',
+                style: TextStyle(color: ColoresApp.rojo, fontSize: 12),
+              ),
             ),
           if (datos.tieneReporte)
             Padding(
@@ -718,9 +741,19 @@ class _ResumenEntrega extends StatelessWidget {
   }
 
   Widget _linea(String titulo, String valor, {bool fuerte = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(children: [Expanded(child: Text(titulo, style: const TextStyle(color: ColoresApp.textoSuave))), Text(valor, style: TextStyle(color: ColoresApp.texto, fontWeight: fuerte ? FontWeight.w700 : FontWeight.w500))]),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        Expanded(
+          child: Text(titulo, style: const TextStyle(color: ColoresApp.textoSuave)),
+        ),
+        Text(
+          valor,
+          style: TextStyle(color: ColoresApp.texto, fontWeight: fuerte ? FontWeight.w700 : FontWeight.w500),
+        ),
+      ],
+    ),
+  );
 }
 
 /// Seguimiento del pedido paso a paso, con la hora de cada confirmacion del repartidor.
@@ -754,7 +787,10 @@ class LineaTiempoEntrega extends StatelessWidget {
                 Expanded(
                   child: Text(
                     texto,
-                    style: TextStyle(color: hecho ? ColoresApp.texto : ColoresApp.textoSuave, fontWeight: hecho ? FontWeight.w600 : FontWeight.normal),
+                    style: TextStyle(
+                      color: hecho ? ColoresApp.texto : ColoresApp.textoSuave,
+                      fontWeight: hecho ? FontWeight.w600 : FontWeight.normal,
+                    ),
                   ),
                 ),
                 if (hora != null)
@@ -783,23 +819,25 @@ class PanelDosPuntos extends StatelessWidget {
     final texto = listos
         ? 'Los dos puntos están marcados'
         : marcandoPartida
-            ? 'Marca dónde recogen a la persona'
-            : 'Marca dónde dejan a la persona';
+        ? 'Marca dónde recogen a la persona'
+        : 'Marca dónde dejan a la persona';
     Widget paso(int numero, bool hecho) => Container(
-          width: 24,
-          height: 24,
-          margin: const EdgeInsets.only(left: 6),
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            color: hecho ? ColoresApp.exito : ColoresApp.blanco,
-            shape: BoxShape.circle,
-            border: Border.all(color: hecho ? ColoresApp.exito : ColoresApp.borde, width: 1.5),
-          ),
-          child: hecho
-              ? const FaIcon(FontAwesomeIcons.check, size: 11, color: ColoresApp.blanco)
-              : Text('$numero',
-                  style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12, fontWeight: FontWeight.w700)),
-        );
+      width: 24,
+      height: 24,
+      margin: const EdgeInsets.only(left: 6),
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: hecho ? ColoresApp.exito : ColoresApp.blanco,
+        shape: BoxShape.circle,
+        border: Border.all(color: hecho ? ColoresApp.exito : ColoresApp.borde, width: 1.5),
+      ),
+      child: hecho
+          ? const FaIcon(FontAwesomeIcons.check, size: 11, color: ColoresApp.blanco)
+          : Text(
+              '$numero',
+              style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+    );
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -809,7 +847,11 @@ class PanelDosPuntos extends StatelessWidget {
             FaIcon(
               FontAwesomeIcons.locationDot,
               size: 16,
-              color: listos ? ColoresApp.exito : marcandoPartida ? ColoresApp.azul : ColoresApp.rojo,
+              color: listos
+                  ? ColoresApp.exito
+                  : marcandoPartida
+                  ? ColoresApp.azul
+                  : ColoresApp.rojo,
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -870,7 +912,10 @@ class _DatosQuienViaja extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Viaja: ${datos.nombre}', style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700)),
+                Text(
+                  'Viaja: ${datos.nombre}',
+                  style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
+                ),
                 Text(
                   '${datos.telefono ?? ''} - ${datos.pagaSolicitante ? 'Pagas tú (QR)' : 'Paga quien viaja'}',
                   style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
@@ -1047,9 +1092,8 @@ class TarjetaCodigoEntrega extends StatelessWidget {
   Widget _botonWhatsapp(BuildContext context, FaseCodigoEntrega fase) {
     final enlace = enlaceWhatsappCodigo(fase)!;
     return IconButton(
-      onPressed: () => abrirEnlace == null
-          ? abrirEnlaceExterno(context, enlace, textoWhatsappCodigo(fase))
-          : abrirEnlace!(enlace),
+      onPressed: () =>
+          abrirEnlace == null ? abrirEnlaceExterno(context, enlace, textoWhatsappCodigo(fase)) : abrirEnlace!(enlace),
       tooltip: 'Mandarlo por WhatsApp',
       icon: const FaIcon(FontAwesomeIcons.whatsapp, color: ColoresApp.azul, size: 16),
     );
@@ -1060,39 +1104,40 @@ class TarjetaCodigoEntrega extends StatelessWidget {
     final nombre = fase.nombre;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: [Row(
       children: [
-        Expanded(
-          child: InkWell(
-            onTap: () => copiarAlPortapapeles(context, fase.codigo),
-            borderRadius: BorderRadius.circular(8),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 11),
-                  const SizedBox(width: 7),
-                  Text(fase.titulo, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      fase.codigo,
-                      style: const TextStyle(
-                        color: ColoresApp.azul,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 2,
+        Row(
+          children: [
+            Expanded(
+              child: InkWell(
+                onTap: () => copiarAlPortapapeles(context, fase.codigo),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    children: [
+                      const FaIcon(FontAwesomeIcons.lock, color: ColoresApp.textoSuave, size: 11),
+                      const SizedBox(width: 7),
+                      Text(fase.titulo, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        child: Text(
+                          fase.codigo,
+                          style: const TextStyle(
+                            color: ColoresApp.azul,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 2,
+                          ),
+                        ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
-          ),
+            if (enlace != null) _botonWhatsapp(context, fase),
+          ],
         ),
-        if (enlace != null) _botonWhatsapp(context, fase),
-        ],
-      ),
         Text(
           'Para ${nombre ?? 'quien recibe'} ${fase.donde}.',
           style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 11.5),
@@ -1380,8 +1425,11 @@ class OpcionesEligiendo extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: Border.all(color: flujo.paraOtraPersona ? ColoresApp.azul : ColoresApp.borde),
                 ),
-                child: FaIcon(FontAwesomeIcons.userGroup, size: 12,
-                    color: flujo.paraOtraPersona ? ColoresApp.blanco : ColoresApp.azul),
+                child: FaIcon(
+                  FontAwesomeIcons.userGroup,
+                  size: 12,
+                  color: flujo.paraOtraPersona ? ColoresApp.blanco : ColoresApp.azul,
+                ),
               ),
             ),
           ),
@@ -1413,10 +1461,7 @@ class TarjetaMoto extends StatelessWidget {
     ].where((d) => (d.$2 ?? '').trim().isNotEmpty).toList();
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-      decoration: BoxDecoration(
-        color: ColoresApp.gris,
-        borderRadius: BorderRadius.circular(14),
-      ),
+      decoration: BoxDecoration(color: ColoresApp.gris, borderRadius: BorderRadius.circular(14)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -1425,7 +1470,10 @@ class TarjetaMoto extends StatelessWidget {
               const FaIcon(FontAwesomeIcons.motorcycle, color: ColoresApp.tinta, size: 15),
               const SizedBox(width: 8),
               const Expanded(
-                child: Text('Tu moto', style: TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700, fontSize: 14)),
+                child: Text(
+                  'Tu moto',
+                  style: TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700, fontSize: 14),
+                ),
               ),
               if (viaje.placa != null)
                 Container(

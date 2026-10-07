@@ -19,14 +19,14 @@ class CalculoPrecioDeliveryServiceTest {
     private static final GeometryFactory GEOMETRIA = new GeometryFactory();
 
     @Test
-    void encomiendaFijaPrecioConLaRutaAB() {
+    void encomiendaCobraTarifaBaseYRecorridoSinCobrarPorMinuto() {
         CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
                 (origen, destino) -> new RutaResponse(new BigDecimal("2500"), 600),
-                new BigDecimal("5.00"), new BigDecimal("2.00"), new BigDecimal("0.50"), BigDecimal.ZERO);
+                new BigDecimal("8.00"), new BigDecimal("2.00"), new BigDecimal("99.00"));
 
         DesglosePrecioDelivery resultado = service.calcularEncomienda(punto(1, 2), punto(3, 4));
 
-        assertEquals(new BigDecimal("15.00"), resultado.precioServicio());
+        assertEquals(new BigDecimal("13.00"), resultado.precioServicio());
         assertEquals(new BigDecimal("2.50"), resultado.distanciaKm());
         assertEquals(10, resultado.duracionMinutos());
         assertEquals(false, resultado.estimado());
@@ -36,7 +36,7 @@ class CalculoPrecioDeliveryServiceTest {
     void compraEstimaGpsBYPrefijaComercioB() {
         CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
                 (origen, destino) -> new RutaResponse(new BigDecimal("1000"), 120),
-                new BigDecimal("4.00"), new BigDecimal("3.00"), BigDecimal.ZERO, BigDecimal.ZERO);
+                new BigDecimal("4.00"), new BigDecimal("3.00"), BigDecimal.ZERO);
 
         DesglosePrecioDelivery estimado = service.estimarCompra(punto(1, 2), punto(3, 4));
         DesglosePrecioDelivery fijado = service.fijarPrecioCompra(punto(5, 6), punto(3, 4));
@@ -50,30 +50,28 @@ class CalculoPrecioDeliveryServiceTest {
     void falloDeOsrmImpideCalcularSinLineaRecta() {
         CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
                 (origen, destino) -> { throw new NegocioException("OSRM no disponible"); },
-                new BigDecimal("5.00"), BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO);
+                new BigDecimal("5.00"), BigDecimal.ONE, BigDecimal.ZERO);
 
         assertThrows(NegocioException.class, () -> service.calcularEncomienda(punto(1, 2), punto(3, 4)));
     }
 
     @Test
-    void comisionEsCeroYNoIncluyeCostoDelProducto() {
+    void consolidarPagoNoCreaComisionAunqueLlegueUnPorcentajeConfigurado() {
         CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
                 (origen, destino) -> new RutaResponse(new BigDecimal("1000"), 60),
-                BigDecimal.ZERO, BigDecimal.ONE, BigDecimal.ZERO, BigDecimal.ZERO);
+                BigDecimal.ZERO, BigDecimal.ONE, BigDecimal.ZERO);
 
         DesglosePrecioDelivery resultado = service.consolidarPago(
                 service.fijarPrecioCompra(punto(1, 2), punto(3, 4)), new BigDecimal("30.00"));
 
-        assertEquals(new BigDecimal("0.00"), resultado.comision());
         assertEquals(new BigDecimal("31.00"), resultado.totalCliente());
-        assertEquals(new BigDecimal("0.00"), resultado.gananciaPlataforma());
     }
 
     @Test
     void compraSoloEsVisibleSiElMontoNoSuperaElLimite() {
         CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
                 (origen, destino) -> new RutaResponse(BigDecimal.ONE, 1),
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
 
         assertEquals(true, service.puedeAdelantar(new BigDecimal("50.00"), new BigDecimal("50.00")));
         assertEquals(false, service.puedeAdelantar(new BigDecimal("50.01"), new BigDecimal("50.00")));

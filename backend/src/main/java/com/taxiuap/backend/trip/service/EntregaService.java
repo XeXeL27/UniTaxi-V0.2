@@ -144,7 +144,7 @@ public class EntregaService {
      * COMPRA_Y_ENTREGA: compra ya hecha. El pedido pasa a EN_MANO con el punto de compra real y el
      * costo real, y el precio del servicio se recalcula desde el comercio hasta el destino: el trayecto
      * del repartidor hasta el comercio no se cobra. El producto queda fuera del precio de la plataforma
-     * porque el 0% de comision es solo del servicio.
+     * porque la comision no aplica actualmente a DELIVERY.
      */
     @Transactional
     public ViajeResponse registrarCompra(Long idViaje, RegistrarCompraRequest request, MultipartFile comprobante) {
@@ -300,7 +300,7 @@ public class EntregaService {
 
     /**
      * ENCOMIENDA: en B el receptor dicta el codigo de entrega. Con el codigo correcto, el pago ya
-     * confirmado y la comision del 0% aplicada solo al servicio, el pedido queda ENTREGADO y el viaje
+     * confirmado, el pedido queda ENTREGADO y el viaje
      * COMPLETADO.
      */
     @Transactional

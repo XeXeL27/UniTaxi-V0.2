@@ -3,6 +3,7 @@ package com.taxiuap.backend.controller.conductor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -10,6 +11,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.dto.ActualizarPerfilConductorRequest;
+import com.taxiuap.backend.identity.dto.ActualizarLimiteAdelantoCompraRequest;
 import com.taxiuap.backend.identity.dto.PerfilConductorResponse;
 import com.taxiuap.backend.identity.service.PerfilConductorService;
 import com.taxiuap.backend.shared.response.ApiResponse;
@@ -43,6 +45,14 @@ public class PerfilConductorController {
             @Valid @RequestBody ActualizarPerfilConductorRequest request) {
         PerfilConductorResponse actualizado = perfilConductorService.actualizar(UsuarioActual.idUsuario(), request);
         return ResponseEntity.ok(ApiResponse.exito("Perfil actualizado", actualizado));
+    }
+
+    @PatchMapping("/limite-adelanto-compra")
+    public ResponseEntity<ApiResponse<PerfilConductorResponse>> actualizarLimiteAdelantoCompra(
+            @Valid @RequestBody ActualizarLimiteAdelantoCompraRequest request) {
+        PerfilConductorResponse actualizado = perfilConductorService.actualizarLimiteAdelantoCompra(
+                UsuarioActual.idUsuario(), request);
+        return ResponseEntity.ok(ApiResponse.exito("Límite de adelanto actualizado", actualizado));
     }
 
     /** Sube o cambia la foto de perfil; el servidor la recorta cuadrada para el circulo. */

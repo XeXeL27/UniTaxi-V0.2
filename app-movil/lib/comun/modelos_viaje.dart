@@ -21,8 +21,6 @@ class DatosEntregaForm {
   final TipoEnvio tipoEnvio;
   final String descripcion;
   final double? costoProductoEstimado;
-  final String? nombreRemitente;
-  final String? telefonoRemitente;
   final String? nombreReceptor;
   final String? telefonoReceptor;
   final String? fotoPaqueteUrl;
@@ -32,8 +30,6 @@ class DatosEntregaForm {
     required this.tipoEnvio,
     required this.descripcion,
     this.costoProductoEstimado,
-    this.nombreRemitente,
-    this.telefonoRemitente,
     this.nombreReceptor,
     this.telefonoReceptor,
     this.fotoPaqueteUrl,
@@ -46,32 +42,34 @@ class DatosEntregaForm {
           ? 'Describe el producto que quieres comprar'
           : 'Describe el contenido del paquete';
     }
-    if (!aceptaPoliticaArticulos) return 'Acepta la política de artículos prohibidos';
+    if (!aceptaPoliticaArticulos) {
+      return 'Acepta la política de artículos prohibidos';
+    }
     if (tipoEnvio == TipoEnvio.compraYEntrega && (costoProductoEstimado ?? 0) <= 0) {
       return 'Indica el monto estimado del producto';
     }
     if (tipoEnvio == TipoEnvio.encomienda) {
-      if (nombreRemitente?.trim().isEmpty ?? true) return 'Indica el nombre del remitente';
-      if (telefonoRemitente?.trim().isEmpty ?? true) return 'Indica el teléfono del remitente';
-      if (nombreReceptor?.trim().isEmpty ?? true) return 'Indica el nombre del receptor';
-      if (telefonoReceptor?.trim().isEmpty ?? true) return 'Indica el teléfono del receptor';
+      if (nombreReceptor?.trim().isEmpty ?? true) {
+        return 'Indica el nombre del receptor';
+      }
+      if (telefonoReceptor?.trim().isEmpty ?? true) {
+        return 'Indica el teléfono del receptor';
+      }
     }
     return null;
   }
 
   Map<String, dynamic> aJson() => {
-        'tipoEnvio': tipoEnvio.codigo,
-        'descripcion': descripcion.trim(),
-        'costoProductoEstimado': tipoEnvio == TipoEnvio.compraYEntrega ? costoProductoEstimado : null,
-        'aceptaPoliticaArticulos': aceptaPoliticaArticulos,
-        if (tipoEnvio == TipoEnvio.encomienda) ...{
-          'nombreRemitente': nombreRemitente!.trim(),
-          'telefonoRemitente': telefonoRemitente!.trim(),
-          'nombreReceptor': nombreReceptor!.trim(),
-          'telefonoReceptor': telefonoReceptor!.trim(),
-          if (fotoPaqueteUrl != null) 'fotoPaqueteUrl': fotoPaqueteUrl,
-        },
-      };
+    'tipoEnvio': tipoEnvio.codigo,
+    'descripcion': descripcion.trim(),
+    'costoProductoEstimado': tipoEnvio == TipoEnvio.compraYEntrega ? costoProductoEstimado : null,
+    'aceptaPoliticaArticulos': aceptaPoliticaArticulos,
+    if (tipoEnvio == TipoEnvio.encomienda) ...{
+      'nombreReceptor': nombreReceptor!.trim(),
+      'telefonoReceptor': telefonoReceptor!.trim(),
+      if (fotoPaqueteUrl != null) 'fotoPaqueteUrl': fotoPaqueteUrl,
+    },
+  };
 }
 
 /// Datos de entrega que devuelve el backend. Los códigos solo llegan al pasajero cuando corresponden.
@@ -145,45 +143,44 @@ class DatosEntrega {
   });
 
   factory DatosEntrega.desdeJson(Map<String, dynamic> json) => DatosEntrega(
-        tipoEnvio: TipoEnvio.desde(json['tipoEnvio'] as String?) ?? TipoEnvio.encomienda,
-        descripcion: json['descripcion'] as String? ?? '',
-        costoProductoEstimado: numeroDesdeJson(json['costoProductoEstimado']),
-        costoProductoReal: numeroDesdeJson(json['costoProductoReal']),
-        costoProductoConfirmado: numeroDesdeJson(json['costoProductoConfirmado']),
-        compraConfirmadaPorCliente: json['compraConfirmadaPorCliente'] as bool? ?? false,
-        pagoConfirmado: json['pagoConfirmado'] as bool? ?? false,
-        montoPagoRecibido: numeroDesdeJson(json['montoPagoRecibido']),
-        nombreRemitente: json['nombreRemitente'] as String?,
-        telefonoRemitente: json['telefonoRemitente'] as String?,
-        nombreReceptor: json['nombreReceptor'] as String?,
-        telefonoReceptor: json['telefonoReceptor'] as String?,
-        codigoRecogida: json['codigoRecogida'] as String?,
-        codigoEntrega: json['codigoEntrega'] as String?,
-        detalleCompraPropuesto: json['detalleCompraPropuesto'] as String?,
-        detalleCompra: json['detalleCompra'] as String?,
-        puntoCompraPropuestoWkt: json['puntoCompraPropuestoWkt'] as String?,
-        puntoCompraWkt: json['puntoCompraWkt'] as String?,
-        fotoPaqueteUrl: json['fotoPaqueteUrl'] as String?,
-        fotoComprobanteUrl: json['fotoComprobanteUrl'] as String?,
-        observacionCompra: json['observacionCompra'] as String?,
-        fotoFallaUrl: json['fotoFallaUrl'] as String?,
-        motivoFalla: json['motivoFalla'] as String?,
-        estadoEntrega: json['estadoEntrega'] as String? ?? 'PENDIENTE_RECOGIDA',
-        fechaLlegadaRecogida: fechaDesdeJson(json['fechaLlegadaRecogida']),
-        fechaRecogida: fechaDesdeJson(json['fechaRecogida']),
-        fechaEntrega: fechaDesdeJson(json['fechaEntrega']),
-        fotoEntregaUrl: json['fotoEntregaUrl'] as String?,
-        receptorIdentificado: json['receptorIdentificado'] as String?,
-      );
+    tipoEnvio: TipoEnvio.desde(json['tipoEnvio'] as String?) ?? TipoEnvio.encomienda,
+    descripcion: json['descripcion'] as String? ?? '',
+    costoProductoEstimado: numeroDesdeJson(json['costoProductoEstimado']),
+    costoProductoReal: numeroDesdeJson(json['costoProductoReal']),
+    costoProductoConfirmado: numeroDesdeJson(json['costoProductoConfirmado']),
+    compraConfirmadaPorCliente: json['compraConfirmadaPorCliente'] as bool? ?? false,
+    pagoConfirmado: json['pagoConfirmado'] as bool? ?? false,
+    montoPagoRecibido: numeroDesdeJson(json['montoPagoRecibido']),
+    nombreRemitente: json['nombreRemitente'] as String?,
+    telefonoRemitente: json['telefonoRemitente'] as String?,
+    nombreReceptor: json['nombreReceptor'] as String?,
+    telefonoReceptor: json['telefonoReceptor'] as String?,
+    codigoRecogida: json['codigoRecogida'] as String?,
+    codigoEntrega: json['codigoEntrega'] as String?,
+    detalleCompraPropuesto: json['detalleCompraPropuesto'] as String?,
+    detalleCompra: json['detalleCompra'] as String?,
+    puntoCompraPropuestoWkt: json['puntoCompraPropuestoWkt'] as String?,
+    puntoCompraWkt: json['puntoCompraWkt'] as String?,
+    fotoPaqueteUrl: json['fotoPaqueteUrl'] as String?,
+    fotoComprobanteUrl: json['fotoComprobanteUrl'] as String?,
+    observacionCompra: json['observacionCompra'] as String?,
+    fotoFallaUrl: json['fotoFallaUrl'] as String?,
+    motivoFalla: json['motivoFalla'] as String?,
+    estadoEntrega: json['estadoEntrega'] as String? ?? 'PENDIENTE_RECOGIDA',
+    fechaLlegadaRecogida: fechaDesdeJson(json['fechaLlegadaRecogida']),
+    fechaRecogida: fechaDesdeJson(json['fechaRecogida']),
+    fechaEntrega: fechaDesdeJson(json['fechaEntrega']),
+    fotoEntregaUrl: json['fotoEntregaUrl'] as String?,
+    receptorIdentificado: json['receptorIdentificado'] as String?,
+  );
 
   double get totalProducto => costoProductoReal ?? costoProductoEstimado ?? 0;
   bool get tieneFotoEntrega => fotoEntregaUrl?.trim().isNotEmpty ?? false;
   bool get muestraCancelacion => EstadoEntrega.puedeCancelar(estadoEntrega);
   bool get tieneReporte => (fotoFallaUrl?.trim().isNotEmpty ?? false) || (motivoFalla?.trim().isNotEmpty ?? false);
   String? get resumenReporte => motivoFalla?.trim().isEmpty ?? true ? null : motivoFalla!.trim();
-  String? get informacionReporte => tieneReporte
-      ? 'Incidente registrado; estado administrativo no disponible para el pasajero'
-      : null;
+  String? get informacionReporte =>
+      tieneReporte ? 'Incidente registrado; estado administrativo no disponible para el pasajero' : null;
 
   /// Punto real del comercio donde el repartidor compro: es el A del mapa en una COMPRA_Y_ENTREGA.
   ///
@@ -284,13 +281,13 @@ class EstadoEntrega {
 
   static bool puedeCancelar(String estado) => estado == pendienteRecogida || estado == enCaminoRecogida;
   static String nombre(String estado) => switch (estado) {
-        pendienteRecogida => 'Pendiente de recogida',
-        enCaminoRecogida => 'Repartidor en camino a recoger',
-        enMano => 'Pedido en manos del repartidor',
-        entregado => 'Entregado',
-        noEntregado => 'No entregado',
-        _ => estado,
-      };
+    pendienteRecogida => 'Pendiente de recogida',
+    enCaminoRecogida => 'Repartidor en camino a recoger',
+    enMano => 'Pedido en manos del repartidor',
+    entregado => 'Entregado',
+    noEntregado => 'No entregado',
+    _ => estado,
+  };
 }
 
 /// Situaciones del viaje (enum SituacionViaje del backend).
@@ -404,11 +401,11 @@ class PasajeroTercero {
       : null;
 
   Map<String, dynamic> aJson() => {
-        'paraOtraPersona': true,
-        'nombrePasajeroTercero': nombre.trim(),
-        'telefonoPasajeroTercero': ?telefono?.trim(),
-        'pagaSolicitante': pagaSolicitante,
-      };
+    'paraOtraPersona': true,
+    'nombrePasajeroTercero': nombre.trim(),
+    'telefonoPasajeroTercero': ?telefono?.trim(),
+    'pagaSolicitante': pagaSolicitante,
+  };
 
   /// "Juan" (para los textos: "Avisale a Juan").
   String get primerNombre {
@@ -429,6 +426,7 @@ class Solicitud {
   /// Nombre del favorito que el pasajero eligio como destino ("Casa de mi mama"). Solo llega en
   /// las respuestas al pasajero: el conductor ve [destinoDireccion].
   final String? destinoNombre;
+
   /// Lo que paga el pasajero y cobra el conductor (con el descuento de estudiante ya restado).
   final double? precio;
   final String situacion;
@@ -505,6 +503,9 @@ class Solicitud {
 class Viaje {
   final int id;
   final String nombrePasajero;
+
+  /// Celular de quien pidio el viaje: con el viaje activo (el conductor lo llama) y en una compra.
+  final String? telefonoPasajero;
   final String nombreConductor;
   final String? placa;
   final String? marca;
@@ -551,12 +552,10 @@ class Viaje {
   /// Cancelado porque el pasajero no se presento tras los 3 avisos.
   final bool pasajeroNoSePresento;
 
-  /// Celular de quien pidio el viaje (para el conductor, mientras el viaje esta activo).
-  final String? telefonoPasajero;
-
   const Viaje({
     required this.id,
     required this.nombrePasajero,
+    this.telefonoPasajero,
     required this.nombreConductor,
     required this.placa,
     required this.marca,
@@ -587,7 +586,6 @@ class Viaje {
     this.avisosEspera = 0,
     this.ultimoAvisoEspera,
     this.pasajeroNoSePresento = false,
-    this.telefonoPasajero,
   });
 
   factory Viaje.desdeJson(Map<String, dynamic> json) => Viaje(
@@ -597,9 +595,9 @@ class Viaje {
     avisosEspera: (json['avisosEspera'] as num?)?.toInt() ?? 0,
     ultimoAvisoEspera: fechaDesdeJson(json['ultimoAvisoEspera']),
     pasajeroNoSePresento: json['pasajeroNoSePresento'] as bool? ?? false,
-    telefonoPasajero: json['telefonoPasajero'] as String?,
     id: (json['idViaje'] as num).toInt(),
     nombrePasajero: json['nombrePasajero'] as String? ?? 'Pasajero',
+    telefonoPasajero: json['telefonoPasajero'] as String?,
     nombreConductor: json['nombreConductor'] as String? ?? 'Conductor',
     placa: json['placaVehiculo'] as String?,
     marca: json['marcaVehiculo'] as String?,

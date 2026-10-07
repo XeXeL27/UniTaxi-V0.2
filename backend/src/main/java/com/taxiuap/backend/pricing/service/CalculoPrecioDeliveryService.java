@@ -21,18 +21,15 @@ public class CalculoPrecioDeliveryService {
     private final BigDecimal tarifaBase;
     private final BigDecimal precioKilometro;
     private final BigDecimal precioMinuto;
-    private final BigDecimal porcentajeComision;
 
     public CalculoPrecioDeliveryService(ClienteRutas clienteRutas,
-            @Value("${taxiuap.delivery.tarifa-base:4.00}") BigDecimal tarifaBase,
-            @Value("${taxiuap.delivery.precio-km:1.80}") BigDecimal precioKilometro,
-            @Value("${taxiuap.delivery.precio-minuto:0.20}") BigDecimal precioMinuto,
-            @Value("${taxiuap.delivery.comision-porcentaje:0.00}") BigDecimal porcentajeComision) {
+            @Value("${taxiuap.delivery.tarifa-base:8.00}") BigDecimal tarifaBase,
+            @Value("${taxiuap.delivery.precio-km:2.00}") BigDecimal precioKilometro,
+            @Value("${taxiuap.delivery.precio-minuto:0.00}") BigDecimal precioMinuto) {
         this.clienteRutas = clienteRutas;
         this.tarifaBase = tarifaBase;
         this.precioKilometro = precioKilometro;
         this.precioMinuto = precioMinuto;
-        this.porcentajeComision = porcentajeComision;
     }
 
     public DesglosePrecioDelivery calcularEncomienda(Point origen, Point destino) {
@@ -49,12 +46,9 @@ public class CalculoPrecioDeliveryService {
 
     public DesglosePrecioDelivery consolidarPago(DesglosePrecioDelivery servicio, BigDecimal costoProducto) {
         BigDecimal producto = dinero(costoProducto);
-        BigDecimal comision = servicio.precioServicio().multiply(porcentajeComision)
-                .divide(new BigDecimal("100"), 2, RoundingMode.HALF_UP);
         BigDecimal total = dinero(producto.add(servicio.precioServicio()));
         return new DesglosePrecioDelivery(servicio.precioServicio(), servicio.distanciaKm(), servicio.duracionMinutos(),
-                servicio.estimado(), producto, total, comision, comision,
-                dinero(servicio.precioServicio().subtract(comision)));
+                servicio.estimado(), producto, total);
     }
 
     public boolean puedeAdelantar(BigDecimal costoEstimado, BigDecimal limiteAdelanto) {
@@ -65,8 +59,7 @@ public class CalculoPrecioDeliveryService {
         RutaResponse ruta = clienteRutas.calcular(origen, destino);
         BigDecimal kilometros = ruta.distanciaMetros().divide(MIL_METROS, 2, RoundingMode.HALF_UP);
         int minutos = (int) Math.max(1, Math.ceil(ruta.duracionSegundos() / 60.0));
-        BigDecimal precio = tarifaBase.add(precioKilometro.multiply(kilometros))
-                .add(precioMinuto.multiply(BigDecimal.valueOf(minutos)));
+        BigDecimal precio = tarifaBase.add(precioKilometro.multiply(kilometros));
         return new DesglosePrecioDelivery(dinero(precio), kilometros, minutos, estimado);
     }
 

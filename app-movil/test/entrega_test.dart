@@ -13,8 +13,6 @@ void main() {
     const datos = DatosEntregaForm(
       tipoEnvio: TipoEnvio.encomienda,
       descripcion: 'Documentos',
-      nombreRemitente: 'Ana',
-      telefonoRemitente: '70000000',
       nombreReceptor: 'Luis',
       telefonoReceptor: '71111111',
       aceptaPoliticaArticulos: true,
@@ -23,6 +21,8 @@ void main() {
     expect(datos.error, isNull);
     expect(datos.aJson()['tipoEnvio'], 'ENCOMIENDA');
     expect(datos.aJson()['aceptaPoliticaArticulos'], true);
+    expect(datos.aJson().containsKey('nombreRemitente'), isFalse);
+    expect(datos.aJson().containsKey('telefonoRemitente'), isFalse);
   });
 
   test('serializa la aceptación de prohibiciones también para compra y entrega', () {
@@ -73,9 +73,33 @@ void main() {
   });
 
   test('etiqueta precio fijo, estimado y definitivo según tipo y respuesta', () {
-    expect(etiquetaPrecioDelivery(_viaje({'datosEntrega': {'tipoEnvio': 'ENCOMIENDA'}, 'precioEstimado': false})), 'Precio fijo del servicio');
-    expect(etiquetaPrecioDelivery(_viaje({'datosEntrega': {'tipoEnvio': 'COMPRA_Y_ENTREGA'}, 'precioEstimado': true})), 'Precio estimado del servicio');
-    expect(etiquetaPrecioDelivery(_viaje({'datosEntrega': {'tipoEnvio': 'COMPRA_Y_ENTREGA'}, 'precioEstimado': false})), 'Precio definitivo del servicio');
+    expect(
+      etiquetaPrecioDelivery(
+        _viaje({
+          'datosEntrega': {'tipoEnvio': 'ENCOMIENDA'},
+          'precioEstimado': false,
+        }),
+      ),
+      'Precio fijo del servicio',
+    );
+    expect(
+      etiquetaPrecioDelivery(
+        _viaje({
+          'datosEntrega': {'tipoEnvio': 'COMPRA_Y_ENTREGA'},
+          'precioEstimado': true,
+        }),
+      ),
+      'Precio estimado del servicio',
+    );
+    expect(
+      etiquetaPrecioDelivery(
+        _viaje({
+          'datosEntrega': {'tipoEnvio': 'COMPRA_Y_ENTREGA'},
+          'precioEstimado': false,
+        }),
+      ),
+      'Precio definitivo del servicio',
+    );
   });
 
   test('expone evidencia y motivo de reporte de entrega', () {
@@ -119,24 +143,21 @@ void main() {
     const posicionDestino = LatLng(-11.02, -68.76);
 
     Map<String, dynamic> datosCompra({String? puntoCompraWkt, String? detalleCompra}) => {
-          'tipoEnvio': 'COMPRA_Y_ENTREGA',
-          'descripcion': 'Pan',
-          'puntoCompraWkt': puntoCompraWkt,
-          'detalleCompra': detalleCompra,
-        };
+      'tipoEnvio': 'COMPRA_Y_ENTREGA',
+      'descripcion': 'Pan',
+      'puntoCompraWkt': puntoCompraWkt,
+      'detalleCompra': detalleCompra,
+    };
 
     Viaje viajeCon({required Map<String, dynamic> datosEntrega}) => _viaje({
-          'origenWkt': 'POINT(-68.755 -11.01)',
-          'destinoWkt': 'POINT(-68.76 -11.02)',
-          'datosEntrega': datosEntrega,
-        });
+      'origenWkt': 'POINT(-68.755 -11.01)',
+      'destinoWkt': 'POINT(-68.76 -11.02)',
+      'datosEntrega': datosEntrega,
+    });
 
     test('en una compra con el comercio registrado, la partida es el comercio con su nombre', () {
       final viaje = viajeCon(
-        datosEntrega: datosCompra(
-          puntoCompraWkt: 'POINT(-68.765 -11.03)',
-          detalleCompra: comercio,
-        ),
+        datosEntrega: datosCompra(puntoCompraWkt: 'POINT(-68.765 -11.03)', detalleCompra: comercio),
       );
 
       expect(viaje.partida, isNotNull);
@@ -147,10 +168,7 @@ void main() {
 
     test('el puntoA de una compra lleva el nombre del comercio', () {
       final viaje = viajeCon(
-        datosEntrega: datosCompra(
-          puntoCompraWkt: 'POINT(-68.765 -11.03)',
-          detalleCompra: comercio,
-        ),
+        datosEntrega: datosCompra(puntoCompraWkt: 'POINT(-68.765 -11.03)', detalleCompra: comercio),
       );
 
       expect(viaje.puntoA.texto, 'Comercio: $comercio');
@@ -159,9 +177,7 @@ void main() {
     });
 
     test('un comercio sin nombre se rotula solo "Comercio"', () {
-      final viaje = viajeCon(
-        datosEntrega: datosCompra(puntoCompraWkt: 'POINT(-68.765 -11.03)'),
-      );
+      final viaje = viajeCon(datosEntrega: datosCompra(puntoCompraWkt: 'POINT(-68.765 -11.03)'));
 
       expect(viaje.partida!.texto, 'Comercio');
     });
@@ -182,17 +198,12 @@ void main() {
     });
 
     test('en encomienda y taxi la partida sigue siendo el origen', () {
-      final encomienda = viajeCon(
-        datosEntrega: {'tipoEnvio': 'ENCOMIENDA', 'descripcion': 'Caja'},
-      );
+      final encomienda = viajeCon(datosEntrega: {'tipoEnvio': 'ENCOMIENDA', 'descripcion': 'Caja'});
       expect(encomienda.tieneRuta, isTrue);
       expect(encomienda.partida!.posicion, posicionOrigen);
       expect(encomienda.partida!.texto, encomienda.origenDireccion);
 
-      final taxi = _viaje({
-        'origenWkt': 'POINT(-68.755 -11.01)',
-        'destinoWkt': 'POINT(-68.76 -11.02)',
-      });
+      final taxi = _viaje({'origenWkt': 'POINT(-68.755 -11.01)', 'destinoWkt': 'POINT(-68.76 -11.02)'});
       expect(taxi.tieneRuta, isTrue);
       expect(taxi.partida!.posicion, posicionOrigen);
       expect(taxi.partida!.texto, taxi.origenDireccion);
@@ -202,10 +213,7 @@ void main() {
       final solicitud = _solicitud({
         'origenWkt': 'POINT(-68.755 -11.01)',
         'destinoWkt': 'POINT(-68.76 -11.02)',
-        'datosEntrega': datosCompra(
-          puntoCompraWkt: 'POINT(-68.765 -11.03)',
-          detalleCompra: comercio,
-        ),
+        'datosEntrega': datosCompra(puntoCompraWkt: 'POINT(-68.765 -11.03)', detalleCompra: comercio),
       });
 
       expect(solicitud.partida!.texto, 'Comercio: $comercio');
@@ -235,10 +243,7 @@ void main() {
       expect(encomienda.partida!.posicion, posicionOrigen);
       expect(encomienda.partida!.texto, encomienda.origenDireccion);
 
-      final taxi = _solicitud({
-        'origenWkt': 'POINT(-68.755 -11.01)',
-        'destinoWkt': 'POINT(-68.76 -11.02)',
-      });
+      final taxi = _solicitud({'origenWkt': 'POINT(-68.755 -11.01)', 'destinoWkt': 'POINT(-68.76 -11.02)'});
       expect(taxi.tieneRuta, isTrue);
       expect(taxi.partida!.posicion, posicionOrigen);
       expect(taxi.partida!.texto, taxi.origenDireccion);
@@ -246,15 +251,8 @@ void main() {
   });
 }
 
-Viaje _viaje(Map<String, dynamic> cambios) => Viaje.desdeJson({
-      'idViaje': 1,
-      'situacionViaje': 'CONFIRMADO',
-      'precioFinal': 8,
-      ...cambios,
-    });
+Viaje _viaje(Map<String, dynamic> cambios) =>
+    Viaje.desdeJson({'idViaje': 1, 'situacionViaje': 'CONFIRMADO', 'precioFinal': 8, ...cambios});
 
-Solicitud _solicitud(Map<String, dynamic> cambios) => Solicitud.desdeJson({
-      'idSolicitud': 1,
-      'situacionSolicitud': 'PENDIENTE',
-      ...cambios,
-    });
+Solicitud _solicitud(Map<String, dynamic> cambios) =>
+    Solicitud.desdeJson({'idSolicitud': 1, 'situacionSolicitud': 'PENDIENTE', ...cambios});

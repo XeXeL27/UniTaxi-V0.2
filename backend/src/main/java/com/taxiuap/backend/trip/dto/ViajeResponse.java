@@ -13,6 +13,11 @@ public record ViajeResponse(
         Long idSolicitud,
         Long idPasajero,
         String nombrePasajero,
+        /**
+         * Celular de quien pidio el viaje: con el viaje activo (el conductor lo llama mientras lo espera)
+         * y siempre en una compra y entrega.
+         */
+        String telefonoPasajero,
         Long idConductor,
         String nombreConductor,
         String placaVehiculo,
@@ -56,20 +61,18 @@ public record ViajeResponse(
          int avisosEspera,
          LocalDateTime ultimoAvisoEspera,
          boolean pasajeroNoSePresento,
-         /** Celular de quien pidio el viaje, para que el conductor lo llame mientras lo espera. */
-         String telefonoPasajero,
          /** Cuando se pidio (los viajes cancelados antes de empezar no tienen fecha de inicio). */
          LocalDateTime fechaSolicitud) {
 
     /** El mismo viaje sin el nombre del favorito, para el conductor. */
     public ViajeResponse sinNombreDestino() {
-        return new ViajeResponse(idViaje, idSolicitud, idPasajero, nombrePasajero, idConductor, nombreConductor,
+        return new ViajeResponse(idViaje, idSolicitud, idPasajero, nombrePasajero, telefonoPasajero, idConductor, nombreConductor,
                 placaVehiculo, marcaVehiculo, modeloVehiculo, colorVehiculo, calificacionConductor, origenWkt,
                 destinoWkt, origenDireccion, destinoDireccion, distanciaKm, duracionMin, precioOriginal,
                 montoDescuento, precioFinal, precioEstimado, situacionViaje, canceladoPor, fechaInicio, fechaFin,
                 calificadoPorPasajero, metodoPago, metodoPagoPedido, conductorTieneQr, calificacionOfrecida, null,
                 datosEntrega == null ? null : datosEntrega.paraConductor(), paraOtraPersona,
                 nombrePasajeroTercero, telefonoPasajeroTercero, pagaSolicitante, pagoAvisadoEn, pagoRecibidoEn,
-                avisosEspera, ultimoAvisoEspera, pasajeroNoSePresento, telefonoPasajero, fechaSolicitud);
+                avisosEspera, ultimoAvisoEspera, pasajeroNoSePresento, fechaSolicitud);
     }
 }

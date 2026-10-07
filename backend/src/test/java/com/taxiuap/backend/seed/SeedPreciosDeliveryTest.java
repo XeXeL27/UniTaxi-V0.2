@@ -66,9 +66,9 @@ class SeedPreciosDeliveryTest {
         assertTrue(tarifas.getAllValues().stream().anyMatch(tarifa -> tarifa.getCategoriaServicio() == delivery));
         org.junit.jupiter.api.Assertions.assertEquals(1, tarifasDeliveryGuardadas.size());
         Tarifa deliveryTarifa = tarifasDeliveryGuardadas.get(0);
-        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("4.00"), deliveryTarifa.getTarifaBase());
-        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("1.80"), deliveryTarifa.getPrecioKm());
-        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("0.20"), deliveryTarifa.getPrecioMinuto());
+        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("8.00"), deliveryTarifa.getTarifaBase());
+        org.junit.jupiter.api.Assertions.assertEquals(new java.math.BigDecimal("2.00"), deliveryTarifa.getPrecioKm());
+        org.junit.jupiter.api.Assertions.assertEquals(java.math.BigDecimal.ZERO, deliveryTarifa.getPrecioMinuto());
     }
 
     @Test
@@ -84,6 +84,9 @@ class SeedPreciosDeliveryTest {
         Tarifa administrada = new Tarifa();
         administrada.setCategoriaServicio(delivery);
         administrada.setZona(periferia);
+        administrada.setTarifaBase(new java.math.BigDecimal("8.00"));
+        administrada.setPrecioKm(new java.math.BigDecimal("2.00"));
+        administrada.setPrecioMinuto(java.math.BigDecimal.ZERO);
         administrada.setVigenteDesde(java.time.LocalDate.now().minusMonths(1));
         administrada.setEstadoTarifa(com.taxiuap.backend.shared.enums.EstadoRegistro.A);
         when(tarifaRepository.findByCategoriaServicioId(7)).thenReturn(List.of(administrada));

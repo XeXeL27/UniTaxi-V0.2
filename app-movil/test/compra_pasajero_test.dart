@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import 'package:taxiuap_movil/comun/modelos_viaje.dart';
 import 'package:taxiuap_movil/core/cliente_api.dart';
+import 'package:taxiuap_movil/core/chat.dart';
 import 'package:taxiuap_movil/core/sesion.dart';
 import 'package:taxiuap_movil/mapa/controlador_mapa.dart';
 import 'package:taxiuap_movil/modulos/pasajero/viaje/flujo_pasajero.dart';
@@ -239,6 +241,42 @@ void main() {
       expect(find.text('Se entrega donde estas'), findsNothing);
     });
   });
+
+  group('el panel de una compra asignada', () {
+    testWidgets('muestra la propuesta de comercio y monto antes de confirmar', (tester) async {
+      final flujo = _flujo(_ApiEspia())
+        ..etapa = EtapaPasajero.enViaje
+        ..viaje = Viaje.desdeJson({
+          'idViaje': 12,
+          'situacionViaje': 'CONFIRMADO',
+          'nombreConductor': 'Carlos',
+          'nombrePasajero': 'Ana',
+          'origenDireccion': 'Punto de partida',
+          'destinoDireccion': 'Punto de entrega',
+          'precioFinal': 18,
+          'datosEntrega': {
+            'tipoEnvio': TipoEnvio.compraYEntrega.codigo,
+            'descripcion': 'Medicamentos',
+            'estadoEntrega': EstadoEntrega.enCaminoRecogida,
+            'detalleCompraPropuesto': 'Farmacia Central',
+            'costoProductoConfirmado': 25,
+          },
+        });
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<ChatEstado>.value(
+          value: ChatEstado(sesion: Sesion(), api: ClienteApi(Sesion())),
+          child: _envolver(
+            PanelViaje(flujo: flujo, onCancelar: () {}, onPedirCambioPago: (_) {}, onConfirmarCompra: () {}),
+          ),
+        ),
+      );
+
+      expect(find.text('Farmacia Central'), findsOneWidget);
+      expect(find.text('25 Bs'), findsWidgets);
+      expect(find.text('Confirmar comercio y monto'), findsOneWidget);
+    });
+  });
 }
 
 /// Pone A y B sin disparar el trazado de ruta: trazar por calles no es asunto de estas pruebas.
@@ -260,15 +298,12 @@ FlujoPasajero _flujo(_ApiEspia api, {TipoEnvio? servicio}) {
   return flujo;
 }
 
-Widget _panel(FlujoPasajero flujo) => PanelEligiendo(
-      flujo: flujo,
-      enviando: false,
-      onSolicitar: () {},
-      onGuardarDestino: () {},
-    );
+Widget _panel(FlujoPasajero flujo) =>
+    PanelEligiendo(flujo: flujo, enviando: false, onSolicitar: () {}, onGuardarDestino: () {});
 
-Widget _envolver(Widget hijo) =>
-    MaterialApp(home: Scaffold(body: SingleChildScrollView(child: hijo)));
+Widget _envolver(Widget hijo) => MaterialApp(
+  home: Scaffold(body: SingleChildScrollView(child: hijo)),
+);
 
 /// ViajeApi de mentira: guarda lo que le piden y responde sin tocar la red.
 class _ApiEspia extends ViajeApi {

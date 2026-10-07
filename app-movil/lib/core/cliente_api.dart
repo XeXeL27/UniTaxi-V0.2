@@ -21,6 +21,8 @@ class ClienteApi {
 
   Future<dynamic> put(String ruta, Map<String, dynamic> cuerpo) => _enviar('PUT', ruta, cuerpo);
 
+  Future<dynamic> patch(String ruta, Map<String, dynamic> cuerpo) => _enviar('PATCH', ruta, cuerpo);
+
   Future<dynamic> delete(String ruta) => _enviar('DELETE', ruta);
 
   /// Lista del backend convertida con [desdeJson].
@@ -89,7 +91,9 @@ class ClienteApi {
   }) async {
     final respuesta = await _conReintento(() {
       final peticion = http.MultipartRequest(metodo, Uri.parse('${Config.apiUrl}$ruta'));
-      peticion.files.add(http.MultipartFile.fromString(parteJson, jsonEncode(datos), contentType: MediaType('application', 'json')));
+      peticion.files.add(
+        http.MultipartFile.fromString(parteJson, jsonEncode(datos), contentType: MediaType('application', 'json')),
+      );
       for (final a in archivos) {
         peticion.files.add(http.MultipartFile.fromBytes(a.campo, a.bytes, filename: a.nombre, contentType: a.tipo));
       }

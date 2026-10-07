@@ -2,11 +2,13 @@ package com.taxiuap.backend.identity.service;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.taxiuap.backend.identity.dto.ActualizarPerfilConductorRequest;
+import com.taxiuap.backend.identity.dto.ActualizarLimiteAdelantoCompraRequest;
 import com.taxiuap.backend.identity.dto.PerfilConductorResponse;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
@@ -49,9 +51,14 @@ public class PerfilConductorService {
     public PerfilConductorResponse actualizar(Long idUsuario, ActualizarPerfilConductorRequest request) {
         Conductor conductor = buscarConductor(idUsuario);
         cuentaUsuarioService.confirmarContrasena(conductor.getUsuario(), request.password());
-        permisoEdicionService.consumir(conductor.getId(), TipoPermisoEdicion.DATOS, null);
         Usuario usuario = conductor.getUsuario();
         Persona persona = usuario.getPersona();
+
+        // El limite de adelanto es una preferencia operativa del repartidor. Los datos personales
+        // y de licencia siguen protegidos por el permiso administrativo DATOS.
+        if (cambiaDatosProtegidos(conductor, persona, request)) {
+            permisoEdicionService.consumir(conductor.getId(), TipoPermisoEdicion.DATOS, null);
+        }
 
         persona.setNombres(request.nombres());
         persona.setApellidos(request.apellidos());
@@ -71,9 +78,34 @@ public class PerfilConductorService {
         return aRespuesta(conductor);
     }
 
+    /** Actualiza exclusivamente el limite que el repartidor adelanta para compras. */
+    @Transactional
+    public PerfilConductorResponse actualizarLimiteAdelantoCompra(Long idUsuario,
+            ActualizarLimiteAdelantoCompraRequest request) {
+        Conductor conductor = buscarConductor(idUsuario);
+        cuentaUsuarioService.confirmarContrasena(conductor.getUsuario(), request.password());
+        conductor.setLimiteAdelantoCompra(request.limiteAdelantoCompra().setScale(2, java.math.RoundingMode.HALF_UP));
+        return aRespuesta(conductor);
+    }
+
     private Conductor buscarConductor(Long idUsuario) {
         return conductorRepository.findByUsuarioId(idUsuario)
                 .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de conductor"));
+    }
+
+    private boolean cambiaDatosProtegidos(Conductor conductor, Persona persona,
+            ActualizarPerfilConductorRequest request) {
+        return !Objects.equals(persona.getNombres(), request.nombres())
+                || !Objects.equals(persona.getApellidos(), request.apellidos())
+                || !Objects.equals(persona.getCi(), request.ci())
+                || !Objects.equals(persona.getComplementoCi(), request.complementoCi())
+                || !Objects.equals(persona.getFechaNacimiento(), request.fechaNacimiento())
+                || !Objects.equals(conductor.getNumeroLicencia(), request.numeroLicencia())
+                || !Objects.equals(conductor.getCategoriaLicencia(), normalizarCategoria(request.categoriaLicencia()));
+    }
+
+    private String normalizarCategoria(String categoria) {
+        return categoria == null || categoria.isBlank() ? null : categoria.trim().toUpperCase();
     }
 
     private PerfilConductorResponse aRespuesta(Conductor conductor) {

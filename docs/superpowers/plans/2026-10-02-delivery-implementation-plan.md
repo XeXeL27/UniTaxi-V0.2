@@ -10,10 +10,12 @@
 
 **Spec:** `docs/superpowers/specs/2026-10-02-delivery-design.md`
 
-**Estado de ejecución (2026-10-02):** Tasks 1 y 2 completadas y revisadas; Task 3
-implementada y pendiente de re-review. Los commits de implementación están en
-`HWatson-dev`. La continuación debe empezar generando el paquete de revisión de
-`964cf19..cee202b` y despachando `task-reviewer`/`re-reviewer` según corresponda.
+**Estado de ejecución (2026-10-07):** Tasks 1 a 8 están incorporadas en `HWatson-dev` y
+documentadas en `docs/superpowers/2026-10-05-verificacion-entrega.md`. La revisión posterior
+cerró los huecos de seguridad y consistencia detectados: límite operativo del repartidor,
+autoasignación de DELIVERY, solicitudes lógicamente inactivas y acciones incorrectas del panel.
+La verificación PostgreSQL debe ejecutarse cargando las variables de `.env`; `./gradlew test`
+por sí solo no las carga.
 
 ## Global Constraints
 
@@ -30,7 +32,7 @@ implementada y pendiente de re-review. Los commits de implementación están en
 
 - `backend/.../vehicle/`: categoría DELIVERY, validación MOTO y límite de adelanto del conductor.
 - `backend/.../trip/`: entidad, DTOs, repositorio y servicio de datos de entrega; integración con solicitud, oferta y viaje.
-- `backend/.../pricing/`: cálculo del precio DELIVERY y comisión 0%.
+- `backend/.../pricing/`: cálculo del precio DELIVERY; la comisión no aplica actualmente.
 - `backend/.../communication/`: evidencia y resolución administrativa de reportes de entrega.
 - `backend/.../controller/pasajero/` y `controller/conductor/`: endpoints de solicitud, seguimiento, compra, entrega, pago y fallo.
 - `app-movil/lib/modulos/pasajero/`: creación y seguimiento de DELIVERY.
@@ -73,12 +75,12 @@ implementada y pendiente de re-review. Los commits de implementación están en
 - ENCOMIENDA calcula A -> B al crear y fija el precio.
 - COMPRA_Y_ENTREGA estima GPS del repartidor -> B al asignarse y fija comercio -> B al confirmar compra.
 - Si OSRM falla, no se permite crear/fijar precio; no usar línea recta.
-- Comisión DELIVERY inicial: 0% y solo sobre el servicio.
+- Comisión DELIVERY: no aplica mientras la pasarela de pagos no esté implementada.
 
 - [ ] Implementar cliente OSRM con timeout y respuesta tipada.
 - [ ] Implementar cálculo por calles y redondeos consistentes con dinero existente.
 - [ ] Exponer límite editable del repartidor y filtrar solicitudes por monto estimado.
-- [ ] Añadir pruebas de A-B, GPS-B, comercio-B, OSRM fallido y comisión 0%.
+- [ ] Añadir pruebas de A-B, GPS-B, comercio-B y OSRM fallido.
 - [ ] Ejecutar tests del módulo y `./gradlew test` focalizado.
 - [ ] Commit: `feat: add delivery pricing and driver advance limit`.
 

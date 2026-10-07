@@ -3,12 +3,12 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/api_excepcion.dart';
 import '../../../core/tema.dart';
 import '../../../core/formato.dart';
 import '../../../comun/editor_foto.dart';
+import '../../../core/enlaces.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/dialogos.dart';
@@ -23,7 +23,8 @@ import 'flujo_conductor.dart';
   if (datos.estadoEntrega == EstadoEntrega.enMano) {
     return ('Lleva el paquete al destino (B)', ColoresApp.exito, '', ColoresApp.azul);
   }
-  final irARecoger = datos.tipoEnvio == TipoEnvio.encomienda &&
+  final irARecoger =
+      datos.tipoEnvio == TipoEnvio.encomienda &&
       (viaje.situacion == SituacionViaje.confirmado || viaje.situacion == SituacionViaje.enCamino);
   return irARecoger
       ? ('Ve a recoger el paquete (A)', ColoresApp.azul, 'Llegué al punto de recogida', ColoresApp.azul)
@@ -58,7 +59,8 @@ class ResumenEntregaConductor extends StatelessWidget {
     final datos = viaje.datosEntrega;
     if (datos == null) return const SizedBox.shrink();
     // El reparto se cancela antes de tenerlo en mano; despues ya no, y el backend tampoco lo acepta.
-    final cancelar = onCancelar != null && datos.muestraCancelacion && SituacionViaje.cancelables.contains(viaje.situacion);
+    final cancelar =
+        onCancelar != null && datos.muestraCancelacion && SituacionViaje.cancelables.contains(viaje.situacion);
     final esCompra = datos.tipoEnvio == TipoEnvio.compraYEntrega;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -99,8 +101,14 @@ class ResumenEntregaConductor extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         Text(datos.descripcion, style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
+        const SizedBox(height: 12),
+        _ContactosEntrega(datos: datos),
         const SizedBox(height: 10),
-        FilaLugar.partida(etiqueta: 'Recoger en (A)', texto: viaje.origenDireccion),
+        if (!esCompra || viaje.partida != null)
+          FilaLugar.partida(
+            etiqueta: esCompra ? 'Comercio (A)' : 'Recoger en (A)',
+            texto: esCompra ? viaje.partida!.texto : viaje.origenDireccion,
+          ),
         FilaLugar.destino(etiqueta: 'Entregar en (B)', texto: viaje.destinoDireccion),
         const SizedBox(height: 10),
         RecuadroPrecio(
@@ -120,6 +128,74 @@ class ResumenEntregaConductor extends StatelessWidget {
             child: const Text('Cancelar pedido', style: TextStyle(fontWeight: FontWeight.w600)),
           ),
         ],
+      ],
+    );
+  }
+}
+
+class _ContactosEntrega extends StatelessWidget {
+  final DatosEntrega datos;
+
+  const _ContactosEntrega({required this.datos});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: ColoresApp.fondo,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: ColoresApp.borde),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Contactos de entrega',
+            style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          _ContactoEntrega(etiqueta: 'Remitente', nombre: datos.nombreRemitente, telefono: datos.telefonoRemitente),
+          const Divider(height: 16),
+          _ContactoEntrega(etiqueta: 'Receptor', nombre: datos.nombreReceptor, telefono: datos.telefonoReceptor),
+        ],
+      ),
+    );
+  }
+}
+
+class _ContactoEntrega extends StatelessWidget {
+  final String etiqueta;
+  final String? nombre;
+  final String? telefono;
+
+  const _ContactoEntrega({required this.etiqueta, this.nombre, this.telefono});
+
+  @override
+  Widget build(BuildContext context) {
+    final numero = telefono?.trim() ?? '';
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(etiqueta, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12)),
+              Text(
+                nombre?.trim().isNotEmpty == true ? nombre!.trim() : 'Sin nombre',
+                style: const TextStyle(color: ColoresApp.texto, fontWeight: FontWeight.w600),
+              ),
+              Text(numero.isEmpty ? 'Sin teléfono' : numero, style: const TextStyle(color: ColoresApp.textoSuave)),
+            ],
+          ),
+        ),
+        IconButton(
+          tooltip: 'Llamar al $etiqueta',
+          onPressed: numero.isEmpty
+              ? null
+              : () => abrirEnlaceExterno(context, Uri(scheme: 'tel', path: numero), numero),
+          icon: const Icon(Icons.phone_outlined),
+        ),
       ],
     );
   }
@@ -148,7 +224,6 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   final _monto = TextEditingController();
   final _observacion = TextEditingController();
   final _motivo = TextEditingController();
-  Uint8List? _comprobante;
   bool _pagoRecibido = false;
 
   /// Foto del paquete al recogerlo (A) o de la persona con su paquete al entregarlo (B).
@@ -160,10 +235,8 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   /// Lo que hay que cobrar con el pedido en mano: el costo del producto (0 en ENCOMIENDA) más el
   /// precio del servicio. El repartidor no escribe el monto, solo confirma que lo recibió.
-  double get _totalACobrar => totalAPagarEntrega(
-        costoProducto: datos?.totalProducto ?? 0,
-        precioServicio: viaje?.precioFinal ?? 0,
-      );
+  double get _totalACobrar =>
+      totalAPagarEntrega(costoProducto: datos?.totalProducto ?? 0, precioServicio: viaje?.precioFinal ?? 0);
 
   @override
   void dispose() {
@@ -203,19 +276,22 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           ? 'Revisa la foto antes de confirmar la entrega. Debe verse:'
           : 'Revisa la foto antes de recoger el paquete. Debe verse:',
       requisitos: entrega
-          ? const ['La persona que recibe con el paquete en la mano', 'Nítida y con buena luz', 'Derecha (gírala si salió de costado)']
-          : const ['El paquete completo, como lo recibes', 'Nítida y con buena luz', 'Derecha (gírala si salió de costado)'],
+          ? const [
+              'La persona que recibe con el paquete en la mano',
+              'Nítida y con buena luz',
+              'Derecha (gírala si salió de costado)',
+            ]
+          : const [
+              'El paquete completo, como lo recibes',
+              'Nítida y con buena luz',
+              'Derecha (gírala si salió de costado)',
+            ],
     );
     if (lista == null || !mounted) return;
     setState(() {
       _fotoEvidencia = lista;
       _etapaDeLaFoto = datos?.estadoEntrega;
     });
-  }
-
-  Future<void> _tomarComprobante() async {
-    final foto = await _tomarFoto();
-    if (foto != null && mounted) setState(() => _comprobante = foto);
   }
 
   /// Aviso corto con el mismo estilo que el resto de la app, que además lo levanta por encima de la
@@ -230,12 +306,6 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
-  }
-
-  Future<void> _llamar(String? telefono) async {
-    final numero = telefono?.replaceAll(RegExp(r'[^0-9+]'), '') ?? '';
-    if (numero.isEmpty) return;
-    await launchUrl(Uri(scheme: 'tel', path: numero));
   }
 
   @override
@@ -255,29 +325,10 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           texto: conPaquete
               ? 'Lleva el paquete al destino (B)'
               : llegoAlPunto || esCompra
-                  ? 'Recoge el paquete'
-                  : 'Ve a recoger el paquete al punto A',
+              ? 'Recoge el paquete'
+              : 'Ve a recoger el paquete al punto A',
         ),
         const SizedBox(height: 6),
-        if (!conPaquete) ...[
-          if (entrega.nombreRemitente != null)
-            _Contacto(
-              etiqueta: 'Remitente',
-              nombre: entrega.nombreRemitente!,
-              telefono: entrega.telefonoRemitente,
-              onLlamar: () => _llamar(entrega.telefonoRemitente),
-            ),
-        ] else ...[
-          if (entrega.nombreReceptor != null)
-            _Contacto(
-              etiqueta: 'Receptor',
-              nombre: entrega.nombreReceptor!,
-              telefono: entrega.telefonoReceptor,
-              onLlamar: () => _llamar(entrega.telefonoReceptor),
-            )
-          else
-            _Contacto(etiqueta: 'Cliente', nombre: actual.nombrePasajero),
-        ],
         const SizedBox(height: 10),
         if (conPaquete)
           _enMano(entrega, actual)
@@ -318,123 +369,135 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   // ------------------------------------------------------------------ etapa 1: recoger en A
 
   Widget _recoger() => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Text('Código de recogida', style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17)),
-          const Text(
-            'Pide al remitente el código de recogida y toma una foto del paquete.',
-            style: TextStyle(color: ColoresApp.textoSuave),
-          ),
-          const SizedBox(height: 12),
-          _campoCodigo(),
-          const SizedBox(height: 10),
-          _BotonFoto(
-            foto: _fotoEvidencia,
-            texto: 'Tomar foto del paquete',
-            onTomar: () => _tomarFotoEvidencia(entrega: false),
-          ),
-          const SizedBox(height: 10),
-          BotonPrincipal(
-            texto: 'Recoger y empezar la entrega',
-            cargando: flujo.ocupado,
-            onPressed: () async {
-              final codigo = _codigo.text.trim();
-              if (!ValidadorCodigoDelivery.esValido(codigo)) return _mensaje('El código debe tener exactamente 6 dígitos.');
-              final foto = _fotoEvidencia;
-              if (foto == null) return _mensaje('La foto del paquete es obligatoria.');
-              await _ejecutar(() => flujo.validarRecogida(codigo, foto));
-              _codigo.clear();
-            },
-          ),
-          const SizedBox(height: 12),
-          _seccionPaqueteIncorrecto(),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      const Text(
+        'Código de recogida',
+        style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
+      ),
+      const Text(
+        'Pide al remitente el código de recogida y toma una foto del paquete.',
+        style: TextStyle(color: ColoresApp.textoSuave),
+      ),
+      const SizedBox(height: 12),
+      _campoCodigo(),
+      const SizedBox(height: 10),
+      _BotonFoto(
+        foto: _fotoEvidencia,
+        texto: 'Tomar foto del paquete',
+        onTomar: () => _tomarFotoEvidencia(entrega: false),
+      ),
+      const SizedBox(height: 10),
+      BotonPrincipal(
+        texto: 'Recoger y empezar la entrega',
+        cargando: flujo.ocupado,
+        onPressed: () async {
+          final codigo = _codigo.text.trim();
+          if (!ValidadorCodigoDelivery.esValido(codigo)) return _mensaje('El código debe tener exactamente 6 dígitos.');
+          final foto = _fotoEvidencia;
+          if (foto == null) return _mensaje('La foto del paquete es obligatoria.');
+          await _ejecutar(() => flujo.validarRecogida(codigo, foto));
+          _codigo.clear();
+        },
+      ),
+      const SizedBox(height: 12),
+      _seccionPaqueteIncorrecto(),
+    ],
+  );
 
   /// Campo del codigo de 6 digitos que dicta la persona, grande y centrado.
   Widget _campoCodigo() => TextField(
-        controller: _codigo,
-        keyboardType: TextInputType.number,
-        maxLength: 6,
-        textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 8, color: ColoresApp.azul),
-        decoration: const InputDecoration(
-          labelText: 'Código dictado',
-          counterText: '',
-          helperText: 'Son 6 dígitos',
-          helperStyle: TextStyle(color: ColoresApp.textoSuave),
-        ),
-      );
+    controller: _codigo,
+    keyboardType: TextInputType.number,
+    maxLength: 6,
+    textAlign: TextAlign.center,
+    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 8, color: ColoresApp.azul),
+    decoration: const InputDecoration(
+      labelText: 'Código dictado',
+      counterText: '',
+      helperText: 'Son 6 dígitos',
+      helperStyle: TextStyle(color: ColoresApp.textoSuave),
+    ),
+  );
 
   /// "Rechazar paquete" no es la accion del dia a dia: es una advertencia. Va plegada para no
   /// competir con la accion del momento.
   Widget _seccionPaqueteIncorrecto() => SeccionDesplegable(
-        titulo: 'El paquete no coincide con lo pedido',
-        ayuda: 'Escribe el motivo y luego toma una foto. Es una advertencia para el administrador, no '
-            'una suspensión automática.',
-        icono: FontAwesomeIcons.boxOpen,
-        color: ColoresApp.textoSuave,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _motivo,
-              maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: flujo.ocupado ? null : _reportarPaquete,
-              icon: const FaIcon(FontAwesomeIcons.flag, size: 14),
-              label: const Text('Rechazar paquete'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: ColoresApp.rojo,
-                side: const BorderSide(color: ColoresApp.rojo),
-                minimumSize: const Size.fromHeight(46),
-              ),
-            ),
-          ],
+    titulo: 'El paquete no coincide con lo pedido',
+    ayuda:
+        'Escribe el motivo y luego toma una foto. Es una advertencia para el administrador, no '
+        'una suspensión automática.',
+    icono: FontAwesomeIcons.boxOpen,
+    color: ColoresApp.textoSuave,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _motivo,
+          maxLines: 2,
+          decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
         ),
-      );
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: flujo.ocupado ? null : _reportarPaquete,
+          icon: const FaIcon(FontAwesomeIcons.flag, size: 14),
+          label: const Text('Rechazar paquete'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: ColoresApp.rojo,
+            side: const BorderSide(color: ColoresApp.rojo),
+            minimumSize: const Size.fromHeight(46),
+          ),
+        ),
+      ],
+    ),
+  );
 
   // ------------------------------------------------------------------ compra y entrega
 
   Widget _compraPanel(DatosEntrega entrega, {required bool propuesta}) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(propuesta ? 'Coordina la compra' : 'Registra la compra', style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17)),
-          if (entrega.detalleCompraPropuesto != null) Text('Comercio propuesto: ${entrega.detalleCompraPropuesto}'),
-          TextField(controller: _detalle, decoration: const InputDecoration(labelText: 'Comercio')),
-          TextField(controller: _monto, keyboardType: const TextInputType.numberWithOptions(decimal: true), decoration: const InputDecoration(labelText: 'Monto en Bs')),
-          if (!propuesta) ...[
-            TextField(controller: _observacion, decoration: const InputDecoration(labelText: 'Observación (opcional)')),
-            OutlinedButton.icon(
-              onPressed: flujo.ocupado ? null : _tomarComprobante,
-              icon: const Icon(Icons.receipt_long),
-              label: Text(_comprobante == null ? 'Agregar foto del recibo (opcional)' : 'Recibo agregado'),
-            ),
-          ],
-          const SizedBox(height: 8),
-          FilledButton(
-            onPressed: flujo.ocupado || flujo.mapa.miUbicacion == null ? null : () async {
-              final monto = double.tryParse(_monto.text.replaceAll(',', '.'));
-              final punto = flujo.mapa.miUbicacion;
-              if (monto == null || monto <= 0 || punto == null || _detalle.text.trim().isEmpty) {
-                _mensaje('Completa comercio, monto y ubicación GPS.');
-                return;
-              }
-              if (propuesta) {
-                await _ejecutar(() => flujo.proponerCompra(punto, _detalle.text, monto));
-              } else {
-                await _ejecutar(() => flujo.registrarCompra(punto, _detalle.text, monto, _observacion.text, _comprobante));
-              }
-            },
-            child: Text(propuesta ? 'Proponer al cliente' : 'Ya tengo el pedido'),
-          ),
-          const SizedBox(height: 12),
-          _seccionPaqueteIncorrecto(),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Text(
+        propuesta ? 'Coordina la compra' : 'Registra la compra',
+        style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
+      ),
+      if (entrega.detalleCompraPropuesto != null) Text('Comercio propuesto: ${entrega.detalleCompraPropuesto}'),
+      TextField(
+        controller: _detalle,
+        decoration: const InputDecoration(labelText: 'Comercio'),
+      ),
+      TextField(
+        controller: _monto,
+        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+        decoration: const InputDecoration(labelText: 'Monto en Bs'),
+      ),
+      if (!propuesta) ...[
+        TextField(
+          controller: _observacion,
+          decoration: const InputDecoration(labelText: 'Observación (opcional)'),
+        ),
+      ],
+      const SizedBox(height: 8),
+      FilledButton(
+        onPressed: flujo.ocupado || flujo.mapa.miUbicacion == null
+            ? null
+            : () async {
+                final monto = double.tryParse(_monto.text.replaceAll(',', '.'));
+                final punto = flujo.mapa.miUbicacion;
+                if (monto == null || monto <= 0 || punto == null || _detalle.text.trim().isEmpty) {
+                  _mensaje('Completa comercio, monto y ubicación GPS.');
+                  return;
+                }
+                if (propuesta) {
+                  await _ejecutar(() => flujo.proponerCompra(punto, _detalle.text, monto));
+                } else {
+                  await _ejecutar(() => flujo.registrarCompra(punto, _detalle.text, monto, _observacion.text, null));
+                }
+              },
+        child: Text(propuesta ? 'Proponer al cliente' : 'Ya tengo el pedido'),
+      ),
+    ],
+  );
 
   // ------------------------------------------------------------------ etapa 2: entregar en B
 
@@ -444,15 +507,22 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text('Pedido en tus manos', style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17)),
+        const Text(
+          'Pedido en tus manos',
+          style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
+        ),
         const SizedBox(height: 4),
         Text(
           metros == null
               ? 'Activa el GPS: la entrega se confirma a ${FlujoConductor.metrosEntrega.round()} m o menos del destino.'
               : cerca
-                  ? 'Estás en el destino. Ya puedes entregar el paquete.'
-                  : 'Estás a ${_distancia(metros)} del destino. La entrega se confirma a ${FlujoConductor.metrosEntrega.round()} m o menos.',
-          style: TextStyle(color: cerca ? ColoresApp.exito : ColoresApp.textoSuave, fontSize: 13, fontWeight: cerca ? FontWeight.w600 : FontWeight.normal),
+              ? 'Estás en el destino. Ya puedes entregar el paquete.'
+              : 'Estás a ${_distancia(metros)} del destino. La entrega se confirma a ${FlujoConductor.metrosEntrega.round()} m o menos.',
+          style: TextStyle(
+            color: cerca ? ColoresApp.exito : ColoresApp.textoSuave,
+            fontSize: 13,
+            fontWeight: cerca ? FontWeight.w600 : FontWeight.normal,
+          ),
         ),
         const SizedBox(height: 6),
         if (!entrega.pagoConfirmado) ...[
@@ -461,8 +531,10 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
             controlAffinity: ListTileControlAffinity.leading,
             value: _pagoRecibido,
             onChanged: flujo.ocupado ? null : (valor) => setState(() => _pagoRecibido = valor ?? false),
-            title: Text('Recibí ${formatoBs(_totalACobrar)}',
-                style: const TextStyle(color: ColoresApp.texto, fontWeight: FontWeight.w600)),
+            title: Text(
+              'Recibí ${formatoBs(_totalACobrar)}',
+              style: const TextStyle(color: ColoresApp.texto, fontWeight: FontWeight.w600),
+            ),
             subtitle: Text(MetodoPago.frase('El cliente paga', actual.metodoPago)),
           ),
           FilledButton(
@@ -472,17 +544,29 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
             child: const Text('Confirmar pago'),
           ),
         ] else ...[
-          Text('Pago confirmado: ${formatoBs(entrega.montoPagoRecibido ?? _totalACobrar)}',
-              style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
+          Text(
+            'Pago confirmado: ${formatoBs(entrega.montoPagoRecibido ?? _totalACobrar)}',
+            style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
+          ),
           const SizedBox(height: 10),
           if (entrega.tipoEnvio == TipoEnvio.encomienda) ...[
-            const Text('Código de entrega', style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17)),
+            const Text(
+              'Código de entrega',
+              style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
+            ),
             const Text('Pide el código al receptor en el punto B.', style: TextStyle(color: ColoresApp.textoSuave)),
             const SizedBox(height: 12),
             _campoCodigo(),
           ] else ...[
-            TextField(controller: _nombre, decoration: const InputDecoration(labelText: 'Nombre del cliente')),
-            TextField(controller: _telefono, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono del cliente')),
+            TextField(
+              controller: _nombre,
+              decoration: const InputDecoration(labelText: 'Nombre del cliente'),
+            ),
+            TextField(
+              controller: _telefono,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(labelText: 'Teléfono del cliente'),
+            ),
           ],
           const SizedBox(height: 10),
           _BotonFoto(
@@ -520,32 +604,32 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   /// "No se pudo entregar" solo se usa cuando algo sale mal, asi que su campo de motivo queda
   /// escondido hasta que el repartidor decide usarlo.
   Widget _seccionFalla() => SeccionDesplegable(
-        titulo: 'No se pudo entregar',
-        ayuda: 'Explica qué pasó y toma una foto del lugar. Se envía al administrador.',
-        icono: FontAwesomeIcons.triangleExclamation,
-        color: ColoresApp.rojo,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            TextField(
-              controller: _motivo,
-              maxLines: 2,
-              decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
-            ),
-            const SizedBox(height: 10),
-            OutlinedButton.icon(
-              onPressed: flujo.ocupado ? null : _reportarFalla,
-              icon: const FaIcon(FontAwesomeIcons.camera, size: 15),
-              label: const Text('Registrar la falla'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: ColoresApp.rojo,
-                side: const BorderSide(color: ColoresApp.rojo),
-                minimumSize: const Size.fromHeight(46),
-              ),
-            ),
-          ],
+    titulo: 'No se pudo entregar',
+    ayuda: 'Explica qué pasó y toma una foto del lugar. Se envía al administrador.',
+    icono: FontAwesomeIcons.triangleExclamation,
+    color: ColoresApp.rojo,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _motivo,
+          maxLines: 2,
+          decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
         ),
-      );
+        const SizedBox(height: 10),
+        OutlinedButton.icon(
+          onPressed: flujo.ocupado ? null : _reportarFalla,
+          icon: const FaIcon(FontAwesomeIcons.camera, size: 15),
+          label: const Text('Registrar la falla'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: ColoresApp.rojo,
+            side: const BorderSide(color: ColoresApp.rojo),
+            minimumSize: const Size.fromHeight(46),
+          ),
+        ),
+      ],
+    ),
+  );
 
   /// El motivo primero y la foto recien tomada: si se cancela la camara no se reenvia una foto vieja.
   Future<void> _reportarFalla() async {
@@ -556,7 +640,9 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   }
 
   Future<void> _reportarPaquete() async {
-    if (_motivo.text.trim().isEmpty) return _mensaje('Escribe el motivo y luego toma la foto. Es una advertencia, no una suspensión automática.');
+    if (_motivo.text.trim().isEmpty) {
+      return _mensaje('Escribe el motivo y luego toma la foto. Es una advertencia, no una suspensión automática.');
+    }
     final foto = await _tomarFoto();
     if (foto == null) return _mensaje('La foto es obligatoria.');
     await _ejecutar(() => flujo.paqueteNoCoincide(_motivo.text, foto));
@@ -577,60 +663,35 @@ class _Etapa extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: (paso == 1 ? ColoresApp.azul : ColoresApp.exito).withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+    decoration: BoxDecoration(
+      color: (paso == 1 ? ColoresApp.azul : ColoresApp.exito).withValues(alpha: 0.1),
+      borderRadius: BorderRadius.circular(10),
+    ),
+    child: Row(
+      children: [
+        Text(
+          'Paso $paso de 2',
+          style: TextStyle(
+            color: paso == 1 ? ColoresApp.azul : ColoresApp.exito,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+          ),
         ),
-        child: Row(
-          children: [
-            Text(
-              'Paso $paso de 2',
-              style: TextStyle(color: paso == 1 ? ColoresApp.azul : ColoresApp.exito, fontSize: 12, fontWeight: FontWeight.w600),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            texto,
+            style: TextStyle(
+              color: paso == 1 ? ColoresApp.azul : ColoresApp.exito,
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                texto,
-                style: TextStyle(color: paso == 1 ? ColoresApp.azul : ColoresApp.exito, fontWeight: FontWeight.w700, fontSize: 15),
-              ),
-            ),
-          ],
+          ),
         ),
-      );
-}
-
-/// Remitente, receptor o cliente con su telefono para llamarlo.
-class _Contacto extends StatelessWidget {
-  final String etiqueta;
-  final String nombre;
-  final String? telefono;
-  final VoidCallback? onLlamar;
-
-  const _Contacto({required this.etiqueta, required this.nombre, this.telefono, this.onLlamar});
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 4),
-        child: Row(
-          children: [
-            const FaIcon(FontAwesomeIcons.user, size: 14, color: ColoresApp.textoSuave),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Text(
-                '$etiqueta: $nombre${telefono == null ? '' : ' - $telefono'}',
-                style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
-              ),
-            ),
-            if (telefono != null && onLlamar != null)
-              IconButton(
-                onPressed: onLlamar,
-                tooltip: 'Llamar',
-                icon: const FaIcon(FontAwesomeIcons.phone, size: 16, color: ColoresApp.azul),
-              ),
-          ],
-        ),
-      );
+      ],
+    ),
+  );
 }
 
 /// Boton para tomar la foto de evidencia con su miniatura cuando ya se tomo.
@@ -659,7 +720,10 @@ class _BotonFoto extends StatelessWidget {
         ),
         const SizedBox(width: 12),
         const Expanded(
-          child: Text('Foto lista', style: TextStyle(color: ColoresApp.exito, fontWeight: FontWeight.w600)),
+          child: Text(
+            'Foto lista',
+            style: TextStyle(color: ColoresApp.exito, fontWeight: FontWeight.w600),
+          ),
         ),
         TextButton(onPressed: onTomar, child: const Text('Tomar otra')),
       ],

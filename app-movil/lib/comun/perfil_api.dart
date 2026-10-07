@@ -28,6 +28,7 @@ class Perfil {
   final DateTime? licenciaVencimiento;
   final bool tieneFotosCarnet;
   final bool tieneFotosLicencia;
+  final double? limiteAdelantoCompra;
 
   const Perfil({
     required this.nombres,
@@ -46,6 +47,7 @@ class Perfil {
     this.licenciaVencimiento,
     this.tieneFotosCarnet = false,
     this.tieneFotosLicencia = false,
+    this.limiteAdelantoCompra,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -69,6 +71,7 @@ class Perfil {
     licenciaVencimiento: fechaDesdeJson(json['licenciaVencimiento']),
     tieneFotosCarnet: json['tieneFotosCarnet'] as bool? ?? false,
     tieneFotosLicencia: json['tieneFotosLicencia'] as bool? ?? false,
+    limiteAdelantoCompra: numeroDesdeJson(json['limiteAdelantoCompra']),
   );
 }
 
@@ -79,10 +82,16 @@ class PerfilApi {
   PerfilApi(this.cliente);
 
   /// El perfil del modo con que se inicio sesion (pasajero o conductor).
-  String get _base =>
-      cliente.sesion.usuario?.esConductor == true ? '/api/conductor/perfil' : '/api/pasajero/perfil';
+  String get _base => cliente.sesion.usuario?.esConductor == true ? '/api/conductor/perfil' : '/api/pasajero/perfil';
 
   Future<Perfil> perfil() async => Perfil.desdeJson(await cliente.get(_base) as Map<String, dynamic>);
+
+  Future<Perfil> actualizarLimiteAdelantoCompra(double limite, String password) async => Perfil.desdeJson(
+    await cliente.patch('/api/conductor/perfil/limite-adelanto-compra', {
+      'limiteAdelantoCompra': limite,
+      'password': password,
+    }) as Map<String, dynamic>,
+  );
 
   /// Foto de perfil, o null si todavia no subio una.
   Future<Uint8List?> foto() => cliente.bytes('$_base/foto');

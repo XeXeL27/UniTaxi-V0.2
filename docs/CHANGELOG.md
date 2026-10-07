@@ -5,6 +5,10 @@
 
 | Fecha | Tipo | Descripción |
 |---|---|---|
+| 2026-10-07 | ✨ | Repartidor: API exclusiva y pantalla para actualizar el límite de adelanto de compras con contraseña o biometría |
+| 2026-10-07 | ✨ | Chat: persistencia en BD, estado real de conexión y señales visuales de envío/recepción |
+| 2026-10-07 | 🐛 | Compra y Entrega: etiquetas A/B corregidas, propuesta de comercio y monto visibles para el pasajero, comisión retirada de la UI y comprobante reservado sin activarlo en la app |
+| 2026-10-07 | 🐛 | DELIVERY: límite de adelanto editable por el repartidor, bloqueo del autoalta de DELIVERY, solicitudes activas filtradas por estado lógico y correcciones de acciones/evidencias del panel |
 | 2026-10-06 | ✨ | Task 3 del plan de compra: el mapa dibuja el tramo naranja hasta el pasajero y la ruta desde el comercio, y re-traza solo si cambió la posición de A |
 | 2026-10-06 | ✨ | Task 2 del plan de compra: el pasajero pide una compra sin elegir destino (origen = destino = su ubicación, precio "A calcular", sin cotizar OSRM) |
 | 2026-10-06 | 📚 | Plan del punto de entrega y el mapa de la compra y entrega: B es donde está el pasajero, naranja punteado hasta él y ruta desde el comercio |
@@ -44,6 +48,24 @@
 | 2026-10-02 | 📚 | Diseño del módulo DELIVERY (fase 1): completadas y decididas las reglas de cancelación; spec limpiada y reescrita |
 | 2026-10-02 | 🔧 | Puesta en marcha local: se crea application-xexel.properties y se corrige el .env (correo SMTP movido a properties, contraseña real de la BD) |
 | 2026-10-02 | 📚 | Diseño del módulo Fletes (spec para retomar en otra sesión): categoría FLETE, datos_flete, chat efímero con fotos por REST |
+
+## 2026-10-07
+
+### ✨ Nuevo · Límite de adelanto de compras aislado del perfil general
+
+- **Módulo / área:** backend de identidad y perfil del conductor, app móvil del repartidor.
+- **Descripción:** se agregó una operación exclusiva para que el repartidor configure únicamente el monto máximo que está dispuesto a adelantar en pedidos COMPRA_Y_ENTREGA.
+- **Cambios clave:** el backend expone `PATCH /api/conductor/perfil/limite-adelanto-compra`, valida el monto no negativo y confirma la identidad; la app muestra el límite en una tarjeta independiente y utiliza el flujo existente de biometría con fallback a contraseña; el formulario general del perfil no se reutiliza para este cambio.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/identity/dto/ActualizarLimiteAdelantoCompraRequest.java`, `backend/src/main/java/com/taxiuap/backend/identity/service/PerfilConductorService.java`, `backend/src/main/java/com/taxiuap/backend/controller/conductor/PerfilConductorController.java`, `app-movil/lib/core/cliente_api.dart`, `app-movil/lib/comun/perfil_api.dart`, `app-movil/lib/comun/datos_perfil.dart`, pruebas asociadas.
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` completo: 213 pruebas en verde; `./gradlew test --console=plain` correcto; `git diff --check` correcto.
+
+### ✨ Nuevo · Chat persistente y señales de estado
+
+- **Módulo / área:** backend de comunicación y app móvil, chat entre pasajero y conductor.
+- **Descripción:** se completó la persistencia que había quedado temporalmente en memoria y se mejoró el modal para que ambos participantes sepan si el chat está activo, si un mensaje fue enviado y si fue recibido.
+- **Cambios clave:** `ChatService` guarda y consulta `Mensaje` mediante `MensajeRepository`, incluyendo historial, no leídos y marcado de lectura; Flutter refleja callbacks reales de STOMP, muestra estado activo/desconectado, resultado del envío y etiquetas visuales `Enviado`/`Recibido`; se conserva el badge y la notificación del teléfono cuando el modal está cerrado.
+- **Archivos afectados:** `backend/src/main/java/com/taxiuap/backend/communication/service/ChatService.java`, `backend/src/test/java/com/taxiuap/backend/communication/service/ChatServiceTest.java`, `app-movil/lib/core/chat.dart`, `app-movil/lib/comun/vista_chat.dart`, `docs/CHANGELOG.md`.
+- **Verificación:** `flutter analyze` sin incidencias; `flutter test` completo: 213 pruebas en verde; `./gradlew test --tests 'com.taxiuap.backend.communication.service.ChatServiceTest' --console=plain` correcto.
 
 ## 2026-10-06
 
