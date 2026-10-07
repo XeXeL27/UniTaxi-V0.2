@@ -15,7 +15,7 @@ Las convenciones del proyecto, el modelo de datos y las reglas de negocio están
 ## Requisitos
 
 - Docker con Docker Compose
-- Java 21 (opcional: sin Java, `iniciar.sh` corre el backend en un contenedor con Java 21)
+- Java 21
 - Flutter 3.x (para el panel admin: Chrome)
 
 ## Configuración inicial (una sola vez)
@@ -57,27 +57,27 @@ escucha en el puerto 5557 y delante va un proxy (nginx, Apache...) con el certif
 conexión WebSocket de `/ws` (`Upgrade` / `Connection`). El DNS de `uni-taxi.uap.edu.bo` debe apuntar
 a ese servidor.
 
-Requisitos del servidor: solo Docker con el plugin compose. Si la máquina tiene Java 21 el backend corre
-con ese; si no, `iniciar.sh` lo corre en un contenedor con Java 21 (mismas rutas, mismo puerto y mismo
-`.env`). No hace falta Flutter: el panel y la app ya van compilados dentro del backend
-(`backend/src/main/resources/web`).
+Requisitos del servidor: Java 21 y la base de datos (externa: `iniciar.sh` no levanta ninguna). No hace
+falta Flutter: el panel y la app ya van compilados dentro del backend (`backend/src/main/resources/web`).
 
 ```bash
 git clone https://github.com/Equipo-de-Sistemas/UniTaxiV2.git && cd UniTaxiV2
 ./iniciar.sh
 ```
 
-Para actualizar: `git pull` y volver a correr `./iniciar.sh` (el `.env` no se toca).
+Para actualizar: `git pull` y volver a correr `./iniciar.sh`. El script no toca la base de datos, el
+`.env` ni el perfil de la máquina (`application-<perfil>.properties`): la conexión, el puerto y las
+claves son los de esa configuración.
 
-- Base de datos: la de Docker (PostGIS, puerto 5436), salvo BD externa: `DB_URL` hacia otro servidor o
-  `BD_EXTERNA=1` en el `.env`, o un PostgreSQL de la máquina que ya escucha en el 5436.
+- Base de datos de desarrollo en Docker (PostGIS, puerto 5436): `./iniciar.sh --con-bd` o
+  `docker compose up -d`.
 - Logs: consola y `logs/taxiuap.log` (30 días, comprimidos) más `logs/taxiuap-errores.log` (solo
   advertencias y errores, lo primero que se revisa). Otra carpeta con `LOG_DIR`; el SQL con
   `LOG_SQL=DEBUG ./iniciar.sh`.
 - Hora: el backend usa la de Bolivia (America/La_Paz) aunque la máquina esté en UTC.
 
-La primera vez `iniciar.sh` crea el `.env` con contraseñas aleatorias (BD, JWT y el administrador
-inicial, que muestra en pantalla: usuario `admin`) y, con la BD vacía, el backend crea los catálogos
+En una máquina nueva se copia `.env.example` como `.env` y se completa; con la BD vacía, el backend
+crea el administrador inicial y los catálogos
 mínimos (UAP, tipos de vehículo, categorías ESTANDAR, MOTO y DELIVERY con su tarifa, zonas y
 etiquetas). Después se completan en el `.env` las integraciones opcionales: Google, Gemini, SIGSE,
 correo y Firebase (sin ellas el sistema arranca y esas funciones quedan apagadas).
