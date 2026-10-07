@@ -72,6 +72,29 @@ public class Persona extends EntidadAuditable {
     @Column(name = "carnet_reverso_url", length = 500)
     private String carnetReversoUrl;
 
+    /** Foto de la persona sosteniendo el anverso de su carnet junto a su cara. */
+    @Column(name = "carnet_selfie_url", length = 500)
+    private String carnetSelfieUrl;
+
+    /** "Valida hasta" del carnet (null: sin dato o sin vencimiento). Vencido no pide viajes ni opera. */
+    @Column(name = "carnet_vencimiento")
+    private LocalDate carnetVencimiento;
+
+    /**
+     * Cuentas de antes de la foto con el carnet: true = se le exige con plazo (SelfieCarnetService),
+     * false = el administrador la habilito sin ella (ya no se suspende sola), null = sin evaluar.
+     */
+    @Column(name = "selfie_exigida")
+    private Boolean selfieExigida;
+
+    /** Hasta cuando puede subir la foto con el carnet antes de que sus cuentas de la app se suspendan. */
+    @Column(name = "plazo_selfie_carnet")
+    private LocalDateTime plazoSelfieCarnet;
+
+    /** true si sus cuentas de la app se suspendieron por no subir la foto con el carnet a tiempo. */
+    @Column(name = "suspendida_sin_selfie")
+    private Boolean suspendidaSinSelfie;
+
     /**
      * OBSERVADO: los datos del carnet esperan la revision de un administrador (ver
      * RevisionCarnetService); mientras tanto la persona no usa la app ni recibe sus credenciales.

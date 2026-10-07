@@ -47,13 +47,14 @@ public class CarnetLicenciaConductorController {
         return imagen(licenciaService.leerPorUsuario(UsuarioActual.idUsuario(), lado));
     }
 
-    /** Multipart: "datos" (CI, complemento, fecha y contrasena), "anverso" y "reverso". */
+    /** Multipart: "datos" (CI, complemento, fecha y contrasena), "anverso", "reverso" y "selfie". */
     @PutMapping(value = "/carnet", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<PerfilConductorResponse>> cambiarCarnet(
             @Valid @RequestPart("datos") CarnetRequest datos,
             @RequestPart("anverso") MultipartFile anverso,
-            @RequestPart("reverso") MultipartFile reverso) {
-        carnetService.reemplazarPorConductor(UsuarioActual.idUsuario(), datos, anverso, reverso);
+            @RequestPart("reverso") MultipartFile reverso,
+            @RequestPart(value = "selfie", required = false) MultipartFile selfie) {
+        carnetService.reemplazarPorConductor(UsuarioActual.idUsuario(), datos, anverso, reverso, selfie);
         return ResponseEntity.ok(ApiResponse.exito("Carnet actualizado", perfilConductorService.obtener(UsuarioActual.idUsuario())));
     }
 

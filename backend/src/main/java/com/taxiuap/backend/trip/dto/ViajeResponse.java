@@ -57,7 +57,9 @@ public record ViajeResponse(
          LocalDateTime ultimoAvisoEspera,
          boolean pasajeroNoSePresento,
          /** Celular de quien pidio el viaje, para que el conductor lo llame mientras lo espera. */
-         String telefonoPasajero) {
+         String telefonoPasajero,
+         /** Cuando se pidio (los viajes cancelados antes de empezar no tienen fecha de inicio). */
+         LocalDateTime fechaSolicitud) {
 
     /** El mismo viaje sin el nombre del favorito, para el conductor. */
     public ViajeResponse sinNombreDestino() {
@@ -68,6 +70,6 @@ public record ViajeResponse(
                 calificadoPorPasajero, metodoPago, metodoPagoPedido, conductorTieneQr, calificacionOfrecida, null,
                 datosEntrega == null ? null : datosEntrega.paraConductor(), paraOtraPersona,
                 nombrePasajeroTercero, telefonoPasajeroTercero, pagaSolicitante, pagoAvisadoEn, pagoRecibidoEn,
-                avisosEspera, ultimoAvisoEspera, pasajeroNoSePresento, telefonoPasajero);
+                avisosEspera, ultimoAvisoEspera, pasajeroNoSePresento, telefonoPasajero, fechaSolicitud);
     }
 }

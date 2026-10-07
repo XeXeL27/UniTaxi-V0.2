@@ -86,6 +86,12 @@ public class ClienteGemini {
      */
     public String leerImagen(String instrucciones, String pedido, byte[] imagen, String tipoMime,
             Map<String, Object> esquema) {
+        return leerImagenes(instrucciones, pedido, List.of(new ImagenIa(imagen, tipoMime)), esquema);
+    }
+
+    /** Igual que leerImagen, con varias imagenes en el orden en que las describe [pedido]. */
+    public String leerImagenes(String instrucciones, String pedido, List<ImagenIa> imagenes,
+            Map<String, Object> esquema) {
         if (!configurado()) {
             throw new GeminiNoDisponibleException("Falta GEMINI_API_KEY");
         }
@@ -98,10 +104,7 @@ public class ClienteGemini {
         }
         Map<String, Object> cuerpo = Map.of(
                 "systemInstruction", Map.of("parts", List.of(Map.of("text", instrucciones))),
-                "contents", List.of(Map.of("role", "user", "parts", List.of(
-                        Map.of("inline_data", Map.of("mime_type", tipoMime,
-                                "data", Base64.getEncoder().encodeToString(imagen))),
-                        Map.of("text", pedido)))),
+                "contents", List.of(Map.of("role", "user", "parts", partes(imagenes, pedido))),
                 "generationConfig", configuracion);
         // Los modelos libres en orden; el ultimo de la lista (flash-lite) siempre entra en los intentos.
         List<String> modelos = new ArrayList<>();
@@ -125,6 +128,16 @@ public class ClienteGemini {
             }
         }
         throw new GeminiNoDisponibleException("Ningun modelo Flash respondio");
+    }
+
+    private static List<Map<String, Object>> partes(List<ImagenIa> imagenes, String pedido) {
+        List<Map<String, Object>> partes = new ArrayList<>();
+        for (ImagenIa imagen : imagenes) {
+            partes.add(Map.of("inline_data", Map.of("mime_type", imagen.tipoMime(),
+                    "data", Base64.getEncoder().encodeToString(imagen.bytes()))));
+        }
+        partes.add(Map.of("text", pedido));
+        return partes;
     }
 
     /** El modelo no puede atender ahora (503, 429, 500, 404 o sin respuesta): se prueba otro. */

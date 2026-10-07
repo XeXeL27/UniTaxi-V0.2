@@ -22,6 +22,11 @@ public record UsuarioDetalleAdminResponse(
         String telefono,
         boolean carnetAnverso,
         boolean carnetReverso,
+        /** Subio la foto con el carnet. */
+        boolean carnetSelfie,
+        LocalDate carnetVencimiento,
+        /** Hasta cuando tiene para subir la foto con el carnet (null = sin plazo). */
+        LocalDateTime plazoSelfieCarnet,
         String situacionCarnet,
         LocalDateTime fechaAceptaTerminos,
         /** null si la persona no tiene cuenta de conductor. */

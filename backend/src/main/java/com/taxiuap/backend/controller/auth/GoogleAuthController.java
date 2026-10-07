@@ -227,16 +227,17 @@ public class GoogleAuthController {
 
     /**
      * Termina el registro de pasajero con Google: "datos" (JSON con el codigo y lo leido del carnet) y
-     * las fotos "anverso" y "reverso". Recien aqui se guarda la persona, el carnet y la cuenta, y salen
+     * las fotos "anverso", "reverso" y "selfie" (la persona con su carnet). Recien aqui se guarda la persona, el carnet y la cuenta, y salen
      * las credenciales por correo.
      */
     @PostMapping(value = "/registro/pasajero/google", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<TokenResponse>> registrarPasajero(
             @Valid @RequestPart("datos") RegistroPasajeroGoogleRequest datos,
             @RequestPart("anverso") MultipartFile anverso,
-            @RequestPart("reverso") MultipartFile reverso) {
+            @RequestPart("reverso") MultipartFile reverso,
+            @RequestPart(value = "selfie", required = false) MultipartFile selfie) {
         PerfilGoogle perfil = perfilRegistroVigente(datos.codigo());
-        TokenResponse tokens = registroGoogleService.registrarPasajeroConCarnet(perfil, datos.carnet(), anverso, reverso,
+        TokenResponse tokens = registroGoogleService.registrarPasajeroConCarnet(perfil, datos.carnet(), anverso, reverso, selfie,
                 () -> foto(perfil));
         temporal.terminarRegistro(datos.codigo());
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro completado", tokens));

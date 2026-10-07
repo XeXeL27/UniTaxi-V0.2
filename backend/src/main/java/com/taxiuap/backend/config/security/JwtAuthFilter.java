@@ -65,7 +65,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                         .orElse(EstadoRegistro.X);
                 if (estado != EstadoRegistro.A) {
                     request.setAttribute(ATRIBUTO_MOTIVO, estado == EstadoRegistro.S
-                            ? AutenticacionService.MENSAJE_CUENTA_SUSPENDIDA
+                            ? motivoSuspendida(usuario.idUsuario())
                             : motivoEliminada(usuario.idUsuario()));
                     SecurityContextHolder.clearContext();
                     chain.doFilter(request, response);
@@ -82,6 +82,13 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             }
         }
         chain.doFilter(request, response);
+    }
+
+    /** Suspendida por no subir la foto con el carnet a tiempo, o por el administrador. */
+    private String motivoSuspendida(Long idUsuario) {
+        return personaRepository.suspendidaSinSelfieDeUsuario(idUsuario).filter(Boolean.TRUE::equals).isPresent()
+                ? AutenticacionService.MENSAJE_SUSPENDIDA_SIN_SELFIE
+                : AutenticacionService.MENSAJE_CUENTA_SUSPENDIDA;
     }
 
     /** Si el administrador rechazo sus datos del carnet se le dice por que; si no, el aviso general. */

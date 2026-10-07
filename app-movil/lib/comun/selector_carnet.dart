@@ -9,6 +9,7 @@ import '../core/carnet/lector_documentos.dart';
 import '../core/carnet/lectura_carnet.dart';
 import '../core/carnet/lectura_licencia.dart';
 import '../core/carnet/ocr_carnet.dart';
+import '../core/formato.dart';
 import '../core/tema.dart';
 import '../widgets/dialogos.dart';
 import 'editor_foto.dart';
@@ -227,6 +228,10 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
   Future<(String?, String?)> _leerEnTelefono(Uint8List bytes, _Lado lado) async {
     try {
       final texto = await OcrCarnet.leer(bytes, _acepta(lado));
+      // El carnet vencido no sirve (el servidor hace lo mismo cuando lee con Gemini).
+      if (texto != null && !_esLicencia && lado == _Lado.anverso && carnetVencidoEn(texto)) {
+        return (null, 'Tu carnet venció el ${formatoFecha(vencimientoCarnet(texto))}. Renuévalo en el SEGIP para continuar.');
+      }
       return (texto, texto == null ? _noEsElDocumento(lado) : null);
     } catch (_) {
       // Un error del lector no es lo mismo que una foto que no es un carnet: se dice aparte.

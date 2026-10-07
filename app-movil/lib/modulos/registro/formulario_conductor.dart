@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../../comun/aceptar_terminos.dart';
 import '../../comun/qr_pago.dart';
 import '../../comun/selector_carnet.dart';
+import '../../comun/selfie_carnet.dart';
 import '../../core/api_excepcion.dart';
 import '../../core/carnet/lectura_carnet.dart';
 import '../../core/carnet/lectura_licencia.dart';
@@ -113,6 +114,9 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   /// Lo que se lee de ellas llena el CI y la fecha de nacimiento (no se editan).
   SeleccionCarnet _carnet = const SeleccionCarnet();
 
+  /// Foto de la persona con su carnet, obligatoria junto con las fotos del carnet.
+  SeleccionSelfie _selfie = const SeleccionSelfie();
+
   /// Cambian para vaciar el selector cuando la persona dice que sus datos no son correctos y tiene
   /// que volver a tomar las fotos.
   int _intentoCarnet = 0;
@@ -176,6 +180,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
     setState(() {
       _intentoCarnet++;
       _carnet = const SeleccionCarnet();
+      _selfie = const SeleccionSelfie();
       _ciLeido = false;
       _fechaLeida = false;
       _c['ci']!.clear();
@@ -427,8 +432,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
     } catch (_) {
       if (mounted) {
         setState(
-          () => _avisoCategorias =
-              'No pudimos leer las categorías del servicio. Te registraremos como mototaxi.',
+          () => _avisoCategorias = 'No pudimos leer las categorías del servicio. Te registraremos como mototaxi.',
         );
       }
     }
@@ -478,6 +482,10 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       setState(() => _error = 'Agrega la foto del anverso y del reverso de tu carnet.');
       return;
     }
+    if (_pideCarnet && _selfie.foto == null) {
+      setState(() => _error = 'Tómate la foto sosteniendo tu carnet junto a tu cara.');
+      return;
+    }
     // Si el nombre no se leyo solo o el corte no era seguro, lo escrito debe estar en el carnet.
     final problemaNombre = _nombreDelCarnet
         ? _carnet.datos?.revisarNombreEscrito(_c['nombres']!.text, _c['apellidos']!.text)
@@ -495,7 +503,12 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       setState(() => _error = _errorLicencia);
       return;
     }
-    final valido = _clave.currentState?.validate() ?? false;
+    final invalidos = _clave.currentState?.validateGranularly();
+    final valido = invalidos != null && invalidos.isEmpty;
+    // El aviso sale junto al boton: se sube hasta el primer campo marcado en rojo.
+    if (invalidos != null && invalidos.isNotEmpty) {
+      Scrollable.ensureVisible(invalidos.first.context, alignment: 0.2, duration: const Duration(milliseconds: 300));
+    }
     if (!valido || _fechaNacimiento == null || _vencimientoLicencia == null) {
       setState(
         () => _error = !valido
@@ -611,7 +624,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         datos,
         Map.of(_pdf),
         qrs: [for (final qr in _qrs) ArchivoPdf(qr.nombre, qr.bytes)],
-        carnet: _pideCarnet ? (anverso: _carnet.anverso!, reverso: _carnet.reverso!) : null,
+        carnet: _pideCarnet ? (anverso: _carnet.anverso!, reverso: _carnet.reverso!, selfie: _selfie.foto!) : null,
         licencia: (anverso: _licencia.anverso!, reverso: _licencia.reverso!),
       );
       // Con la sesion iniciada la pantalla principal pasa a ser la del conductor (en revision), o la
@@ -672,6 +685,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             nombre: 'carnet_reverso.jpg',
             tipo: MediaType('image', 'jpeg'),
           ),
+          (campo: 'CARNET_SELFIE', bytes: _selfie.foto!, nombre: 'carnet_selfie.jpg', tipo: MediaType('image', 'jpeg')),
         ],
         (
           campo: 'LICENCIA_ANVERSO',
@@ -804,332 +818,348 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             alignment: Alignment.topCenter,
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 720),
-              child: ListView(
+              // SingleChildScrollView y no ListView: el ListView destruye los campos que salen de la
+              // pantalla y validate() no los revisaba (con el boton de enviar abajo, la contrasena y el
+              // celular llegaban sin validar al servidor).
+              child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(16, 18, 16, 32),
-                children: [
-                  if (_datosConocidos) _tarjetaGoogle(),
-                  if (_pideCarnet)
-                    _Seccion(
-                      icono: FontAwesomeIcons.idCard,
-                      titulo: 'Foto de tu carnet',
-                      children: [
-                        Text(
-                          LectorDocumentos.puedeLeer
-                              ? 'Toma o carga una foto de cada lado de tu carnet de identidad. Con ellas llenamos tu '
-                                    'nombre, tu número de carnet y tu fecha de nacimiento.'
-                              : 'Carga una foto de cada lado de tu carnet de identidad y escribe tu nombre como está en '
-                                    'el carnet, tu número de carnet y tu fecha de nacimiento.',
-                          style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
-                        ),
-                        const SizedBox(height: 12),
-                        SelectorCarnet(key: ValueKey('carnet$_intentoCarnet'), onCambio: _alCambiarCarnet),
-                      ],
-                    ),
-                  _Seccion(
-                    icono: FontAwesomeIcons.solidUser,
-                    titulo: 'Datos personales',
-                    children: [
-                      // Nombre: se lee del carnet en el APK (sin teclado); en la web se escribe.
-                      if (_pideCarnet || !_datosConocidos) ...[
-                        if (_nombreDelCarnet && _c['nombres']!.text.isEmpty)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 12),
-                            child: Text(
-                              'Tu nombre aparecerá aquí cuando agregues las fotos de tu carnet.',
-                              style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
-                            ),
-                          ),
-                        if (_nombreDelCarnet && (_carnet.datos?.nombresEditables ?? false))
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 12),
-                            child: Text(
-                              avisoNombreCarnet(_carnet.datos!),
-                              style: const TextStyle(
-                                color: ColoresApp.rutaSecundariaBorde,
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        fila([
-                          _campo(
-                            'nombres',
-                            _nombreDelCarnet ? 'Nombres (del carnet)' : 'Nombres',
-                            obligatorio: true,
-                            soloLectura: _nombreDelCarnet && !(_carnet.datos?.nombresEditables ?? false),
-                            formatos: Formatos.letras,
-                            alCambiar: (_) => _revisarNombreSiHayLicencia(),
-                          ),
-                          _campo(
-                            'apellidos',
-                            _nombreDelCarnet ? 'Apellidos (del carnet)' : 'Apellidos',
-                            obligatorio: true,
-                            soloLectura: _nombreDelCarnet && !(_carnet.datos?.apellidosEditables ?? false),
-                            formatos: Formatos.letras,
-                            alCambiar: (_) => _revisarNombreSiHayLicencia(),
-                          ),
-                        ]),
-                        const SizedBox(height: 12),
-                      ],
-                      if (_tieneCarnet)
-                        const Padding(
-                          padding: EdgeInsets.only(bottom: 12),
-                          child: Text(
-                            'Usamos el carnet que ya registraste en tu cuenta.',
-                            style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
-                          ),
-                        ),
-                      fila([
-                        _campo(
-                          'ci',
-                          'Carnet de identidad',
-                          obligatorio: true,
-                          teclado: TextInputType.number,
-                          soloLectura: _tieneCarnet || _ciLeido || (LectorDocumentos.puedeLeer && _pideCarnet),
-                          formatos: [Formatos.soloDigitos],
-                          validar: (v) => RegExp(r'^\d{5,10}$').hasMatch(v) ? null : 'Solo los números de tu carnet',
-                        ),
-                        _campo(
-                          'complementoCi',
-                          LectorDocumentos.puedeLeer && _pideCarnet
-                              ? 'Complemento (se lee de la foto)'
-                              : 'Complemento (solo si tu carnet lo tiene)',
-                          soloLectura: _tieneCarnet || LectorDocumentos.puedeLeer,
-                          formatos: [
-                            FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')),
-                            LengthLimitingTextInputFormatter(2),
-                            MayusculasFormatter(),
-                          ],
-                          validar: (v) => complementoValido(v) ? null : 'Dos caracteres con un número, por ejemplo 1B',
-                        ),
-                      ]),
-                      const SizedBox(height: 12),
-                      fila([
-                        _campo(
-                          'telefono',
-                          'Celular',
-                          obligatorio: true,
-                          teclado: TextInputType.phone,
-                          formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(8)],
-                          validar: (v) => Formatos.celular.hasMatch(v) ? null : '8 dígitos que empiezan con 6 o 7',
-                        ),
-                        _campoFecha(),
-                      ]),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Te llamaremos a este celular si hay alguna observación en tus documentos.',
-                        style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
-                      ),
-                      if (!_datosConocidos) ...[
-                        const SizedBox(height: 12),
-                        _campo(
-                          'correo',
-                          'Correo electrónico',
-                          obligatorio: true,
-                          teclado: TextInputType.emailAddress,
-                          validar: (v) => RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v) ? null : 'Correo no válido',
-                        ),
-                      ],
-                    ],
-                  ),
-                  if (!_datosConocidos)
-                    _Seccion(
-                      icono: FontAwesomeIcons.key,
-                      titulo: 'Tu cuenta',
-                      children: [
-                        _campo(
-                          'nombreUsuario',
-                          'Nombre de usuario',
-                          obligatorio: true,
-                          validar: (v) {
-                            return RegExp(r'^[A-Za-z0-9._-]{3,50}$').hasMatch(v)
-                                ? null
-                                : 'De 3 a 50 caracteres: letras, números, punto, guion o guion bajo';
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        fila([
-                          _campo(
-                            'password',
-                            'Contraseña',
-                            obligatorio: true,
-                            oculto: true,
-                            validar: (v) => v.length < 8 ? 'Al menos 8 caracteres' : null,
-                          ),
-                          _campo(
-                            'confirmacion',
-                            'Confirmar contraseña',
-                            obligatorio: true,
-                            oculto: true,
-                            validar: (v) => v != _c['password']!.text ? 'No coincide con la contraseña' : null,
-                          ),
-                        ]),
-                      ],
-                    ),
-                  _Seccion(
-                    icono: FontAwesomeIcons.solidIdBadge,
-                    titulo: 'Licencia de conducir',
-                    children: [
-                      Text(
-                        LectorDocumentos.puedeLeer
-                            ? 'Toma o carga una foto de cada lado de tu licencia. Leemos el número, la categoría y el '
-                                  'vencimiento; al enviar solo confirmas el número. Por ahora solo aceptamos licencias '
-                                  'de motocicleta (categoría M).'
-                            : 'Carga una foto de cada lado de tu licencia y escribe su número y su vencimiento. Por '
-                                  'ahora solo aceptamos licencias de motocicleta (categoría M).',
-                        style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
-                      ),
-                      const SizedBox(height: 12),
-                      SelectorCarnet(
-                        key: ValueKey('licencia$_intentoLicencia'),
-                        documento: DocumentoFoto.licencia,
-                        onCambio: _alCambiarLicencia,
-                      ),
-                      if (_errorLicencia != null) ...[const SizedBox(height: 10), _aviso(_errorLicencia!)],
-                      if (_licencia.completa || !LectorDocumentos.puedeLeer) ...[
-                        const SizedBox(height: 14),
-                        fila([
-                          _campo(
-                            'numeroLicencia',
-                            'Número de licencia',
-                            obligatorio: true,
-                            teclado: TextInputType.number,
-                            soloLectura: LectorDocumentos.puedeLeer,
-                            formatos: [Formatos.soloDigitos],
-                            validar: (v) => RegExp(r'^\d{5,10}(-[0-9A-Z]{2})?$').hasMatch(v) ? null : 'Solo números',
-                          ),
-                          _campo('categoriaLicencia', 'Categoría', soloLectura: true),
-                          _campoVencimiento(),
-                        ]),
-                        if (_licenciaConfirmada)
-                          const Padding(
-                            padding: EdgeInsets.only(top: 8),
-                            child: Row(
-                              children: [
-                                FaIcon(FontAwesomeIcons.solidCircleCheck, color: ColoresApp.exito, size: 14),
-                                SizedBox(width: 8),
-                                Text(
-                                  'Número de licencia confirmado',
-                                  style: TextStyle(color: ColoresApp.exito, fontSize: 13),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ],
-                  ),
-                  _Seccion(
-                    icono: FontAwesomeIcons.motorcycle,
-                    titulo: 'Tu moto',
-                    children: [
-                      fila([
-                        _campo('placa', 'Placa', obligatorio: true, formatos: Formatos.alfanumerico),
-                        _campo(
-                          'marca',
-                          'Marca',
-                          obligatorio: true,
-                          formatos: Formatos.letrasMayusculas,
-                          validar: (v) => Formatos.marca.hasMatch(v) ? null : 'Solo letras en mayúsculas',
-                        ),
-                      ]),
-                      const SizedBox(height: 12),
-                      fila([
-                        _campo(
-                          'modelo',
-                          'Modelo',
-                          obligatorio: true,
-                          formatos: Formatos.alfanumerico,
-                          validar: (v) => Formatos.modelo.hasMatch(v) ? null : 'Solo letras y números',
-                        ),
-                        _campo(
-                          'color',
-                          'Color',
-                          obligatorio: true,
-                          formatos: Formatos.letras,
-                          validar: (v) => Formatos.color.hasMatch(v) ? null : 'Solo letras',
-                        ),
-                        _campo(
-                          'anio',
-                          'Año',
-                          teclado: TextInputType.number,
-                          formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(4)],
-                          validar: (v) {
-                            final anio = int.tryParse(v);
-                            return anio == null || anio < 1950 || anio > DateTime.now().year + 1
-                                ? 'Año no válido'
-                                : null;
-                          },
-                        ),
-                      ]),
-                      if (_categorias.isNotEmpty) ...[
-                        const SizedBox(height: 14),
-                        _SelectorCategoriaMoto(
-                          elegida: _categoriaElegida,
-                          categorias: _categorias,
-                          alElegir: (categoria) => setState(() => _categoriaElegida = categoria),
-                        ),
-                      ],
-                      if (_avisoCategorias != null) ...[
-                        const SizedBox(height: 10),
-                        Text(
-                          _avisoCategorias!,
-                          style: const TextStyle(
-                            color: ColoresApp.rutaSecundariaBorde,
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(height: 6),
-                      const Text(
-                        'El pasajero verá la marca, el modelo, el color y la placa para reconocer tu moto.',
-                        style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
-                      ),
-                    ],
-                  ),
-                  _Seccion(
-                    icono: FontAwesomeIcons.filePdf,
-                    titulo: 'SOAT en PDF (opcional)',
-                    children: [
-                      const Text(
-                        'Máximo 5 MB. Quedará pendiente de revisión.',
-                        style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
-                      ),
-                      const SizedBox(height: 10),
-                      for (final documento in _documentos) _filaPdf(documento),
-                    ],
-                  ),
-                  _Seccion(
-                    icono: FontAwesomeIcons.qrcode,
-                    titulo: 'QR de cobro (opcional)',
-                    children: [
-                      const Text(
-                        'La imagen del QR de tu banca móvil, hasta 3. Los pasajeros que paguen por QR lo verán. '
-                        'Puedes agregarlos o cambiarlos después en Perfil > Mis QR de cobro.',
-                        style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
-                      ),
-                      const SizedBox(height: 12),
-                      SelectorQrRegistro(imagenes: _qrs, alCambiar: (lista) => setState(() => _qrs = lista)),
-                    ],
-                  ),
-                  if (_error != null) ...[
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(12)),
-                      child: Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_datosConocidos) _tarjetaGoogle(),
+                    if (_pideCarnet)
+                      _Seccion(
+                        icono: FontAwesomeIcons.idCard,
+                        titulo: 'Foto de tu carnet',
                         children: [
-                          const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
+                          Text(
+                            LectorDocumentos.puedeLeer
+                                ? 'Toma o carga una foto de cada lado de tu carnet de identidad y tómate una foto '
+                                      'sosteniéndolo junto a tu cara. Con ellas llenamos tu nombre, tu número de carnet '
+                                      'y tu fecha de nacimiento.'
+                                : 'Carga una foto de cada lado de tu carnet de identidad, tómate una foto sosteniéndolo '
+                                      'junto a tu cara y escribe tu nombre como está en el carnet, tu número de carnet y '
+                                      'tu fecha de nacimiento.',
+                            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
+                          ),
+                          const SizedBox(height: 12),
+                          SelectorCarnet(key: ValueKey('carnet$_intentoCarnet'), onCambio: _alCambiarCarnet),
+                          const SizedBox(height: 12),
+                          SelectorSelfieCarnet(
+                            key: ValueKey('selfie$_intentoCarnet'),
+                            anverso: _carnet.anverso,
+                            onCambio: (selfie) => setState(() => _selfie = selfie),
                           ),
                         ],
                       ),
+                    _Seccion(
+                      icono: FontAwesomeIcons.solidUser,
+                      titulo: 'Datos personales',
+                      children: [
+                        // Nombre: se lee del carnet en el APK (sin teclado); en la web se escribe.
+                        if (_pideCarnet || !_datosConocidos) ...[
+                          if (_nombreDelCarnet && _c['nombres']!.text.isEmpty)
+                            const Padding(
+                              padding: EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                'Tu nombre aparecerá aquí cuando agregues las fotos de tu carnet.',
+                                style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                              ),
+                            ),
+                          if (_nombreDelCarnet && (_carnet.datos?.nombresEditables ?? false))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Text(
+                                avisoNombreCarnet(_carnet.datos!),
+                                style: const TextStyle(
+                                  color: ColoresApp.rutaSecundariaBorde,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ),
+                          fila([
+                            _campo(
+                              'nombres',
+                              _nombreDelCarnet ? 'Nombres (del carnet)' : 'Nombres',
+                              obligatorio: true,
+                              soloLectura: _nombreDelCarnet && !(_carnet.datos?.nombresEditables ?? false),
+                              formatos: Formatos.letras,
+                              alCambiar: (_) => _revisarNombreSiHayLicencia(),
+                            ),
+                            _campo(
+                              'apellidos',
+                              _nombreDelCarnet ? 'Apellidos (del carnet)' : 'Apellidos',
+                              obligatorio: true,
+                              soloLectura: _nombreDelCarnet && !(_carnet.datos?.apellidosEditables ?? false),
+                              formatos: Formatos.letras,
+                              alCambiar: (_) => _revisarNombreSiHayLicencia(),
+                            ),
+                          ]),
+                          const SizedBox(height: 12),
+                        ],
+                        if (_tieneCarnet)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 12),
+                            child: Text(
+                              'Usamos el carnet que ya registraste en tu cuenta.',
+                              style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                            ),
+                          ),
+                        fila([
+                          _campo(
+                            'ci',
+                            'Carnet de identidad',
+                            obligatorio: true,
+                            teclado: TextInputType.number,
+                            soloLectura: _tieneCarnet || _ciLeido || (LectorDocumentos.puedeLeer && _pideCarnet),
+                            formatos: [Formatos.soloDigitos],
+                            validar: (v) => RegExp(r'^\d{5,10}$').hasMatch(v) ? null : 'Solo los números de tu carnet',
+                          ),
+                          _campo(
+                            'complementoCi',
+                            LectorDocumentos.puedeLeer && _pideCarnet
+                                ? 'Complemento (se lee de la foto)'
+                                : 'Complemento (solo si tu carnet lo tiene)',
+                            soloLectura: _tieneCarnet || LectorDocumentos.puedeLeer,
+                            formatos: [
+                              FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')),
+                              LengthLimitingTextInputFormatter(2),
+                              MayusculasFormatter(),
+                            ],
+                            validar: (v) =>
+                                complementoValido(v) ? null : 'Dos caracteres con un número, por ejemplo 1B',
+                          ),
+                        ]),
+                        const SizedBox(height: 12),
+                        fila([
+                          _campo(
+                            'telefono',
+                            'Celular',
+                            obligatorio: true,
+                            teclado: TextInputType.phone,
+                            formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(8)],
+                            validar: (v) => Formatos.celular.hasMatch(v) ? null : '8 dígitos que empiezan con 6 o 7',
+                          ),
+                          _campoFecha(),
+                        ]),
+                        const SizedBox(height: 6),
+                        const Text(
+                          'Te llamaremos a este celular si hay alguna observación en tus documentos.',
+                          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                        ),
+                        if (!_datosConocidos) ...[
+                          const SizedBox(height: 12),
+                          _campo(
+                            'correo',
+                            'Correo electrónico',
+                            obligatorio: true,
+                            teclado: TextInputType.emailAddress,
+                            validar: (v) =>
+                                RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v) ? null : 'Correo no válido',
+                          ),
+                        ],
+                      ],
                     ),
-                    const SizedBox(height: 14),
+                    if (!_datosConocidos)
+                      _Seccion(
+                        icono: FontAwesomeIcons.key,
+                        titulo: 'Tu cuenta',
+                        children: [
+                          _campo(
+                            'nombreUsuario',
+                            'Nombre de usuario',
+                            obligatorio: true,
+                            validar: (v) {
+                              return RegExp(r'^[A-Za-z0-9._-]{3,50}$').hasMatch(v)
+                                  ? null
+                                  : 'De 3 a 50 caracteres: letras, números, punto, guion o guion bajo';
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          fila([
+                            _campo(
+                              'password',
+                              'Contraseña',
+                              obligatorio: true,
+                              oculto: true,
+                              validar: (v) => v.length < 8 ? 'Al menos 8 caracteres' : null,
+                            ),
+                            _campo(
+                              'confirmacion',
+                              'Confirmar contraseña',
+                              obligatorio: true,
+                              oculto: true,
+                              validar: (v) => v != _c['password']!.text ? 'No coincide con la contraseña' : null,
+                            ),
+                          ]),
+                        ],
+                      ),
+                    _Seccion(
+                      icono: FontAwesomeIcons.solidIdBadge,
+                      titulo: 'Licencia de conducir',
+                      children: [
+                        Text(
+                          LectorDocumentos.puedeLeer
+                              ? 'Toma o carga una foto de cada lado de tu licencia. Leemos el número, la categoría y el '
+                                    'vencimiento; al enviar solo confirmas el número. Por ahora solo aceptamos licencias '
+                                    'de motocicleta (categoría M).'
+                              : 'Carga una foto de cada lado de tu licencia y escribe su número y su vencimiento. Por '
+                                    'ahora solo aceptamos licencias de motocicleta (categoría M).',
+                          style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
+                        ),
+                        const SizedBox(height: 12),
+                        SelectorCarnet(
+                          key: ValueKey('licencia$_intentoLicencia'),
+                          documento: DocumentoFoto.licencia,
+                          onCambio: _alCambiarLicencia,
+                        ),
+                        if (_errorLicencia != null) ...[const SizedBox(height: 10), _aviso(_errorLicencia!)],
+                        if (_licencia.completa || !LectorDocumentos.puedeLeer) ...[
+                          const SizedBox(height: 14),
+                          fila([
+                            _campo(
+                              'numeroLicencia',
+                              'Número de licencia',
+                              obligatorio: true,
+                              teclado: TextInputType.number,
+                              soloLectura: LectorDocumentos.puedeLeer,
+                              formatos: [Formatos.soloDigitos],
+                              validar: (v) => RegExp(r'^\d{5,10}(-[0-9A-Z]{2})?$').hasMatch(v) ? null : 'Solo números',
+                            ),
+                            _campo('categoriaLicencia', 'Categoría', soloLectura: true),
+                            _campoVencimiento(),
+                          ]),
+                          if (_licenciaConfirmada)
+                            const Padding(
+                              padding: EdgeInsets.only(top: 8),
+                              child: Row(
+                                children: [
+                                  FaIcon(FontAwesomeIcons.solidCircleCheck, color: ColoresApp.exito, size: 14),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Número de licencia confirmado',
+                                    style: TextStyle(color: ColoresApp.exito, fontSize: 13),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                      ],
+                    ),
+                    _Seccion(
+                      icono: FontAwesomeIcons.motorcycle,
+                      titulo: 'Tu moto',
+                      children: [
+                        fila([
+                          _campo('placa', 'Placa', obligatorio: true, formatos: Formatos.alfanumerico),
+                          _campo(
+                            'marca',
+                            'Marca',
+                            obligatorio: true,
+                            formatos: Formatos.letrasMayusculas,
+                            validar: (v) => Formatos.marca.hasMatch(v) ? null : 'Solo letras en mayúsculas',
+                          ),
+                        ]),
+                        const SizedBox(height: 12),
+                        fila([
+                          _campo(
+                            'modelo',
+                            'Modelo',
+                            obligatorio: true,
+                            formatos: Formatos.alfanumerico,
+                            validar: (v) => Formatos.modelo.hasMatch(v) ? null : 'Solo letras y números',
+                          ),
+                          _campo(
+                            'color',
+                            'Color',
+                            obligatorio: true,
+                            formatos: Formatos.letras,
+                            validar: (v) => Formatos.color.hasMatch(v) ? null : 'Solo letras',
+                          ),
+                          _campo(
+                            'anio',
+                            'Año',
+                            teclado: TextInputType.number,
+                            formatos: [Formatos.soloDigitos, LengthLimitingTextInputFormatter(4)],
+                            validar: (v) {
+                              final anio = int.tryParse(v);
+                              return anio == null || anio < 1950 || anio > DateTime.now().year + 1
+                                  ? 'Año no válido'
+                                  : null;
+                            },
+                          ),
+                        ]),
+                        if (_categorias.isNotEmpty) ...[
+                          const SizedBox(height: 14),
+                          _SelectorCategoriaMoto(
+                            elegida: _categoriaElegida,
+                            categorias: _categorias,
+                            alElegir: (categoria) => setState(() => _categoriaElegida = categoria),
+                          ),
+                        ],
+                        if (_avisoCategorias != null) ...[
+                          const SizedBox(height: 10),
+                          Text(
+                            _avisoCategorias!,
+                            style: const TextStyle(
+                              color: ColoresApp.rutaSecundariaBorde,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                        const SizedBox(height: 6),
+                        const Text(
+                          'El pasajero verá la marca, el modelo, el color y la placa para reconocer tu moto.',
+                          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
+                        ),
+                      ],
+                    ),
+                    _Seccion(
+                      icono: FontAwesomeIcons.filePdf,
+                      titulo: 'SOAT en PDF (opcional)',
+                      children: [
+                        const Text(
+                          'Máximo 5 MB. Quedará pendiente de revisión.',
+                          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                        ),
+                        const SizedBox(height: 10),
+                        for (final documento in _documentos) _filaPdf(documento),
+                      ],
+                    ),
+                    _Seccion(
+                      icono: FontAwesomeIcons.qrcode,
+                      titulo: 'QR de cobro (opcional)',
+                      children: [
+                        const Text(
+                          'La imagen del QR de tu banca móvil, hasta 3. Los pasajeros que paguen por QR lo verán. '
+                          'Puedes agregarlos o cambiarlos después en Perfil > Mis QR de cobro.',
+                          style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                        ),
+                        const SizedBox(height: 12),
+                        SelectorQrRegistro(imagenes: _qrs, alCambiar: (lista) => setState(() => _qrs = lista)),
+                      ],
+                    ),
+                    if (_error != null) ...[
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(12)),
+                        child: Row(
+                          children: [
+                            const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                    ],
+                    BotonPrincipal(texto: 'Enviar registro', cargando: _enviando, onPressed: _enviar),
                   ],
-                  BotonPrincipal(texto: 'Enviar registro', cargando: _enviando, onPressed: _enviar),
-                ],
+                ),
               ),
             ),
           );
@@ -1415,10 +1445,7 @@ class _SelectorCategoriaMoto extends StatelessWidget {
         const SizedBox(height: 6),
         Row(
           children: [
-            for (var i = 0; i < categorias.length; i++) ...[
-              if (i > 0) const SizedBox(width: 8),
-              opcion(categorias[i]),
-            ],
+            for (var i = 0; i < categorias.length; i++) ...[if (i > 0) const SizedBox(width: 8), opcion(categorias[i])],
           ],
         ),
       ],

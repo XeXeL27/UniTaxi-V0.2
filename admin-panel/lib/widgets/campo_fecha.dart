@@ -16,11 +16,17 @@ class CampoFecha extends FormField<DateTime> {
   }) : super(
          builder: (estado) {
            Future<void> elegir() async {
+             final primera = primeraFecha ?? DateTime(1900);
+             final ultima = ultimaFecha ?? DateTime(2100);
+             // Sin fecha elegida el calendario abre en el 2000, dentro del rango permitido.
+             var inicial = estado.value ?? DateTime(2000);
+             if (inicial.isBefore(primera)) inicial = primera;
+             if (inicial.isAfter(ultima)) inicial = ultima;
              final elegida = await showDatePicker(
                context: estado.context,
-               initialDate: estado.value ?? DateTime(2000),
-               firstDate: primeraFecha ?? DateTime(1900),
-               lastDate: ultimaFecha ?? DateTime(2100),
+               initialDate: inicial,
+               firstDate: primera,
+               lastDate: ultima,
              );
              if (elegida != null) {
                estado.didChange(elegida);

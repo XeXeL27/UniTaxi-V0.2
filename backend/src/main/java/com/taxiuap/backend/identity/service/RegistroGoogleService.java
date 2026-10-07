@@ -105,8 +105,8 @@ public class RegistroGoogleService {
      * salen por correo despues de confirmar la transaccion; si algo falla no queda nada guardado.
      */
     public TokenResponse registrarPasajeroConCarnet(PerfilGoogle perfil, CarnetRequest datos, MultipartFile anverso,
-            MultipartFile reverso, Supplier<byte[]> foto) {
-        CarnetService.FotosCarnet fotos = carnetService.validar(anverso, reverso);
+            MultipartFile reverso, MultipartFile selfie, Supplier<byte[]> foto) {
+        CarnetService.FotosCarnet fotos = carnetService.validar(anverso, reverso, selfie);
         // Si la persona dice que sus datos se leyeron mal no se comparan con la lectura: los revisa el admin.
         if (!datos.esObservado()) {
             carnetService.verificarLectura(fotos, datos.ci(), datos.complementoCi(), datos.fechaNacimiento(),
@@ -130,7 +130,7 @@ public class RegistroGoogleService {
             persona.setIngresoGoogle(true);
         }
         carnetService.guardar(persona, fotos);
-        boolean observado = carnetService.revisar(persona, datos.esObservado(), datos.aceptoTerminos());
+        boolean observado = carnetService.revisar(persona, fotos, datos.esObservado(), datos.aceptoTerminos());
         return crearPasajero(persona, foto.get(), !observado);
     }
 
@@ -226,7 +226,7 @@ public class RegistroGoogleService {
         boolean observado = false;
         if (carnet != null) {
             carnetService.guardar(persona, carnet);
-            observado = carnetService.revisar(persona, pidioRevision, datos.aceptoTerminos());
+            observado = carnetService.revisar(persona, carnet, pidioRevision, datos.aceptoTerminos());
         }
 
         CuentaNueva nueva = crearCuenta(persona, RolSistema.CONDUCTOR);
@@ -296,7 +296,7 @@ public class RegistroGoogleService {
         boolean suspendida = usuarioRepository.findByPersonaId(persona.getId()).stream()
                 .anyMatch(u -> u.getEstadoUsuario() == EstadoRegistro.S && rol.getCodigo().equals(u.getRol().getCodigo()));
         if (suspendida) {
-            throw new NegocioException(AutenticacionService.MENSAJE_CUENTA_SUSPENDIDA);
+            throw new NegocioException(AutenticacionService.mensajeSuspendida(persona));
         }
         return cuentasActivas(persona).stream().filter(u -> rol.getCodigo().equals(u.getRol().getCodigo())).findFirst();
     }

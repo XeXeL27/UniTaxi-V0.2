@@ -171,6 +171,14 @@ public class GestionUsuarioService {
             validarSinViajeEnCurso(usuario, "suspender");
         }
         usuario.setEstadoUsuario(estado);
+        Persona persona = usuario.getPersona();
+        if (estado == EstadoRegistro.A && Boolean.TRUE.equals(persona.getSuspendidaSinSelfie())) {
+            // El administrador la habilita sin la foto con el carnet: ya no se vuelve a suspender sola (la app
+            // se la sigue pidiendo, sin plazo).
+            persona.setSuspendidaSinSelfie(false);
+            persona.setSelfieExigida(false);
+            persona.setPlazoSelfieCarnet(null);
+        }
         return aRespuesta(usuario);
     }
 
@@ -182,8 +190,16 @@ public class GestionUsuarioService {
 
     /** Con un pedido o un viaje en curso no se corta la cuenta: primero debe terminar o cancelarse. */
     private void validarSinViajeEnCurso(Usuario usuario, String accion) {
+        if (tieneViajeEnCurso(usuario)) {
+            throw new NegocioException("No se puede " + accion + " la cuenta: tiene un viaje o una solicitud en curso. "
+                    + "Espere a que termine o se cancele");
+        }
+    }
+
+    /** La cuenta tiene una solicitud o un viaje sin terminar (como pasajero o como conductor). */
+    public boolean tieneViajeEnCurso(Usuario usuario) {
         List<SituacionViaje> finales = List.of(SituacionViaje.COMPLETADO, SituacionViaje.CANCELADO);
-        boolean ocupado = pasajeroRepository.findByUsuarioId(usuario.getId())
+        return pasajeroRepository.findByUsuarioId(usuario.getId())
                 .map(p -> solicitudViajeRepository.existsByPasajeroIdAndSituacionSolicitudIn(p.getId(),
                                 List.of(SituacionSolicitud.PENDIENTE, SituacionSolicitud.CON_OFERTAS))
                         || viajeRepository.findFirstByPasajeroIdAndSituacionViajeNotIn(p.getId(), finales).isPresent())
@@ -191,10 +207,6 @@ public class GestionUsuarioService {
                 || conductorRepository.findByUsuarioId(usuario.getId())
                         .map(c -> viajeRepository.findFirstByConductorIdAndSituacionViajeNotIn(c.getId(), finales).isPresent())
                         .orElse(false);
-        if (ocupado) {
-            throw new NegocioException("No se puede " + accion + " la cuenta: tiene un viaje o una solicitud en curso. "
-                    + "Espere a que termine o se cancele");
-        }
     }
 
     private record Credenciales(String nombreUsuario, String passwordHash) {
@@ -247,7 +259,19 @@ public class GestionUsuarioService {
                 usuario.getRol().getCodigo(),
                 usuario.getFechaRegistro(),
                 usuario.getEstadoUsuario().name(),
-                situacion(usuario));
+                situacion(usuario),
+                fotoConCarnet(usuario),
+                persona.getCarnetSelfieUrl() == null ? persona.getPlazoSelfieCarnet() : null,
+                CarnetService.carnetVencido(persona));
+    }
+
+    private static String fotoConCarnet(Usuario usuario) {
+        Persona persona = usuario.getPersona();
+        if (RolSistema.ADMIN.getCodigo().equals(usuario.getRol().getCodigo())) return null;
+        if (persona.getCarnetSelfieUrl() != null) return "SUBIDA";
+        if (Boolean.TRUE.equals(persona.getSuspendidaSinSelfie())) return "SUSPENDIDA";
+        if (Boolean.FALSE.equals(persona.getSelfieExigida())) return "SIN_PLAZO";
+        return persona.getPlazoSelfieCarnet() != null ? "PENDIENTE" : null;
     }
 
     /**

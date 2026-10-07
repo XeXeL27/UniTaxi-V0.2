@@ -110,11 +110,12 @@ public class RegistroEstudianteUapService {
      * las fotos y los del SIGSE. Todo se guarda junto: si algo falla no queda nada.
      */
     @Transactional
-    public TokenResponse registrar(RegistroEstudianteUapRequest datos, MultipartFile anverso, MultipartFile reverso) {
+    public TokenResponse registrar(RegistroEstudianteUapRequest datos, MultipartFile anverso, MultipartFile reverso,
+            MultipartFile selfie) {
         DatosSigse sigse = temporal.ver(datos.codigo())
                 .orElseThrow(() -> new NegocioException("La consulta de tu RU venció. Vuelve a escribir tu RU."));
         CarnetRequest carnet = datos.carnet();
-        CarnetService.FotosCarnet fotos = carnetService.validar(anverso, reverso);
+        CarnetService.FotosCarnet fotos = carnetService.validar(anverso, reverso, selfie);
         if (!carnet.esObservado()) {
             carnetService.verificarLectura(fotos, carnet.ci(), carnet.complementoCi(), carnet.fechaNacimiento(),
                     carnet.nombres(), carnet.apellidos());
@@ -145,7 +146,7 @@ public class RegistroEstudianteUapService {
                     carnet.fechaNacimiento(), sigse.correo(), telefono));
         }
         carnetService.guardar(persona, fotos);
-        boolean observado = carnetService.revisar(persona, carnet.esObservado(), carnet.aceptoTerminos());
+        boolean observado = carnetService.revisar(persona, fotos, carnet.esObservado(), carnet.aceptoTerminos());
         estudianteUapService.marcarEstudiante(persona, sigse,
                 observado ? SituacionVerificacion.PENDIENTE : SituacionVerificacion.APROBADA);
         TokenResponse tokens = registroGoogleService.crearPasajero(persona, sigse.foto(), !observado);

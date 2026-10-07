@@ -34,6 +34,12 @@ public record LecturaDocumentoResponse(
                 null, null, null);
     }
 
+    /** El documento ya vencio: se rechaza, pero se informa hasta cuando valia. */
+    public static LecturaDocumentoResponse vencido(String motivo, LocalDate vencimiento) {
+        return new LecturaDocumentoResponse(true, false, motivo, null, null, null, null, null, null, false, false,
+                null, null, vencimiento);
+    }
+
     public static LecturaDocumentoResponse rechazada(String motivo) {
         return new LecturaDocumentoResponse(true, false, motivo, null, null, null, null, null, null, false, false,
                 null, null, null);

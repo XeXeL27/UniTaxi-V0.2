@@ -47,6 +47,19 @@ class PantallaUsuarios extends StatelessWidget {
           opciones: const ['HABILITADO', 'PENDIENTE', 'OBSERVADO', 'RECHAZADO', 'SUSPENDIDO'],
           valor: (u) => u.situacion,
         ),
+        ColumnaTabla(
+          titulo: 'Foto con carnet',
+          tipo: TipoColumna.estado,
+          opciones: const ['SUBIDA', 'PENDIENTE', 'SIN_PLAZO', 'SUSPENDIDA'],
+          valor: (u) => u.fotoConCarnet,
+        ),
+        ColumnaTabla(titulo: 'Plazo de la foto', tipo: TipoColumna.fechaHora, valor: (u) => u.plazoFotoConCarnet),
+        ColumnaTabla(
+          titulo: 'Carnet',
+          tipo: TipoColumna.estado,
+          opciones: const ['VENCIDO'],
+          valor: (u) => u.carnetVencido ? 'VENCIDO' : null,
+        ),
         ColumnaTabla(titulo: 'Registrado', tipo: TipoColumna.fechaHora, valor: (u) => u.fechaRegistro),
       ],
       acciones: (recargar) => [

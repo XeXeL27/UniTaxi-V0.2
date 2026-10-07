@@ -52,7 +52,7 @@ public class EdicionUsuarioAdminService {
      * credenciales); en una cuenta de administrador, solo en esa. Si cambia el correo se avisa al anterior.
      */
     public UsuarioDetalleAdminResponse actualizar(Long idUsuario, EdicionUsuarioAdminRequest datos,
-            MultipartFile carnetAnverso, MultipartFile carnetReverso,
+            MultipartFile carnetAnverso, MultipartFile carnetReverso, MultipartFile carnetSelfie,
             MultipartFile licenciaAnverso, MultipartFile licenciaReverso) {
         Usuario usuario = gestionUsuarioService.buscarNoEliminado(idUsuario);
         Persona persona = usuario.getPersona();
@@ -62,8 +62,11 @@ public class EdicionUsuarioAdminService {
                 datos.nombres(), datos.apellidos(), datos.fechaNacimiento(), datos.correo(), datos.telefono()));
         cambiarNombreUsuario(usuario, datos.nombreUsuario());
 
-        if (tiene(carnetAnverso) || tiene(carnetReverso)) {
-            carnetService.reemplazarPorAdmin(idUsuario, carnetAnverso, carnetReverso);
+        if (tiene(carnetAnverso) || tiene(carnetReverso) || tiene(carnetSelfie)) {
+            carnetService.reemplazarPorAdmin(idUsuario, carnetAnverso, carnetReverso, carnetSelfie);
+        }
+        if (datos.carnetVencimiento() != null) {
+            persona.setCarnetVencimiento(datos.carnetVencimiento());
         }
 
         Optional<Conductor> conductor = conductorDe(persona);
@@ -147,6 +150,9 @@ public class EdicionUsuarioAdminService {
                 persona.getTelefono(),
                 persona.getCarnetAnversoUrl() != null,
                 persona.getCarnetReversoUrl() != null,
+                persona.getCarnetSelfieUrl() != null,
+                persona.getCarnetVencimiento(),
+                persona.getPlazoSelfieCarnet(),
                 persona.getSituacionCarnet() == null ? null : persona.getSituacionCarnet().name(),
                 persona.getFechaAceptaTerminos(),
                 conductor.map(Conductor::getId).orElse(null),

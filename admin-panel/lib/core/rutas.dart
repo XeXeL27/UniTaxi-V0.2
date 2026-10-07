@@ -5,6 +5,7 @@ import '../layout/layout_admin.dart';
 import '../modulos/sistema/pantalla_carpeta.dart';
 import '../modulos/tarifas/pantalla_descuento_estudiante.dart';
 import '../modulos/tarifas/pantalla_precio_viaje.dart';
+import '../modulos/viajes/pantalla_viajes.dart';
 import '../modulos/auth/pantalla_login.dart';
 import '../modulos/flota/pantalla_flota.dart';
 import '../modulos/inicio/pantalla_inicio.dart';
@@ -64,6 +65,7 @@ GoRouter crearRutas(Sesion sesion) {
           GoRoute(path: Menu.carpetaArchivos.ruta, pageBuilder: (_, _) => pagina(const PantallaCarpeta())),
           GoRoute(path: Menu.reportesEntrega.ruta, pageBuilder: (_, _) => pagina(const PantallaReportesEntrega())),
           GoRoute(path: Menu.entregas.ruta, pageBuilder: (_, _) => pagina(const PantallaEntregas())),
+          GoRoute(path: Menu.viajes.ruta, pageBuilder: (_, _) => pagina(const PantallaViajes())),
         ],
       ),
     ],

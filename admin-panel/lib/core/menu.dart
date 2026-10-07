@@ -40,12 +40,13 @@ class Menu {
   static const carpetaArchivos = ItemMenu('Carpeta de archivos', Iconos.folderOpen, '/sistema/carpeta');
   static const reportesEntrega = ItemMenu('Reportes', Iconos.triangleExclamation, '/reportes-entrega');
   static const entregas = ItemMenu('Entregas', Iconos.paquete, '/entregas');
+  static const viajes = ItemMenu('Viajes y pedidos', Iconos.route, '/viajes');
 
   static const grupos = [
     GrupoMenu('Personas', Iconos.users, [personas, usuarios, pasajeros, conductores, carnetsObservados, eliminacionPermanente]),
     GrupoMenu('Mapa', Iconos.map, [zonas, mapa, flota]),
     GrupoMenu('Tarifas', Iconos.layerGroup, [precioViaje, descuentoEstudiante]),
-    GrupoMenu('Entregas', Iconos.paquete, [entregas, reportesEntrega]),
+    GrupoMenu('Viajes y entregas', Iconos.paquete, [viajes, entregas, reportesEntrega]),
     GrupoMenu('Sistema', Iconos.gear, [carpetaArchivos]),
   ];
 

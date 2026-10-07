@@ -37,13 +37,14 @@ public class EstudianteUapAuthController {
                 registroEstudianteUapService.consultar(request.ru(), peticion.getRemoteAddr())));
     }
 
-    /** Paso 2: "datos" (codigo + carnet confirmado) y las fotos "anverso" y "reverso". */
+    /** Paso 2: "datos" (codigo + carnet confirmado) y las fotos "anverso", "reverso" y "selfie" (con el carnet). */
     @PostMapping(value = "/registro/estudiante-uap", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<TokenResponse>> registrar(
             @Valid @RequestPart("datos") RegistroEstudianteUapRequest datos,
             @RequestPart("anverso") MultipartFile anverso,
-            @RequestPart("reverso") MultipartFile reverso) {
-        TokenResponse tokens = registroEstudianteUapService.registrar(datos, anverso, reverso);
+            @RequestPart("reverso") MultipartFile reverso,
+            @RequestPart(value = "selfie", required = false) MultipartFile selfie) {
+        TokenResponse tokens = registroEstudianteUapService.registrar(datos, anverso, reverso, selfie);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Registro completado", tokens));
     }
 }

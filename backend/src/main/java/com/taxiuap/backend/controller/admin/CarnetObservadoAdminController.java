@@ -40,8 +40,11 @@ public class CarnetObservadoAdminController {
     @PutMapping("/{idPersona}/aprobar")
     public ResponseEntity<ApiResponse<CarnetObservadoResponse>> aprobar(@PathVariable Long idPersona,
             @Valid @RequestBody RevisionCarnetRequest datos) {
-        return ResponseEntity.ok(ApiResponse.exito("Datos aprobados: se enviaron las credenciales a su correo",
-                revisionCarnetService.aprobar(idPersona, datos)));
+        // Una cuenta que ya usaba la app (foto con el carnet o carnet renovado) ya tiene sus credenciales.
+        boolean existente = revisionCarnetService.esCuentaExistente(idPersona);
+        CarnetObservadoResponse aprobado = revisionCarnetService.aprobar(idPersona, datos);
+        return ResponseEntity.ok(ApiResponse.exito(existente ? "Datos aprobados: se le avisó que puede seguir usando la app"
+                : "Datos aprobados: se enviaron las credenciales a su correo", aprobado));
     }
 
     @PutMapping("/{idPersona}/rechazar")

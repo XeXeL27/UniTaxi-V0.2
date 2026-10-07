@@ -20,5 +20,5 @@ public record RegistroPasajeroRequest(
         @Email String correo,
         String telefono,
         @NotBlank @Pattern(regexp = NombreUsuario.PATRON, message = NombreUsuario.MENSAJE) String nombreUsuario,
-        @NotBlank @Size(min = 8, max = 72) String password) {
+        @NotBlank @Size(min = 8, max = 72, message = ReglasRegistro.MENSAJE_CONTRASENA) String password) {
 }

@@ -50,6 +50,15 @@ public class AutenticacionService {
     public static final String MENSAJE_CUENTA_SUSPENDIDA =
             "Tu cuenta esta suspendida. Comunicate con la administracion de UNITAXI";
 
+    public static final String MENSAJE_SUSPENDIDA_SIN_SELFIE = "Tu cuenta esta suspendida porque no subiste tu "
+            + "foto con el carnet a tiempo. Comunicate con la administracion de UNITAXI para habilitarla";
+
+    /** Aviso para una cuenta suspendida: dice si fue por no subir la foto con el carnet. */
+    public static String mensajeSuspendida(Persona persona) {
+        return persona != null && Boolean.TRUE.equals(persona.getSuspendidaSinSelfie())
+                ? MENSAJE_SUSPENDIDA_SIN_SELFIE : MENSAJE_CUENTA_SUSPENDIDA;
+    }
+
     private final PersonaRepository personaRepository;
     private final UsuarioRepository usuarioRepository;
     private final ConductorRepository conductorRepository;
@@ -106,7 +115,7 @@ public class AutenticacionService {
         Usuario usuario = cuentaUsuarioService.crearUsuario(persona, RolSistema.CONDUCTOR, nombreUsuario,
                 cuentaUsuarioService.codificar(datos.password()));
         carnetService.guardar(persona, carnet);
-        boolean observado = carnetService.revisar(persona, pidioRevision, datos.aceptoTerminos());
+        boolean observado = carnetService.revisar(persona, carnet, pidioRevision, datos.aceptoTerminos());
         Conductor conductor = cuentaUsuarioService.crearConductor(usuario, datos.conductor().numeroLicencia(),
                 datos.conductor().categoriaLicencia());
         registroMotoConductorService.registrar(conductor, datos.conductor(), documentos);
@@ -178,7 +187,7 @@ public class AutenticacionService {
     private static List<Usuario> sinSuspendidas(List<Usuario> cuentas) {
         List<Usuario> activas = cuentas.stream().filter(u -> u.getEstadoUsuario() == EstadoRegistro.A).toList();
         if (activas.isEmpty() && !cuentas.isEmpty()) {
-            throw new NegocioException(MENSAJE_CUENTA_SUSPENDIDA);
+            throw new NegocioException(mensajeSuspendida(cuentas.get(0).getPersona()));
         }
         return activas;
     }
@@ -262,7 +271,7 @@ public class AutenticacionService {
                     .orElseThrow(() -> new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS));
 
             if (usuario.getEstadoUsuario() == EstadoRegistro.S) {
-                throw new NegocioException(MENSAJE_CUENTA_SUSPENDIDA);
+                throw new NegocioException(mensajeSuspendida(usuario.getPersona()));
             }
             if (usuario.getEstadoUsuario() != EstadoRegistro.A
                     || usuario.getPersona().getEstadoPersona() != EstadoRegistro.A) {

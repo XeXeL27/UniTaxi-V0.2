@@ -14,6 +14,7 @@ import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
+import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.identity.service.CuentaUsuarioService;
 import com.taxiuap.backend.identity.service.PermisoEdicionService;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
@@ -198,12 +199,15 @@ public class DocumentoConductorService {
     /**
      * Un conductor puede operar (recibir solicitudes de viaje) apenas el administrador lo pone en
      * APROBADO (regla de negocio 1), aunque sus documentos sigan en revision (regla 2). Solo lo frena
-     * la licencia vencida. Lo usa el flujo de viaje antes de ofertar o aceptar solicitudes.
+     * la licencia o el carnet vencidos. Lo usa el flujo de viaje antes de ofertar o aceptar solicitudes.
      */
     public boolean puedeOperar(Long idConductor) {
         Conductor conductor = conductorRepository.findById(idConductor)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Conductor", idConductor));
         if (conductor.getSituacionAprobacion() != SituacionAprobacion.APROBADO) {
+            return false;
+        }
+        if (CarnetService.carnetVencido(conductor.getUsuario().getPersona())) {
             return false;
         }
         LocalDate vence = conductor.getLicenciaVencimiento();

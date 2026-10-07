@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.dto.LecturaDocumentoResponse;
+import com.taxiuap.backend.identity.dto.LecturaSelfieResponse;
 import com.taxiuap.backend.identity.enums.DocumentoIdentidad;
 import com.taxiuap.backend.identity.enums.LadoDocumento;
 import com.taxiuap.backend.identity.service.LecturaDocumentoService;
@@ -38,5 +39,18 @@ public class LecturaDocumentoController {
             HttpServletRequest peticion) {
         LecturaDocumentoResponse lectura = lecturaDocumentoService.leer(foto, documento, lado, peticion.getRemoteAddr());
         return ResponseEntity.ok(ApiResponse.exito(lectura));
+    }
+
+    /**
+     * Revisa la foto de la persona sosteniendo su carnet. Multipart: "foto" y, opcional, "anverso" (la foto
+     * del anverso que ya tomo: ayuda a comparar la cara y su numero debe ser el mismo).
+     */
+    @PostMapping(value = "/selfie", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<LecturaSelfieResponse>> selfie(
+            @RequestPart("foto") MultipartFile foto,
+            @RequestPart(value = "anverso", required = false) MultipartFile anverso,
+            HttpServletRequest peticion) {
+        return ResponseEntity.ok(ApiResponse.exito(lecturaDocumentoService.leerSelfie(foto, anverso,
+                peticion.getRemoteAddr())));
     }
 }

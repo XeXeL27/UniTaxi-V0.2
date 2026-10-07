@@ -33,7 +33,7 @@ class PersonasApi {
       UsuarioDetalle.desdeJson(await _api.get('/api/admin/usuarios/$id/detalle') as Map<String, dynamic>);
 
   /// Edicion completa: datos de la persona, usuario, licencia y, si vienen, fotos del carnet y de la
-  /// licencia (partes carnetAnverso, carnetReverso, licenciaAnverso, licenciaReverso).
+  /// licencia (partes carnetAnverso, carnetReverso, carnetSelfie, licenciaAnverso, licenciaReverso).
   Future<void> actualizarUsuario(int id, Map<String, dynamic> datos, Map<String, ArchivoSubida> fotos) =>
       _api.enviarMultipart('PUT', '/api/admin/usuarios/$id/datos', datos: datos, archivos: fotos);
 

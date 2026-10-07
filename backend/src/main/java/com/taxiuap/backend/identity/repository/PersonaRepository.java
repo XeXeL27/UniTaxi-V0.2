@@ -24,6 +24,15 @@ public interface PersonaRepository extends JpaRepository<Persona, Long> {
     @Query("select u.persona.motivoObservacion from Usuario u where u.id = :idUsuario")
     Optional<String> motivoObservacionDeUsuario(@Param("idUsuario") Long idUsuario);
 
+    /** true si las cuentas de la persona de esta cuenta se suspendieron por no subir la foto con el carnet. */
+    @Query("select u.persona.suspendidaSinSelfie from Usuario u where u.id = :idUsuario")
+    Optional<Boolean> suspendidaSinSelfieDeUsuario(@Param("idUsuario") Long idUsuario);
+
+    /** Personas activas con CI que todavia no subieron su foto con el carnet (sin el registro fijo 0). */
+    @Query("select p from Persona p where p.estadoPersona = com.taxiuap.backend.shared.enums.EstadoRegistro.A "
+            + "and p.carnetSelfieUrl is null and p.ci is not null and p.ci <> '' and p.id > 0")
+    List<Persona> sinSelfieCarnet();
+
     Optional<Persona> findByCorreo(String correo);
 
     List<Persona> findByCiAndEstadoPersona(String ci, EstadoRegistro estado);

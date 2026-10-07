@@ -23,6 +23,7 @@ public final class ReglasRegistro {
     public static final String PATRON_CELULAR = "^[67]\\d{7}$";
 
     public static final String MENSAJE_CELULAR = "El celular debe tener 8 digitos y empezar con 6 o 7";
+    public static final String MENSAJE_CONTRASENA = "La contrasena debe tener entre 8 y 72 caracteres";
 
     /** Categorias de licencia en Bolivia: P particular, M motociclista, A, B y C profesional. */
     public static final String PATRON_CATEGORIA = "^$|^[PMABC]$";

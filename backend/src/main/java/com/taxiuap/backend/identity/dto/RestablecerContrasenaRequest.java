@@ -9,6 +9,6 @@ import jakarta.validation.constraints.Size;
 public record RestablecerContrasenaRequest(
         @NotBlank @Email String correo,
         @NotBlank @Pattern(regexp = "\\d{6}", message = "El codigo tiene 6 digitos") String codigo,
-        @NotBlank @Size(min = 8, max = 72) String nueva,
+        @NotBlank @Size(min = 8, max = 72, message = ReglasRegistro.MENSAJE_CONTRASENA) String nueva,
         @NotBlank String confirmacion) {
 }

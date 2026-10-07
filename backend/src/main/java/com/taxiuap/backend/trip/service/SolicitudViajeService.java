@@ -19,6 +19,7 @@ import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Pasajero;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
+import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
@@ -82,6 +83,9 @@ public class SolicitudViajeService {
         Pasajero pasajero = buscarPasajero();
         if (pasajero.getUsuario().getPersona().carnetObservado()) {
             throw new NegocioException("Tus datos estan en revision: podras pedir viajes cuando un administrador los apruebe");
+        }
+        if (CarnetService.carnetVencido(pasajero.getUsuario().getPersona())) {
+            throw new NegocioException("Tu carnet venció: sube las fotos de tu carnet nuevo para pedir viajes");
         }
         // Pedidos simultaneos del mismo pasajero se atienden de a uno (ver PasajeroRepository.bloquear).
         pasajeroRepository.bloquear(pasajero.getId());

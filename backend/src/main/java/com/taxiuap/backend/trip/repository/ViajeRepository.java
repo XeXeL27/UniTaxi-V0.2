@@ -12,6 +12,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.trip.dto.PersonaViajesResponse;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 
@@ -21,6 +22,41 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
     List<Viaje> findByPasajeroIdOrderByFechaInicioDesc(Long idPasajero);
 
     List<Viaje> findByConductorIdOrderByFechaInicioDesc(Long idConductor);
+
+    /**
+     * Viajes del panel: [servicio] TODOS, TAXI (sin datos_entrega) o DELIVERY; [idPersonaPasajero] y
+     * [idPersonaConductor] en 0 = cualquiera; pedidos entre [desde] (incluido) y [hasta] (excluido).
+     */
+    @Query("""
+            select v from Viaje v join v.solicitud s left join s.datosEntrega d
+            where (:servicio = 'TODOS' or (:servicio = 'DELIVERY' and d.id is not null)
+                    or (:servicio = 'TAXI' and d.id is null))
+              and (:idPersonaPasajero = 0 or v.pasajero.usuario.persona.id = :idPersonaPasajero)
+              and (:idPersonaConductor = 0 or v.conductor.usuario.persona.id = :idPersonaConductor)
+              and s.fechaSolicitud >= :desde and s.fechaSolicitud < :hasta
+            order by v.id desc""")
+    List<Viaje> buscarParaAdmin(@Param("servicio") String servicio, @Param("idPersonaPasajero") long idPersonaPasajero,
+            @Param("idPersonaConductor") long idPersonaConductor, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta);
+
+    /** Personas que pidieron viajes o pedidos, con cuantos (filtro del panel). */
+    @Query("""
+            select new com.taxiuap.backend.trip.dto.PersonaViajesResponse(pe.id, pe.nombres, pe.apellidos, pe.ci,
+                count(v))
+            from Viaje v join v.pasajero.usuario.persona pe
+            group by pe.id, pe.nombres, pe.apellidos, pe.ci
+            order by pe.nombres, pe.apellidos""")
+    List<PersonaViajesResponse> pasajerosConViajes();
+
+    /** Conductores con viajes de taxi ([servicio] TAXI) o pedidos entregados (DELIVERY), con cuantos. */
+    @Query("""
+            select new com.taxiuap.backend.trip.dto.PersonaViajesResponse(pe.id, pe.nombres, pe.apellidos, pe.ci,
+                count(v))
+            from Viaje v join v.solicitud s left join s.datosEntrega d join v.conductor.usuario.persona pe
+            where (:servicio = 'DELIVERY' and d.id is not null) or (:servicio = 'TAXI' and d.id is null)
+            group by pe.id, pe.nombres, pe.apellidos, pe.ci
+            order by pe.nombres, pe.apellidos""")
+    List<PersonaViajesResponse> conductoresConViajes(@Param("servicio") String servicio);
 
     /** Viajes de pedidos DELIVERY (los que tienen datos_entrega), del mas nuevo al mas antiguo. */
     @Query("select v from Viaje v join v.solicitud s join s.datosEntrega d order by v.id desc")

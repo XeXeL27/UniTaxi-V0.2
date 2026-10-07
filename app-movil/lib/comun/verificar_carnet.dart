@@ -15,9 +15,10 @@ import '../widgets/boton_principal.dart';
 import '../widgets/formatos.dart';
 import 'aceptar_terminos.dart';
 import 'selector_carnet.dart';
+import 'selfie_carnet.dart';
 
 /// Quien entro con Google y todavia no tiene CI registra su carnet antes de usar la app: fotos del
-/// anverso y del reverso (quedan en su carpeta) y, leidos de ellas, el numero, el complemento y la
+/// anverso y del reverso y su foto con el carnet (quedan en su carpeta) y, leidos de ellas, el numero, el complemento y la
 /// fecha de nacimiento, que no se editan (en la web se escriben a mano). Antes de guardar confirma su
 /// nombre y su numero de carnet (con "No" vuelve a tomar las fotos) y recien entonces le llega el
 /// correo con sus credenciales.
@@ -59,6 +60,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
   final _apellidos = TextEditingController();
   DateTime? _nacimiento;
   SeleccionCarnet _seleccion = const SeleccionCarnet();
+  SeleccionSelfie _selfie = const SeleccionSelfie();
 
   /// El numero y la fecha leidos de las fotos no se editan.
   bool _ciLeido = false;
@@ -81,6 +83,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
     setState(() {
       _intento++;
       _seleccion = const SeleccionCarnet();
+      _selfie = const SeleccionSelfie();
       _ciLeido = false;
       _fechaLeida = false;
       _ci.clear();
@@ -185,6 +188,10 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       setState(() => _error = 'Agrega la foto del anverso y del reverso de tu carnet.');
       return;
     }
+    if (_selfie.foto == null) {
+      setState(() => _error = 'Tómate la foto sosteniendo tu carnet junto a tu cara.');
+      return;
+    }
     // Si el nombre no se leyo solo o el corte no era seguro, lo escrito debe estar en el carnet.
     final problemaNombre = _seleccion.datos?.revisarNombreEscrito(_nombres.text, _apellidos.text);
     if (problemaNombre != null) {
@@ -237,12 +244,14 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
             {...datos, 'codigo': widget.codigoEstudiante},
             anverso: _seleccion.anverso!,
             reverso: _seleccion.reverso!,
+            selfie: _selfie.foto!,
           );
         } else {
           await sesion.registrarPasajeroGoogle(
             {...datos, 'codigo': widget.codigoGoogle},
             anverso: _seleccion.anverso!,
             reverso: _seleccion.reverso!,
+            selfie: _selfie.foto!,
           );
         }
         if (widget.onCancelar == null) navegador.popUntil((ruta) => ruta.isFirst);
@@ -251,6 +260,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       final usuario = await context.read<ClienteApi>().enviarFormulario('/api/cuenta/carnet', datos, [
         (campo: 'anverso', bytes: _seleccion.anverso!, nombre: 'carnet_anverso.jpg', tipo: MediaType('image', 'jpeg')),
         (campo: 'reverso', bytes: _seleccion.reverso!, nombre: 'carnet_reverso.jpg', tipo: MediaType('image', 'jpeg')),
+        (campo: 'selfie', bytes: _selfie.foto!, nombre: 'carnet_selfie.jpg', tipo: MediaType('image', 'jpeg')),
       ]) as Map<String, dynamic>;
       // Con el carnet registrado la sesion cambia y la app pasa sola a la vista del pasajero o del conductor.
       await sesion.reemplazarUsuario(usuario);
@@ -292,14 +302,25 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                       const SizedBox(height: 8),
                       Text(
                         LectorDocumentos.puedeLeer
-                            ? 'Toma o carga una foto de cada lado de tu carnet de identidad. Leeremos tu nombre, tu '
-                                  'número de carnet, su complemento y tu fecha de nacimiento.'
-                            : 'Carga una foto de cada lado de tu carnet de identidad y escribe tu nombre como está en '
-                                  'el carnet, tu número de carnet y tu fecha de nacimiento.',
+                            ? 'Toma o carga una foto de cada lado de tu carnet de identidad y tómate una foto '
+                                  'sosteniéndolo junto a tu cara. Leeremos tu nombre, tu número de carnet, su '
+                                  'complemento y tu fecha de nacimiento.'
+                            : 'Carga una foto de cada lado de tu carnet de identidad, tómate una foto sosteniéndolo '
+                                  'junto a tu cara y escribe tu nombre como está en el carnet, tu número de carnet y '
+                                  'tu fecha de nacimiento.',
                         style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 14.5, height: 1.45),
                       ),
                       const SizedBox(height: 20),
                       SelectorCarnet(key: ValueKey(_intento), onCambio: _alCambiar),
+                      const SizedBox(height: 12),
+                      SelectorSelfieCarnet(
+                        key: ValueKey('selfie$_intento'),
+                        anverso: _seleccion.anverso,
+                        onCambio: (selfie) => setState(() {
+                          _selfie = selfie;
+                          _error = null;
+                        }),
+                      ),
                       const SizedBox(height: 22),
                       if (LectorDocumentos.puedeLeer && !leido)
                         const Text(

@@ -13,11 +13,15 @@ import org.springframework.web.multipart.MultipartFile;
 import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.identity.dto.ReglasRegistro;
 import com.taxiuap.backend.identity.dto.CarnetRequest;
+import com.taxiuap.backend.identity.dto.LecturaDocumentoResponse;
+import com.taxiuap.backend.identity.dto.LecturaSelfieResponse;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.UsuarioResponse;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
+import com.taxiuap.backend.identity.enums.DocumentoIdentidad;
+import com.taxiuap.backend.identity.enums.LadoDocumento;
 import com.taxiuap.backend.identity.enums.SituacionCarnet;
 import com.taxiuap.backend.identity.enums.TipoPermisoEdicion;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
@@ -42,9 +46,20 @@ public class CarnetService {
 
     public static final String PARTE_ANVERSO = "CARNET_ANVERSO";
     public static final String PARTE_REVERSO = "CARNET_REVERSO";
+    public static final String PARTE_SELFIE = "CARNET_SELFIE";
 
     /** Motivo de un carnet OBSERVADO a pedido de la persona. */
     public static final String MOTIVO_PEDIDO = "La persona indicó que el sistema leyó mal sus datos";
+
+    /** Motivo de un carnet OBSERVADO porque el servidor no pudo revisar la foto con el carnet. */
+    public static final String MOTIVO_SELFIE_SIN_REVISAR =
+            "No se pudo revisar automáticamente la foto con el carnet (lector no disponible)";
+
+    /**
+     * Comienzo del motivo cuando la observacion sale de una cuenta que ya usaba la app (subio su foto con
+     * el carnet o renovo su carnet): al aprobarla no se reenvian credenciales.
+     */
+    public static final String PREFIJO_CUENTA_EXISTENTE = "Cuenta existente: ";
 
     private final UsuarioRepository usuarioRepository;
     private final GestionPersonaService gestionPersonaService;
@@ -57,14 +72,15 @@ public class CarnetService {
 
     /** Partes del multipart del registro de conductor que son fotos del carnet (no PDF). */
     public static boolean esParteCarnet(String parte) {
-        return PARTE_ANVERSO.equals(parte) || PARTE_REVERSO.equals(parte);
+        return PARTE_ANVERSO.equals(parte) || PARTE_REVERSO.equals(parte) || PARTE_SELFIE.equals(parte);
     }
 
     /**
      * Fotos del carnet ya procesadas (JPEG), listas para guardar, y la huella de las fotos tal como
      * llegaron (para buscar lo que Gemini leyo de ellas).
      */
-    public record FotosCarnet(byte[] anverso, byte[] reverso, String huellaAnverso, String huellaReverso) {
+    public record FotosCarnet(byte[] anverso, byte[] reverso, byte[] selfie, String huellaAnverso,
+            String huellaReverso, String huellaSelfie) {
     }
 
     /**
@@ -76,7 +92,26 @@ public class CarnetService {
         if (fotos != null) {
             lecturaDocumentoService.verificarCarnet(fotos.huellaAnverso(), fotos.huellaReverso(), ci, complemento,
                     fechaNacimiento, nombres, apellidos);
+            verificarSelfie(fotos, ci);
         }
+    }
+
+    /** El carnet que sostiene en la foto con el carnet debe ser el mismo (si el servidor la reviso). */
+    private void verificarSelfie(FotosCarnet fotos, String ci) {
+        LecturaSelfieResponse selfie = lecturaDocumentoService.selfie(fotos.huellaSelfie(), fotos.huellaAnverso());
+        if (selfie != null && selfie.numero() != null && (ci == null || !selfie.numero().equals(ci.trim()))) {
+            throw new NegocioException("El carnet de tu foto con el carnet no es el mismo de las fotos de tu carnet. "
+                    + "Vuelve a tomar la foto.");
+        }
+    }
+
+    /**
+     * Por que la foto con el carnet deja la cuenta OBSERVADA: el servidor no la pudo revisar, la cara no
+     * se parece a la del carnet o parece foto de una pantalla. null si esta bien.
+     */
+    private String observacionSelfie(FotosCarnet fotos) {
+        LecturaSelfieResponse selfie = lecturaDocumentoService.selfie(fotos.huellaSelfie(), fotos.huellaAnverso());
+        return selfie == null ? MOTIVO_SELFIE_SIN_REVISAR : selfie.observacion();
     }
 
     private void verificarLectura(FotosCarnet fotos, CarnetRequest datos) {
@@ -85,20 +120,29 @@ public class CarnetService {
     }
 
     /**
-     * Con el carnet ya guardado: queda OBSERVADO si la persona pidio la revision ([pedido]) o si su
-     * nombre no parece real (NombresPermitidos); si no, VERIFICADO. Mientras este observado no usa la
+     * Con el carnet ya guardado: queda OBSERVADO si la persona pidio la revision ([pedido]), si su
+     * nombre no parece real (NombresPermitidos) o si la foto con el carnet no paso la revision del
+     * servidor (sin revisar, otra cara o foto de una pantalla); si no, VERIFICADO. Mientras este observado no usa la
      * app ni recibe sus credenciales: las recibe cuando un administrador lo aprueba
      * (RevisionCarnetService). Devuelve true si quedo observado.
      *
      * Antes de enviar el carnet la persona debe aceptar los terminos y condiciones ([aceptaTerminos]);
      * queda la fecha en persona.fecha_acepta_terminos.
      */
-    public boolean revisar(Persona persona, boolean pedido, boolean aceptaTerminos) {
+    public boolean revisar(Persona persona, FotosCarnet fotos, boolean pedido, boolean aceptaTerminos) {
         if (!aceptaTerminos) {
             throw new NegocioException("Debes aceptar los términos y condiciones para continuar");
         }
         persona.setFechaAceptaTerminos(LocalDateTime.now());
         String motivo = pedido ? MOTIVO_PEDIDO : NombresPermitidos.problema(persona.getNombres(), persona.getApellidos());
+        if (motivo == null && fotos != null) {
+            motivo = observacionSelfie(fotos);
+        }
+        return observarSi(persona, motivo);
+    }
+
+    /** OBSERVADO con [motivo] o, si es null, VERIFICADO. Devuelve true si quedo observado. */
+    private static boolean observarSi(Persona persona, String motivo) {
         if (motivo == null) {
             persona.setSituacionCarnet(SituacionCarnet.VERIFICADO);
             persona.setMotivoObservacion(null);
@@ -115,8 +159,9 @@ public class CarnetService {
      * Pantalla "Verifica tu carnet" de la app: guarda los datos y las fotos de la persona. Si queda
      * OBSERVADO, las credenciales esperan a que el administrador apruebe sus datos.
      */
-    public UsuarioResponse registrar(Long idUsuario, CarnetRequest datos, MultipartFile anverso, MultipartFile reverso) {
-        FotosCarnet fotos = validar(anverso, reverso);
+    public UsuarioResponse registrar(Long idUsuario, CarnetRequest datos, MultipartFile anverso, MultipartFile reverso,
+            MultipartFile selfie) {
+        FotosCarnet fotos = validar(anverso, reverso, selfie);
         // Si la persona dice que sus datos se leyeron mal no se comparan con la lectura: los revisa el admin.
         if (!datos.esObservado()) verificarLectura(fotos, datos);
         Usuario usuario = usuarioRepository.findById(idUsuario)
@@ -124,7 +169,7 @@ public class CarnetService {
         Persona persona = usuario.getPersona();
         actualizarDatos(persona, datos);
         guardar(persona, fotos);
-        if (!revisar(persona, datos.esObservado(), datos.aceptoTerminos())) entregarCredenciales(usuario);
+        if (!revisar(persona, fotos, datos.esObservado(), datos.aceptoTerminos())) entregarCredenciales(usuario);
         return UsuarioResponse.de(usuario);
     }
 
@@ -146,7 +191,7 @@ public class CarnetService {
 
     /** Fotos del carnet que llegan en un multipart (registro de conductor): obligatorias. */
     public FotosCarnet validarDelRegistro(Map<String, MultipartFile> archivos) {
-        return validar(archivos.get(PARTE_ANVERSO), archivos.get(PARTE_REVERSO));
+        return validar(archivos.get(PARTE_ANVERSO), archivos.get(PARTE_REVERSO), archivos.get(PARTE_SELFIE));
     }
 
     /**
@@ -172,8 +217,8 @@ public class CarnetService {
      * confirmando con su contrasena. Se actualizan el CI, el complemento y la fecha leidos de ellas.
      */
     public UsuarioResponse reemplazarPorConductor(Long idUsuario, CarnetRequest datos, MultipartFile anverso,
-            MultipartFile reverso) {
-        FotosCarnet fotos = validar(anverso, reverso);
+            MultipartFile reverso, MultipartFile selfie) {
+        FotosCarnet fotos = validar(anverso, reverso, selfie);
         verificarLectura(fotos, datos);
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
@@ -184,14 +229,19 @@ public class CarnetService {
         Persona persona = usuario.getPersona();
         actualizarDatos(persona, datos);
         guardar(persona, fotos);
+        String motivo = observacionSelfie(fotos);
+        if (motivo != null) {
+            observarSi(persona, PREFIJO_CUENTA_EXISTENTE + motivo);
+        }
         return UsuarioResponse.de(usuario);
     }
 
-    /** El administrador cambia una o las dos fotos del carnet de la persona de una cuenta. */
-    public void reemplazarPorAdmin(Long idUsuario, MultipartFile anverso, MultipartFile reverso) {
+    /** El administrador cambia una o varias fotos del carnet (y la foto con el carnet) de la persona de una cuenta. */
+    public void reemplazarPorAdmin(Long idUsuario, MultipartFile anverso, MultipartFile reverso, MultipartFile selfie) {
         boolean conAnverso = anverso != null && !anverso.isEmpty();
         boolean conReverso = reverso != null && !reverso.isEmpty();
-        if (!conAnverso && !conReverso) {
+        boolean conSelfie = selfie != null && !selfie.isEmpty();
+        if (!conAnverso && !conReverso && !conSelfie) {
             throw new NegocioException("Elija al menos una foto del carnet");
         }
         Usuario usuario = usuarioRepository.findById(idUsuario)
@@ -208,6 +258,9 @@ public class CarnetService {
                     procesar(reverso, "reverso"), carpeta,
                     "carnet_reverso", "jpg"));
         }
+        if (conSelfie) {
+            guardarSelfie(persona, procesarSelfie(selfie));
+        }
     }
 
     /** Datos leidos del carnet: CI (unico), complemento, nombre impreso y fecha de nacimiento. */
@@ -223,18 +276,128 @@ public class CarnetService {
                 persona.getTelefono()));
     }
 
-    public FotosCarnet validar(MultipartFile anverso, MultipartFile reverso) {
-        return new FotosCarnet(procesar(anverso, "anverso"), procesar(reverso, "reverso"),
-                LecturaDocumentoService.huella(anverso), LecturaDocumentoService.huella(reverso));
+    public FotosCarnet validar(MultipartFile anverso, MultipartFile reverso, MultipartFile selfie) {
+        if (selfie == null || selfie.isEmpty()) {
+            throw new NegocioException("Falta tu foto con el carnet. Si no la ves en la app, actualiza UNITAXI.");
+        }
+        return new FotosCarnet(procesar(anverso, "anverso"), procesar(reverso, "reverso"), procesarSelfie(selfie),
+                LecturaDocumentoService.huella(anverso), LecturaDocumentoService.huella(reverso),
+                LecturaDocumentoService.huella(selfie));
+    }
+
+    private static byte[] procesarSelfie(MultipartFile selfie) {
+        if (selfie.getSize() > AlmacenamientoArchivos.TAMANO_MAXIMO_IMAGEN * 2) {
+            throw new NegocioException("La foto con tu carnet supera los 10 MB");
+        }
+        try {
+            return ProcesadorImagen.imagenCarnet(selfie.getBytes());
+        } catch (IOException | IllegalArgumentException | IllegalStateException e) {
+            throw new NegocioException("No se pudo leer la foto con tu carnet");
+        }
     }
 
     /** Guarda las fotos en personas/<id>_<ci>/general/carnet y deja sus rutas en la persona. */
     public void guardar(Persona persona, FotosCarnet fotos) {
+        LocalDate vence = lecturaDocumentoService.vencimientoCarnet(fotos.huellaAnverso());
+        if (vence != null && vence.isBefore(LocalDate.now())) {
+            throw new NegocioException("Tu carnet está vencido. Renuévalo en el SEGIP para continuar.");
+        }
         String carpeta = almacenamientoArchivos.carpetaCarnet(persona);
         persona.setCarnetAnversoUrl(almacenamientoArchivos.reemplazarConSello(persona.getCarnetAnversoUrl(),
                 fotos.anverso(), carpeta, "carnet_anverso", "jpg"));
         persona.setCarnetReversoUrl(almacenamientoArchivos.reemplazarConSello(persona.getCarnetReversoUrl(),
                 fotos.reverso(), carpeta, "carnet_reverso", "jpg"));
+        guardarSelfie(persona, fotos.selfie());
+        // Sin lectura del servidor el vencimiento lo pone el administrador al revisar (queda OBSERVADO).
+        persona.setCarnetVencimiento(vence);
+    }
+
+    private void guardarSelfie(Persona persona, byte[] selfie) {
+        persona.setCarnetSelfieUrl(almacenamientoArchivos.reemplazarConSello(persona.getCarnetSelfieUrl(),
+                selfie, almacenamientoArchivos.carpetaCarnet(persona), "carnet_selfie", "jpg"));
+        persona.setPlazoSelfieCarnet(null);
+    }
+
+    /**
+     * Cuenta que ya usaba la app: sube su foto con el carnet (cuentas de antes) o, si su carnet vencio o
+     * no tiene sus fotos, el anverso, el reverso y la foto con el carnet. Los datos leidos deben ser los
+     * que ya tiene registrados (no se cambian aqui). Si el servidor no pudo revisar la foto con el carnet,
+     * la cara no se parece o no se sabe hasta cuando vale el carnet, queda OBSERVADA para el administrador.
+     */
+    public UsuarioResponse actualizarCuenta(Long idUsuario, MultipartFile anverso, MultipartFile reverso,
+            MultipartFile selfie) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
+        Persona persona = usuario.getPersona();
+        if (persona.getCi() == null || persona.getCi().isBlank()) {
+            throw new NegocioException("Primero registra tu carnet");
+        }
+        boolean conFotosCarnet = anverso != null && !anverso.isEmpty() && reverso != null && !reverso.isEmpty();
+        if (!conFotosCarnet && (!tieneCarnet(persona) || carnetVencido(persona))) {
+            throw new NegocioException(carnetVencido(persona)
+                    ? "Tu carnet venció: toma las fotos de tu carnet nuevo y tu foto con el carnet"
+                    : "Faltan las fotos de tu carnet (anverso y reverso)");
+        }
+        String motivo;
+        if (conFotosCarnet) {
+            FotosCarnet fotos = validar(anverso, reverso, selfie);
+            lecturaDocumentoService.verificarCarnet(fotos.huellaAnverso(), fotos.huellaReverso(), persona.getCi(),
+                    persona.getComplementoCi(), persona.getFechaNacimiento(), persona.getNombres(), persona.getApellidos());
+            verificarSelfie(fotos, persona.getCi());
+            guardar(persona, fotos);
+            motivo = observacionSelfie(fotos);
+            if (motivo == null && persona.getCarnetVencimiento() == null) {
+                motivo = "No se pudo leer hasta cuándo vale el carnet";
+            }
+        } else {
+            if (selfie == null || selfie.isEmpty()) {
+                throw new NegocioException("Falta tu foto con el carnet");
+            }
+            byte[] guardado = leerArchivo(persona.getCarnetAnversoUrl());
+            byte[] original = bytesDe(selfie);
+            LecturaSelfieResponse lectura = lecturaDocumentoService.leerSelfie(original,
+                    selfie.getContentType() == null ? "image/jpeg" : selfie.getContentType(), guardado);
+            if (lectura.disponible() && !lectura.aceptada()) {
+                throw new NegocioException(lectura.motivo());
+            }
+            if (lectura.numero() != null && !lectura.numero().equals(persona.getCi().trim())) {
+                throw new NegocioException("El carnet de tu foto no es el tuyo: debe ser el carnet N° "
+                        + persona.getCi().trim() + ".");
+            }
+            guardarSelfie(persona, procesarSelfie(selfie));
+            if (persona.getCarnetVencimiento() == null) {
+                // Cuentas de antes: se lee hasta cuando vale el carnet en el anverso que ya tenia.
+                LecturaDocumentoResponse delAnverso = lecturaDocumentoService.leerGuardada(guardado,
+                        DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+                persona.setCarnetVencimiento(delAnverso.vencimiento());
+            }
+            motivo = !lectura.disponible() ? MOTIVO_SELFIE_SIN_REVISAR : lectura.observacion();
+        }
+        if (motivo != null) {
+            observarSi(persona, PREFIJO_CUENTA_EXISTENTE + motivo);
+        }
+        return UsuarioResponse.de(usuario);
+    }
+
+    /** El carnet de la persona ya vencio (se sabe solo si se leyo su "Valida hasta"). */
+    public static boolean carnetVencido(Persona persona) {
+        return persona.getCarnetVencimiento() != null && persona.getCarnetVencimiento().isBefore(LocalDate.now());
+    }
+
+    private byte[] leerArchivo(String ruta) {
+        try (var entrada = almacenamientoArchivos.leer(ruta).getInputStream()) {
+            return entrada.readAllBytes();
+        } catch (IOException e) {
+            throw new NegocioException("No se pudo leer la foto de tu carnet guardada");
+        }
+    }
+
+    private static byte[] bytesDe(MultipartFile foto) {
+        try {
+            return foto.getBytes();
+        } catch (IOException e) {
+            throw new NegocioException("No se pudo leer la foto con tu carnet");
+        }
     }
 
     /**
@@ -249,10 +412,12 @@ public class CarnetService {
         String ruta = switch (lado) {
             case "anverso" -> persona.getCarnetAnversoUrl();
             case "reverso" -> persona.getCarnetReversoUrl();
+            case "selfie" -> persona.getCarnetSelfieUrl();
             default -> throw new NegocioException("Lado del carnet no valido: " + lado);
         };
         if (ruta == null || !almacenamientoArchivos.existe(ruta)) {
-            throw new RecursoNoEncontradoException("La persona no registro la foto del " + lado + " de su carnet");
+            throw new RecursoNoEncontradoException("selfie".equals(lado) ? "La persona no subio su foto con el carnet"
+                    : "La persona no registro la foto del " + lado + " de su carnet");
         }
         return almacenamientoArchivos.leer(ruta);
     }

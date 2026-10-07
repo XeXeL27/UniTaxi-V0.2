@@ -29,6 +29,8 @@ dependencies {
 	implementation 'io.jsonwebtoken:jjwt-api:0.13.0'
 	// Notificaciones push (FCM) al telefono aunque la app este cerrada
 	implementation 'com.google.firebase:firebase-admin:9.4.3'
+	// Lectura de documentos con Claude (shared/ia/ClienteClaude); Gemini queda de respaldo
+	implementation 'com.anthropic:anthropic-java:2.34.0'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.13.0'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.13.0'
 	compileOnly 'org.projectlombok:lombok'

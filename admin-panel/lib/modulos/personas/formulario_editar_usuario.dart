@@ -42,6 +42,7 @@ class _FormularioEditarUsuarioState extends State<FormularioEditarUsuario> {
   late final _licencia = TextEditingController(text: _d.numeroLicencia);
   late DateTime? _fechaNacimiento = _d.fechaNacimiento;
   late DateTime? _vencimiento = _d.vencimientoLicencia;
+  late DateTime? _vencimientoCarnet = _d.carnetVencimiento;
   late String? _categoria = const ['P', 'M', 'A', 'B', 'C'].contains(_d.categoriaLicencia) ? _d.categoriaLicencia : null;
 
   /// Fotos nuevas elegidas, por parte del multipart (carnetAnverso, licenciaReverso, ...).
@@ -68,6 +69,7 @@ class _FormularioEditarUsuarioState extends State<FormularioEditarUsuario> {
       'fechaNacimiento': Formato.fechaIso(_fechaNacimiento),
       'correo': texto(_correo)?.toLowerCase(),
       'telefono': texto(_telefono),
+      'carnetVencimiento': Formato.fechaIso(_vencimientoCarnet),
       if (_esConductor) ...{
         'numeroLicencia': texto(_licencia),
         'categoriaLicencia': _categoria,
@@ -204,7 +206,18 @@ class _FormularioEditarUsuarioState extends State<FormularioEditarUsuario> {
         _fila([
           _foto('carnetAnverso', 'Anverso', _d.carnetAnverso, () => widget.expedienteApi.carnet(_d.idUsuario, 'anverso')),
           _foto('carnetReverso', 'Reverso', _d.carnetReverso, () => widget.expedienteApi.carnet(_d.idUsuario, 'reverso')),
+          _foto('carnetSelfie', 'Con el carnet', _d.carnetSelfie, () => widget.expedienteApi.carnet(_d.idUsuario, 'selfie')),
         ]),
+        if (!_d.carnetSelfie && _d.plazoSelfieCarnet != null)
+          Text(
+            'Todavía no subió su foto con el carnet: tiene hasta el ${Formato.fechaHora(_d.plazoSelfieCarnet)}.',
+            style: const TextStyle(fontSize: 12.5, color: ColoresApp.textoSuave),
+          ),
+        CampoFecha(
+          etiqueta: 'Carnet válido hasta',
+          initialValue: _vencimientoCarnet,
+          alCambiar: (fecha) => _vencimientoCarnet = fecha,
+        ),
         if (_esConductor) ...[
           _titulo('Licencia de conducir'),
           _fila([

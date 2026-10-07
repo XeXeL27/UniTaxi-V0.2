@@ -199,6 +199,9 @@ class ViajeExpediente {
   final DateTime? fechaInicio;
   final DateTime? fechaFin;
 
+  /// Cuando se pidio (el viaje cancelado antes de empezar no tiene fecha de inicio).
+  final DateTime? fechaSolicitud;
+
   /// Datos del pedido si el viaje es DELIVERY (null en un viaje de taxi).
   final EntregaExpediente? entrega;
 
@@ -222,13 +225,14 @@ class ViajeExpediente {
     this.canceladoPor,
     this.fechaInicio,
     this.fechaFin,
+    this.fechaSolicitud,
     this.entrega,
     this.nombreTercero,
     this.telefonoTercero,
     this.pagaSolicitante = false,
   });
 
-  DateTime? get fecha => fechaInicio ?? fechaFin;
+  DateTime? get fecha => fechaInicio ?? fechaFin ?? fechaSolicitud;
 
   factory ViajeExpediente.desdeJson(Map<String, dynamic> json) => ViajeExpediente(
     id: Formato.leerEntero(json['idViaje'])!,
@@ -245,6 +249,7 @@ class ViajeExpediente {
     canceladoPor: json['canceladoPor'] as String?,
     fechaInicio: Formato.leerFecha(json['fechaInicio']),
     fechaFin: Formato.leerFecha(json['fechaFin']),
+    fechaSolicitud: Formato.leerFecha(json['fechaSolicitud']),
     nombreTercero: json['paraOtraPersona'] == true ? json['nombrePasajeroTercero'] as String? : null,
     telefonoTercero: json['paraOtraPersona'] == true ? json['telefonoPasajeroTercero'] as String? : null,
     pagaSolicitante: json['pagaSolicitante'] as bool? ?? false,

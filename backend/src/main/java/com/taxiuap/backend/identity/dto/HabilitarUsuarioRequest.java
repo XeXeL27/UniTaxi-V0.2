@@ -27,7 +27,7 @@ public record HabilitarUsuarioRequest(
         TipoRegistroUsuario tipo,
         List<TipoRegistroUsuario> tipos,
         @Pattern(regexp = NombreUsuario.PATRON, message = NombreUsuario.MENSAJE) String nombreUsuario,
-        @Size(min = 8, max = 72) String password,
+        @Size(min = 8, max = 72, message = ReglasRegistro.MENSAJE_CONTRASENA) String password,
         @Size(max = 100) String cargo,
         @Valid DatosConductorRequest conductor,
         @DecimalMin("0") @DecimalMax("100000") BigDecimal limiteAdelantoCompra) {

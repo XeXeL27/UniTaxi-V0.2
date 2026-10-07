@@ -1,5 +1,6 @@
 package com.taxiuap.backend.identity.service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -23,6 +24,7 @@ import com.taxiuap.backend.identity.repository.PersonaRepository;
 import com.taxiuap.backend.institution.service.EstudianteUapService;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 
 import lombok.RequiredArgsConstructor;
@@ -64,6 +66,12 @@ public class RevisionCarnetService {
                 .toList();
     }
 
+    /** La observacion es de una cuenta que ya usaba la app (no se le envian credenciales al aprobarla). */
+    public boolean esCuentaExistente(Long idPersona) {
+        String motivo = observada(idPersona).getMotivoObservacion();
+        return motivo != null && motivo.startsWith(CarnetService.PREFIJO_CUENTA_EXISTENTE);
+    }
+
     public CarnetObservadoResponse aprobar(Long idPersona, RevisionCarnetRequest datos) {
         Persona persona = observada(idPersona);
         gestionPersonaService.actualizar(persona.getId(), new PersonaRequest(
@@ -74,12 +82,29 @@ public class RevisionCarnetService {
                 datos.fechaNacimiento(),
                 persona.getCorreo(),
                 persona.getTelefono()));
+        if (datos.carnetVencimiento() != null) {
+            if (datos.carnetVencimiento().isBefore(LocalDate.now())) {
+                throw new NegocioException("Con esa fecha el carnet ya está vencido: rechace los datos para que la "
+                        + "persona suba su carnet nuevo");
+            }
+            persona.setCarnetVencimiento(datos.carnetVencimiento());
+        }
+        // Cuenta que ya usaba la app (subio su foto con el carnet o renovo su carnet): ya tiene sus
+        // credenciales, solo se le avisa.
+        boolean cuentaExistente = esCuentaExistente(idPersona);
         persona.setSituacionCarnet(SituacionCarnet.VERIFICADO);
         persona.setMotivoObservacion(null);
         persona.setFechaObservacion(null);
         estudianteUapService.resolverRevision(persona, !Boolean.FALSE.equals(datos.comoEstudiante()));
 
         List<Usuario> cuentas = credencialesCorreoService.cuentasDeApp(persona);
+        if (cuentaExistente) {
+            cuentas.forEach(u -> notificacionPushService.enviar(u.getId(), Map.of(
+                    "tipo", "CUENTA_APROBADA",
+                    "titulo", "Tus datos fueron aprobados",
+                    "cuerpo", "Ya puedes seguir usando UNITAXI.")));
+            return aRespuesta(persona);
+        }
         Optional<Usuario> conductor = cuenta(cuentas, RolSistema.CONDUCTOR);
         Optional<Usuario> pasajero = cuenta(cuentas, RolSistema.PASAJERO);
         boolean enviado = conductor.map(c -> entregarConductor(c, Boolean.TRUE.equals(datos.aprobarConductor())))
@@ -208,7 +233,9 @@ public class RevisionCarnetService {
                 conductor.map(Conductor::getNumeroLicencia).orElse(null),
                 persona.getMotivoObservacion(),
                 persona.getFechaObservacion(),
-                estudianteUapService.ruPendiente(persona).orElse(null));
+                estudianteUapService.ruPendiente(persona).orElse(null),
+                persona.getCarnetSelfieUrl() != null,
+                persona.getCarnetVencimiento());
     }
 
     private static String vacioANull(String valor) {

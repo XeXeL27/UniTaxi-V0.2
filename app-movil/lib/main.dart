@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import 'comun/carnet_observado.dart';
 import 'comun/completar_correo.dart';
+import 'comun/foto_con_carnet.dart';
 import 'comun/verificar_carnet.dart';
 import 'core/api_excepcion.dart';
 import 'core/chat.dart';
@@ -86,10 +87,48 @@ class TaxiUap extends StatefulWidget {
   State<TaxiUap> createState() => _TaxiUapState();
 }
 
-class _TaxiUapState extends State<TaxiUap> {
+class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
   late String? _error = widget.vuelta.error;
   late String? _codigoRegistro = widget.vuelta.codigoRegistro;
   late String? _codigoPasajero = widget.vuelta.codigoPasajero;
+
+  DateTime? _ultimaConsultaUsuario;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    unawaited(_actualizarUsuario());
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState estado) {
+    if (estado == AppLifecycleState.resumed) unawaited(_actualizarUsuario());
+  }
+
+  /// Al abrir la app (y al volver a ella) se traen los datos de la cuenta: asi se entera, por ejemplo,
+  /// de que le falta la foto con el carnet o de que su carnet vencio. Sin conexion queda lo guardado.
+  Future<void> _actualizarUsuario() async {
+    final sesion = context.read<Sesion>();
+    final ahora = DateTime.now();
+    final antes = _ultimaConsultaUsuario;
+    if (!sesion.autenticado || sesion.panelAdmin != null) return;
+    if (antes != null && ahora.difference(antes) < const Duration(minutes: 1)) return;
+    _ultimaConsultaUsuario = ahora;
+    final id = sesion.usuario?.idUsuario;
+    try {
+      final usuario = await context.read<ClienteApi>().get('/api/cuenta/yo') as Map<String, dynamic>;
+      if (sesion.autenticado && sesion.usuario?.idUsuario == id) await sesion.reemplazarUsuario(usuario);
+    } catch (_) {
+      // Sin conexion o sesion cerrada (la cuenta suspendida vuelve al login con el motivo).
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,6 +137,10 @@ class _TaxiUapState extends State<TaxiUap> {
     final sinCorreo = context.select<Sesion, bool>((s) => (s.usuario?.correo ?? '').trim().isEmpty);
     final sinCarnet = context.select<Sesion, bool>((s) => s.usuario?.requiereCarnet ?? false);
     final carnetObservado = context.select<Sesion, bool>((s) => s.usuario?.carnetObservado ?? false);
+    // Le falta la foto con el carnet o su carnet vencio, y no eligio "Mas tarde" desde que abrio la app.
+    final pideFotoCarnet = context.select<Sesion, bool>(
+      (s) => s.usuario?.carnetPendiente != null && !s.fotoCarnetPostergada,
+    );
     // Administrador que entro desde el login del APK: el panel se abre dentro de la app.
     final panelAdmin = context.select<Sesion, Map<String, dynamic>?>((s) => s.panelAdmin);
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
@@ -127,6 +170,7 @@ class _TaxiUapState extends State<TaxiUap> {
         _ when rol != null && sinCarnet => const PantallaVerificarCarnet(),
         // Envio sus datos del carnet a revision: espera a que la administracion los apruebe.
         _ when rol != null && carnetObservado => const PantallaCarnetObservado(),
+        _ when rol != null && pideFotoCarnet => const PantallaFotoConCarnet(),
         Config.rolConductor => const RequiereGps(
           key: ValueKey(Config.rolConductor),
           child: PantallaInicioConductor(),

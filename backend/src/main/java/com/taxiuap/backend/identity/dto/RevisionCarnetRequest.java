@@ -21,5 +21,7 @@ public record RevisionCarnetRequest(
         @NotBlank @Size(max = 100) @Pattern(regexp = ReglasRegistro.PATRON_NOMBRE, message = ReglasRegistro.MENSAJE_NOMBRE) String apellidos,
         @NotNull @Past LocalDate fechaNacimiento,
         Boolean aprobarConductor,
-        Boolean comoEstudiante) {
+        Boolean comoEstudiante,
+        /** "Valida hasta" del carnet segun la foto (opcional: el servidor no siempre lo pudo leer). */
+        LocalDate carnetVencimiento) {
 }

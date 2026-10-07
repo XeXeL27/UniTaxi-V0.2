@@ -52,8 +52,14 @@ Reglas de los campos:
   " " + apellidos debe ser exactamente nombreCompleto, con las mismas palabras en el mismo orden.
 - Si la MRZ corta el nombre (lineas de 30 caracteres), pon nombreCortado en true.
 - Fechas en formato AAAA-MM-DD. fechaNacimiento solo si aparece en este lado.
+- vencimiento: hasta cuando vale el documento, en AAAA-MM-DD. En el CARNET_ANVERSO nuevo es la FECHA DE
+  EXPIRACION; en el CARNET_ANVERSO antiguo es la fecha de "Valida hasta el 15 de Septiembre de 2026"; en la
+  licencia es el Vencimiento. Si en su lugar dice INDEFINIDO o INDEFINIDA, vencimiento es null y
+  sinVencimiento es true; en cualquier otro caso sinVencimiento es false. El reverso del carnet no lo trae.
 - categoria: una letra (P, M, A, B o C) solo para la licencia.
 - legible: false si la foto esta borrosa, con reflejo que tapa datos, cortada o muy lejos, de modo que no se
-  pueden leer con seguridad los datos que ese lado deberia traer. En problema explica en una frase corta
+  pueden leer con seguridad los datos que ese lado deberia traer. Las sombras, el fondo, la foto un poco
+  girada o un reflejo en una parte sin datos NO la hacen ilegible: si esos datos se leen, legible es true.
+- Lee cada nombre letra por letra tal como esta impreso; no lo cambies por un apellido parecido. En problema explica en una frase corta
   en espanol, dirigida a la persona, que debe corregir al tomar la foto (por ejemplo "La foto esta borrosa:
   vuelve a tomarla con el telefono quieto y buena luz"). Si todo esta bien, problema es null.

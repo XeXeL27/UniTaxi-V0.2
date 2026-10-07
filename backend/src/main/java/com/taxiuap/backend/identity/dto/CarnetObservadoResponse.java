@@ -26,5 +26,9 @@ public record CarnetObservadoResponse(
         String motivo,
         LocalDateTime fechaObservacion,
         /** RU si se registro como estudiante UAP: el admin lo aprueba como estudiante o como pasajero normal. */
-        String ruEstudiante) {
+        String ruEstudiante,
+        /** true si subio la foto con el carnet (/api/admin/usuarios/{id}/carnet/selfie). */
+        boolean conSelfie,
+        /** "Valida hasta" del carnet si se leyo; el admin lo corrige o lo completa al aprobar. */
+        LocalDate carnetVencimiento) {
 }

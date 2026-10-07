@@ -70,8 +70,10 @@ class PantallaCarnetsObservados extends StatelessWidget {
     await mostrarExito(
       context,
       titulo: '¡Datos aprobados!',
-      mensaje: 'Se enviaron el usuario y la contraseña a ${carnet.correo ?? 'su correo'} y una notificación a '
-          'su teléfono. Ya puede usar UNITAXI.',
+      mensaje: carnet.esCuentaExistente
+          ? 'Se le envió una notificación a su teléfono: ya puede seguir usando UNITAXI.'
+          : 'Se enviaron el usuario y la contraseña a ${carnet.correo ?? 'su correo'} y una notificación a '
+                'su teléfono. Ya puede usar UNITAXI.',
     );
   }
 
@@ -114,6 +116,7 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
   late final _nombres = TextEditingController(text: widget.carnet.nombres.toUpperCase());
   late final _apellidos = TextEditingController(text: widget.carnet.apellidos.toUpperCase());
   late DateTime? _fechaNacimiento = widget.carnet.fechaNacimiento;
+  late DateTime? _vencimiento = widget.carnet.carnetVencimiento;
   bool _aprobarConductor = true;
 
   /// Registro de estudiante UAP: true lo aprueba como estudiante (con descuento), false como pasajero normal.
@@ -134,6 +137,7 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
       'nombres': _nombres.text.trim(),
       'apellidos': _apellidos.text.trim(),
       'fechaNacimiento': Formato.fechaIso(_fechaNacimiento),
+      if (_vencimiento != null) 'carnetVencimiento': Formato.fechaIso(_vencimiento),
       'aprobarConductor': widget.carnet.esConductor && _aprobarConductor,
       if (widget.carnet.esEstudianteUap) 'comoEstudiante': _comoEstudiante,
     });
@@ -158,7 +162,7 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
       icono: Iconos.idCardClip,
       claveFormulario: _claveFormulario,
       alGuardar: _guardar,
-      textoGuardar: 'Aprobar y enviar credenciales',
+      textoGuardar: carnet.esCuentaExistente ? 'Aprobar' : 'Aprobar y enviar credenciales',
       campos: [
         _Explicacion(motivo: carnet.motivo),
         if (carnet.idUsuario != null)
@@ -224,6 +228,13 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
           ultimaFecha: DateTime(hoy.year, hoy.month, hoy.day).subtract(const Duration(days: 1)),
           alCambiar: (fecha) => _fechaNacimiento = fecha,
           validator: (fecha) => fecha == null ? 'Campo obligatorio' : null,
+        ),
+        // "Valida hasta" del anverso (o FECHA DE EXPIRACION); vacio si el carnet dice INDEFINIDO.
+        CampoFecha(
+          etiqueta: 'Carnet válido hasta (vacío si es indefinido)',
+          initialValue: _vencimiento,
+          primeraFecha: DateTime(hoy.year, hoy.month, hoy.day),
+          alCambiar: (fecha) => _vencimiento = fecha,
         ),
         if (carnet.esEstudianteUap) ...[
           _DatosUap(api: widget.api, ru: carnet.ruEstudiante!),
@@ -300,8 +311,8 @@ class _Explicacion extends StatelessWidget {
   }
 }
 
-/// Miniaturas del anverso y del reverso; al tocarlas se abren en grande (con zoom) en el modal del
-/// carnet.
+/// Miniaturas del anverso, del reverso y de la foto con el carnet; al tocarlas se abren en grande (con
+/// zoom) en el modal del carnet.
 class _FotosCarnet extends StatelessWidget {
   final ExpedienteApi api;
   final int idUsuario;
@@ -313,12 +324,24 @@ class _FotosCarnet extends StatelessWidget {
   Widget build(BuildContext context) {
     Widget lado(String lado) => Expanded(
       child: _Miniatura(
-        titulo: lado == 'anverso' ? 'Anverso' : 'Reverso',
+        titulo: switch (lado) {
+          'anverso' => 'Anverso',
+          'reverso' => 'Reverso',
+          _ => 'Con el carnet',
+        },
         cargar: () => api.carnet(idUsuario, lado),
         alTocar: () => mostrarCarnet(context, api: api, idUsuario: idUsuario, nombre: nombre),
       ),
     );
-    return Row(children: [lado('anverso'), const SizedBox(width: 10), lado('reverso')]);
+    return Row(
+      children: [
+        lado('anverso'),
+        const SizedBox(width: 10),
+        lado('reverso'),
+        const SizedBox(width: 10),
+        lado('selfie'),
+      ],
+    );
   }
 }
 

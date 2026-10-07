@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../../../comun/confirmar_identidad.dart';
 import '../../../comun/perfil_api.dart';
 import '../../../comun/selector_carnet.dart';
+import '../../../comun/selfie_carnet.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/carnet/lectura_licencia.dart';
 import '../../../core/carnet/lector_documentos.dart';
@@ -184,6 +185,9 @@ class PantallaCambiarFotos extends StatefulWidget {
 
 class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
   SeleccionCarnet _seleccion = const SeleccionCarnet();
+
+  /// Con el carnet, la foto de la persona sosteniendolo (obligatoria).
+  SeleccionSelfie _selfie = const SeleccionSelfie();
   final _numero = TextEditingController();
   final _complemento = TextEditingController();
 
@@ -265,6 +269,10 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
       setState(() => _error = 'Agrega la foto del anverso y del reverso.');
       return;
     }
+    if (!_esLicencia && _selfie.foto == null) {
+      setState(() => _error = 'Tómate la foto sosteniendo tu carnet junto a tu cara.');
+      return;
+    }
     if (_error != null) return;
     final numero = _numero.text.trim();
     if (!RegExp(r'^\d{5,10}(-[0-9A-Z]{2})?$').hasMatch(numero) || _fecha == null) {
@@ -298,6 +306,7 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
       setState(() {
         _intento++;
         _seleccion = const SeleccionCarnet();
+        _selfie = const SeleccionSelfie();
         _numero.clear();
         _complemento.clear();
         _nombres.clear();
@@ -340,6 +349,7 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
           },
           _seleccion.anverso!,
           _seleccion.reverso!,
+          _selfie.foto!,
         );
       }
       if (!mounted) return;
@@ -387,11 +397,19 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
           Text(
             _esLicencia
                 ? 'Toma una foto de cada lado de tu licencia de conducir (categoría M).'
-                : 'Toma una foto de cada lado de tu carnet de identidad.',
+                : 'Toma una foto de cada lado de tu carnet de identidad y una foto tuya sosteniéndolo junto a tu cara.',
             style: const TextStyle(color: ColoresApp.textoSuave),
           ),
           const SizedBox(height: 12),
           SelectorCarnet(key: ValueKey(_intento), documento: widget.documento, onCambio: _alCambiar),
+          if (!_esLicencia) ...[
+            const SizedBox(height: 12),
+            SelectorSelfieCarnet(
+              key: ValueKey('selfie$_intento'),
+              anverso: _seleccion.anverso,
+              onCambio: (selfie) => setState(() => _selfie = selfie),
+            ),
+          ],
           if (_seleccion.completa || !leido) ...[
             const SizedBox(height: 16),
             TextField(

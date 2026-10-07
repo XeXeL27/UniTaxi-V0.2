@@ -73,7 +73,7 @@ public class UsuarioAdminController {
                 .body(fotoPerfilService.leer(id));
     }
 
-    /** Foto del carnet de la persona de la cuenta: lado "anverso" o "reverso" (404 si no la tiene). */
+    /** Foto del carnet de la persona de la cuenta: "anverso", "reverso" o "selfie" (404 si no la tiene). */
     @GetMapping("/{id}/carnet/{lado}")
     public ResponseEntity<Resource> carnet(@PathVariable Long id, @PathVariable String lado) {
         return ResponseEntity.ok()
@@ -82,13 +82,14 @@ public class UsuarioAdminController {
                 .body(carnetService.leer(id, lado));
     }
 
-    /** Cambia una o las dos fotos del carnet de la persona de la cuenta (multipart "anverso" / "reverso"). */
+    /** Cambia fotos del carnet de la persona de la cuenta (multipart "anverso" / "reverso" / "selfie"). */
     @PutMapping(value = "/{id}/carnet", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<Void>> cambiarCarnet(
             @PathVariable Long id,
             @RequestPart(value = "anverso", required = false) MultipartFile anverso,
-            @RequestPart(value = "reverso", required = false) MultipartFile reverso) {
-        carnetService.reemplazarPorAdmin(id, anverso, reverso);
+            @RequestPart(value = "reverso", required = false) MultipartFile reverso,
+            @RequestPart(value = "selfie", required = false) MultipartFile selfie) {
+        carnetService.reemplazarPorAdmin(id, anverso, reverso, selfie);
         return ResponseEntity.ok(ApiResponse.exito("Fotos del carnet actualizadas", null));
     }
 
@@ -100,7 +101,7 @@ public class UsuarioAdminController {
 
     /**
      * Edita todo junto. Multipart: "datos" (JSON) y, opcionales, "carnetAnverso", "carnetReverso",
-     * "licenciaAnverso" y "licenciaReverso".
+     * "carnetSelfie", "licenciaAnverso" y "licenciaReverso".
      */
     @PutMapping(value = "/{id}/datos", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<UsuarioDetalleAdminResponse>> actualizar(
@@ -108,10 +109,11 @@ public class UsuarioAdminController {
             @Valid @RequestPart("datos") EdicionUsuarioAdminRequest datos,
             @RequestPart(value = "carnetAnverso", required = false) MultipartFile carnetAnverso,
             @RequestPart(value = "carnetReverso", required = false) MultipartFile carnetReverso,
+            @RequestPart(value = "carnetSelfie", required = false) MultipartFile carnetSelfie,
             @RequestPart(value = "licenciaAnverso", required = false) MultipartFile licenciaAnverso,
             @RequestPart(value = "licenciaReverso", required = false) MultipartFile licenciaReverso) {
         return ResponseEntity.ok(ApiResponse.exito("Usuario actualizado", edicionUsuarioAdminService.actualizar(
-                id, datos, carnetAnverso, carnetReverso, licenciaAnverso, licenciaReverso)));
+                id, datos, carnetAnverso, carnetReverso, carnetSelfie, licenciaAnverso, licenciaReverso)));
     }
 
     /** Genera una contrasena nueva y la envia con el usuario al correo actual de la persona. */

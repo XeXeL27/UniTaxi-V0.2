@@ -21,11 +21,14 @@ import org.springframework.mock.web.MockMultipartFile;
 
 import com.sun.net.httpserver.HttpServer;
 import com.taxiuap.backend.identity.dto.LecturaDocumentoResponse;
+import com.taxiuap.backend.identity.dto.LecturaSelfieResponse;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.enums.DocumentoIdentidad;
 import com.taxiuap.backend.identity.enums.LadoDocumento;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.shared.ia.ClienteClaude;
 import com.taxiuap.backend.shared.ia.ClienteGemini;
+import com.taxiuap.backend.shared.ia.LectorIa;
 
 import tools.jackson.databind.json.JsonMapper;
 
@@ -80,7 +83,9 @@ class LecturaDocumentoServiceTest {
         });
         servidor.start();
         String url = "http://127.0.0.1:" + servidor.getAddress().getPort();
-        servicio = new LecturaDocumentoService(new ClienteGemini("llave", "gemini-flash-latest", url, "", 5),
+        // Sin llave de Claude: estas pruebas ejercitan el respaldo con Gemini (ver ClienteClaudeTest).
+        servicio = new LecturaDocumentoService(new LectorIa(new ClienteClaude("", "claude-haiku-4-5", "http://127.0.0.1:9", 5),
+                new ClienteGemini("llave", "gemini-flash-latest", url, "", 5)),
                 JsonMapper.builder().build(), 40);
     }
 
@@ -102,7 +107,7 @@ class LecturaDocumentoServiceTest {
     private static final String CARNET_ANVERSO_NUEVO = """
             {"documento":"CARNET_ANVERSO","formato":"NUEVO","legible":true,"numero":"7654321","complemento":"1A",
              "nombres":"MARÍA ELENA","apellidos":"ROJAS VACA","nombreCompleto":"MARÍA ELENA ROJAS VACA",
-             "nombreSeparado":true,"nombreCortado":false,"fechaNacimiento":"1995-04-12"}""";
+             "nombreSeparado":true,"nombreCortado":false,"fechaNacimiento":"1995-04-12","vencimiento":"2032-05-20"}""";
     private static final String CARNET_REVERSO_NUEVO = """
             {"documento":"CARNET_REVERSO","formato":"NUEVO","legible":true,"numero":"7654321",
              "nombres":"MARIA ELENA","apellidos":"ROJAS VACA","nombreSeparado":true,"nombreCortado":false,
@@ -232,5 +237,102 @@ class LecturaDocumentoServiceTest {
         leer(CARNET_ANVERSO_NUEVO, "t", DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
         assertEquals(3, modelosPedidos.size());
         assertTrue(modelosPedidos.get(2).contains("gemini-3.6-flash:"));
+    }
+
+    // ---------------------------------------------------------------- vencimiento
+
+    @Test
+    void elAnversoTraeHastaCuandoValeElCarnet() {
+        LecturaDocumentoResponse lectura = leer(CARNET_ANVERSO_NUEVO, "a", DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        assertEquals(LocalDate.of(2032, 5, 20), lectura.vencimiento());
+        assertEquals(LocalDate.of(2032, 5, 20), servicio.vencimientoCarnet(LecturaDocumentoService.huella(foto("a"))));
+    }
+
+    @Test
+    void rechazaElCarnetVencidoConLaFecha() {
+        LecturaDocumentoResponse lectura = leer(CARNET_ANVERSO_NUEVO.replace("2032-05-20", "2020-03-15"), "vencido",
+                DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        assertTrue(lectura.disponible());
+        assertFalse(lectura.aceptada());
+        assertTrue(lectura.motivo().contains("15/03/2020"), lectura.motivo());
+        assertEquals(LocalDate.of(2020, 3, 15), lectura.vencimiento());
+    }
+
+    @Test
+    void elCarnetIndefinidoSeAcepta() {
+        LecturaDocumentoResponse lectura = leer(CARNET_ANVERSO_NUEVO.replace("\"vencimiento\":\"2032-05-20\"",
+                "\"sinVencimiento\":true"), "indefinido", DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        assertTrue(lectura.aceptada());
+        assertEquals(null, lectura.vencimiento());
+    }
+
+    @Test
+    void sinLaFechaDeVencimientoPideOtraFotoDelAnverso() {
+        LecturaDocumentoResponse lectura = leer(CARNET_ANVERSO_NUEVO.replace(",\"vencimiento\":\"2032-05-20\"", ""),
+                "sinfecha", DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        assertFalse(lectura.aceptada());
+        assertTrue(lectura.motivo().contains("Válida hasta"), lectura.motivo());
+    }
+
+    @Test
+    void rechazaLaLicenciaVencida() {
+        LecturaDocumentoResponse lectura = leer(LICENCIA_REVERSO.replace("2031-01-01", "2021-01-01"), "lv",
+                DocumentoIdentidad.LICENCIA, LadoDocumento.REVERSO);
+        assertFalse(lectura.aceptada());
+        assertTrue(lectura.motivo().startsWith("Tu licencia venció"), lectura.motivo());
+    }
+
+    // ---------------------------------------------------------------- foto con el carnet
+
+    private static final String SELFIE_BIEN = """
+            {"caraVisible":true,"carnetVisible":true,"ladoCarnet":"ANVERSO","numero":"7654321",
+             "pantallaOImpresion":false,"caraCoincide":true,"legible":true}""";
+
+    private LecturaSelfieResponse selfie(String json, String contenido, String anverso) {
+        lecturaJson.set(json);
+        return servicio.leerSelfie(foto(contenido), anverso == null ? null : foto(anverso), "10.0.0.1");
+    }
+
+    @Test
+    void aceptaLaFotoConElCarnetYLaGuardaParaElRegistro() {
+        leer(CARNET_ANVERSO_NUEVO, "a", DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        LecturaSelfieResponse lectura = selfie(SELFIE_BIEN, "s", "a");
+        assertTrue(lectura.aceptada());
+        assertEquals("7654321", lectura.numero());
+        assertEquals(null, lectura.observacion());
+        LecturaSelfieResponse guardada = servicio.selfie(LecturaDocumentoService.huella(foto("s")),
+                LecturaDocumentoService.huella(foto("a")));
+        assertEquals("7654321", guardada.numero());
+    }
+
+    @Test
+    void laCaraDistintaSeAceptaConObservacion() {
+        LecturaSelfieResponse lectura = selfie(SELFIE_BIEN.replace("\"caraCoincide\":true", "\"caraCoincide\":false"),
+                "otra", null);
+        assertTrue(lectura.aceptada());
+        assertTrue(lectura.observacion().contains("no se parece"));
+    }
+
+    @Test
+    void rechazaLaFotoConElReversoDelCarnet() {
+        LecturaSelfieResponse lectura = selfie(SELFIE_BIEN.replace("\"ANVERSO\"", "\"REVERSO\""), "rev", null);
+        assertFalse(lectura.aceptada());
+        assertTrue(lectura.motivo().contains("lado de tu carnet que tiene tu foto"));
+    }
+
+    @Test
+    void rechazaOtroCarnetDelDeLasFotos() {
+        leer(CARNET_ANVERSO_NUEVO, "a", DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        LecturaSelfieResponse lectura = selfie(SELFIE_BIEN.replace("7654321", "1234567"), "otro", "a");
+        assertFalse(lectura.aceptada());
+        assertTrue(lectura.motivo().contains("no es el mismo"));
+    }
+
+    @Test
+    void sinGeminiLaFotoConElCarnetQuedaSinRevisar() {
+        estado.set(403);
+        LecturaSelfieResponse lectura = selfie(SELFIE_BIEN, "s", null);
+        assertFalse(lectura.disponible());
+        assertEquals(null, servicio.selfie(LecturaDocumentoService.huella(foto("s")), null));
     }
 }

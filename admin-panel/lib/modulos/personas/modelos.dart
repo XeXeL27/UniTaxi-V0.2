@@ -99,6 +99,12 @@ class UsuarioAdmin {
   /// SUSPENDIDO: la columna Situacion y su filtro.
   final String situacion;
 
+  /// Foto con el carnet: SUBIDA, PENDIENTE (con plazo), SIN_PLAZO (habilitada sin ella), SUSPENDIDA (no
+  /// la subio a tiempo) o null (administrador o sin carnet).
+  final String? fotoConCarnet;
+  final DateTime? plazoFotoConCarnet;
+  final bool carnetVencido;
+
   UsuarioAdmin({
     required this.idUsuario,
     required this.idPersona,
@@ -112,6 +118,9 @@ class UsuarioAdmin {
     this.fechaRegistro,
     this.estado = 'A',
     this.situacion = 'HABILITADO',
+    this.fotoConCarnet,
+    this.plazoFotoConCarnet,
+    this.carnetVencido = false,
   });
 
   bool get suspendida => estado == 'S';
@@ -129,6 +138,9 @@ class UsuarioAdmin {
     fechaRegistro: Formato.leerFecha(json['fechaRegistro']),
     estado: json['estado'] as String? ?? 'A',
     situacion: json['situacion'] as String? ?? ((json['estado'] as String?) == 'S' ? 'SUSPENDIDO' : 'HABILITADO'),
+    fotoConCarnet: json['fotoConCarnet'] as String?,
+    plazoFotoConCarnet: Formato.leerFecha(json['plazoFotoConCarnet']),
+    carnetVencido: json['carnetVencido'] as bool? ?? false,
   );
 }
 
@@ -148,6 +160,13 @@ class UsuarioDetalle {
   final String? telefono;
   final bool carnetAnverso;
   final bool carnetReverso;
+
+  /// Subio la foto con el carnet.
+  final bool carnetSelfie;
+  final DateTime? carnetVencimiento;
+
+  /// Hasta cuando tiene para subir la foto con el carnet (null = sin plazo).
+  final DateTime? plazoSelfieCarnet;
   final DateTime? fechaAceptaTerminos;
 
   /// null si la persona no tiene cuenta de conductor.
@@ -173,6 +192,9 @@ class UsuarioDetalle {
     this.telefono,
     this.carnetAnverso = false,
     this.carnetReverso = false,
+    this.carnetSelfie = false,
+    this.carnetVencimiento,
+    this.plazoSelfieCarnet,
     this.fechaAceptaTerminos,
     this.idConductor,
     this.numeroLicencia,
@@ -199,6 +221,9 @@ class UsuarioDetalle {
     telefono: json['telefono'] as String?,
     carnetAnverso: json['carnetAnverso'] == true,
     carnetReverso: json['carnetReverso'] == true,
+    carnetSelfie: json['carnetSelfie'] == true,
+    carnetVencimiento: Formato.leerFecha(json['carnetVencimiento']),
+    plazoSelfieCarnet: Formato.leerFecha(json['plazoSelfieCarnet']),
     fechaAceptaTerminos: Formato.leerFecha(json['fechaAceptaTerminos']),
     idConductor: Formato.leerEntero(json['idConductor']),
     numeroLicencia: json['numeroLicencia'] as String?,
@@ -460,6 +485,12 @@ class CarnetObservado {
   /// RU si se registro como estudiante UAP: se aprueba como estudiante o como pasajero normal.
   final String? ruEstudiante;
 
+  /// Subio la foto con el carnet.
+  final bool conSelfie;
+
+  /// "Valida hasta" del carnet si se leyo; el admin lo completa o corrige al aprobar.
+  final DateTime? carnetVencimiento;
+
   CarnetObservado({
     required this.idPersona,
     this.idUsuario,
@@ -476,6 +507,8 @@ class CarnetObservado {
     this.motivo,
     this.fechaObservacion,
     this.ruEstudiante,
+    this.conSelfie = false,
+    this.carnetVencimiento,
   });
 
   String get nombreCompleto => '$nombres $apellidos';
@@ -483,6 +516,10 @@ class CarnetObservado {
   bool get esConductor => idConductor != null;
 
   bool get esEstudianteUap => ruEstudiante != null;
+
+  /// La observacion es de una cuenta que ya usaba la app (subio su foto con el carnet o renovo su
+  /// carnet): ya tiene sus credenciales y al aprobarla solo se le avisa.
+  bool get esCuentaExistente => (motivo ?? '').startsWith('Cuenta existente: ');
 
   String get carnet => (complementoCi ?? '').isEmpty ? (ci ?? '') : '${ci ?? ''}-$complementoCi';
 
@@ -502,5 +539,7 @@ class CarnetObservado {
     motivo: json['motivo'] as String?,
     fechaObservacion: Formato.leerFecha(json['fechaObservacion']),
     ruEstudiante: json['ruEstudiante'] as String?,
+    conSelfie: json['conSelfie'] as bool? ?? false,
+    carnetVencimiento: Formato.leerFecha(json['carnetVencimiento']),
   );
 }

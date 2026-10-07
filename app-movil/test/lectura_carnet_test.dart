@@ -336,4 +336,14 @@ void main() {
       expect(datos.nombreCompleto, 'MARIA ELENA ROJAS VACA', reason: texto);
     }
   });
+
+  test('vencimiento del carnet: "Valida hasta el" del antiguo y FECHA DE EXPIRACION del nuevo', () {
+    expect(vencimientoCarnet('No 8123456 de BENI\nValida hasta el 15 de Septiembre de 2031'), DateTime(2031, 9, 15));
+    expect(vencimientoCarnet('Válida hasta el3 de Marzo de 2030'), DateTime(2030, 3, 3));
+    expect(vencimientoCarnet('FECHA DE EXPIRACION: 20/05/2032'), DateTime(2032, 5, 20));
+    expect(vencimientoCarnet('Valida hasta el INDEFINIDO'), isNull);
+    expect(carnetVencidoEn('Valida hasta el 15 de Septiembre de 2020'), isTrue);
+    expect(carnetVencidoEn('FECHA DE EXPIRACION 20/05/2032'), isFalse);
+    expect(carnetVencidoEn('sin fecha'), isFalse);
+  });
 }

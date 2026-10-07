@@ -85,17 +85,19 @@ class DocumentosApi {
   Future<Uint8List?> fotoLicencia(String lado) => cliente.bytes('/api/conductor/licencia/$lado');
 
   /// Nuevas fotos del carnet (con permiso CARNET) y lo leido de ellas.
-  Future<void> cambiarCarnet(Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso) =>
-      _fotos('PUT', '/api/conductor/carnet', datos, anverso, reverso);
+  Future<void> cambiarCarnet(Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso, Uint8List selfie) =>
+      _fotos('PUT', '/api/conductor/carnet', datos, anverso, reverso, selfie: selfie);
 
   /// Nuevas fotos de la licencia (con permiso LICENCIA) y lo leido de ellas.
   Future<void> cambiarLicencia(Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso) =>
       _fotos('PUT', '/api/conductor/licencia', datos, anverso, reverso);
 
-  Future<void> _fotos(String metodo, String ruta, Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso) =>
+  Future<void> _fotos(String metodo, String ruta, Map<String, dynamic> datos, Uint8List anverso, Uint8List reverso,
+          {Uint8List? selfie}) =>
       cliente.enviarFormulario(ruta, datos, [
         (campo: 'anverso', bytes: anverso, nombre: 'anverso.jpg', tipo: MediaType('image', 'jpeg')),
         (campo: 'reverso', bytes: reverso, nombre: 'reverso.jpg', tipo: MediaType('image', 'jpeg')),
+        if (selfie != null) (campo: 'selfie', bytes: selfie, nombre: 'selfie.jpg', tipo: MediaType('image', 'jpeg')),
       ], metodo: metodo);
 
   /// Sube un documento que no envio al registrarse; solo se acepta si no tiene ninguno de ese tipo.

@@ -27,26 +27,28 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.identity.dto.LecturaDocumentoResponse;
+import com.taxiuap.backend.identity.dto.LecturaSelfieResponse;
 import com.taxiuap.backend.identity.dto.ReglasRegistro;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.enums.DocumentoIdentidad;
 import com.taxiuap.backend.identity.enums.LadoDocumento;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.exception.NegocioException;
-import com.taxiuap.backend.shared.ia.ClienteGemini;
-import com.taxiuap.backend.shared.ia.GeminiNoDisponibleException;
+import com.taxiuap.backend.shared.ia.IaNoDisponibleException;
+import com.taxiuap.backend.shared.ia.ImagenIa;
+import com.taxiuap.backend.shared.ia.LectorIa;
 
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Lectura del carnet y de la licencia con Gemini (una foto por vez) y verificacion de los datos que
- * llegan al registrar.
+ * Lectura del carnet y de la licencia con IA (LectorIa: Claude y, si no responde, Gemini; una foto
+ * por vez) y verificacion de los datos que llegan al registrar.
  *
  * Cada lectura aceptada se guarda en memoria unas horas con la huella (SHA-256) de la foto. Al
  * registrar, la app manda las mismas fotos: si el servidor las leyo, los datos del registro deben ser
  * los leidos (no se pueden cambiar a mano) y el conductor queda aprobado solo si la licencia leida
- * aqui coincide con su carnet. Si no hay lectura del servidor (Gemini sin llave o caido, la app leyo con
+ * aqui coincide con su carnet. Si no hay lectura del servidor (IA sin llave o caida, la app leyo con
  * ML Kit) se acepta lo que manda la app y el conductor queda PENDIENTE para el administrador.
  */
 @Service
@@ -57,35 +59,55 @@ public class LecturaDocumentoService {
     private static final Duration VIGENCIA_LECTURA = Duration.ofHours(3);
     private static final int MAXIMO_LECTURAS_GUARDADAS = 5000;
     private static final Duration VENTANA_LIMITE = Duration.ofHours(1);
+    private static final java.time.format.DateTimeFormatter FORMATO_FECHA =
+            java.time.format.DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
-    private final ClienteGemini gemini;
+    private final LectorIa lector;
     private final JsonMapper json;
     private final int lecturasPorHora;
     private final String instrucciones;
+    private final String instruccionesSelfie;
     private final Map<String, Object> esquema = esquema();
+    private final Map<String, Object> esquemaSelfie = esquemaSelfie();
 
     private record Guardada(DocumentoIdentidad documento, LadoDocumento lado, LecturaDocumentoResponse lectura,
             Instant vence) {
     }
 
-    private final Map<String, Guardada> lecturas = new ConcurrentHashMap<>();
-    private final Map<String, Deque<Instant>> pedidosPorIp = new ConcurrentHashMap<>();
-
-    /** Respuesta de Gemini tal como la pide el esquema. */
-    record LecturaGemini(String documento, String formato, Boolean legible, String problema, String numero,
-            String complemento, String nombres, String apellidos, String nombreCompleto, Boolean nombreSeparado,
-            Boolean nombreCortado, String fechaNacimiento, String categoria, String vencimiento) {
+    private record SelfieGuardada(LecturaSelfieResponse lectura, Instant vence) {
     }
 
-    public LecturaDocumentoService(ClienteGemini gemini, JsonMapper json,
+    private final Map<String, Guardada> lecturas = new ConcurrentHashMap<>();
+    private final Map<String, SelfieGuardada> selfies = new ConcurrentHashMap<>();
+    private final Map<String, Deque<Instant>> pedidosPorIp = new ConcurrentHashMap<>();
+
+    /** Respuesta de la IA (Claude o Gemini) tal como la pide el esquema. */
+    record LecturaIa(String documento, String formato, Boolean legible, String problema, String numero,
+            String complemento, String nombres, String apellidos, String nombreCompleto, Boolean nombreSeparado,
+            Boolean nombreCortado, String fechaNacimiento, String categoria, String vencimiento,
+            Boolean sinVencimiento) {
+    }
+
+    /** Respuesta de la IA sobre la foto con el carnet. */
+    record SelfieIa(Boolean caraVisible, Boolean carnetVisible, String ladoCarnet, String numero,
+            String nombreCompleto, Boolean pantallaOImpresion, Boolean caraCoincide, Boolean legible,
+            String problema) {
+    }
+
+    public LecturaDocumentoService(LectorIa lector, JsonMapper json,
             @Value("${taxiuap.gemini.lecturas-por-hora:40}") int lecturasPorHora) {
-        this.gemini = gemini;
+        this.lector = lector;
         this.json = json;
         this.lecturasPorHora = lecturasPorHora;
-        try (InputStream entrada = new ClassPathResource("gemini/lectura_documento.txt").getInputStream()) {
-            this.instrucciones = new String(entrada.readAllBytes(), StandardCharsets.UTF_8);
+        this.instrucciones = texto("gemini/lectura_documento.txt");
+        this.instruccionesSelfie = texto("gemini/selfie_carnet.txt");
+    }
+
+    private static String texto(String ruta) {
+        try (InputStream entrada = new ClassPathResource(ruta).getInputStream()) {
+            return new String(entrada.readAllBytes(), StandardCharsets.UTF_8);
         } catch (IOException e) {
-            throw new IllegalStateException("Falta gemini/lectura_documento.txt", e);
+            throw new IllegalStateException("Falta " + ruta, e);
         }
     }
 
@@ -115,31 +137,40 @@ public class LecturaDocumentoService {
         if (foto.getSize() > AlmacenamientoArchivos.TAMANO_MAXIMO_IMAGEN * 2) {
             throw new NegocioException("La foto supera los 10 MB");
         }
-        if (!gemini.configurado()) {
+        if (!lector.configurado()) {
             return LecturaDocumentoResponse.noDisponible();
         }
-        byte[] bytes;
-        try {
-            bytes = foto.getBytes();
-        } catch (IOException e) {
-            throw new NegocioException("No se pudo leer la foto");
-        }
-        String clave = huella(bytes);
+        String clave = huella(bytesDe(foto));
         Guardada previa = vigente(clave);
         if (previa != null && previa.documento() == documento && previa.lado() == lado) {
             return previa.lectura();
         }
         controlarLimite(ip);
-        String tipo = foto.getContentType() != null && foto.getContentType().startsWith("image/")
-                ? foto.getContentType() : "image/jpeg";
-        LecturaGemini leida;
+        return leerBytes(bytesDe(foto), tipoDe(foto), documento, lado);
+    }
+
+    /**
+     * Lee una foto que ya esta guardada en el servidor (por ejemplo el anverso del carnet de una cuenta
+     * de antes, para conocer su vencimiento). Sin limite por IP.
+     */
+    public LecturaDocumentoResponse leerGuardada(byte[] bytes, DocumentoIdentidad documento, LadoDocumento lado) {
+        if (!lector.configurado() || bytes == null) {
+            return LecturaDocumentoResponse.noDisponible();
+        }
+        return leerBytes(bytes, "image/jpeg", documento, lado);
+    }
+
+    private LecturaDocumentoResponse leerBytes(byte[] bytes, String tipo, DocumentoIdentidad documento,
+            LadoDocumento lado) {
+        String clave = huella(bytes);
+        LecturaIa leida;
         try {
-            String texto = gemini.leerImagen(instrucciones, "Lee este documento.", bytes, tipo, esquema);
-            leida = json.readValue(texto, LecturaGemini.class);
-        } catch (GeminiNoDisponibleException e) {
+            String texto = lector.leerImagen(instrucciones, "Lee este documento.", bytes, tipo, esquema);
+            leida = json.readValue(texto, LecturaIa.class);
+        } catch (IaNoDisponibleException e) {
             return LecturaDocumentoResponse.noDisponible();
         } catch (JacksonException e) {
-            log.warn("Gemini devolvio un JSON que no se pudo leer: {}", e.getOriginalMessage());
+            log.warn("La IA devolvio un JSON que no se pudo leer: {}", e.getOriginalMessage());
             return LecturaDocumentoResponse.noDisponible();
         }
         LecturaDocumentoResponse lectura = evaluar(leida, documento, lado);
@@ -149,9 +180,154 @@ public class LecturaDocumentoService {
         return lectura;
     }
 
+    private static byte[] bytesDe(MultipartFile foto) {
+        try {
+            return foto.getBytes();
+        } catch (IOException e) {
+            throw new NegocioException("No se pudo leer la foto");
+        }
+    }
+
+    private static String tipoDe(MultipartFile foto) {
+        return foto.getContentType() != null && foto.getContentType().startsWith("image/")
+                ? foto.getContentType() : "image/jpeg";
+    }
+
+    // ---------------------------------------------------------------- foto con el carnet
+
+    /**
+     * Revisa la foto de la persona sosteniendo su carnet. [anverso] (opcional) es la foto del anverso que
+     * tomo antes: ayuda a comparar la cara y su numero debe ser el mismo.
+     */
+    public LecturaSelfieResponse leerSelfie(MultipartFile foto, MultipartFile anverso, String ip) {
+        if (foto == null || foto.isEmpty()) {
+            throw new NegocioException("Falta la foto con tu carnet");
+        }
+        if (foto.getSize() > AlmacenamientoArchivos.TAMANO_MAXIMO_IMAGEN * 2) {
+            throw new NegocioException("La foto supera los 10 MB");
+        }
+        if (!lector.configurado()) {
+            return LecturaSelfieResponse.noDisponible();
+        }
+        byte[] bytesAnverso = anverso == null || anverso.isEmpty() ? null : bytesDe(anverso);
+        String clave = claveSelfie(huella(bytesDe(foto)), bytesAnverso == null ? null : huella(bytesAnverso));
+        SelfieGuardada previa = selfieVigente(clave);
+        if (previa != null) {
+            return previa.lectura();
+        }
+        controlarLimite(ip);
+        return revisarSelfie(bytesDe(foto), tipoDe(foto), bytesAnverso, bytesAnverso == null ? null : tipoDe(anverso));
+    }
+
+    /** Igual que leerSelfie, con el anverso ya guardado en el servidor (cuentas de antes). */
+    public LecturaSelfieResponse leerSelfie(byte[] foto, String tipo, byte[] anverso) {
+        if (!lector.configurado()) {
+            return LecturaSelfieResponse.noDisponible();
+        }
+        String clave = claveSelfie(huella(foto), anverso == null ? null : huella(anverso));
+        SelfieGuardada previa = selfieVigente(clave);
+        return previa != null ? previa.lectura() : revisarSelfie(foto, tipo, anverso, "image/jpeg");
+    }
+
+    private LecturaSelfieResponse revisarSelfie(byte[] foto, String tipo, byte[] anverso, String tipoAnverso) {
+        List<ImagenIa> imagenes = anverso == null
+                ? List.of(new ImagenIa(foto, tipo))
+                : List.of(new ImagenIa(foto, tipo), new ImagenIa(anverso, tipoAnverso));
+        SelfieIa leida;
+        try {
+            String texto = lector.leerImagenes(instruccionesSelfie, anverso == null
+                    ? "Revisa la foto con el carnet."
+                    : "La primera imagen es la foto con el carnet y la segunda el anverso del carnet.",
+                    imagenes, esquemaSelfie);
+            leida = json.readValue(texto, SelfieIa.class);
+        } catch (IaNoDisponibleException e) {
+            return LecturaSelfieResponse.noDisponible();
+        } catch (JacksonException e) {
+            log.warn("La IA devolvio un JSON que no se pudo leer (foto con el carnet): {}", e.getOriginalMessage());
+            return LecturaSelfieResponse.noDisponible();
+        }
+        String numeroAnverso = null;
+        if (anverso != null) {
+            LecturaDocumentoResponse delAnverso = lectura(huella(anverso), DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+            numeroAnverso = delAnverso == null ? null : delAnverso.numero();
+        }
+        LecturaSelfieResponse lectura = evaluarSelfie(leida, numeroAnverso);
+        if (lectura.aceptada()) {
+            guardarSelfie(claveSelfie(huella(foto), anverso == null ? null : huella(anverso)),
+                    new SelfieGuardada(lectura, Instant.now().plus(VIGENCIA_LECTURA)));
+        }
+        return lectura;
+    }
+
+    static LecturaSelfieResponse evaluarSelfie(SelfieIa g, String numeroAnverso) {
+        String problema = g.problema() == null || g.problema().isBlank() ? null : g.problema().trim();
+        if (!Boolean.TRUE.equals(g.caraVisible()) || !Boolean.TRUE.equals(g.carnetVisible())) {
+            return LecturaSelfieResponse.rechazada(problema != null ? problema
+                    : "En la foto deben verse tu cara y tu carnet (el lado con tu foto). Vuelve a tomarla.");
+        }
+        if (!"ANVERSO".equals(g.ladoCarnet())) {
+            return LecturaSelfieResponse.rechazada("Muestra el lado de tu carnet que tiene tu foto y vuelve a tomarla.");
+        }
+        String numero = soloDigitos(g.numero());
+        if (!Boolean.TRUE.equals(g.legible()) || numero == null) {
+            return LecturaSelfieResponse.rechazada(problema != null ? problema
+                    : "Acerca el carnet a la cámara: debe leerse su número. Vuelve a tomar la foto.");
+        }
+        if (numeroAnverso != null && !numeroAnverso.equals(numero)) {
+            return LecturaSelfieResponse.rechazada("El carnet de esta foto no es el mismo de las fotos de tu carnet.");
+        }
+        String observacion = Boolean.TRUE.equals(g.pantallaOImpresion())
+                ? "La foto con el carnet parece tomada a otra foto o a una pantalla"
+                : Boolean.FALSE.equals(g.caraCoincide())
+                        ? "La cara de la foto con el carnet no se parece a la foto del carnet" : null;
+        return new LecturaSelfieResponse(true, true, null, numero, observacion);
+    }
+
+    /** Lo que el servidor reviso de la foto con el carnet (null si no la reviso). */
+    public LecturaSelfieResponse selfie(String huellaSelfie, String huellaAnverso) {
+        if (huellaSelfie == null) {
+            return null;
+        }
+        SelfieGuardada guardada = selfieVigente(claveSelfie(huellaSelfie, huellaAnverso));
+        if (guardada == null && huellaAnverso != null) {
+            // La app pudo revisarla sin mandar el anverso.
+            guardada = selfieVigente(claveSelfie(huellaSelfie, null));
+        }
+        return guardada == null ? null : guardada.lectura();
+    }
+
+    /** Vencimiento del carnet leido por el servidor en la foto del anverso (null si no la leyo o no vence). */
+    public LocalDate vencimientoCarnet(String huellaAnverso) {
+        LecturaDocumentoResponse anverso = lectura(huellaAnverso, DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        return anverso == null ? null : anverso.vencimiento();
+    }
+
+    private static String claveSelfie(String huellaSelfie, String huellaAnverso) {
+        return huellaSelfie + ":" + (huellaAnverso == null ? "-" : huellaAnverso);
+    }
+
+    private SelfieGuardada selfieVigente(String clave) {
+        SelfieGuardada guardada = selfies.get(clave);
+        if (guardada != null && guardada.vence().isBefore(Instant.now())) {
+            selfies.remove(clave);
+            return null;
+        }
+        return guardada;
+    }
+
+    private void guardarSelfie(String clave, SelfieGuardada guardada) {
+        if (selfies.size() >= MAXIMO_LECTURAS_GUARDADAS) {
+            Instant ahora = Instant.now();
+            selfies.values().removeIf(g -> g.vence().isBefore(ahora));
+        }
+        if (selfies.size() < MAXIMO_LECTURAS_GUARDADAS) {
+            selfies.put(clave, guardada);
+        }
+    }
+
     // ---------------------------------------------------------------- evaluacion de la lectura
 
-    static LecturaDocumentoResponse evaluar(LecturaGemini g, DocumentoIdentidad documento, LadoDocumento lado) {
+    static LecturaDocumentoResponse evaluar(LecturaIa g, DocumentoIdentidad documento, LadoDocumento lado) {
         String esperado = documento.name() + "_" + lado.name();
         String leido = g.documento() == null ? "OTRO" : g.documento();
         if (!esperado.equals(leido)) {
@@ -169,7 +345,7 @@ public class LecturaDocumentoService {
         String apellidos = nombre(g.apellidos());
         boolean separado = Boolean.TRUE.equals(g.nombreSeparado()) && nombres != null && apellidos != null;
         String completo = separado ? nombres + " " + apellidos : nombre(g.nombreCompleto());
-        // Carnet antiguo: el corte lo propone Gemini; vale solo si son las mismas palabras del nombre impreso.
+        // Carnet antiguo: el corte lo propone la IA; vale solo si son las mismas palabras del nombre impreso.
         if (!separado && (nombres == null || apellidos == null || completo == null
                 || !sinTildes(nombres + " " + apellidos).equals(sinTildes(completo)))) {
             nombres = null;
@@ -179,8 +355,13 @@ public class LecturaDocumentoService {
         String categoria = categoria(g.categoria());
         LocalDate vencimiento = fecha(g.vencimiento());
 
+        boolean sinVencimiento = Boolean.TRUE.equals(g.sinVencimiento());
+        if (sinVencimiento) {
+            vencimiento = null;
+        }
         String falta = switch (esperado) {
-            case "CARNET_ANVERSO" -> numero == null ? "el número del carnet" : null;
+            case "CARNET_ANVERSO" -> numero == null ? "el número del carnet"
+                    : vencimiento == null && !sinVencimiento ? "hasta cuándo vale tu carnet (Válida hasta)" : null;
             case "CARNET_REVERSO" -> completo == null ? "tu nombre" : nacimiento == null ? "tu fecha de nacimiento" : null;
             case "LICENCIA_ANVERSO" -> numero == null ? "el número de licencia"
                     : !separado ? "tu nombre (Nombres, Apellidos)" : null;
@@ -190,6 +371,12 @@ public class LecturaDocumentoService {
         if (falta != null) {
             return LecturaDocumentoResponse.rechazada("No se pudo leer " + falta + " en la foto. Vuelve a tomarla de "
                     + "frente, con buena luz, sin reflejos y con todo el " + nombreDocumento(documento) + " a la vista.");
+        }
+        if (vencimiento != null && vencimiento.isBefore(LocalDate.now())) {
+            return LecturaDocumentoResponse.vencido(documento == DocumentoIdentidad.CARNET
+                    ? "Tu carnet venció el " + FORMATO_FECHA.format(vencimiento) + ". Renuévalo en el SEGIP para continuar."
+                    : "Tu licencia venció el " + FORMATO_FECHA.format(vencimiento) + ". Renuévala para continuar.",
+                    vencimiento);
         }
         return new LecturaDocumentoResponse(true, true, null, g.formato(), numero, complemento, nombres, apellidos,
                 completo, separado, separado && Boolean.TRUE.equals(g.nombreCortado()), nacimiento, categoria,
@@ -447,9 +634,30 @@ public class LecturaDocumentoService {
         propiedades.put("fechaNacimiento", tipo("STRING", true));
         propiedades.put("categoria", tipo("STRING", true));
         propiedades.put("vencimiento", tipo("STRING", true));
+        propiedades.put("sinVencimiento", tipo("BOOLEAN", true));
         Map<String, Object> raiz = tipo("OBJECT", false);
         raiz.put("properties", propiedades);
         raiz.put("required", List.of("documento", "formato", "legible", "nombreSeparado", "nombreCortado"));
+        raiz.put("propertyOrdering", List.copyOf(propiedades.keySet()));
+        return raiz;
+    }
+
+    private static Map<String, Object> esquemaSelfie() {
+        Map<String, Object> propiedades = new LinkedHashMap<>();
+        propiedades.put("caraVisible", tipo("BOOLEAN", false));
+        propiedades.put("carnetVisible", tipo("BOOLEAN", false));
+        Map<String, Object> lado = tipo("STRING", false);
+        lado.put("enum", List.of("ANVERSO", "REVERSO", "NINGUNO"));
+        propiedades.put("ladoCarnet", lado);
+        propiedades.put("numero", tipo("STRING", true));
+        propiedades.put("nombreCompleto", tipo("STRING", true));
+        propiedades.put("pantallaOImpresion", tipo("BOOLEAN", false));
+        propiedades.put("caraCoincide", tipo("BOOLEAN", true));
+        propiedades.put("legible", tipo("BOOLEAN", false));
+        propiedades.put("problema", tipo("STRING", true));
+        Map<String, Object> raiz = tipo("OBJECT", false);
+        raiz.put("properties", propiedades);
+        raiz.put("required", List.of("caraVisible", "carnetVisible", "ladoCarnet", "pantallaOImpresion", "legible"));
         raiz.put("propertyOrdering", List.copyOf(propiedades.keySet()));
         return raiz;
     }

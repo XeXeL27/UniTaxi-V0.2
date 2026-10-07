@@ -25,5 +25,7 @@ public record EdicionUsuarioAdminRequest(
         /** Solo si la persona tiene cuenta de conductor; vacio = no se cambia la licencia. */
         @Size(max = 30) String numeroLicencia,
         @Pattern(regexp = ReglasRegistro.PATRON_CATEGORIA, message = ReglasRegistro.MENSAJE_CATEGORIA) String categoriaLicencia,
-        LocalDate vencimientoLicencia) {
+        LocalDate vencimientoLicencia,
+        /** "Valida hasta" del carnet; vacio = no se cambia. */
+        LocalDate carnetVencimiento) {
 }

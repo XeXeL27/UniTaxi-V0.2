@@ -48,6 +48,7 @@ import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
+import com.taxiuap.backend.trip.dto.PersonaViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
@@ -690,6 +691,47 @@ public class ViajeService {
                 .toList();
     }
 
+    /**
+     * Viajes de taxi y pedidos de delivery del panel, filtrados. [servicio]: TODOS, TAXI o DELIVERY.
+     * [tipoUsuario]: TODOS, PASAJERO (lo que pidio), CONDUCTOR (viajes de taxi que hizo) o REPARTIDOR
+     * (pedidos que entrego); con [idPersona] solo los de esa persona. Fechas por el dia en que se pidio
+     * (sin fechas: todo). El administrador ve todo el detalle y la evidencia, sin limite de tiempo.
+     */
+    public List<ViajeResponse> listarParaAdmin(String servicio, String tipoUsuario, Long idPersona, LocalDate desde,
+            LocalDate hasta) {
+        String tipo = tipoUsuario == null ? "TODOS" : tipoUsuario.toUpperCase();
+        String filtroServicio = switch (tipo) {
+            case "CONDUCTOR" -> "TAXI";
+            case "REPARTIDOR" -> "DELIVERY";
+            default -> servicio == null ? "TODOS" : servicio.toUpperCase();
+        };
+        if (!List.of("TODOS", "TAXI", "DELIVERY").contains(filtroServicio)
+                || !List.of("TODOS", "PASAJERO", "CONDUCTOR", "REPARTIDOR").contains(tipo)) {
+            throw new NegocioException("Filtro de viajes no valido");
+        }
+        long persona = idPersona == null || "TODOS".equals(tipo) ? 0 : idPersona;
+        return viajeRepository.buscarParaAdmin(filtroServicio,
+                "PASAJERO".equals(tipo) ? persona : 0,
+                "CONDUCTOR".equals(tipo) || "REPARTIDOR".equals(tipo) ? persona : 0,
+                desde == null ? SIN_LIMITE_DESDE : desde.atStartOfDay(),
+                hasta == null ? SIN_LIMITE_HASTA : hasta.plusDays(1).atStartOfDay()).stream()
+                .map(this::aRespuesta)
+                .toList();
+    }
+
+    /**
+     * Personas que se pueden elegir en el filtro de viajes del panel: las que pidieron (PASAJERO), hicieron
+     * viajes de taxi (CONDUCTOR) o entregaron pedidos (REPARTIDOR), con cuantos tienen.
+     */
+    public List<PersonaViajesResponse> personasConViajes(String tipoUsuario) {
+        return switch (tipoUsuario == null ? "" : tipoUsuario.toUpperCase()) {
+            case "PASAJERO" -> viajeRepository.pasajerosConViajes();
+            case "CONDUCTOR" -> viajeRepository.conductoresConViajes("TAXI");
+            case "REPARTIDOR" -> viajeRepository.conductoresConViajes("DELIVERY");
+            default -> throw new NegocioException("Elija pasajero, conductor de taxi o repartidor");
+        };
+    }
+
     /** Viaje por id para el panel admin (sin control de participacion: la ruta ya exige ADMIN). */
     public Viaje obtenerParaAdmin(Long idViaje) {
         return obtenerViaje(idViaje);
@@ -877,7 +919,8 @@ public class ViajeService {
                 Boolean.TRUE.equals(viaje.getPasajeroNoSePresento()),
                 // Solo mientras el viaje esta activo: terminado, el conductor ya no necesita llamarlo.
                 ESTADOS_FINALES.contains(viaje.getSituacionViaje()) ? null
-                        : usuarioPasajero.getPersona().getTelefono());
+                        : usuarioPasajero.getPersona().getTelefono(),
+                viaje.getSolicitud().getFechaSolicitud());
     }
 
     /**

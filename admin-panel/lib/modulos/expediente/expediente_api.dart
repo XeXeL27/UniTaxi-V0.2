@@ -70,8 +70,12 @@ class ExpedienteApi {
   Future<Uint8List> carnet(int idUsuario, String lado) => _api.bytes('/api/admin/usuarios/$idUsuario/carnet/$lado');
 
   /// Cambia una o las dos fotos del carnet de la persona de una cuenta.
-  Future<void> cambiarCarnet(int idUsuario, {ArchivoSubida? anverso, ArchivoSubida? reverso}) =>
-      _api.enviarMultipart('PUT', '/api/admin/usuarios/$idUsuario/carnet', archivos: {'anverso': ?anverso, 'reverso': ?reverso});
+  Future<void> cambiarCarnet(int idUsuario, {ArchivoSubida? anverso, ArchivoSubida? reverso, ArchivoSubida? selfie}) =>
+      _api.enviarMultipart(
+        'PUT',
+        '/api/admin/usuarios/$idUsuario/carnet',
+        archivos: {'anverso': ?anverso, 'reverso': ?reverso, 'selfie': ?selfie},
+      );
 
   /// Foto de la licencia del conductor: [lado] "anverso" o "reverso" (404 si no la tiene).
   Future<Uint8List> licencia(int idConductor, String lado) => _api.bytes('/api/admin/conductores/$idConductor/licencia/$lado');

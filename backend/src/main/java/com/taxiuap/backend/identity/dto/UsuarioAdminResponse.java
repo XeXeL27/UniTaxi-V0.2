@@ -17,5 +17,14 @@ public record UsuarioAdminResponse(
         /** A (activa) o S (suspendida). */
         String estado,
         /** HABILITADO, PENDIENTE (conductor en revision), OBSERVADO (carnet en revision), RECHAZADO o SUSPENDIDO. */
-        String situacion) {
+        String situacion,
+        /**
+         * Foto con el carnet: SUBIDA, PENDIENTE (con plazo), SIN_PLAZO (el admin la habilito sin ella),
+         * SUSPENDIDA (no la subio a tiempo) o null (cuenta de administrador o sin carnet).
+         */
+        String fotoConCarnet,
+        /** Hasta cuando tiene para subirla (solo PENDIENTE). */
+        LocalDateTime plazoFotoConCarnet,
+        /** true si su carnet ya vencio. */
+        boolean carnetVencido) {
 }

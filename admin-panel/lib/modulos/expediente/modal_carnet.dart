@@ -10,38 +10,48 @@ import '../../widgets/archivos_web.dart';
 import '../../widgets/dialogos.dart';
 import 'expediente_api.dart';
 
-/// Fotos del carnet (anverso y reverso) de la persona de una cuenta, en un solo modal. Las sube la
-/// persona desde la app; solo el administrador puede verlas y cambiarlas.
+/// Fotos del carnet (anverso y reverso) y la foto de la persona sosteniendolo, en un solo modal. Las sube
+/// la persona desde la app; solo el administrador puede verlas y cambiarlas.
 Future<void> mostrarCarnet(BuildContext context, {required ExpedienteApi api, required int idUsuario, required String nombre}) {
   return mostrarFotosDocumento(
     context,
     titulo: 'Carnet de $nombre',
     icono: Iconos.idCard,
     documento: 'carnet',
+    lados: const ['anverso', 'reverso', 'selfie'],
     cargar: (lado) => api.carnet(idUsuario, lado),
     cambiar: (lado, archivo) => api.cambiarCarnet(
       idUsuario,
       anverso: lado == 'anverso' ? archivo : null,
       reverso: lado == 'reverso' ? archivo : null,
+      selfie: lado == 'selfie' ? archivo : null,
     ),
   );
 }
 
-/// Fotos del anverso y del reverso de un documento (carnet o licencia). Con [cambiar] cada lado
-/// tiene el boton "Cambiar foto".
+/// Fotos del anverso y del reverso de un documento (carnet o licencia) y, en el carnet, la foto con el
+/// carnet ("selfie" en [lados]). Con [cambiar] cada foto tiene el boton "Cambiar foto".
 Future<void> mostrarFotosDocumento(
   BuildContext context, {
   required String titulo,
   required IconData icono,
   required String documento,
+  List<String> lados = const ['anverso', 'reverso'],
   required Future<Uint8List> Function(String lado) cargar,
   Future<void> Function(String lado, ArchivoSubida archivo)? cambiar,
 }) {
   return showDialog<void>(
     context: context,
-    builder: (_) => _ModalCarnet(titulo: titulo, icono: icono, documento: documento, cargar: cargar, cambiar: cambiar),
+    builder: (_) =>
+        _ModalCarnet(titulo: titulo, icono: icono, documento: documento, lados: lados, cargar: cargar, cambiar: cambiar),
   );
 }
+
+String _tituloLado(String lado) => switch (lado) {
+  'anverso' => 'Anverso',
+  'reverso' => 'Reverso',
+  _ => 'Foto con el carnet',
+};
 
 /// Boton "Ver carnet" para la cabecera de la seccion de datos personales del expediente.
 class BotonVerCarnet extends StatelessWidget {
@@ -66,19 +76,27 @@ class _ModalCarnet extends StatelessWidget {
   final String titulo;
   final IconData icono;
   final String documento;
+  final List<String> lados;
   final Future<Uint8List> Function(String lado) cargar;
   final Future<void> Function(String lado, ArchivoSubida archivo)? cambiar;
 
-  const _ModalCarnet({required this.titulo, required this.icono, required this.documento, required this.cargar, this.cambiar});
+  const _ModalCarnet({
+    required this.titulo,
+    required this.icono,
+    required this.documento,
+    required this.lados,
+    required this.cargar,
+    this.cambiar,
+  });
 
   @override
   Widget build(BuildContext context) {
     final tamano = MediaQuery.sizeOf(context);
     final angosto = tamano.width < 600;
     final lados = [
-      for (final lado in const ['anverso', 'reverso'])
+      for (final lado in this.lados)
         _Lado(
-          titulo: lado == 'anverso' ? 'Anverso' : 'Reverso',
+          titulo: _tituloLado(lado),
           documento: documento,
           cargar: () => cargar(lado),
           nombreDescarga: '${documento}_$lado.jpg',
@@ -118,9 +136,10 @@ class _ModalCarnet extends StatelessWidget {
                 : Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Expanded(child: lados[0]),
-                      const SizedBox(width: 16),
-                      Expanded(child: lados[1]),
+                      for (var i = 0; i < lados.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 16),
+                        Expanded(child: lados[i]),
+                      ],
                     ],
                   ),
           ),
@@ -133,7 +152,9 @@ class _ModalCarnet extends StatelessWidget {
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(RadiosApp.tarjeta)),
       child: SizedBox(
-        width: tamano.width * 0.9 > 1100 ? 1100 : tamano.width * 0.9,
+        width: tamano.width * 0.9 > (lados.length > 2 ? 1400 : 1100)
+            ? (lados.length > 2 ? 1400 : 1100)
+            : tamano.width * 0.9,
         height: tamano.height * 0.8 > 560 ? 560 : tamano.height * 0.8,
         child: contenido,
       ),
@@ -163,8 +184,10 @@ class _LadoState extends State<_Lado> {
     if (archivo == null || !mounted) return;
     final confirmado = await confirmarAccion(
       context,
-      mensaje: 'Va a cambiar la foto del ${widget.titulo.toLowerCase()} de${widget.documento == 'carnet' ? 'l carnet' : ' la licencia'} '
-          'por "${archivo.nombre}".',
+      mensaje: widget.titulo == 'Foto con el carnet'
+          ? 'Va a cambiar la foto de la persona con su carnet por "${archivo.nombre}".'
+          : 'Va a cambiar la foto del ${widget.titulo.toLowerCase()} de${widget.documento == 'carnet' ? 'l carnet' : ' la licencia'} '
+                'por "${archivo.nombre}".',
       textoConfirmar: 'Sí, cambiar',
     );
     if (!confirmado || !mounted) return;
@@ -173,7 +196,13 @@ class _LadoState extends State<_Lado> {
       await widget.cambiar!(archivo);
       if (!mounted) return;
       setState(() => _imagen = widget.cargar());
-      await mostrarExito(context, titulo: '¡Foto cambiada!', mensaje: 'La foto del ${widget.titulo.toLowerCase()} se actualizó.');
+      await mostrarExito(
+        context,
+        titulo: '¡Foto cambiada!',
+        mensaje: widget.titulo == 'Foto con el carnet'
+            ? 'La foto con el carnet se actualizó.'
+            : 'La foto del ${widget.titulo.toLowerCase()} se actualizó.',
+      );
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
@@ -225,7 +254,9 @@ class _LadoState extends State<_Lado> {
                     ? Center(
                         child: Text(
                           error is ApiExcepcion && error.codigo == 404
-                              ? 'No registró la foto del ${widget.titulo.toLowerCase()} de su ${widget.documento}'
+                              ? (widget.titulo == 'Foto con el carnet'
+                                    ? 'Todavía no subió su foto con el carnet'
+                                    : 'No registró la foto del ${widget.titulo.toLowerCase()} de su ${widget.documento}')
                               : 'No se pudo cargar la imagen',
                           textAlign: TextAlign.center,
                           style: const TextStyle(color: ColoresApp.textoSuave),

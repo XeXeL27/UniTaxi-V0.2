@@ -272,6 +272,29 @@ DateTime? _fechaNacimiento(String t) {
   return null;
 }
 
+/// Hasta cuando vale el carnet, leido del anverso: "Valida hasta el 15 de Septiembre de 2026" (antiguo) o
+/// "FECHA DE EXPIRACION: 15/09/2026" (nuevo). null si no se lee o dice INDEFINIDO.
+DateTime? vencimientoCarnet(String texto) {
+  final t = _normalizar(texto);
+  final antiguo = RegExp('HASTA\\s*EL\\W{0,4}(\\d{1,2})\\s*DE\\s*(${_meses.keys.join('|')})\\s*DE\\s*(\\d{4})').firstMatch(t);
+  final nuevo = RegExp(r'EXPIRACION\W{0,6}(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4})').firstMatch(t);
+  final (anio, mes, dia) = antiguo != null
+      ? (int.parse(antiguo[3]!), _meses[antiguo[2]]!, int.parse(antiguo[1]!))
+      : nuevo != null
+      ? (int.parse(nuevo[3]!), int.parse(nuevo[2]!), int.parse(nuevo[1]!))
+      : (0, 0, 0);
+  if (anio < 2000 || mes < 1 || mes > 12 || dia < 1 || dia > 31) return null;
+  final fecha = DateTime(anio, mes, dia);
+  return fecha.month == mes && fecha.day == dia ? fecha : null;
+}
+
+/// El carnet vence antes de hoy.
+bool carnetVencidoEn(String texto) {
+  final vence = vencimientoCarnet(texto);
+  final hoy = DateTime.now();
+  return vence != null && vence.isBefore(DateTime(hoy.year, hoy.month, hoy.day));
+}
+
 // ------------------------------------------------------------------ nombre
 
 const _etiquetas = {

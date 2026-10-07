@@ -69,6 +69,27 @@ class LecturaFoto {
   }
 }
 
+/// Lo que el servidor reviso de la foto de la persona con su carnet.
+class LecturaSelfie {
+  /// La foto sirve (se ve la cara y el carnet del lado de la foto, con su numero). Si no, [motivo].
+  final bool aceptada;
+  final String? motivo;
+  final String? numero;
+
+  /// La foto se acepta pero la cuenta quedara en revision por este motivo (la cara no se parece o
+  /// parece foto de una pantalla).
+  final String? observacion;
+
+  const LecturaSelfie({required this.aceptada, this.motivo, this.numero, this.observacion});
+
+  factory LecturaSelfie.json(Map<String, dynamic> j) => LecturaSelfie(
+    aceptada: j['aceptada'] as bool? ?? false,
+    motivo: j['motivo'] as String?,
+    numero: j['numero'] as String?,
+    observacion: j['observacion'] as String?,
+  );
+}
+
 /// Lectura de las fotos del carnet y de la licencia. Primero se lee en el servidor con Gemini (POST
 /// /api/auth/documentos/leer); si el servidor no puede (sin llave, sin cuota o sin conexion) el APK
 /// lee con ML Kit en el telefono y la web pasa a datos escritos a mano.
@@ -78,6 +99,37 @@ class LectorDocumentos {
   /// Se pueden leer las fotos: siempre en el APK (ML Kit de respaldo); en la web mientras el servidor
   /// lea. Si es false los datos se escriben a mano.
   static bool get puedeLeer => OcrCarnet.disponible || !_servidorNoDisponible;
+
+  /// Revisa en el servidor la foto con el carnet (POST /api/auth/documentos/selfie). [anverso] es la foto
+  /// del anverso ya tomada: el servidor compara la cara y el numero. Devuelve null si el servidor no
+  /// puede revisarla: la foto se envia igual y la cuenta queda en revision.
+  static Future<LecturaSelfie?> leerSelfie(Uint8List foto, {Uint8List? anverso}) async {
+    final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}/api/auth/documentos/selfie'))
+      ..files.add(http.MultipartFile.fromBytes('foto', foto,
+          filename: 'selfie.jpg', contentType: MediaType('image', 'jpeg')));
+    if (anverso != null) {
+      peticion.files.add(http.MultipartFile.fromBytes('anverso', anverso,
+          filename: 'anverso.jpg', contentType: MediaType('image', 'jpeg')));
+    }
+    final http.Response respuesta;
+    try {
+      respuesta = await http.Response.fromStream(await peticion.send().timeout(const Duration(seconds: 110)));
+    } catch (_) {
+      return null;
+    }
+    Map<String, dynamic> json;
+    try {
+      json = jsonDecode(utf8.decode(respuesta.bodyBytes)) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+    if (respuesta.statusCode == 422 || respuesta.statusCode == 413) {
+      throw ApiExcepcion(json['mensaje'] as String? ?? 'No se pudo revisar la foto', codigo: respuesta.statusCode);
+    }
+    if (respuesta.statusCode >= 400 || json['ok'] != true || json['datos'] is! Map<String, dynamic>) return null;
+    final datos = json['datos'] as Map<String, dynamic>;
+    return datos['disponible'] == true ? LecturaSelfie.json(datos) : null;
+  }
 
   /// Lee la foto en el servidor. Devuelve null si el servidor no puede leer (se usa el respaldo).
   /// Lanza [ApiExcepcion] si el servidor rechaza el pedido (por ejemplo, demasiadas lecturas).

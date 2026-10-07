@@ -36,6 +36,17 @@ class UsuarioSesion {
   /// administracion los apruebe.
   final bool carnetObservado;
 
+  /// Lo que le falta del carnet a una cuenta que ya usaba la app: SELFIE (su foto con el carnet),
+  /// CARNET (fotos del carnet y foto con el carnet) o VENCIDO (su carnet vencio; no pide viajes ni
+  /// recibe solicitudes hasta subir el nuevo). null = nada.
+  final String? carnetPendiente;
+
+  /// Hasta cuando puede subir la foto con el carnet antes de que se suspenda su cuenta (null = sin plazo).
+  final DateTime? plazoSelfie;
+
+  /// "Valida hasta" de su carnet, si se leyo.
+  final DateTime? carnetVencimiento;
+
   UsuarioSesion({
     required this.idUsuario,
     required this.nombreUsuario,
@@ -48,6 +59,9 @@ class UsuarioSesion {
     this.requiereCarnet = false,
     this.avisoCredenciales = false,
     this.carnetObservado = false,
+    this.carnetPendiente,
+    this.plazoSelfie,
+    this.carnetVencimiento,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -78,6 +92,9 @@ class UsuarioSesion {
     requiereCarnet: json['requiereCarnet'] as bool? ?? false,
     avisoCredenciales: json['avisoCredenciales'] as bool? ?? false,
     carnetObservado: json['carnetObservado'] as bool? ?? false,
+    carnetPendiente: json['carnetPendiente'] as String?,
+    plazoSelfie: DateTime.tryParse(json['plazoSelfie'] as String? ?? ''),
+    carnetVencimiento: DateTime.tryParse(json['carnetVencimiento'] as String? ?? ''),
   );
 
   Map<String, dynamic> aJson() => {
@@ -92,6 +109,12 @@ class UsuarioSesion {
     'requiereCarnet': requiereCarnet,
     'avisoCredenciales': avisoCredenciales,
     'carnetObservado': carnetObservado,
+    'carnetPendiente': carnetPendiente,
+    'plazoSelfie': plazoSelfie?.toIso8601String(),
+    'carnetVencimiento': carnetVencimiento == null
+        ? null
+        : '${carnetVencimiento!.year.toString().padLeft(4, '0')}-${carnetVencimiento!.month.toString().padLeft(2, '0')}-'
+              '${carnetVencimiento!.day.toString().padLeft(2, '0')}',
   };
 }
 
@@ -142,6 +165,17 @@ class Sesion extends ChangeNotifier {
   /// Por que se cerro la sesion sin que la persona lo pidiera (cuenta suspendida o eliminada); el
   /// login lo muestra. Se borra al volver a iniciar sesion.
   String? motivoCierre;
+
+  /// La persona eligio "Mas tarde" en el pedido de la foto con el carnet: no se le vuelve a mostrar
+  /// hasta que abra la app de nuevo.
+  bool _fotoCarnetPostergada = false;
+
+  bool get fotoCarnetPostergada => _fotoCarnetPostergada;
+
+  void postergarFotoCarnet() {
+    _fotoCarnetPostergada = true;
+    notifyListeners();
+  }
 
   String? get tokenAcceso => _tokenAcceso;
   UsuarioSesion? get usuario => _usuario;
@@ -262,8 +296,12 @@ class Sesion extends ChangeNotifier {
 
   /// Termina el registro de pasajero con Google: recien aqui el servidor guarda la persona, el carnet
   /// y la cuenta, y envia las credenciales. Al terminar la sesion queda iniciada.
-  Future<void> registrarPasajeroGoogle(Map<String, dynamic> datos, {required Uint8List anverso, required Uint8List reverso}) =>
-      _registrarConCarnet('/api/auth/registro/pasajero/google', datos, anverso: anverso, reverso: reverso);
+  Future<void> registrarPasajeroGoogle(
+    Map<String, dynamic> datos, {
+    required Uint8List anverso,
+    required Uint8List reverso,
+    required Uint8List selfie,
+  }) => _registrarConCarnet('/api/auth/registro/pasajero/google', datos, anverso: anverso, reverso: reverso, selfie: selfie);
 
   /// Registro de estudiante UAP, paso 1: el RU. El servidor lo consulta en el SIGSE y devuelve el
   /// codigo para el paso 2, o (tieneCuenta) el mensaje para quien ya tenia cuenta.
@@ -271,16 +309,21 @@ class Sesion extends ChangeNotifier {
       await _postAuth('/api/auth/estudiante-uap/consulta', {'ru': ru}) as Map<String, dynamic>;
 
   /// Registro de estudiante UAP, paso 2: el carnet confirmado. Al terminar la sesion queda iniciada.
-  Future<void> registrarEstudianteUap(Map<String, dynamic> datos, {required Uint8List anverso, required Uint8List reverso}) =>
-      _registrarConCarnet('/api/auth/registro/estudiante-uap', datos, anverso: anverso, reverso: reverso);
+  Future<void> registrarEstudianteUap(
+    Map<String, dynamic> datos, {
+    required Uint8List anverso,
+    required Uint8List reverso,
+    required Uint8List selfie,
+  }) => _registrarConCarnet('/api/auth/registro/estudiante-uap', datos, anverso: anverso, reverso: reverso, selfie: selfie);
 
   Future<void> _registrarConCarnet(String ruta, Map<String, dynamic> datos,
-      {required Uint8List anverso, required Uint8List reverso}) async {
+      {required Uint8List anverso, required Uint8List reverso, required Uint8List selfie}) async {
     final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
     peticion.files.addAll([
       http.MultipartFile.fromString('datos', jsonEncode(datos), contentType: MediaType('application', 'json')),
       http.MultipartFile.fromBytes('anverso', anverso, filename: 'carnet_anverso.jpg', contentType: MediaType('image', 'jpeg')),
       http.MultipartFile.fromBytes('reverso', reverso, filename: 'carnet_reverso.jpg', contentType: MediaType('image', 'jpeg')),
+      http.MultipartFile.fromBytes('selfie', selfie, filename: 'carnet_selfie.jpg', contentType: MediaType('image', 'jpeg')),
     ]);
     await _guardar(await _enviarMultipart(peticion));
   }
@@ -299,7 +342,7 @@ class Sesion extends ChangeNotifier {
     Map<String, dynamic> datos,
     Map<String, ArchivoPdf> documentos, {
     List<ArchivoPdf> qrs = const [],
-    ({Uint8List anverso, Uint8List reverso})? carnet,
+    ({Uint8List anverso, Uint8List reverso, Uint8List selfie})? carnet,
     ({Uint8List anverso, Uint8List reverso})? licencia,
   }) async {
     final peticion = http.MultipartRequest('POST', Uri.parse('${Config.apiUrl}$ruta'));
@@ -322,13 +365,15 @@ class Sesion extends ChangeNotifier {
         ),
       );
     }
-    // Fotos del carnet del registro con Google (partes CARNET_ANVERSO y CARNET_REVERSO).
+    // Fotos del carnet (partes CARNET_ANVERSO, CARNET_REVERSO y CARNET_SELFIE, la foto con el carnet).
     if (carnet != null) {
       peticion.files.addAll([
         http.MultipartFile.fromBytes('CARNET_ANVERSO', carnet.anverso,
             filename: 'carnet_anverso.jpg', contentType: MediaType('image', 'jpeg')),
         http.MultipartFile.fromBytes('CARNET_REVERSO', carnet.reverso,
             filename: 'carnet_reverso.jpg', contentType: MediaType('image', 'jpeg')),
+        http.MultipartFile.fromBytes('CARNET_SELFIE', carnet.selfie,
+            filename: 'carnet_selfie.jpg', contentType: MediaType('image', 'jpeg')),
       ]);
     }
     // Fotos de la licencia (partes LICENCIA_ANVERSO y LICENCIA_REVERSO).
