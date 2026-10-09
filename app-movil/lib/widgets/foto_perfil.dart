@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_excepcion.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import 'dialogos.dart';
 
@@ -62,12 +62,12 @@ class _FotoPerfilEditableState extends State<FotoPerfilEditable> {
           children: [
             const SizedBox(height: 10),
             ListTile(
-              leading: const FaIcon(FontAwesomeIcons.image, color: ColoresApp.azul),
+              leading: const Icon(Iconos.image, color: ColoresApp.azul),
               title: const Text('Elegir de la galería'),
               onTap: () => Navigator.of(context).pop(ImageSource.gallery),
             ),
             ListTile(
-              leading: const FaIcon(FontAwesomeIcons.camera, color: ColoresApp.azul),
+              leading: const Icon(Iconos.camera, color: ColoresApp.azul),
               title: const Text('Tomar una foto'),
               onTap: () => Navigator.of(context).pop(ImageSource.camera),
             ),
@@ -120,7 +120,7 @@ class _FotoPerfilEditableState extends State<FotoPerfilEditable> {
               child: const SizedBox(
                 width: 40,
                 height: 40,
-                child: Center(child: FaIcon(FontAwesomeIcons.camera, color: ColoresApp.blanco, size: 16)),
+                child: Center(child: Icon(Iconos.camera, color: ColoresApp.blanco, size: 16)),
               ),
             ),
           ),

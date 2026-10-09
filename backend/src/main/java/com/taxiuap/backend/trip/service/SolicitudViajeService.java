@@ -21,6 +21,7 @@ import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.identity.service.CarnetService;
+import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
@@ -99,8 +100,10 @@ public class SolicitudViajeService {
         if (tieneSolicitudActiva) {
             throw new NegocioException("Ya tiene una solicitud de viaje activa");
         }
-        if (viajeService.pasajeroTieneViajeActivo(pasajero.getId())) {
-            throw new NegocioException("Ya tiene un viaje en curso");
+        // Con el primer servicio ya aceptado puede pedir un segundo (taxi o entrega); no mas de 2.
+        if (!viajeService.pasajeroPuedePedirOtro(pasajero.getId())) {
+            throw new NegocioException("Ya tienes " + ViajeService.MAXIMO_SERVICIOS_PASAJERO
+                    + " servicios en curso: podrás pedir otro cuando termine uno");
         }
 
         CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
@@ -175,9 +178,23 @@ public class SolicitudViajeService {
      */
     public CotizacionViajeResponse cotizar(double origenLat, double origenLng, double destinoLat, double destinoLng,
             boolean paraOtraPersona) {
+        return cotizar(origenLat, origenLng, destinoLat, destinoLng, paraOtraPersona, false);
+    }
+
+    /**
+     * Con entrega: el precio de una encomienda de A a B con la tarifa DELIVERY, el mismo que se fija al
+     * pedirla (sin descuento de estudiante).
+     */
+    public CotizacionViajeResponse cotizar(double origenLat, double origenLng, double destinoLat, double destinoLng,
+            boolean paraOtraPersona, boolean entrega) {
         Pasajero pasajero = buscarPasajero();
         Point origen = PuntoDesdeWkt.convertir(String.format(java.util.Locale.ROOT, "POINT(%.7f %.7f)", origenLng, origenLat));
         Point destino = PuntoDesdeWkt.convertir(String.format(java.util.Locale.ROOT, "POINT(%.7f %.7f)", destinoLng, destinoLat));
+        if (entrega) {
+            DesglosePrecioDelivery envio = calculoPrecioDeliveryService.calcularEncomienda(origen, destino);
+            return new CotizacionViajeResponse(envio.distanciaKm(), envio.duracionMinutos(), true,
+                    envio.precioServicio(), BigDecimal.ZERO.setScale(2), envio.precioServicio(), "Bs");
+        }
         CotizacionViaje cotizacion = calculoPrecioService.cotizar(pasajero, origen, destino);
         if (paraOtraPersona) {
             return new CotizacionViajeResponse(cotizacion.distanciaKm(), cotizacion.duracionMin(), cotizacion.porCalles(),

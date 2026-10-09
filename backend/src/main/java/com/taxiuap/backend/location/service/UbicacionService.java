@@ -190,12 +190,24 @@ public class UbicacionService {
     @Transactional(readOnly = true)
     public List<ConductorEnLineaResponse> conductoresLibres() {
         LocalDateTime limite = LocalDateTime.now().minusSeconds(segundosEnLinea);
-        return listaFlota().stream()
+        List<PosicionConductor> libres = listaFlota().stream()
                 .filter(posicion -> posicion.disponibilidad() == Disponibilidad.DISPONIBLE)
                 .filter(posicion -> posicion.latitud() != null && posicion.actualizadoEn() != null)
                 .filter(posicion -> posicion.actualizadoEn().isAfter(limite.atZone(ZoneId.systemDefault()).toInstant()))
-                .map(posicion -> new ConductorEnLineaResponse(
-                        posicion.idConductor(), posicion.latitud(), posicion.longitud(), posicion.rumbo()))
+                .toList();
+        if (libres.isEmpty()) {
+            return List.of();
+        }
+        // Repartidor = su (primera) moto activa es de la categoria DELIVERY.
+        Map<Long, Boolean> repartidores = new HashMap<>();
+        for (Vehiculo vehiculo : vehiculoRepository.findByConductorIdInAndEstadoVehiculoOrderByIdAsc(
+                libres.stream().map(PosicionConductor::idConductor).toList(), EstadoRegistro.A)) {
+            repartidores.putIfAbsent(vehiculo.getConductor().getId(), vehiculo.esMotoDelivery());
+        }
+        return libres.stream()
+                .map(posicion -> new ConductorEnLineaResponse(posicion.idConductor(), posicion.latitud(),
+                        posicion.longitud(), posicion.rumbo(),
+                        repartidores.getOrDefault(posicion.idConductor(), false)))
                 .toList();
     }
 

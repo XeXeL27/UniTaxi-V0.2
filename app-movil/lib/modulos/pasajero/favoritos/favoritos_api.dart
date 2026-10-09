@@ -1,7 +1,8 @@
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:flutter/widgets.dart' show IconData;
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/cliente_api.dart';
+import '../../../core/iconos.dart';
 import '../../../mapa/servicios_mapa.dart';
 
 /// Lugar favorito del pasajero (direccion_guardada).
@@ -21,17 +22,17 @@ class Favorito {
   );
 
   /// Icono segun el nombre: casa, trabajo o estudio, terminal; si no, un marcador.
-  FaIconData get icono {
+  IconData get icono {
     final n = nombre.toLowerCase();
-    if (n.contains('casa') || n.contains('hogar') || n.contains('depa')) return FontAwesomeIcons.house;
-    if (n.contains('trabajo') || n.contains('oficina')) return FontAwesomeIcons.briefcase;
+    if (n.contains('casa') || n.contains('hogar') || n.contains('depa')) return Iconos.house;
+    if (n.contains('trabajo') || n.contains('oficina')) return Iconos.briefcase;
     if (n.contains('universidad') || n.contains('uap') || n.contains('facultad') || n.contains('colegio')) {
-      return FontAwesomeIcons.graduationCap;
+      return Iconos.graduationCap;
     }
-    if (n.contains('terminal') || n.contains('aeropuerto')) return FontAwesomeIcons.bus;
-    if (n.contains('mercado') || n.contains('tienda')) return FontAwesomeIcons.basketShopping;
-    if (n.contains('hospital') || n.contains('clinica') || n.contains('clínica')) return FontAwesomeIcons.hospital;
-    return FontAwesomeIcons.locationDot;
+    if (n.contains('terminal') || n.contains('aeropuerto')) return Iconos.bus;
+    if (n.contains('mercado') || n.contains('tienda')) return Iconos.basketShopping;
+    if (n.contains('hospital') || n.contains('clinica') || n.contains('clínica')) return Iconos.hospital;
+    return Iconos.locationDot;
   }
 }
 

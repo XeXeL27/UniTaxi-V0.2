@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
+import '../../../widgets/notificaciones.dart';
 
 const double _anchoModalEntrega = 600;
 
@@ -23,7 +24,7 @@ Future<DatosEntregaForm?> abrirFormularioEntrega(BuildContext context, TipoEnvio
           ),
           body: SafeArea(
             child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 24),
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
               child: _FormularioEntrega(tipo: tipo),
             ),
           ),
@@ -38,7 +39,7 @@ Future<DatosEntregaForm?> abrirFormularioEntrega(BuildContext context, TipoEnvio
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(26, 22, 26, 24),
+          padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
           child: _FormularioEntrega(tipo: tipo),
         ),
       ),
@@ -80,7 +81,7 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
     );
     final error = datos.error;
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      mostrarMensaje(context, error, error: true);
       return;
     }
     Navigator.of(context).pop(datos);
@@ -100,7 +101,7 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
                 widget.tipo.nombre,
                 style: const TextStyle(color: ColoresApp.azul, fontSize: 20, fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 6),
+              const SizedBox(height: 8),
               Text(
                 compra
                     ? 'Indica qué producto quieres comprar y recibir.'
@@ -114,19 +115,19 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
                 decoration: InputDecoration(labelText: compra ? 'Producto y descripción' : 'Contenido del paquete'),
               ),
               if (compra) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _monto,
                   keyboardType: const TextInputType.numberWithOptions(decimal: true),
                   decoration: const InputDecoration(labelText: 'Monto estimado (Bs)'),
                 ),
               ] else ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _receptor,
                   decoration: const InputDecoration(labelText: 'Nombre del receptor'),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 TextField(
                   controller: _telefonoReceptor,
                   keyboardType: TextInputType.phone,

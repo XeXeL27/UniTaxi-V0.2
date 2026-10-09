@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:taxiuap_movil/core/iconos.dart';
 
 import 'package:taxiuap_movil/widgets/paneles.dart';
 
@@ -9,7 +9,7 @@ void main() {
     testWidgets('arranca plegada: se ve el titulo pero no los campos', (tester) async {
       await tester.pumpWidget(_envolver(const SeccionDesplegable(
         titulo: 'No se pudo entregar',
-        icono: FontAwesomeIcons.triangleExclamation,
+        icono: Iconos.triangleExclamation,
         child: Text('CAMPOS DE LA FALLA'),
       )));
 
@@ -21,7 +21,7 @@ void main() {
       await tester.pumpWidget(_envolver(const SeccionDesplegable(
         titulo: 'No se pudo entregar',
         ayuda: 'La foto y el motivo son obligatorios.',
-        icono: FontAwesomeIcons.triangleExclamation,
+        icono: Iconos.triangleExclamation,
         child: Text('CAMPOS DE LA FALLA'),
       )));
 
@@ -35,7 +35,7 @@ void main() {
     testWidgets('al tocarla otra vez se repliega', (tester) async {
       await tester.pumpWidget(_envolver(const SeccionDesplegable(
         titulo: 'No se pudo entregar',
-        icono: FontAwesomeIcons.triangleExclamation,
+        icono: Iconos.triangleExclamation,
         child: Text('CAMPOS DE LA FALLA'),
       )));
 
@@ -54,7 +54,7 @@ void main() {
       await tester.pumpWidget(_envolver(const SeccionDesplegable(
         abiertoInicial: true,
         titulo: 'Ya abierta',
-        icono: FontAwesomeIcons.route,
+        icono: Iconos.route,
         child: Text('CONTENIDO'),
       )));
 
@@ -64,7 +64,7 @@ void main() {
     testWidgets('la accion de la cabecera se puede poner aparte', (tester) async {
       await tester.pumpWidget(_envolver(const SeccionDesplegable(
         titulo: 'Con acción',
-        icono: FontAwesomeIcons.route,
+        icono: Iconos.route,
         accion: Text('MAS'),
         child: Text('CONTENIDO'),
       )));

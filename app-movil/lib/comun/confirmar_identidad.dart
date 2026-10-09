@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/huella.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 
 /// Todo cambio de datos se confirma con la contrasena de la cuenta. Si el ingreso con huella esta
@@ -76,7 +76,7 @@ class _DialogoContrasenaState extends State<_DialogoContrasena> {
               suffixIcon: IconButton(
                 tooltip: _oculta ? 'Mostrar' : 'Ocultar',
                 onPressed: () => setState(() => _oculta = !_oculta),
-                icon: FaIcon(_oculta ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash, size: 15, color: ColoresApp.textoSuave),
+                icon: Icon(_oculta ? Iconos.eye : Iconos.eyeSlash, size: 15, color: ColoresApp.textoSuave),
               ),
             ),
             onSubmitted: (_) => _continuar(),

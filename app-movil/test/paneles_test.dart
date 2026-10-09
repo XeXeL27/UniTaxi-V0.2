@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:taxiuap_movil/core/iconos.dart';
 
 import 'package:taxiuap_movil/core/tema.dart';
 import 'package:taxiuap_movil/widgets/paneles.dart';
@@ -16,7 +16,7 @@ void main() {
     await tester.pumpWidget(_envolver(PanelPlegable(
       abierto: true,
       onAlternar: () {},
-      icono: FontAwesomeIcons.route,
+      icono: Iconos.route,
       color: ColoresApp.azul,
       resumen: 'En camino',
       tituloAbierto: 'Detalle del viaje',
@@ -42,7 +42,7 @@ void main() {
     await tester.pumpWidget(_envolver(PanelPlegable(
       abierto: false,
       onAlternar: () {},
-      icono: FontAwesomeIcons.route,
+      icono: Iconos.route,
       color: ColoresApp.azul,
       resumen: 'En camino',
       tituloAbierto: 'Detalle del viaje',

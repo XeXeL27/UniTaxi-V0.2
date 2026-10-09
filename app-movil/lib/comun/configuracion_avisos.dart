@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../core/iconos.dart';
 import '../core/preferencias_aviso.dart';
 import '../core/sonido.dart';
 import '../core/tema.dart';
@@ -51,7 +51,7 @@ class _ConfiguracionAvisos extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 value: activo,
                 onChanged: PreferenciasAviso.cambiarSonido,
-                secondary: FaIcon(activo ? FontAwesomeIcons.volumeHigh : FontAwesomeIcons.volumeXmark,
+                secondary: Icon(activo ? Iconos.volumeHigh : Iconos.volumeXmark,
                     color: ColoresApp.tinta, size: 18),
                 title: const Text('Sonido', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text(activo ? 'Suena una vez cuando un conductor acepta tu viaje' : 'Los avisos no suenan'),
@@ -63,7 +63,7 @@ class _ConfiguracionAvisos extends StatelessWidget {
                 contentPadding: EdgeInsets.zero,
                 value: activo,
                 onChanged: PreferenciasAviso.cambiarVibracion,
-                secondary: FaIcon(FontAwesomeIcons.mobileScreenButton,
+                secondary: Icon(Iconos.mobileScreenButton,
                     color: activo ? ColoresApp.tinta : ColoresApp.grisTexto, size: 18),
                 title: const Text('Vibración', style: TextStyle(fontWeight: FontWeight.w600)),
                 subtitle: Text(activo ? 'Vibra en cada aviso' : 'Los avisos no vibran'),
@@ -72,7 +72,7 @@ class _ConfiguracionAvisos extends StatelessWidget {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: _probar,
-              icon: const FaIcon(FontAwesomeIcons.play, size: 14),
+              icon: const Icon(Iconos.play, size: 14),
               label: const Text('Probar aviso'),
             ),
           ],

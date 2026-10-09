@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../core/api_excepcion.dart';
 import '../core/cliente_api.dart';
 import '../core/credenciales.dart';
 import '../core/formato.dart';
+import '../core/iconos.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
@@ -118,24 +118,24 @@ class _DatosPerfilState extends State<DatosPerfil> {
 
   Widget _vista() {
     final p = widget.perfil;
-    final datos = <(FaIconData, String, String)>[
-      (FontAwesomeIcons.solidUser, 'Nombre completo', p.nombreCompleto),
-      (FontAwesomeIcons.idCard, 'Carnet de identidad', p.ciCompleto),
+    final datos = <(IconData, String, String)>[
+      (Iconos.solidUser, 'Nombre completo', p.nombreCompleto),
+      (Iconos.idCard, 'Carnet de identidad', p.ciCompleto),
       (
-        FontAwesomeIcons.cakeCandles,
+        Iconos.cakeCandles,
         'Fecha de nacimiento',
         p.fechaNacimiento == null ? '' : formatoFecha(p.fechaNacimiento),
       ),
-      (FontAwesomeIcons.envelope, 'Correo', p.correo ?? ''),
-      (FontAwesomeIcons.phone, 'Teléfono', p.telefono ?? ''),
+      (Iconos.envelope, 'Correo', p.correo ?? ''),
+      (Iconos.phone, 'Teléfono', p.telefono ?? ''),
       if (widget.esConductor) ...[
-        (FontAwesomeIcons.idBadge, 'Licencia', p.numeroLicencia ?? ''),
-        (FontAwesomeIcons.layerGroup, 'Categoría de licencia', p.categoriaLicencia ?? ''),
+        (Iconos.idBadge, 'Licencia', p.numeroLicencia ?? ''),
+        (Iconos.layerGroup, 'Categoría de licencia', p.categoriaLicencia ?? ''),
       ],
       // La calificacion solo se muestra al conductor.
       if (widget.esConductor)
         (
-          FontAwesomeIcons.solidStar,
+          Iconos.solidStar,
           'Tu calificación',
           p.calificacionPromedio == null
               ? ''
@@ -150,7 +150,7 @@ class _DatosPerfilState extends State<DatosPerfil> {
           accion: TextButton.icon(
             onPressed: _editar,
             style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
-            icon: const FaIcon(FontAwesomeIcons.pen, size: 13),
+            icon: const Icon(Iconos.pen, size: 13),
             label: const Text('Editar', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
           children: [
@@ -159,7 +159,7 @@ class _DatosPerfilState extends State<DatosPerfil> {
               ListTile(
                 leading: SizedBox(
                   width: 24,
-                  child: Center(child: FaIcon(datos[i].$1, color: ColoresApp.rojo, size: 17)),
+                  child: Center(child: Icon(datos[i].$1, color: ColoresApp.rojo, size: 17)),
                 ),
                 title: Text(datos[i].$2, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
                 subtitle: Text(
@@ -205,7 +205,7 @@ class _DatosPerfilState extends State<DatosPerfil> {
                     _campo(
                       _correo,
                       'Correo *',
-                      FontAwesomeIcons.envelope,
+                      Iconos.envelope,
                       teclado: TextInputType.emailAddress,
                       validar: (v) {
                         final texto = v?.trim() ?? '';
@@ -219,7 +219,7 @@ class _DatosPerfilState extends State<DatosPerfil> {
                     _campo(
                       _telefono,
                       widget.esConductor ? 'Celular *' : 'Teléfono',
-                      FontAwesomeIcons.phone,
+                      Iconos.phone,
                       teclado: TextInputType.phone,
                       formatos: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(8)],
                       validar: (v) {
@@ -234,7 +234,7 @@ class _DatosPerfilState extends State<DatosPerfil> {
                       _campo(
                         _licencia,
                         'Número de licencia',
-                        FontAwesomeIcons.idBadge,
+                        Iconos.idBadge,
                         teclado: TextInputType.number,
                         formatos: [FilteringTextInputFormatter.digitsOnly],
                       ),
@@ -242,7 +242,7 @@ class _DatosPerfilState extends State<DatosPerfil> {
                       _campo(
                         _categoria,
                         'Categoría de licencia (P, M, A, B o C)',
-                        FontAwesomeIcons.layerGroup,
+                        Iconos.layerGroup,
                         formatos: [
                           LengthLimitingTextInputFormatter(1),
                           FilteringTextInputFormatter.allow(RegExp('[PMABCpmabc]')),
@@ -275,7 +275,7 @@ class _DatosPerfilState extends State<DatosPerfil> {
   Widget _campo(
     TextEditingController controlador,
     String etiqueta,
-    FaIconData icono, {
+    IconData icono, {
     String? Function(String?)? validar,
     TextInputType? teclado,
     bool mayusculaInicial = false,
@@ -389,14 +389,14 @@ class _LimiteAdelantoCompraState extends State<_LimiteAdelantoCompra> {
       titulo: 'Límite para compras',
       accion: TextButton.icon(
         onPressed: _editar,
-        icon: const FaIcon(FontAwesomeIcons.pen, size: 13),
+        icon: const Icon(Iconos.pen, size: 13),
         label: const Text('Editar', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       children: [
         ListTile(
           leading: const SizedBox(
             width: 24,
-            child: Center(child: FaIcon(FontAwesomeIcons.wallet, color: ColoresApp.rojo, size: 17)),
+            child: Center(child: Icon(Iconos.wallet, color: ColoresApp.rojo, size: 17)),
           ),
           title: const Text('Máximo que adelantarás', style: TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
           subtitle: Text(
@@ -451,7 +451,7 @@ class _Tarjeta extends StatelessWidget {
 }
 
 class _IconoCampo extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
 
   const _IconoCampo(this.icono);
 
@@ -459,7 +459,7 @@ class _IconoCampo extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 44,
-      child: Center(child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave)),
+      child: Center(child: Icon(icono, size: 15, color: ColoresApp.textoSuave)),
     );
   }
 }

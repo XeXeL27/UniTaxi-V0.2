@@ -45,11 +45,13 @@ import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
+import com.taxiuap.backend.trip.dto.ViajesHoyResponse;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.PersonaViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.dto.ViajesActivosResponse;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
@@ -227,7 +229,8 @@ public class ViajeService {
     /** [extra]: datos para la app (por ejemplo "aviso": numero del aviso de espera del conductor). */
     void avisarPasajero(Viaje viaje, String tipo, String titulo, String resto, Map<String, String> extra) {
         String nombre = viaje.getConductor().getUsuario().getPersona().getNombres();
-        String primerNombre = nombre == null || nombre.isBlank() ? "Tu conductor" : nombre.trim().split("\\s+")[0];
+        // "Rene", no "RENE": los nombres se guardan en mayusculas.
+        String primerNombre = nombre == null || nombre.isBlank() ? "Tu conductor" : primerNombre(nombre);
         Map<String, String> datos = new java.util.HashMap<>(extra);
         datos.put("tipo", tipo);
         datos.put("idViaje", String.valueOf(viaje.getId()));
@@ -239,7 +242,11 @@ public class ViajeService {
     /** Aviso "te estoy esperando" numero [aviso] (1 = "Llegue"): push con el sonido del taxi que llego. */
     void avisarEspera(Viaje viaje, int aviso) {
         Map<String, String> extra = Map.of("aviso", String.valueOf(aviso));
-        if (viaje.getSolicitud().esParaOtraPersona()) {
+        if (esDelivery(viaje)) {
+            // El repartidor espera en el punto de recogida a quien le entrega el paquete.
+            avisarPasajero(viaje, "REPARTIDOR_LLEGO", aviso == 1 ? "Tu repartidor llegó" : "Tu repartidor te está esperando",
+                    " te espera en el punto de recogida de tu paquete" + textoAviso(aviso) + ".", extra);
+        } else if (viaje.getSolicitud().esParaOtraPersona()) {
             String persona = primerNombre(viaje.getSolicitud().getNombrePasajeroTercero());
             avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Avísale a " + persona + ": su taxi lo está esperando",
                     " llegó al punto de recogida.", extra);
@@ -247,8 +254,19 @@ public class ViajeService {
             avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Tu conductor llegó", " te espera en el punto de partida.", extra);
         } else {
             avisarPasajero(viaje, "CONDUCTOR_LLEGO", "Tu conductor te está esperando",
-                    " te espera en el punto de partida (aviso " + aviso + " de 3).", extra);
+                    " te espera en el punto de partida (aviso " + aviso
+                            + (aviso <= EsperaPasajeroService.MAXIMO_AVISOS ? " de " + EsperaPasajeroService.MAXIMO_AVISOS : "")
+                            + ").", extra);
         }
+    }
+
+    /** " (aviso 2 de 3)", " (aviso 5)" o nada en el primero. */
+    static String textoAviso(int aviso) {
+        if (aviso <= 1) {
+            return "";
+        }
+        return " (aviso " + aviso
+                + (aviso <= EsperaPasajeroService.MAXIMO_AVISOS ? " de " + EsperaPasajeroService.MAXIMO_AVISOS : "") + ")";
     }
 
     /** Guarda un cambio sin cambio de situacion y avisa a las dos partes (lo usan otros servicios). */
@@ -297,8 +315,11 @@ public class ViajeService {
             historialViajeService.registrar(viaje, SituacionViaje.CONDUCTOR_EN_CAMINO, UsuarioActual.idUsuario());
         }
         validarTransicion(viaje, SituacionViaje.CONDUCTOR_EN_CAMINO, SituacionViaje.CONDUCTOR_LLEGO);
+        // Como "Llegue" en el taxi, es el primer aviso de espera (EsperaPasajeroService).
+        viaje.setAvisosEspera(1);
+        viaje.setUltimoAvisoEspera(LocalDateTime.now());
         viaje = viajeRepository.save(viaje);
-        avisarPasajero(viaje, "REPARTIDOR_LLEGO", "Tu repartidor llegó", " llegó al punto de recogida de tu paquete.");
+        avisarEspera(viaje, 1);
         return registrarYNotificar(viaje);
     }
 
@@ -657,6 +678,14 @@ public class ViajeService {
         });
     }
 
+    /** Viajes o entregas completados hoy (hora de Bolivia) por el conductor autenticado. */
+    public ViajesHoyResponse viajesDeHoyDelConductor() {
+        Long id = obtenerConductorActual().getId();
+        LocalDate hoy = LocalDate.now(ZONA);
+        return new ViajesHoyResponse(viajeRepository.contarHistorialDeConductor(id, SituacionViaje.COMPLETADO,
+                EstadoRegistro.A, hoy.atStartOfDay(), hoy.plusDays(1).atStartOfDay()));
+    }
+
     private HistorialViajesResponse historial(PeriodoHistorial periodo, int pagina, ConsultaHistorial consulta) {
         PeriodoHistorial elegido = periodo == null ? PeriodoHistorial.RECIENTES : periodo;
         Rango rango = rangoDe(elegido);
@@ -854,6 +883,55 @@ public class ViajeService {
         return Optional.empty();
     }
 
+    /** Servicios a la vez del pasajero: con el primero ya aceptado puede pedir un segundo (taxi o entrega). */
+    public static final int MAXIMO_SERVICIOS_PASAJERO = 2;
+
+    /** Pedidos a la vez del repartidor (moto DELIVERY). El taxista lleva un viaje a la vez. */
+    public static final int MAXIMO_PEDIDOS_REPARTIDOR = 3;
+
+    /** Cuantos viajes activos puede llevar el conductor: 3 si su moto activa es de reparto, si no 1. */
+    public int maximoViajesConductor(Long idConductor) {
+        boolean repartidor = vehiculoRepository.findByConductorId(idConductor).stream()
+                .filter(v -> v.getEstadoVehiculo() == EstadoRegistro.A)
+                .anyMatch(Vehiculo::esMotoDelivery);
+        return repartidor ? MAXIMO_PEDIDOS_REPARTIDOR : 1;
+    }
+
+    /** El conductor todavia puede aceptar otro pedido (el taxista ninguno con un viaje en curso). */
+    public boolean conductorPuedeTomarOtro(Long idConductor) {
+        return viajeRepository.countByConductorIdAndSituacionViajeNotIn(idConductor, ESTADOS_FINALES)
+                < maximoViajesConductor(idConductor);
+    }
+
+    /** El pasajero todavia puede pedir otro servicio (tiene menos de 2 en curso). */
+    public boolean pasajeroPuedePedirOtro(Long idPasajero) {
+        return viajeRepository.countByPasajeroIdAndSituacionViajeNotIn(idPasajero, ESTADOS_FINALES)
+                < MAXIMO_SERVICIOS_PASAJERO;
+    }
+
+    /** Servicios en curso del pasajero autenticado, del mas antiguo al mas nuevo. */
+    public ViajesActivosResponse activosDelPasajero() {
+        Long idUsuario = UsuarioActual.idUsuario();
+        List<ViajeResponse> viajes = pasajeroRepository.findByUsuarioId(idUsuario)
+                .map(p -> viajeRepository.findByPasajeroIdAndSituacionViajeNotInOrderByIdAsc(p.getId(), ESTADOS_FINALES)
+                        .stream().map(this::aRespuesta).toList())
+                .orElse(List.of());
+        return new ViajesActivosResponse(viajes, MAXIMO_SERVICIOS_PASAJERO);
+    }
+
+    /** Pedidos o viaje en curso del conductor autenticado, con cuantos puede llevar a la vez. */
+    public ViajesActivosResponse activosDelConductor() {
+        Long idUsuario = UsuarioActual.idUsuario();
+        Optional<Conductor> conductor = conductorRepository.findByUsuarioId(idUsuario);
+        if (conductor.isEmpty()) {
+            return new ViajesActivosResponse(List.of(), 1);
+        }
+        Long id = conductor.get().getId();
+        List<ViajeResponse> viajes = viajeRepository.findByConductorIdAndSituacionViajeNotInOrderByIdAsc(id, ESTADOS_FINALES)
+                .stream().map(this::aRespuesta).toList();
+        return new ViajesActivosResponse(viajes, maximoViajesConductor(id));
+    }
+
     /** true si el pasajero tiene un viaje asignado que todavia no termino ni se cancelo. */
     public boolean pasajeroTieneViajeActivo(Long idPasajero) {
         return viajeRepository.findFirstByPasajeroIdAndSituacionViajeNotIn(idPasajero, ESTADOS_FINALES).isPresent();
@@ -918,7 +996,8 @@ public class ViajeService {
                 viaje.getAvisosEspera() == null ? 0 : viaje.getAvisosEspera(),
                 viaje.getUltimoAvisoEspera(),
                 Boolean.TRUE.equals(viaje.getPasajeroNoSePresento()),
-                viaje.getSolicitud().getFechaSolicitud());
+                viaje.getSolicitud().getFechaSolicitud(),
+                !ESTADOS_FINALES.contains(viaje.getSituacionViaje()) ? usuarioConductor.getPersona().getTelefono() : null);
     }
 
     /**

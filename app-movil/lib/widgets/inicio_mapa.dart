@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/enlaces.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 
 /// Ancho maximo de la columna de controles sobre el mapa en pantallas anchas (PC): la cabecera y
@@ -16,7 +16,7 @@ const double altoBarraDestino = 56;
 /// silueta para el pasajero) en negro sobre gris.
 class AvatarCabecera extends StatelessWidget {
   final Uint8List? foto;
-  final FaIconData iconoSinFoto;
+  final IconData iconoSinFoto;
   final double tamano;
 
   const AvatarCabecera({super.key, this.foto, required this.iconoSinFoto, this.tamano = 48});
@@ -28,7 +28,7 @@ class AvatarCabecera extends StatelessWidget {
       height: tamano,
       decoration: const BoxDecoration(color: ColoresApp.gris, shape: BoxShape.circle),
       child: foto == null
-          ? Center(child: FaIcon(iconoSinFoto, color: ColoresApp.tinta, size: tamano * 0.4))
+          ? Center(child: Icon(iconoSinFoto, color: ColoresApp.tinta, size: tamano * 0.4))
           : ClipOval(child: Image.memory(foto!, fit: BoxFit.cover, gaplessPlayback: true)),
     );
   }
@@ -41,7 +41,7 @@ class CabeceraInicio extends StatelessWidget {
   final String saludo;
   final String nombre;
   final String ubicacion;
-  final FaIconData iconoBoton;
+  final IconData iconoBoton;
   final String tooltipBoton;
   final VoidCallback onBoton;
 
@@ -53,7 +53,7 @@ class CabeceraInicio extends StatelessWidget {
 
   /// Foto de perfil; sin ella se muestra [iconoSinFoto].
   final Uint8List? foto;
-  final FaIconData iconoSinFoto;
+  final IconData iconoSinFoto;
 
   /// Tocar la foto o el saludo (por ejemplo, ir a Mas).
   final VoidCallback? onPerfil;
@@ -63,13 +63,13 @@ class CabeceraInicio extends StatelessWidget {
     this.saludo = 'Bienvenido',
     required this.nombre,
     required this.ubicacion,
-    this.iconoBoton = FontAwesomeIcons.headset,
+    this.iconoBoton = Iconos.headset,
     this.tooltipBoton = 'Ayuda',
     required this.onBoton,
     this.solape = 0,
     this.onAtras,
     this.foto,
-    this.iconoSinFoto = FontAwesomeIcons.solidUser,
+    this.iconoSinFoto = Iconos.solidUser,
     this.onPerfil,
   });
 
@@ -80,7 +80,7 @@ class CabeceraInicio extends StatelessWidget {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: BarraSistema.sobreClaro,
       child: Container(
-        padding: EdgeInsets.fromLTRB(16, arriba + 10, 16, 14 + solape),
+        padding: EdgeInsets.fromLTRB(16, arriba + 12, 16, 16 + solape),
         decoration: const BoxDecoration(
           color: ColoresApp.blanco,
           borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
@@ -93,7 +93,7 @@ class CabeceraInicio extends StatelessWidget {
             child: Row(
               children: [
                 if (onAtras != null) ...[
-                  BotonGris(icono: FontAwesomeIcons.arrowLeft, tooltip: 'Volver', onTap: onAtras!),
+                  BotonGris(icono: Iconos.arrowLeft, tooltip: 'Volver', onTap: onAtras!),
                   const SizedBox(width: 12),
                 ],
                 // La foto y el saludo juntos: tocarlos lleva a Mas.
@@ -127,11 +127,11 @@ class CabeceraInicio extends StatelessWidget {
                           height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 2),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
-                          const FaIcon(FontAwesomeIcons.locationDot, size: 11, color: ColoresApp.grisTexto),
-                          const SizedBox(width: 5),
+                          const Icon(Iconos.locationDot, size: 11, color: ColoresApp.grisTexto),
+                          const SizedBox(width: 4),
                           Expanded(
                             child: Text(
                               ubicacion,
@@ -149,7 +149,7 @@ class CabeceraInicio extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 12),
                 BotonGris(icono: iconoBoton, tooltip: tooltipBoton, onTap: onBoton),
               ],
             ),
@@ -162,7 +162,7 @@ class CabeceraInicio extends StatelessWidget {
 
 /// Boton redondo gris claro con el icono en negro (ayuda, volver).
 class BotonGris extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String tooltip;
   final VoidCallback onTap;
   final double tamano;
@@ -182,7 +182,7 @@ class BotonGris extends StatelessWidget {
           child: SizedBox(
             width: tamano,
             height: tamano,
-            child: Center(child: FaIcon(icono, color: ColoresApp.tinta, size: 17)),
+            child: Center(child: Icon(icono, color: ColoresApp.tinta, size: 17)),
           ),
         ),
       ),
@@ -214,13 +214,13 @@ class BarraDestino extends StatelessWidget {
           height: altoBarraDestino,
           child: Row(
             children: [
-              const SizedBox(width: 20),
-              FaIcon(
-                conDestino ? FontAwesomeIcons.solidSquare : FontAwesomeIcons.magnifyingGlass,
+              const SizedBox(width: 16),
+              Icon(
+                conDestino ? Iconos.solidSquare : Iconos.magnifyingGlass,
                 color: ColoresApp.tinta,
                 size: conDestino ? 12 : 18,
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 16),
               Expanded(
                 child: Text(
                   destino ?? '¿A dónde vas?',
@@ -238,7 +238,7 @@ class BarraDestino extends StatelessWidget {
                 IconButton(
                   tooltip: 'Quitar destino',
                   onPressed: onQuitar,
-                  icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.tinta, size: 18),
+                  icon: const Icon(Iconos.xmark, color: ColoresApp.tinta, size: 18),
                 )
               else
                 const SizedBox(width: 16),
@@ -255,14 +255,14 @@ class BarraDestino extends StatelessWidget {
 Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
   final pasos = esConductor
       ? const [
-          (FontAwesomeIcons.powerOff, 'Conéctate con el botón del centro para recibir solicitudes.'),
-          (FontAwesomeIcons.route, 'Toca una solicitud para ver la ruta y tu ganancia antes de aceptarla.'),
-          (FontAwesomeIcons.flagCheckered, 'El viaje se finaliza al llegar a menos de 50 m del destino.'),
+          (Iconos.powerOff, 'Conéctate con el botón verde de Inicio para recibir solicitudes.'),
+          (Iconos.route, 'Cada solicitud muestra la ruta y cuánto cobras: tienes 15 segundos para aceptarla.'),
+          (Iconos.flagCheckered, 'El viaje se finaliza al llegar a menos de 50 m del destino.'),
         ]
       : const [
-          (FontAwesomeIcons.magnifyingGlass, 'Busca tu destino o tócalo en el mapa.'),
-          (FontAwesomeIcons.paperPlane, 'Revisa el precio y pide tu mototaxi con el botón del centro.'),
-          (FontAwesomeIcons.solidStar, 'Al llegar, califica a tu conductor.'),
+          (Iconos.magnifyingGlass, 'Busca tu destino o tócalo en el mapa.'),
+          (Iconos.paperPlane, 'Elige tu servicio, revisa el precio y toca Solicitar moto taxi.'),
+          (Iconos.solidStar, 'Al llegar, califica a tu conductor.'),
         ];
 
   final pregunta = esConductor ? '¿Necesitas ayuda con la app?' : '¿Necesitas asistencia?';
@@ -280,7 +280,7 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
         child: ConstrainedBox(
           constraints: BoxConstraints(maxHeight: altoMax),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(22, 20, 22, 18),
+            padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -291,36 +291,36 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
                     width: 56,
                     height: 56,
                     decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
-                    child: const Center(child: FaIcon(FontAwesomeIcons.headset, color: ColoresApp.azul, size: 22)),
+                    child: const Center(child: Icon(Iconos.headset, color: ColoresApp.azul, size: 22)),
                   ),
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 Text(
                   pregunta,
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: ColoresApp.azul, fontSize: 20, fontWeight: FontWeight.w700),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 const Text(
                   afirmacion,
                   textAlign: TextAlign.center,
                   style: TextStyle(color: ColoresApp.textoSuave, fontSize: 14),
                 ),
-                const SizedBox(height: 22),
+                const SizedBox(height: 24),
 
                 // Seccion AYUDA RAPIDA
                 const Text(
                   'AYUDA RÁPIDA',
                   style: TextStyle(color: ColoresApp.azul, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _TipAyudaRapida(
-                  icono: FontAwesomeIcons.locationCrosshairs,
+                  icono: Iconos.locationCrosshairs,
                   texto: 'Activa tu ubicación para que el conductor te encuentre.',
                 ),
                 const SizedBox(height: 8),
                 _TipAyudaRapida(
-                  icono: FontAwesomeIcons.bell,
+                  icono: Iconos.bell,
                   texto: 'Mantén activadas las notificaciones de la app.',
                 ),
                 const SizedBox(height: 16),
@@ -335,38 +335,38 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
                           width: 40,
                           height: 40,
                           decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
-                          child: Center(child: FaIcon(icono, color: ColoresApp.azul, size: 16)),
+                          child: Center(child: Icon(icono, color: ColoresApp.azul, size: 16)),
                         ),
-                        const SizedBox(width: 14),
+                        const SizedBox(width: 16),
                         Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14.5))),
                       ],
                     ),
                   ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
                 const Divider(color: ColoresApp.borde),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
 
                 // Seccion CANALES DE ATENCION
                 const Text(
                   'CANALES DE ATENCIÓN',
                   style: TextStyle(color: ColoresApp.azul, fontSize: 13, fontWeight: FontWeight.w700, letterSpacing: 0.5),
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 const Text(
                   'Selecciona la manera de comunicarte con nosotros:',
                   style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
                 ),
                 const SizedBox(height: 12),
                 _CanalAtencion(
-                  icono: FontAwesomeIcons.envelope,
+                  icono: Iconos.envelope,
                   color: ColoresApp.azul,
                   titulo: 'Correo electrónico',
                   valor: 'unitaxi@uap.edu.bo',
                   onTap: () => abrirEnlaceExterno(context, Uri.parse('mailto:unitaxi@uap.edu.bo'), 'unitaxi@uap.edu.bo'),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _CanalAtencion(
-                  icono: FontAwesomeIcons.locationDot,
+                  icono: Iconos.locationDot,
                   color: ColoresApp.rojo,
                   titulo: 'Dirección',
                   valor: 'X6JW+Q5P, C. Bruno Racua, Cobija',
@@ -376,22 +376,22 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
                     'la dirección',
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _CanalAtencion(
-                  icono: FontAwesomeIcons.clock,
+                  icono: Iconos.clock,
                   color: ColoresApp.exito,
                   titulo: 'Horario de atención',
                   valor: 'Lunes a viernes: 8:00 - 12:00 y 14:00 - 16:00',
                   onTap: null,
                 ),
-                const SizedBox(height: 18),
+                const SizedBox(height: 16),
                 const Divider(color: ColoresApp.borde),
                 const SizedBox(height: 12),
 
                 // Emergencia
                 const Row(
                   children: [
-                    FaIcon(FontAwesomeIcons.triangleExclamation, color: ColoresApp.rojo, size: 16),
+                    Icon(Iconos.triangleExclamation, color: ColoresApp.rojo, size: 16),
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
@@ -419,7 +419,7 @@ Future<void> mostrarAyuda(BuildContext context, {required bool esConductor}) {
 }
 
 class _TipAyudaRapida extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String texto;
 
   const _TipAyudaRapida({required this.icono, required this.texto});
@@ -432,7 +432,7 @@ class _TipAyudaRapida extends StatelessWidget {
           width: 32,
           height: 32,
           decoration: BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
-          child: Center(child: FaIcon(icono, color: ColoresApp.azul, size: 14)),
+          child: Center(child: Icon(icono, color: ColoresApp.azul, size: 14)),
         ),
         const SizedBox(width: 12),
         Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 14))),
@@ -442,7 +442,7 @@ class _TipAyudaRapida extends StatelessWidget {
 }
 
 class _CanalAtencion extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final Color color;
   final String titulo;
   final String valor;
@@ -465,14 +465,14 @@ class _CanalAtencion extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Row(
             children: [
               Container(
                 width: 36,
                 height: 36,
                 decoration: BoxDecoration(color: color.withValues(alpha: 0.18), shape: BoxShape.circle),
-                child: Center(child: FaIcon(icono, color: color, size: 15)),
+                child: Center(child: Icon(icono, color: color, size: 15)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -483,7 +483,7 @@ class _CanalAtencion extends StatelessWidget {
                       titulo,
                       style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 2),
+                    const SizedBox(height: 4),
                     Text(
                       valor,
                       style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
@@ -492,7 +492,7 @@ class _CanalAtencion extends StatelessWidget {
                 ),
               ),
               if (onTap != null)
-                FaIcon(FontAwesomeIcons.chevronRight, color: color.withValues(alpha: 0.5), size: 12),
+                Icon(Iconos.chevronRight, color: color.withValues(alpha: 0.5), size: 12),
             ],
           ),
         ),

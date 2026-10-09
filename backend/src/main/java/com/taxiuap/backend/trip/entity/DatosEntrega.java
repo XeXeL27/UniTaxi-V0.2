@@ -144,6 +144,20 @@ public class DatosEntrega extends EntidadAuditable {
     @Column(name = "fecha_llegada_recogida")
     private LocalDateTime fechaLlegadaRecogida;
 
+    /** Cuando el repartidor marco que llego al punto de entrega (B), a 100 m o menos. */
+    @Column(name = "fecha_llegada_entrega")
+    private LocalDateTime fechaLlegadaEntrega;
+
+    /**
+     * Avisos "te estoy esperando" en el punto de entrega (la llegada es el primero). Despues del
+     * tercero el repartidor puede reportar que no pudo entregar o seguir esperando (hasta 10).
+     */
+    @Column(name = "avisos_entrega")
+    private Integer avisosEntrega;
+
+    @Column(name = "ultimo_aviso_entrega")
+    private LocalDateTime ultimoAvisoEntrega;
+
     /** Foto obligatoria del paquete al recogerlo en A (ENCOMIENDA). */
     @Column(name = "foto_recogida_url", length = 500)
     private String fotoRecogidaUrl;

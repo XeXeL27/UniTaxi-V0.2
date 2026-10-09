@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../core/api_excepcion.dart';
+import '../core/iconos.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
@@ -72,7 +72,7 @@ class _PantallaCompletarCorreoState extends State<PantallaCompletarCorreo> {
                           height: 88,
                           decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
                           child: const Center(
-                            child: FaIcon(FontAwesomeIcons.envelope, color: ColoresApp.azul, size: 36),
+                            child: Icon(Iconos.envelope, color: ColoresApp.azul, size: 36),
                           ),
                         ),
                       ),
@@ -99,7 +99,7 @@ class _PantallaCompletarCorreoState extends State<PantallaCompletarCorreo> {
                           ),
                           child: Row(
                             children: [
-                              const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                              const Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
@@ -119,7 +119,7 @@ class _PantallaCompletarCorreoState extends State<PantallaCompletarCorreo> {
                           labelText: 'Correo electrónico',
                           prefixIcon: SizedBox(
                             width: 44,
-                            child: Center(child: FaIcon(FontAwesomeIcons.at, size: 15, color: ColoresApp.textoSuave)),
+                            child: Center(child: Icon(Iconos.at, size: 15, color: ColoresApp.textoSuave)),
                           ),
                         ),
                         validator: (v) => v != null && RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(v.trim())

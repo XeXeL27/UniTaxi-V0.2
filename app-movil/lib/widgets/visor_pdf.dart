@@ -1,8 +1,8 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import 'cuerpo_pdf_movil.dart' if (dart.library.js_interop) 'cuerpo_pdf_web.dart';
 
@@ -42,7 +42,7 @@ class _VisorPdfState extends State<_VisorPdf> {
               padding: const EdgeInsets.fromLTRB(16, 6, 4, 6),
               child: Row(
                 children: [
-                  const FaIcon(FontAwesomeIcons.filePdf, color: ColoresApp.blanco, size: 16),
+                  const Icon(Iconos.filePdf, color: ColoresApp.blanco, size: 16),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
@@ -54,7 +54,7 @@ class _VisorPdfState extends State<_VisorPdf> {
                   IconButton(
                     tooltip: 'Cerrar',
                     onPressed: () => Navigator.of(context).pop(),
-                    icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.blanco, size: 18),
+                    icon: const Icon(Iconos.xmark, color: ColoresApp.blanco, size: 18),
                   ),
                 ],
               ),

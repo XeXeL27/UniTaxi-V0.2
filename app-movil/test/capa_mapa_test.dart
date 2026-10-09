@@ -23,5 +23,27 @@ void main() {
       final topeMasBajo = CapaMapa.values.map((c) => c.zoomNativo).reduce((a, b) => a < b ? a : b);
       expect(ControladorMapa.zoomCalle.round(), lessThanOrEqualTo(topeMasBajo));
     });
+  
+    test('solo la capa de calles va en grises; el satelital queda a color', () {
+      expect(CapaMapa.calles.enGrises, isTrue);
+      expect(CapaMapa.satelite.enGrises, isFalse);
+    });
+  });
+
+  group('matrizGris', () {
+    test('con saturacion 1 y sin aclarar no cambia los colores', () {
+      expect(matrizGris(saturacion: 1, aclarar: 0), [1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0]);
+    });
+
+    test('un rojo puro queda casi gris y el blanco sigue blanco', () {
+      final m = matrizGris(saturacion: 0.12, aclarar: 0.06);
+      double canal(int fila, List<double> rgb) =>
+          m[fila * 5] * rgb[0] + m[fila * 5 + 1] * rgb[1] + m[fila * 5 + 2] * rgb[2] + m[fila * 5 + 4];
+      final rojo = [canal(0, [255, 0, 0]), canal(1, [255, 0, 0]), canal(2, [255, 0, 0])];
+      expect(rojo[0] - rojo[1], lessThan(40));
+      for (var fila = 0; fila < 3; fila++) {
+        expect(canal(fila, [255, 255, 255]), closeTo(255, 0.5));
+      }
+    });
   });
 }

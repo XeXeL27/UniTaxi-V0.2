@@ -32,6 +32,23 @@ class MainActivity : FlutterFragmentActivity() {
                 else -> resultado.notImplemented()
             }
         }
+        // Notificacion fija mientras hay viaje o el conductor esta conectado (ServicioSeguimiento).
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "unitaxi/seguimiento").setMethodCallHandler { llamada, resultado ->
+            when (llamada.method) {
+                "iniciar" -> resultado.success(
+                    ServicioSeguimiento.iniciar(
+                        applicationContext,
+                        llamada.argument<String>("texto") ?: "UNITAXI",
+                        llamada.argument<Boolean>("ubicacion") ?: false,
+                    )
+                )
+                "detener" -> {
+                    ServicioSeguimiento.detener(applicationContext)
+                    resultado.success(null)
+                }
+                else -> resultado.notImplemented()
+            }
+        }
     }
 
     private var reproductor: MediaPlayer? = null

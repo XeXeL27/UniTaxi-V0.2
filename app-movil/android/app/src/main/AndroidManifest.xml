@@ -19,9 +19,11 @@
         android:usesCleartextTraffic="true"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
-        <!-- Servicio de flutter_local_notifications para "Siguiendo tu viaje" (Notificador) -->
+        <!-- Notificacion fija mientras hay viaje o el conductor esta conectado (Notificador.seguirViaje).
+             Servicio propio: el de flutter_local_notifications cerraba la app si Android rechazaba el
+             tipo ubicacion (sin permiso o desde segundo plano, Android 14+) -->
         <service
-            android:name="com.dexterous.flutterlocalnotifications.ForegroundService"
+            android:name=".ServicioSeguimiento"
             android:exported="false"
             android:stopWithTask="true"
             android:foregroundServiceType="dataSync|location"/>
@@ -79,6 +81,15 @@
         <intent>
             <action android:name="android.intent.action.VIEW"/>
             <data android:scheme="mailto"/>
+        </intent>
+        <!-- Llamar al conductor, a quien viaja o al 110 desde el panel del viaje (Android 11+). -->
+        <intent>
+            <action android:name="android.intent.action.DIAL"/>
+            <data android:scheme="tel"/>
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="tel"/>
         </intent>
     </queries>
 </manifest>

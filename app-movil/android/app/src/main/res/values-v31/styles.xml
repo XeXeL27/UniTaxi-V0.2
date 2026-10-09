@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Mientras arranca el proceso: pantalla de arranque azul marino con el logo UNITAXI. Se quita
+         sola cuando Flutter dibuja su primer cuadro (la presentacion animada, lib/comun/presentacion.dart). -->
+    <style name="LaunchTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <!-- Android 12+: pantalla de arranque del sistema (fondo e icono; el circulo del icono, del mismo azul). -->
+        <item name="android:windowBackground">@color/presentacion_fondo</item>
+        <item name="android:windowSplashScreenBackground">@color/presentacion_fondo</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_icono</item>
+        <item name="android:windowSplashScreenIconBackgroundColor">@color/presentacion_fondo</item>
+        <item name="android:statusBarColor">@color/presentacion_fondo</item>
+        <item name="android:navigationBarColor">@color/presentacion_fondo</item>
+    </style>
+    <!-- Detras de Flutter mientras se inicia y mientras corre: el mismo azul, sin destello blanco. -->
+    <style name="NormalTheme" parent="@android:style/Theme.Light.NoTitleBar">
+        <item name="android:windowBackground">@color/presentacion_fondo</item>
+    </style>
+</resources>

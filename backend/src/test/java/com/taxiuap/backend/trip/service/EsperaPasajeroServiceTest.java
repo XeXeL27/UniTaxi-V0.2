@@ -34,9 +34,9 @@ import com.taxiuap.backend.trip.enums.SituacionSolicitud;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 
 /**
- * El conductor que llego puede avisar "te estoy esperando" hasta 3 veces, con 1 minuto entre avisos, y
- * un minuto despues del tercero cancelar porque el pasajero no se presento: sin republicar el pedido y
- * dejando un reporte con su comentario para el admin.
+ * El conductor que llego puede avisar "te estoy esperando" con 1 minuto entre avisos; un minuto despues
+ * del tercero puede cancelar porque el pasajero no se presento (sin republicar el pedido y dejando un
+ * reporte con su comentario para el admin) o seguir esperando y avisando hasta 10 avisos.
  */
 @ExtendWith(MockitoExtension.class)
 class EsperaPasajeroServiceTest {
@@ -89,13 +89,42 @@ class EsperaPasajeroServiceTest {
     }
 
     @Test
-    void noHayCuartoAviso() {
-        conAvisos(3, 120);
+    void siSigueEsperandoPuedeAvisarUnaCuartaVez() {
+        conAvisos(3, 61);
+
+        service.avisarDeNuevo(500L);
+
+        assertEquals(4, viaje.getAvisosEspera());
+        verify(viajeService).avisarEspera(viaje, 4);
+    }
+
+    @Test
+    void noSePasaDelLimiteDeAvisos() {
+        conAvisos(EsperaPasajeroService.LIMITE_AVISOS, 120);
 
         NegocioException error = assertThrows(NegocioException.class, () -> service.avisarDeNuevo(500L));
 
-        assertTrue(error.getMessage().contains("3 veces"));
+        assertTrue(error.getMessage().contains(EsperaPasajeroService.LIMITE_AVISOS + " veces"));
         verify(viajeService, never()).avisarEspera(any(), anyInt());
+    }
+
+    @Test
+    void conElTercerAvisoRecienHechoTodaviaNoSeReporta() {
+        conAvisos(3, 20);
+
+        assertThrows(NegocioException.class, () -> service.pasajeroNoSePresento(500L, "No contestó"));
+
+        verify(reporteRepository, never()).save(any());
+    }
+
+    @Test
+    void siguioEsperandoYReportaSinEsperarOtroMinuto() {
+        conAvisos(4, 10);
+
+        service.pasajeroNoSePresento(500L, "Avisé cuatro veces y no apareció");
+
+        assertEquals(SituacionViaje.CANCELADO, viaje.getSituacionViaje());
+        verify(reporteRepository).save(any());
     }
 
     @Test

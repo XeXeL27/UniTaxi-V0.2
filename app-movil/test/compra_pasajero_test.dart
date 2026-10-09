@@ -8,7 +8,9 @@ import 'package:taxiuap_movil/core/cliente_api.dart';
 import 'package:taxiuap_movil/core/chat.dart';
 import 'package:taxiuap_movil/core/sesion.dart';
 import 'package:taxiuap_movil/mapa/controlador_mapa.dart';
+import 'package:taxiuap_movil/modulos/pasajero/viaje/elegir_servicio.dart';
 import 'package:taxiuap_movil/modulos/pasajero/viaje/flujo_pasajero.dart';
+import 'package:taxiuap_movil/modulos/pasajero/viaje/modo_servicio.dart';
 import 'package:taxiuap_movil/modulos/pasajero/viaje/paneles_pasajero.dart';
 import 'package:taxiuap_movil/modulos/pasajero/viaje/viaje_api.dart';
 
@@ -121,6 +123,49 @@ void main() {
     });
   });
 
+  group('taxi y entrega no se cruzan', () {
+    test('un taxi despues de una entrega no lleva la categoria DELIVERY ni datos de paquete', () async {
+      final api = _ApiEspia();
+      final flujo = _flujo(api, servicio: TipoEnvio.encomienda);
+      flujo.mapa.ponerA(const PuntoRuta(_aqui, 'Mi ubicación actual'));
+      flujo.mapa.b = const PuntoRuta(_alla, 'Mercado');
+      flujo.datosEntregaForm = const DatosEntregaForm(
+        tipoEnvio: TipoEnvio.encomienda,
+        descripcion: 'Libro',
+        aceptaPoliticaArticulos: true,
+      );
+      await flujo.solicitar();
+      expect(api.idCategoriaServicio, 9);
+      expect(api.datosEntrega, isNotNull);
+
+      // Vuelve a elegir (como tras cancelar) y pide un taxi para otra persona.
+      flujo
+        ..etapa = EtapaPasajero.eligiendo
+        ..solicitud = null;
+      flujo.cambiarServicio(ServicioActivo.viaje);
+      flujo.cambiarParaOtraPersona(true);
+      flujo.guardarTercero(const PasajeroTercero(nombre: 'JUAN PEREZ', telefono: '70000001', pagaSolicitante: false));
+      flujo.mapa.ponerA(const PuntoRuta(_aqui, 'Plaza'));
+      flujo.mapa.b = const PuntoRuta(_alla, 'Mercado');
+      await flujo.solicitar();
+
+      expect(api.idCategoriaServicio, isNull);
+      expect(api.datosEntrega, isNull);
+      expect(api.tercero?.nombre, 'JUAN PEREZ');
+    });
+
+    test('pasar a Entrega apaga "para otra persona" (es solo de taxi)', () {
+      final flujo = _flujo(_ApiEspia());
+      flujo.cambiarParaOtraPersona(true);
+      expect(flujo.paraOtraPersona, isTrue);
+
+      flujo.cambiarServicio(ServicioActivo.entrega);
+
+      expect(flujo.paraOtraPersona, isFalse);
+      expect(flujo.tercero, isNull);
+    });
+  });
+
   group('la cotizacion de la ruta', () {
     test('en una compra no se pide, ni siquiera con A y B en el mapa', () async {
       final api = _ApiEspia();
@@ -153,6 +198,38 @@ void main() {
 
       expect(api.cotizaciones, hasLength(1));
     });
+    test('en una encomienda el precio es el de la tarifa de delivery, no el base del taxi', () async {
+      final api = _ApiEspia();
+      final flujo = _flujo(api, servicio: TipoEnvio.encomienda)..precio = const PrecioViaje(precio: 8);
+      _ponerPuntos(flujo);
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(api.cotizacionesEntrega, hasLength(1));
+      expect(flujo.textoPrecio, '11,76 Bs');
+    });
+
+    test('mirando el taxi la tarjeta Entrega tambien trae su precio de delivery', () async {
+      final api = _ApiEspia();
+      final flujo = _flujo(api);
+      _ponerPuntos(flujo);
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(flujo.textoPrecioDe(ServicioActivo.viaje), '8 Bs');
+      expect(flujo.textoPrecioDe(ServicioActivo.entrega), '11,76 Bs');
+    });
+
+    test('en una compra no se cotiza la entrega: dice A calcular', () async {
+      final api = _ApiEspia();
+      final flujo = _flujo(api, servicio: TipoEnvio.compraYEntrega);
+      _ponerPuntos(flujo);
+
+      await Future<void>.delayed(Duration.zero);
+
+      expect(api.cotizacionesEntrega, isEmpty);
+      expect(flujo.textoPrecio, 'A calcular');
+    });
   });
 
   group('textoPrecio', () {
@@ -163,11 +240,11 @@ void main() {
       expect(flujo.textoPrecio, 'A calcular');
     });
 
-    test('en una encomienda muestra la tarifa del servicio', () {
+    test('en una encomienda sin destino no usa el precio base del taxi: dice A calcular', () {
       final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.encomienda);
       flujo.precio = const PrecioViaje(precio: 8);
 
-      expect(flujo.textoPrecio, '8 Bs');
+      expect(flujo.textoPrecio, 'A calcular');
     });
 
     test('en un viaje sigue mostrando la tarifa de la ruta o A calcular', () {
@@ -209,36 +286,49 @@ void main() {
     });
   });
 
-  group('el panel eligiendo de una compra', () {
-    testWidgets('muestra el precio, el pago y el boton de pedir sin destino', (tester) async {
+  group('la hoja "Elige tu servicio" de una compra', () {
+    testWidgets('muestra el precio a calcular, el pago y que se entrega donde esta', (tester) async {
       final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.compraYEntrega)
         ..precio = const PrecioViaje(precio: 8)
         ..mapa.ponerA(const PuntoRuta(_aqui, 'Mi ubicación actual'));
 
       await tester.pumpWidget(_envolver(_panel(flujo)));
 
+      expect(find.text('Elige tu servicio'), findsOneWidget);
       expect(find.text('A calcular'), findsOneWidget);
-      expect(find.text('Precio del servicio'), findsOneWidget);
-      expect(find.text('¿Cómo vas a pagar?'), findsOneWidget);
-      expect(find.text('Se entrega donde estas'), findsOneWidget);
-      // El boton existe y esta habilitado: se puede pedir sin haber elegido destino.
-      expect(find.widgetWithText(FilledButton, 'Solicitar entrega'), findsOneWidget);
-      expect(tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Solicitar entrega')).onPressed, isNotNull);
-      // Sin busqueda de destino, sin favoritos y sin quitar destino.
-      expect(find.text('Busca tu destino arriba o tócalo en el mapa.'), findsNothing);
-      expect(find.text('Destino (B)'), findsNothing);
-      expect(find.byTooltip('Quitar destino'), findsNothing);
+      expect(find.text('Compra y entrega'), findsNWidgets(2));
+      expect(find.text('Se entrega donde estás'), findsOneWidget);
+      expect(find.text('Efectivo'), findsOneWidget);
+      // Sin destino la tarjeta del taxi no tiene precio: pide elegir uno.
+      expect(find.textContaining('Elige un destino'), findsOneWidget);
+      // Se puede pedir sin haber elegido destino.
+      expect(flujo.puedeSolicitar, isTrue);
     });
 
-    testWidgets('en una encomienda sin destino no deja pedir', (tester) async {
-      final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.encomienda)
-        ..mapa.ponerA(const PuntoRuta(_aqui, 'Mi ubicación actual'));
+    testWidgets('en una encomienda la tarjeta Entrega muestra el precio de delivery de la ruta', (tester) async {
+      final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.encomienda)..precio = const PrecioViaje(precio: 8);
+      _ponerPuntos(flujo);
 
       await tester.pumpWidget(_envolver(_panel(flujo)));
+      await tester.pump();
 
-      expect(find.widgetWithText(FilledButton, 'Solicitar entrega'), findsNothing);
-      expect(find.text('Busca tu destino arriba o tócalo en el mapa.'), findsOneWidget);
-      expect(find.text('Se entrega donde estas'), findsNothing);
+      expect(find.text('11,76 Bs'), findsOneWidget);
+      expect(find.text('Encomienda'), findsNWidgets(2));
+      expect(find.text('1 repartidor libre'), findsOneWidget);
+    });
+  });
+
+  group('la hoja "Elige tu servicio" bajada', () {
+    testWidgets('deja una sola linea con el servicio, el precio y como paga', (tester) async {
+      final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.encomienda)..precio = const PrecioViaje(precio: 8);
+      _ponerPuntos(flujo);
+
+      await tester.pumpWidget(_envolver(_panel(flujo, abierta: false)));
+      await tester.pump();
+
+      expect(find.text('Elige tu servicio'), findsNothing);
+      expect(find.text('Encomienda · 11,76 Bs'), findsOneWidget);
+      expect(find.byTooltip('Ver el detalle'), findsOneWidget);
     });
   });
 
@@ -265,7 +355,7 @@ void main() {
 
       await tester.pumpWidget(
         ChangeNotifierProvider<ChatEstado>.value(
-          value: ChatEstado(sesion: Sesion(), api: ClienteApi(Sesion())),
+          value: ChatSinSocket(),
           child: _envolver(
             PanelViaje(flujo: flujo, onCancelar: () {}, onPedirCambioPago: (_) {}, onConfirmarCompra: () {}),
           ),
@@ -298,8 +388,18 @@ FlujoPasajero _flujo(_ApiEspia api, {TipoEnvio? servicio}) {
   return flujo;
 }
 
-Widget _panel(FlujoPasajero flujo) =>
-    PanelEligiendo(flujo: flujo, enviando: false, onSolicitar: () {}, onGuardarDestino: () {});
+Widget _panel(FlujoPasajero flujo, {bool abierta = true}) => PanelElegirServicio(
+  flujo: flujo,
+  abierta: abierta,
+  onAlternar: () {},
+  taxistasLibres: 1,
+  repartidoresLibres: 1,
+  onMotoTaxi: () {},
+  onEntrega: () {},
+  onParaQuien: () {},
+  onTipoEnvio: () {},
+  onPago: () {},
+);
 
 Widget _envolver(Widget hijo) => MaterialApp(
   home: Scaffold(body: SingleChildScrollView(child: hijo)),
@@ -313,9 +413,19 @@ class _ApiEspia extends ViajeApi {
   PuntoRuta? origen;
   PuntoRuta? destino;
   String? destinoNombre;
+  int? idCategoriaServicio;
+  DatosEntregaForm? datosEntrega;
+  PasajeroTercero? tercero;
+
+  /// Cotizaciones de encomienda (tarifa delivery), aparte de las del taxi.
+  final List<(LatLng, LatLng)> cotizacionesEntrega = [];
 
   @override
-  Future<CotizacionViaje> cotizar(LatLng a, LatLng b, {bool paraOtraPersona = false}) async {
+  Future<CotizacionViaje> cotizar(LatLng a, LatLng b, {bool paraOtraPersona = false, bool entrega = false}) async {
+    if (entrega) {
+      cotizacionesEntrega.add((a, b));
+      return const CotizacionViaje(distanciaKm: 1.9, precioNormal: 11.76, descuentoEstudiante: 0, precio: 11.76);
+    }
     cotizaciones.add((a, b));
     return const CotizacionViaje(distanciaKm: 1, precioNormal: 8, descuentoEstudiante: 0, precio: 8);
   }
@@ -333,10 +443,21 @@ class _ApiEspia extends ViajeApi {
     origen = o;
     destino = d;
     this.destinoNombre = destinoNombre;
+    this.idCategoriaServicio = idCategoriaServicio;
+    this.datosEntrega = datosEntrega;
+    this.tercero = tercero;
     // Sin WKT la solicitud no tiene ruta que dibujar: el trazado lo prueba otra tarea.
     return Solicitud.desdeJson({'idSolicitud': 1, 'situacionSolicitud': 'PENDIENTE'});
   }
 
   @override
   Future<int?> categoriaDelivery() async => 9;
+}
+
+/// Chat de prueba: no abre el socket al vincularse al viaje (dejaria temporizadores pendientes).
+class ChatSinSocket extends ChatEstado {
+  ChatSinSocket() : super(sesion: Sesion(), api: ClienteApi(Sesion()));
+
+  @override
+  Future<void> vincular(int idViaje, String nombreContraparte) async {}
 }

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:provider/provider.dart';
 
@@ -9,6 +8,7 @@ import '../core/carnet/lectura_carnet.dart';
 import '../core/carnet/lector_documentos.dart';
 import '../core/cliente_api.dart';
 import '../core/formato.dart';
+import '../core/iconos.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
@@ -344,7 +344,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                         _campo(
                           _nombres,
                           LectorDocumentos.puedeLeer ? 'Nombres (del carnet)' : 'Nombres (como en tu carnet)',
-                          FontAwesomeIcons.solidUser,
+                          Iconos.solidUser,
                           soloLectura: LectorDocumentos.puedeLeer && !(_seleccion.datos?.nombresEditables ?? false),
                           formatos: Formatos.letras,
                           validar: (v) => (v ?? '').trim().isEmpty ? 'Escribe tus nombres' : null,
@@ -352,7 +352,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                         _campo(
                           _apellidos,
                           LectorDocumentos.puedeLeer ? 'Apellidos (del carnet)' : 'Apellidos (como en tu carnet)',
-                          FontAwesomeIcons.solidUser,
+                          Iconos.solidUser,
                           soloLectura: LectorDocumentos.puedeLeer && !(_seleccion.datos?.apellidosEditables ?? false),
                           formatos: Formatos.letras,
                           validar: (v) => (v ?? '').trim().isEmpty ? 'Escribe tus apellidos' : null,
@@ -360,7 +360,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                         _campo(
                           _ci,
                           _ciLeido ? 'Número de carnet (leído de la foto)' : 'Número de carnet',
-                          FontAwesomeIcons.idCard,
+                          Iconos.idCard,
                           teclado: TextInputType.number,
                           soloLectura: _ciLeido,
                           formatos: [FilteringTextInputFormatter.digitsOnly],
@@ -374,7 +374,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                           LectorDocumentos.puedeLeer
                               ? 'Complemento (se lee de la foto)'
                               : 'Complemento (solo si tu carnet lo tiene)',
-                          FontAwesomeIcons.hashtag,
+                          Iconos.hashtag,
                           soloLectura: LectorDocumentos.puedeLeer,
                           formatos: [
                             FilteringTextInputFormatter.allow(RegExp('[0-9A-Za-z]')),
@@ -400,14 +400,14 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                                   ? const SizedBox(
                                       width: 44,
                                       child: Center(
-                                        child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave),
+                                        child: Icon(Iconos.lock, size: 13, color: ColoresApp.textoSuave),
                                       ),
                                     )
                                   : null,
                               prefixIcon: const SizedBox(
                                 width: 44,
                                 child: Center(
-                                  child: FaIcon(FontAwesomeIcons.cakeCandles, size: 15, color: ColoresApp.textoSuave),
+                                  child: Icon(Iconos.cakeCandles, size: 15, color: ColoresApp.textoSuave),
                                 ),
                               ),
                             ),
@@ -428,7 +428,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
                           ),
                           child: Row(
                             children: [
-                              const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                              const Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                               const SizedBox(width: 10),
                               Expanded(
                                 child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
@@ -466,7 +466,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
   Widget _campo(
     TextEditingController controlador,
     String etiqueta,
-    FaIconData icono, {
+    IconData icono, {
     String? Function(String?)? validar,
     TextInputType? teclado,
     bool soloLectura = false,
@@ -486,12 +486,12 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
           suffixIcon: soloLectura
               ? const SizedBox(
                   width: 44,
-                  child: Center(child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave)),
+                  child: Center(child: Icon(Iconos.lock, size: 13, color: ColoresApp.textoSuave)),
                 )
               : null,
           prefixIcon: SizedBox(
             width: 44,
-            child: Center(child: FaIcon(icono, size: 15, color: ColoresApp.textoSuave)),
+            child: Center(child: Icon(icono, size: 15, color: ColoresApp.textoSuave)),
           ),
         ),
         validator: validar,

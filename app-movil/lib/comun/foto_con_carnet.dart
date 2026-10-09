@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:provider/provider.dart';
 
 import '../core/api_excepcion.dart';
 import '../core/cliente_api.dart';
 import '../core/formato.dart';
+import '../core/iconos.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
@@ -134,7 +134,7 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
                         ),
                         child: Row(
                           children: [
-                            const FaIcon(FontAwesomeIcons.clock, color: ColoresApp.rutaSecundariaBorde, size: 16),
+                            const Icon(Iconos.clock, color: ColoresApp.rutaSecundariaBorde, size: 16),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
@@ -176,7 +176,7 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
                         ),
                         child: Row(
                           children: [
-                            const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                            const Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                             const SizedBox(width: 10),
                             Expanded(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro))),
                           ],

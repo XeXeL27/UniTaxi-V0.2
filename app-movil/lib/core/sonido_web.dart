@@ -1,3 +1,5 @@
+import 'dart:js_interop';
+
 import 'package:web/web.dart' as web;
 
 final _audios = <String, web.HTMLAudioElement>{};
@@ -10,7 +12,8 @@ Future<void> sonarAviso(String archivo) async {
       ..loop = false;
     audio.pause();
     audio.currentTime = 0;
-    audio.play();
+    // play() devuelve una promesa que el navegador rechaza si la persona todavia no toco la pagina.
+    await audio.play().toDart;
   } catch (_) {
     // Sin audio no pasa nada.
   }

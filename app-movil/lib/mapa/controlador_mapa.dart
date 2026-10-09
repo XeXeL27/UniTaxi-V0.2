@@ -35,6 +35,7 @@ enum CapaMapa {
     'Calles',
     'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     19,
+    enGrises: true,
   ),
   satelite(
     'Satélite',
@@ -49,7 +50,27 @@ enum CapaMapa {
   /// flutter_map escala la ultima tesela real en vez de pedir una que el proveedor no tiene.
   final int zoomNativo;
 
-  const CapaMapa(this.nombre, this.url, this.zoomNativo);
+  /// Se dibuja casi en gris (estilo Uber): asi resaltan la ruta, los puntos A y B y las motos.
+  final bool enGrises;
+
+  const CapaMapa(this.nombre, this.url, this.zoomNativo, {this.enGrises = false});
+}
+
+/// Filtro de las teselas en grises: deja el 12 % del color y aclara un 6 %, como en las maquetas.
+final ColorFilter filtroMapaGris = ColorFilter.matrix(matrizGris(saturacion: 0.12, aclarar: 0.06));
+
+/// Matriz de color 4x5 que baja la saturacion y mezcla con blanco ([aclarar] de 0 a 1).
+List<double> matrizGris({required double saturacion, required double aclarar}) {
+  const r = 0.2126, g = 0.7152, b = 0.0722;
+  final k = 1 - aclarar;
+  final resto = 1 - saturacion;
+  final blanco = 255 * aclarar;
+  return [
+    (r * resto + saturacion) * k, g * resto * k, b * resto * k, 0, blanco,
+    r * resto * k, (g * resto + saturacion) * k, b * resto * k, 0, blanco,
+    r * resto * k, g * resto * k, (b * resto + saturacion) * k, 0, blanco,
+    0, 0, 0, 1, 0,
+  ];
 }
 
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
@@ -177,8 +198,20 @@ class ControladorMapa extends ChangeNotifier {
       return;
     }
     _alNuevaPosicion(posicion, centrar: true);
+    _seguirGps();
+    // Si el GPS se apaga, el seguimiento de Android termina con error: al volver a estar listo
+    // (encendido y con permiso) se empieza de nuevo.
+    RequiereGps.listo.removeListener(_alCambiarGps);
+    RequiereGps.listo.addListener(_alCambiarGps);
+  }
+
+  void _seguirGps() {
     _gps?.cancel();
     _gps = ServiciosMapa.seguirUbicacion().listen((p) => _alNuevaPosicion(p), onError: (_) {});
+  }
+
+  void _alCambiarGps() {
+    if (!_cerrado && RequiereGps.listo.value) _seguirGps();
   }
 
   void alListarMapa() {
@@ -505,6 +538,7 @@ class ControladorMapa extends ChangeNotifier {
   @override
   void dispose() {
     _cerrado = true;
+    RequiereGps.listo.removeListener(_alCambiarGps);
     _gps?.cancel();
     mapa.dispose();
     rotacion.dispose();

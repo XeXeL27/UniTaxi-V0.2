@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Azul marino de la app (ColoresApp.azul): fondo de la pantalla de arranque, el mismo del primer
+         cuadro de la presentacion en Flutter, asi el paso de una a otra no se nota. -->
+    <color name="presentacion_fondo">#0A2342</color>
+</resources>

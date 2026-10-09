@@ -147,7 +147,7 @@ public class OfertaViajeService {
         // ofertas a la vez: se bloquea su fila y se revisa.
         Long idConductorOferta = conductorOferta.getId();
         conductorRepository.bloquear(idConductorOferta);
-        if (viajeService.conductorTieneViajeActivo(idConductorOferta)) {
+        if (!viajeService.conductorPuedeTomarOtro(idConductorOferta)) {
             throw new ConflictoException("El conductor de esta oferta ya tomo otro viaje");
         }
 
@@ -195,8 +195,12 @@ public class OfertaViajeService {
         if (!documentoConductorService.puedeOperar(conductor.getId())) {
             throw new NegocioException("El conductor no esta habilitado para recibir solicitudes");
         }
-        if (viajeService.conductorTieneViajeActivo(conductor.getId())) {
-            throw new NegocioException("Ya tiene un viaje en curso");
+        // El taxista lleva un viaje a la vez; el repartidor hasta 3 pedidos.
+        if (!viajeService.conductorPuedeTomarOtro(conductor.getId())) {
+            int maximo = viajeService.maximoViajesConductor(conductor.getId());
+            throw new NegocioException(maximo > 1
+                    ? "Ya llevas " + maximo + " pedidos en curso: termina uno para aceptar otro"
+                    : "Ya tiene un viaje en curso");
         }
         if (!solicitudViajeRepository.existsById(idSolicitud)) {
             throw RecursoNoEncontradoException.de("SolicitudViaje", idSolicitud);

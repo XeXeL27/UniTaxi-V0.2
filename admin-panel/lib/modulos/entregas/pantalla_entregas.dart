@@ -11,7 +11,12 @@ import '../expediente/vista_expediente.dart';
 import 'detalle_entrega.dart';
 import 'entregas_api.dart';
 
-const _estadosEntrega = ['PENDIENTE_RECOGIDA', 'EN_CAMINO_RECOGIDA', 'EN_MANO', 'ENTREGADO', 'NO_ENTREGADO'];
+const _estadosEntrega = ['PENDIENTE_RECOGIDA', 'EN_CAMINO_RECOGIDA', 'EN_MANO', 'ENTREGADO', 'NO_ENTREGADO', 'CANCELADO'];
+
+/// Estado que se muestra del pedido: si el viaje se cancelo, "Cancelado" (el estado del paquete se
+/// queda donde estaba al cancelar y parecia un pedido todavia en camino).
+String estadoDelPedido(ViajeExpediente viaje) =>
+    viaje.situacion == 'CANCELADO' ? 'CANCELADO' : viaje.entrega?.estadoEntrega ?? '';
 
 /// Todos los pedidos DELIVERY. El ojo abre el detalle con las confirmaciones y las fotos.
 class PantallaEntregas extends StatelessWidget {
@@ -36,7 +41,7 @@ class PantallaEntregas extends StatelessWidget {
           titulo: 'Entrega',
           tipo: TipoColumna.estado,
           opciones: _estadosEntrega,
-          valor: (v) => v.entrega?.estadoEntrega ?? '',
+          valor: estadoDelPedido,
         ),
         ColumnaTabla(titulo: 'Entregado', tipo: TipoColumna.fechaHora, valor: (v) => v.entrega?.fechaEntrega),
         ColumnaTabla(titulo: 'Servicio', tipo: TipoColumna.numero, valor: (v) => v.precioFinal),

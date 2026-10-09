@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../favoritos/favoritos_api.dart';
@@ -91,7 +91,7 @@ class _BuscadorState extends State<_Buscador> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Center(
           child: Container(
             width: 44,
@@ -100,7 +100,7 @@ class _BuscadorState extends State<_Buscador> {
           ),
         ),
         Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
+          padding: const EdgeInsets.fromLTRB(16, 16, 12, 8),
           child: Row(
             children: [
               Expanded(
@@ -112,7 +112,7 @@ class _BuscadorState extends State<_Buscador> {
               IconButton(
                 tooltip: 'Cerrar',
                 onPressed: () => Navigator.of(context).pop(),
-                icon: const FaIcon(FontAwesomeIcons.xmark, size: 18, color: ColoresApp.textoSuave),
+                icon: const Icon(Iconos.xmark, size: 18, color: ColoresApp.textoSuave),
               ),
             ],
           ),
@@ -132,7 +132,7 @@ class _BuscadorState extends State<_Buscador> {
               hintText: 'Calle, barrio o lugar de Cobija',
               prefixIcon: const SizedBox(
                 width: 46,
-                child: Center(child: FaIcon(FontAwesomeIcons.magnifyingGlass, size: 16, color: ColoresApp.textoSuave)),
+                child: Center(child: Icon(Iconos.magnifyingGlass, size: 16, color: ColoresApp.textoSuave)),
               ),
               suffixIcon: texto.isEmpty
                   ? null
@@ -142,7 +142,7 @@ class _BuscadorState extends State<_Buscador> {
                         _texto.clear();
                         _alEscribir('');
                       },
-                      icon: const FaIcon(FontAwesomeIcons.circleXmark, size: 16, color: ColoresApp.textoSuave),
+                      icon: const Icon(Iconos.circleXmark, size: 16, color: ColoresApp.textoSuave),
                     ),
             ),
           ),
@@ -153,7 +153,7 @@ class _BuscadorState extends State<_Buscador> {
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
             children: [
               _Fila(
-                icono: FontAwesomeIcons.handPointer,
+                icono: Iconos.handPointer,
                 color: ColoresApp.azul,
                 titulo: 'Elegir en el mapa',
                 detalle: 'Cierra el buscador y toca el lugar en el mapa',
@@ -174,7 +174,7 @@ class _BuscadorState extends State<_Buscador> {
                 const _Titulo('Lugares'),
                 if (_buscando)
                   const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 20),
+                    padding: EdgeInsets.symmetric(vertical: 16),
                     child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
                   )
                 else if (_resultados.isEmpty)
@@ -188,7 +188,7 @@ class _BuscadorState extends State<_Buscador> {
                 else
                   for (final lugar in _resultados)
                     _Fila(
-                      icono: FontAwesomeIcons.locationDot,
+                      icono: Iconos.locationDot,
                       color: ColoresApp.textoSuave,
                       titulo: lugar.nombre,
                       detalle: lugar.detalle,
@@ -211,7 +211,7 @@ class _Titulo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(4, 18, 4, 8),
+      padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
       child: Text(
         texto,
         style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13, fontWeight: FontWeight.w700),
@@ -221,7 +221,7 @@ class _Titulo extends StatelessWidget {
 }
 
 class _Fila extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final Color color;
   final String titulo;
   final String detalle;
@@ -247,7 +247,7 @@ class _Fila extends StatelessWidget {
                   width: 40,
                   height: 40,
                   decoration: BoxDecoration(color: color.withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: Center(child: FaIcon(icono, color: color, size: 16)),
+                  child: Center(child: Icon(icono, color: color, size: 16)),
                 ),
                 const SizedBox(width: 12),
                 Expanded(

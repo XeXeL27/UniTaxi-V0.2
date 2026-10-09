@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../core/api_excepcion.dart';
 import '../core/cliente_api.dart';
 import '../core/credenciales.dart';
 import '../core/huella.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
 import '../widgets/dialogos.dart';
@@ -127,7 +127,7 @@ class _FormularioContrasenaState extends State<_FormularioContrasena> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(color: const Color(0xFFF39C12).withValues(alpha: 0.14), shape: BoxShape.circle),
-                child: const Center(child: FaIcon(FontAwesomeIcons.lock, color: Color(0xFFE67E22), size: 19)),
+                child: const Center(child: Icon(Iconos.lock, color: Color(0xFFE67E22), size: 19)),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -150,7 +150,7 @@ class _FormularioContrasenaState extends State<_FormularioContrasena> {
                 IconButton(
                   tooltip: 'Cerrar',
                   onPressed: _enviando ? null : () => Navigator.of(context).pop(false),
-                  icon: const FaIcon(FontAwesomeIcons.xmark, size: 18, color: ColoresApp.textoSuave),
+                  icon: const Icon(Iconos.xmark, size: 18, color: ColoresApp.textoSuave),
                 ),
             ],
           ),
@@ -161,7 +161,7 @@ class _FormularioContrasenaState extends State<_FormularioContrasena> {
               decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
-                  const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                  const Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                   const SizedBox(width: 10),
                   Expanded(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro))),
                 ],
@@ -187,7 +187,7 @@ class _FormularioContrasenaState extends State<_FormularioContrasena> {
           const SizedBox(height: 10),
           const Row(
             children: [
-              FaIcon(FontAwesomeIcons.circleInfo, size: 13, color: ColoresApp.textoSuave),
+              Icon(Iconos.circleInfo, size: 13, color: ColoresApp.textoSuave),
               SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -228,13 +228,13 @@ class _FormularioContrasenaState extends State<_FormularioContrasena> {
         labelText: etiqueta,
         prefixIcon: const SizedBox(
           width: 44,
-          child: Center(child: FaIcon(FontAwesomeIcons.key, size: 15, color: ColoresApp.textoSuave)),
+          child: Center(child: Icon(Iconos.key, size: 15, color: ColoresApp.textoSuave)),
         ),
         suffixIcon: IconButton(
           tooltip: _ocultos[indice] ? 'Mostrar' : 'Ocultar',
           onPressed: () => setState(() => _ocultos[indice] = !_ocultos[indice]),
-          icon: FaIcon(
-            _ocultos[indice] ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash,
+          icon: Icon(
+            _ocultos[indice] ? Iconos.eye : Iconos.eyeSlash,
             size: 16,
             color: ColoresApp.textoSuave,
           ),

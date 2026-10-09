@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../comun/verificar_carnet.dart';
 import '../../core/api_excepcion.dart';
+import '../../core/iconos.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
@@ -134,7 +134,7 @@ class _RegistroEstudianteUapState extends State<RegistroEstudianteUap> {
             labelText: 'Tu RU (registro universitario)',
             prefixIcon: Padding(
               padding: EdgeInsets.all(14),
-              child: FaIcon(FontAwesomeIcons.graduationCap, size: 16, color: ColoresApp.textoSuave),
+              child: Icon(Iconos.graduationCap, size: 16, color: ColoresApp.textoSuave),
             ),
           ),
         ),
@@ -199,7 +199,7 @@ class _Nota extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 2),
-            child: FaIcon(FontAwesomeIcons.circleInfo, size: 14, color: ColoresApp.azul),
+            child: Icon(Iconos.circleInfo, size: 14, color: ColoresApp.azul),
           ),
           const SizedBox(width: 10),
           Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 13.5, height: 1.35))),

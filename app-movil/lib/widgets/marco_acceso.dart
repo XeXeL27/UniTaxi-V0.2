@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import 'panel_marca.dart';
 
@@ -26,7 +27,7 @@ class MarcoAcceso extends StatelessWidget {
             child: IconButton(
               tooltip: 'Volver',
               onPressed: onVolver,
-              icon: const Icon(Icons.arrow_back_rounded, color: ColoresApp.blanco),
+              icon: const Icon(Iconos.arrowLeft, color: ColoresApp.blanco),
             ),
           );
     if (ancho >= 900) {

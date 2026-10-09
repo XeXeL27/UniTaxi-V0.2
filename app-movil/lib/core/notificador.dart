@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import '../comun/modelos_viaje.dart';
@@ -19,8 +21,9 @@ class Notificador {
   static bool _listo = false;
   static Future<void>? _iniciando;
 
-  /// Vibracion de los avisos: dos pulsos, los mismos de Vibracion.corta (MainActivity).
-  static final _vibracionCorta = Int64List.fromList([0, 350, 150, 350]);
+  /// Vibracion de los avisos: dos pulsos, los mismos de Vibracion.corta (MainActivity). En la web no
+  /// hay: Int64List no existe en el navegador y crearlo hacia fallar cada notificacion.
+  static final Int64List? _vibracionCorta = kIsWeb ? null : Int64List.fromList([0, 350, 150, 350]);
 
   /// En Android el sonido y la vibracion de un canal no se pueden cambiar despues de crearlo: hay un
   /// canal por combinacion de Mas > Sonido y vibracion (sufijo s = sonido, v = vibracion).
@@ -119,10 +122,14 @@ class Notificador {
     await iniciar();
     if (!_listo) return;
     final una = nuevas.length == 1 ? nuevas.first : null;
-    final titulo = una != null ? 'Nueva solicitud de viaje' : '${nuevas.length} solicitudes de viaje nuevas';
+    // Al repartidor le llegan pedidos de entrega; al taxista, solicitudes de viaje.
+    final entregas = nuevas.every((s) => s.datosEntrega != null);
+    final titulo = una != null
+        ? (entregas ? 'Nuevo pedido de entrega' : 'Nueva solicitud de viaje')
+        : (entregas ? '${nuevas.length} pedidos de entrega nuevos' : '${nuevas.length} solicitudes de viaje nuevas');
     final cuerpo = una != null
         ? 'Hacia ${una.destinoDireccion}${una.precio != null ? ' - ${formatoBs(una.precio)}' : ''}'
-        : 'Abre UNITAXI para ver las solicitudes y aceptar un viaje';
+        : (entregas ? 'Abre UNITAXI para ver los pedidos y aceptar uno' : 'Abre UNITAXI para ver las solicitudes y aceptar un viaje');
     try {
       await _plugin.show(
         id: 7001,
@@ -162,22 +169,15 @@ class Notificador {
   }
 
   /// Notificacion fija "Siguiendo tu viaje" como servicio en primer plano mientras el pasajero
-  /// busca taxi o esta en viaje: Android no congela la app minimizada y la consulta periodica sigue
-  /// (asi llegan el sonido y el aviso de viaje aceptado o conductor llego). Solo el APK de Android.
-  static const _canalSeguimiento = AndroidNotificationDetails(
-    'seguimiento_viaje',
-    'Viaje en curso',
-    channelDescription: 'Mantiene la app atenta a tu viaje mientras esta minimizada',
-    importance: Importance.low,
-    priority: Priority.low,
-    playSound: false,
-    enableVibration: false,
-    ongoing: true,
-    onlyAlertOnce: true,
-    showWhen: false,
-  );
+  /// busca taxi o esta en viaje y mientras el conductor esta conectado: Android no congela la app
+  /// minimizada y la consulta periodica sigue (asi llegan el sonido y los avisos del viaje). Solo el
+  /// APK de Android. El servicio es propio (ServicioSeguimiento.kt): nunca cierra la app si Android
+  /// rechaza el tipo ubicacion o no deja iniciarlo.
+  static const _seguimiento = MethodChannel('unitaxi/seguimiento');
 
   static String? _textoSeguimiento;
+  static bool _ubicacionSeguimiento = false;
+  static AppLifecycleListener? _alVolver;
 
   /// Iniciar y detener el servicio van en fila: al cambiar de modo (pasajero / conductor) el dispose
   /// de uno y el inicio del otro no se pisan.
@@ -186,39 +186,47 @@ class Notificador {
   static Future<void> _enCola(Future<void> Function() tarea) =>
       _cola = _cola.then((_) => tarea()).catchError((Object e) => debugPrint('Seguimiento: $e'));
 
-  /// [ubicacion]: el conductor conectado tambien envia su GPS (servicio de tipo ubicacion).
+  /// [ubicacion]: el conductor conectado tambien envia su GPS (servicio de tipo ubicacion, solo si el
+  /// permiso de ubicacion ya esta concedido).
   static Future<void> seguirViaje(String texto, {bool ubicacion = false}) {
-    if (kIsWeb || _textoSeguimiento != null) return Future.value();
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android || _textoSeguimiento != null) {
+      return Future.value();
+    }
     // Se marca antes de esperar: _avisar llama seguido y no debe iniciarse dos veces.
     _textoSeguimiento = texto;
+    _ubicacionSeguimiento = ubicacion;
+    // Al volver a la app se inicia de nuevo: Android pudo detenerlo (en Android 15+ el tiempo del
+    // servicio tiene limite) o no dejo iniciarlo con la app minimizada.
+    _alVolver ??= AppLifecycleListener(onResume: () {
+      if (_textoSeguimiento != null) unawaited(_enCola(_iniciarSeguimiento));
+    });
     return _enCola(() async {
       await iniciar();
-      if (!_listo || _textoSeguimiento != texto) return;
-      try {
-        await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.startForegroundService(
-          id: 7010,
-          title: 'UNITAXI',
-          body: texto,
-          notificationDetails: _canalSeguimiento,
-          startType: AndroidServiceStartType.startNotSticky,
-          foregroundServiceTypes: {
-            AndroidServiceForegroundType.foregroundServiceTypeDataSync,
-            if (ubicacion) AndroidServiceForegroundType.foregroundServiceTypeLocation,
-          },
-        );
-      } catch (e) {
-        _textoSeguimiento = null;
-        debugPrint('No se pudo iniciar el seguimiento: $e');
-      }
+      await _iniciarSeguimiento();
     });
+  }
+
+  static Future<void> _iniciarSeguimiento() async {
+    final texto = _textoSeguimiento;
+    if (texto == null) return;
+    var iniciado = false;
+    try {
+      iniciado = await _seguimiento.invokeMethod<bool>('iniciar', {
+            'texto': texto,
+            'ubicacion': _ubicacionSeguimiento,
+          }) ??
+          false;
+    } catch (e) {
+      debugPrint('No se pudo iniciar el seguimiento: $e');
+    }
+    // Android no lo dejo iniciar ahora: la proxima llamada (o la vuelta a la app) lo reintenta.
+    if (!iniciado && _textoSeguimiento == texto) _textoSeguimiento = null;
   }
 
   static Future<void> dejarDeSeguir() {
     if (kIsWeb || _textoSeguimiento == null) return Future.value();
     _textoSeguimiento = null;
-    return _enCola(() async {
-      await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.stopForegroundService();
-    });
+    return _enCola(() => _seguimiento.invokeMethod<void>('detener'));
   }
 
   /// Avisa un mensaje de chat con el nombre de quien lo escribio. Solo se llama cuando el chat no

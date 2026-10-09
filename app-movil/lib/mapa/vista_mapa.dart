@@ -2,10 +2,10 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../core/config.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../widgets/notificaciones.dart';
 import '../widgets/paneles.dart';
@@ -53,95 +53,103 @@ class MapaBase extends StatelessWidget {
         final gps = c.miUbicacion;
         final conductorPos = c.conductorUbicacion;
         final conductorRumbo = c.conductorRumbo;
-        return FlutterMap(
-          mapController: c.mapa,
-          options: MapOptions(
-            initialCenter: c.centroInicial,
-            initialZoom: 15,
-            minZoom: 5,
-            maxZoom: c.capa.zoomNativo.toDouble(),
-            backgroundColor: const Color(0xFFE8E6E1),
-            // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
-            interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-            onMapReady: c.alListarMapa,
-            onPositionChanged: (camara, _) => c.alMoverMapa(camara),
-            onTap: onTap == null ? null : (_, punto) => onTap!(punto),
-          ),
-          children: [
-            TileLayer(
-              key: ValueKey(c.capa),
-              urlTemplate: c.capa.url,
-              userAgentPackageName: Config.agenteMapas,
-              maxNativeZoom: c.capa.zoomNativo,
+        // El mapa queda fuera de la accesibilidad: como se puede tocar, Flutter lo publicaba como un
+        // boton "A B" del tamano de la pantalla, encima de los botones del panel (con el lector de
+        // pantalla o la accesibilidad del navegador, los toques le llegaban al mapa).
+        return ExcludeSemantics(
+          child: FlutterMap(
+            mapController: c.mapa,
+            options: MapOptions(
+              initialCenter: c.centroInicial,
+              initialZoom: 15,
+              minZoom: 5,
+              maxZoom: c.capa.zoomNativo.toDouble(),
+              backgroundColor: c.capa.enGrises ? const Color(0xFFEDEDED) : const Color(0xFFE8E6E1),
+              // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
+              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+              onMapReady: c.alListarMapa,
+              onPositionChanged: (camara, _) => c.alMoverMapa(camara),
+              onTap: onTap == null ? null : (_, punto) => onTap!(punto),
             ),
-            PolylineLayer(
-              polylines: [
-                if (acercamiento != null)
-                  Polyline(
-                    points: acercamiento.puntos,
-                    strokeWidth: 5,
-                    color: ColoresApp.rutaSecundaria,
-                    borderStrokeWidth: 1.5,
-                    borderColor: ColoresApp.rutaSecundariaBorde,
-                    pattern: StrokePattern.dashed(segments: const [10, 8]),
-                  ),
-                if (rutaConductor != null)
-                  Polyline(
-                    points: rutaConductor.puntos,
-                    strokeWidth: 5,
-                    color: ColoresApp.rutaSecundaria,
-                    borderStrokeWidth: 1.5,
-                    borderColor: ColoresApp.rutaSecundariaBorde,
-                    pattern: StrokePattern.dashed(segments: const [10, 8]),
-                  ),
-                if (ruta != null) ...[
-                  // La ruta arranca en la calle mas cercana: se une con cada pin por una linea punteada.
-                  if (!ruta.aproximada && a != null) _tramoAPie(a.posicion, ruta.puntos.first),
-                  if (!ruta.aproximada && b != null) _tramoAPie(ruta.puntos.last, b.posicion),
-                  Polyline(
-                    points: ruta.puntos,
-                    strokeWidth: 6,
-                    color: ColoresApp.ruta,
-                    borderStrokeWidth: 1.5,
-                    borderColor: ColoresApp.rutaBorde,
-                    pattern: ruta.aproximada
-                        ? StrokePattern.dashed(segments: const [14, 10])
-                        : const StrokePattern.solid(),
-                  ),
+            children: [
+              TileLayer(
+                key: ValueKey(c.capa),
+                urlTemplate: c.capa.url,
+                userAgentPackageName: Config.agenteMapas,
+                maxNativeZoom: c.capa.zoomNativo,
+                tileBuilder: c.capa.enGrises
+                    ? (context, tesela, _) => ColorFiltered(colorFilter: filtroMapaGris, child: tesela)
+                    : null,
+              ),
+              PolylineLayer(
+                polylines: [
+                  if (acercamiento != null)
+                    Polyline(
+                      points: acercamiento.puntos,
+                      strokeWidth: 5,
+                      color: ColoresApp.rutaSecundaria,
+                      borderStrokeWidth: 1.5,
+                      borderColor: ColoresApp.rutaSecundariaBorde,
+                      pattern: StrokePattern.dashed(segments: const [10, 8]),
+                    ),
+                  if (rutaConductor != null)
+                    Polyline(
+                      points: rutaConductor.puntos,
+                      strokeWidth: 5,
+                      color: ColoresApp.rutaSecundaria,
+                      borderStrokeWidth: 1.5,
+                      borderColor: ColoresApp.rutaSecundariaBorde,
+                      pattern: StrokePattern.dashed(segments: const [10, 8]),
+                    ),
+                  if (ruta != null) ...[
+                    // La ruta arranca en la calle mas cercana: se une con cada pin por una linea punteada.
+                    if (!ruta.aproximada && a != null) _tramoAPie(a.posicion, ruta.puntos.first),
+                    if (!ruta.aproximada && b != null) _tramoAPie(ruta.puntos.last, b.posicion),
+                    Polyline(
+                      points: ruta.puntos,
+                      strokeWidth: 6,
+                      color: ColoresApp.ruta,
+                      borderStrokeWidth: 1.5,
+                      borderColor: ColoresApp.rutaBorde,
+                      pattern: ruta.aproximada
+                          ? StrokePattern.dashed(segments: const [14, 10])
+                          : const StrokePattern.solid(),
+                    ),
+                  ],
                 ],
-              ],
-            ),
-            ...capasAnimadas,
-            // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
-            MarkerLayer(
-              rotate: true,
-              markers: [
-                ...marcadoresExtra,
-                if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
-                if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
-                // El GPS va encima de los pines: es lo que se mueve en vivo.
-                if (gps != null && !c.ocultarMiUbicacion)
-                  Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
-                // Marcador del conductor asignado al viaje del pasajero.
-                if (conductorPos != null)
-                  Marker(
-                    point: conductorPos,
-                    width: 32,
-                    height: 32,
-                    child: Transform.rotate(
-                      angle: (conductorRumbo ?? 0) * 3.14159 / 180,
-                      child: Image.asset(
-                        'assets/mototaxi.png',
-                        width: 32,
-                        height: 32,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.medium,
+              ),
+              ...capasAnimadas,
+              // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
+              MarkerLayer(
+                rotate: true,
+                markers: [
+                  ...marcadoresExtra,
+                  if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
+                  if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
+                  // El GPS va encima de los pines: es lo que se mueve en vivo.
+                  if (gps != null && !c.ocultarMiUbicacion)
+                    Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
+                  // Marcador del conductor asignado al viaje del pasajero.
+                  if (conductorPos != null)
+                    Marker(
+                      point: conductorPos,
+                      width: 32,
+                      height: 32,
+                      child: Transform.rotate(
+                        angle: (conductorRumbo ?? 0) * 3.14159 / 180,
+                        child: Image.asset(
+                          'assets/mototaxi.png',
+                          width: 32,
+                          height: 32,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.medium,
+                        ),
                       ),
                     ),
-                  ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         );
       },
     );
@@ -200,7 +208,7 @@ class BotonUbicacion extends StatelessWidget {
         child: const SizedBox(
           width: 50,
           height: 50,
-          child: Center(child: FaIcon(FontAwesomeIcons.locationCrosshairs, color: ColoresApp.tinta, size: 19)),
+          child: Center(child: Icon(Iconos.locationCrosshairs, color: ColoresApp.tinta, size: 19)),
         ),
       ),
     );
@@ -235,10 +243,7 @@ class BotonBrujula extends StatelessWidget {
                 width: 50,
                 height: 50,
                 child: Center(
-                  child: Transform.rotate(
-                    angle: grados * 3.141592653589793 / 180,
-                    child: const _Aguja(),
-                  ),
+                  child: Transform.rotate(angle: grados * 3.141592653589793 / 180, child: const _Aguja()),
                 ),
               ),
             ),
@@ -289,8 +294,12 @@ class _Aguja extends StatelessWidget {
       height: 30,
       child: Column(
         children: [
-          Expanded(child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.rojo, arriba: true))),
-          Expanded(child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.textoSuave, arriba: false))),
+          Expanded(
+            child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.rojo, arriba: true)),
+          ),
+          Expanded(
+            child: CustomPaint(size: Size(14, 15), painter: _Triangulo(ColoresApp.textoSuave, arriba: false)),
+          ),
         ],
       ),
     );
@@ -338,19 +347,22 @@ class BotonCapas extends StatelessWidget {
       shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
       builder: (context) => SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 14),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text('Tipo de mapa', style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700)),
-              const SizedBox(height: 14),
+              const Text(
+                'Tipo de mapa',
+                style: TextStyle(color: ColoresApp.azul, fontSize: 18, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 16),
               Row(
                 children: [
                   for (final capa in CapaMapa.values)
                     Expanded(
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 5),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: _OpcionCapa(
                           capa: capa,
                           activa: capa == controlador.capa,
@@ -381,7 +393,7 @@ class BotonCapas extends StatelessWidget {
         child: const SizedBox(
           width: 50,
           height: 50,
-          child: Center(child: FaIcon(FontAwesomeIcons.layerGroup, color: ColoresApp.tinta, size: 18)),
+          child: Center(child: Icon(Iconos.layerGroup, color: ColoresApp.tinta, size: 18)),
         ),
       ),
     );
@@ -398,22 +410,22 @@ class _OpcionCapa extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final icono = switch (capa) {
-      CapaMapa.calles => FontAwesomeIcons.road,
-      CapaMapa.satelite => FontAwesomeIcons.earthAmericas,
+      CapaMapa.calles => Iconos.road,
+      CapaMapa.satelite => Iconos.earthAmericas,
     };
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
           color: activa ? ColoresApp.azulSuave : ColoresApp.fondo,
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(color: activa ? ColoresApp.azul : ColoresApp.borde, width: activa ? 2 : 1),
         ),
         child: Column(
           children: [
-            FaIcon(icono, color: activa ? ColoresApp.azul : ColoresApp.textoSuave, size: 22),
+            Icon(icono, color: activa ? ColoresApp.azul : ColoresApp.textoSuave, size: 22),
             const SizedBox(height: 8),
             Text(
               capa.nombre,
@@ -456,7 +468,7 @@ class FilaBotonesMapa extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   BotonCapas(controlador: controlador),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 12),
                   BotonUbicacion(controlador: controlador),
                 ],
               ),
@@ -496,12 +508,7 @@ List<AnilloRadar> anillosRadar(double avance) {
   for (var i = 0; i < cantidad; i++) {
     final fase = (avance + i / cantidad) % 1;
     final aparecer = fase < entrada ? fase / entrada : 1.0;
-    anillos.add(
-      AnilloRadar(
-        radioInicial + (radioFinal - radioInicial) * fase,
-        opacidadMaxima * aparecer * (1 - fase),
-      ),
-    );
+    anillos.add(AnilloRadar(radioInicial + (radioFinal - radioInicial) * fase, opacidadMaxima * aparecer * (1 - fase)));
   }
   return anillos;
 }

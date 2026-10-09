@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/conexion.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 
 /// Franja roja arriba de cualquier pantalla mientras el telefono no tiene internet.
@@ -25,7 +25,7 @@ class AvisoSinInternet extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
-                      const FaIcon(FontAwesomeIcons.wifi, color: ColoresApp.blanco, size: 14),
+                      const Icon(Iconos.wifi, color: ColoresApp.blanco, size: 14),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(

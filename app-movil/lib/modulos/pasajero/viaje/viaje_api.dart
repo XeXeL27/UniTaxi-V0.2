@@ -29,13 +29,20 @@ class ConductorEnLinea {
   final int id;
   final LatLng posicion;
 
-  const ConductorEnLinea({required this.id, required this.posicion});
+  /// Su moto es de reparto (solo hace entregas); si no, es taxista.
+  final bool repartidor;
+
+  const ConductorEnLinea({required this.id, required this.posicion, this.repartidor = false});
 
   static ConductorEnLinea? desdeJson(Map<String, dynamic> json) {
     final latitud = numeroDesdeJson(json['latitud']);
     final longitud = numeroDesdeJson(json['longitud']);
     if (latitud == null || longitud == null) return null;
-    return ConductorEnLinea(id: (json['idConductor'] as num).toInt(), posicion: LatLng(latitud, longitud));
+    return ConductorEnLinea(
+      id: (json['idConductor'] as num).toInt(),
+      posicion: LatLng(latitud, longitud),
+      repartidor: json['repartidor'] == true,
+    );
   }
 }
 
@@ -88,12 +95,14 @@ class ViajeApi {
       PrecioViaje.desdeJson(await cliente.get('/api/pasajero/solicitudes/precio') as Map<String, dynamic>);
 
   /// Precio de ir de [a] a [b] para este pasajero (con su descuento de estudiante, si tiene).
-  /// [paraOtraPersona]: sin el descuento de estudiante de quien pide.
-  Future<CotizacionViaje> cotizar(LatLng a, LatLng b, {bool paraOtraPersona = false}) async =>
+  /// [paraOtraPersona]: sin el descuento de estudiante de quien pide. [entrega]: precio de una
+  /// encomienda con la tarifa de delivery.
+  Future<CotizacionViaje> cotizar(LatLng a, LatLng b, {bool paraOtraPersona = false, bool entrega = false}) async =>
       CotizacionViaje.desdeJson(
         await cliente.get(
           '/api/pasajero/solicitudes/cotizacion?origenLat=${a.latitude}&origenLng=${a.longitude}'
-          '&destinoLat=${b.latitude}&destinoLng=${b.longitude}&paraOtraPersona=$paraOtraPersona',
+          '&destinoLat=${b.latitude}&destinoLng=${b.longitude}&paraOtraPersona=$paraOtraPersona'
+          '${entrega ? '&entrega=true' : ''}',
         ) as Map<String, dynamic>,
       );
 
@@ -136,6 +145,10 @@ class ViajeApi {
   );
 
   /// Viaje activo del pasajero, o null si no tiene.
+  /// Servicios en curso y cuantos se pueden tener a la vez.
+  Future<ViajesActivos> viajesActivos() async =>
+      ViajesActivos.desdeJson(await cliente.get('/api/pasajero/viajes/activos') as Map<String, dynamic>);
+
   Future<Viaje?> viajeEnCurso() async {
     final datos = await cliente.get('/api/pasajero/viajes/en-curso');
     return datos == null ? null : Viaje.desdeJson(datos as Map<String, dynamic>);

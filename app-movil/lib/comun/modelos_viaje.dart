@@ -110,6 +110,14 @@ class DatosEntrega {
   /// Nombre de quien recibio una compra.
   final String? receptorIdentificado;
 
+  /// El repartidor marco que llego al punto de entrega (B): desde ahi avisa que espera (1 por minuto).
+  final DateTime? fechaLlegadaEntrega;
+  final int avisosEntrega;
+  final DateTime? ultimoAvisoEntrega;
+
+  /// Ya esta en el punto de entrega esperando a quien recibe.
+  bool get esperandoEnEntrega => fechaLlegadaEntrega != null && estadoEntrega == EstadoEntrega.enMano;
+
   const DatosEntrega({
     required this.tipoEnvio,
     required this.descripcion,
@@ -140,6 +148,9 @@ class DatosEntrega {
     this.fechaEntrega,
     this.fotoEntregaUrl,
     this.receptorIdentificado,
+    this.fechaLlegadaEntrega,
+    this.avisosEntrega = 0,
+    this.ultimoAvisoEntrega,
   });
 
   factory DatosEntrega.desdeJson(Map<String, dynamic> json) => DatosEntrega(
@@ -172,6 +183,9 @@ class DatosEntrega {
     fechaEntrega: fechaDesdeJson(json['fechaEntrega']),
     fotoEntregaUrl: json['fotoEntregaUrl'] as String?,
     receptorIdentificado: json['receptorIdentificado'] as String?,
+    fechaLlegadaEntrega: fechaDesdeJson(json['fechaLlegadaEntrega']),
+    avisosEntrega: (json['avisosEntrega'] as num?)?.toInt() ?? 0,
+    ultimoAvisoEntrega: fechaDesdeJson(json['ultimoAvisoEntrega']),
   );
 
   double get totalProducto => costoProductoReal ?? costoProductoEstimado ?? 0;
@@ -441,6 +455,9 @@ class Solicitud {
   /// Quien viaja, si el taxi se pidio para otra persona.
   final PasajeroTercero? tercero;
 
+  /// Km por calles que el servidor midio al pedir (con eso se cobra); null en solicitudes viejas.
+  final double? distanciaKm;
+
   const Solicitud({
     required this.id,
     required this.nombrePasajero,
@@ -457,6 +474,7 @@ class Solicitud {
     this.precioNormal,
     this.datosEntrega,
     this.tercero,
+    this.distanciaKm,
   });
 
   factory Solicitud.desdeJson(Map<String, dynamic> json) => Solicitud(
@@ -474,10 +492,19 @@ class Solicitud {
     metodoPago: json['metodoPago'] as String? ?? MetodoPago.efectivo,
     descuentoEstudiante: numeroDesdeJson(json['descuentoEstudiante']) ?? 0,
     precioNormal: numeroDesdeJson(json['precioNormal']),
+    distanciaKm: numeroDesdeJson(json['distanciaKm']),
     datosEntrega: json['datosEntrega'] is Map<String, dynamic>
         ? DatosEntrega.desdeJson(json['datosEntrega'] as Map<String, dynamic>)
         : null,
   );
+
+  /// Metros del recorrido para mostrar: en un taxi los km por calles del servidor (los mismos que vio
+  /// el pasajero y con los que se cobra); si no los hay o es un reparto, la linea recta de A a B.
+  double? get metrosRecorrido {
+    final km = distanciaKm;
+    if (datosEntrega == null && km != null && km > 0) return km * 1000;
+    return tieneRuta ? ServiciosMapa.metros(partida!.posicion, destino!) : null;
+  }
 
   bool get activa => situacion == 'PENDIENTE' || situacion == 'CON_OFERTAS';
 
@@ -502,11 +529,20 @@ class Solicitud {
 /// Viaje asignado (ViajeResponse).
 class Viaje {
   final int id;
+
+  /// Solicitud de la que salio: con varios servicios a la vez, asi se sabe cual acepto un conductor.
+  final int? idSolicitud;
+
+  /// Conductor asignado: la posicion que llega por WebSocket se aplica solo al viaje de ese conductor.
+  final int? idConductor;
   final String nombrePasajero;
 
   /// Celular de quien pidio el viaje: con el viaje activo (el conductor lo llama) y en una compra.
   final String? telefonoPasajero;
   final String nombreConductor;
+
+  /// Celular del conductor, solo con el viaje activo: el pasajero lo llama desde el panel del viaje.
+  final String? telefonoConductor;
   final String? placa;
   final String? marca;
   final String? modelo;
@@ -554,9 +590,12 @@ class Viaje {
 
   const Viaje({
     required this.id,
+    this.idSolicitud,
+    this.idConductor,
     required this.nombrePasajero,
     this.telefonoPasajero,
     required this.nombreConductor,
+    this.telefonoConductor,
     required this.placa,
     required this.marca,
     required this.modelo,
@@ -596,9 +635,12 @@ class Viaje {
     ultimoAvisoEspera: fechaDesdeJson(json['ultimoAvisoEspera']),
     pasajeroNoSePresento: json['pasajeroNoSePresento'] as bool? ?? false,
     id: (json['idViaje'] as num).toInt(),
+    idSolicitud: (json['idSolicitud'] as num?)?.toInt(),
+    idConductor: (json['idConductor'] as num?)?.toInt(),
     nombrePasajero: json['nombrePasajero'] as String? ?? 'Pasajero',
     telefonoPasajero: json['telefonoPasajero'] as String?,
     nombreConductor: json['nombreConductor'] as String? ?? 'Conductor',
+    telefonoConductor: json['telefonoConductor'] as String?,
     placa: json['placaVehiculo'] as String?,
     marca: json['marcaVehiculo'] as String?,
     modelo: json['modeloVehiculo'] as String?,
@@ -656,9 +698,10 @@ class Viaje {
   /// "Toyota Corolla blanco", o lo que se sepa del vehiculo.
   String get vehiculo => [marca, modelo, color].where((p) => p != null && p.trim().isNotEmpty).join(' ');
 
-  String get primerNombreConductor => nombreConductor.trim().split(RegExp(r'\s+')).first;
+  /// "Rene", no "RENE": los nombres se guardan en mayusculas y en los avisos se leen como nombre.
+  String get primerNombreConductor => enTitulo(nombreConductor.trim().split(RegExp(r'\s+')).first);
 
-  String get primerNombrePasajero => nombrePasajero.trim().split(RegExp(r'\s+')).first;
+  String get primerNombrePasajero => enTitulo(nombrePasajero.trim().split(RegExp(r'\s+')).first);
 }
 
 /// Que parte del historial se consulta: los ultimos 10 viajes completados, o un mes paginado.
@@ -696,5 +739,21 @@ class PaginaHistorial {
     totalPaginas: (json['totalPaginas'] as num?)?.toInt() ?? 1,
     totalViajes: (json['totalViajes'] as num?)?.toInt() ?? 0,
     totalMonto: (json['totalMonto'] as num?)?.toDouble() ?? 0,
+  );
+}
+
+/// Servicios en curso (ViajesActivosResponse) y cuantos se pueden tener a la vez: el pasajero 2, el
+/// repartidor 3 pedidos y el taxista 1 viaje.
+class ViajesActivos {
+  final List<Viaje> viajes;
+  final int maximo;
+
+  const ViajesActivos({this.viajes = const [], this.maximo = 1});
+
+  factory ViajesActivos.desdeJson(Map<String, dynamic> json) => ViajesActivos(
+    viajes: [
+      for (final v in (json['viajes'] as List<dynamic>? ?? const [])) Viaje.desdeJson(v as Map<String, dynamic>),
+    ],
+    maximo: (json['maximo'] as num?)?.toInt() ?? 1,
   );
 }

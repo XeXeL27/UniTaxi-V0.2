@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../comun/modelos_viaje.dart';
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/formatos.dart';
+import '../../../widgets/notificaciones.dart';
 
 /// Datos de la persona que va a viajar cuando el taxi se pide para otra persona: nombre, celular y
 /// quien paga. Bajo 600 px ocupa toda la pantalla; en la web es un modal.
@@ -70,7 +71,7 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
       error = 'El celular debe tener 8 dígitos y empezar con 6 o 7.';
     }
     if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      mostrarMensaje(context, error, error: true);
       return;
     }
     Navigator.of(context).pop(PasajeroTercero(nombre: nombre, telefono: celular, pagaSolicitante: _pagoYo));
@@ -88,7 +89,7 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
             'Datos de quien viaja',
             style: TextStyle(color: ColoresApp.azul, fontSize: 19, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           const Text(
             'El conductor verá su nombre y podrá llamarlo. Tú sigues el viaje desde tu app.',
             style: TextStyle(color: ColoresApp.textoSuave),
@@ -100,7 +101,7 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
             inputFormatters: Formatos.letras,
             decoration: const InputDecoration(labelText: 'Nombre y apellido'),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           TextField(
             controller: _celular,
             keyboardType: TextInputType.phone,
@@ -113,10 +114,10 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
             '¿Quién paga el viaje?',
             style: TextStyle(fontSize: 13, color: ColoresApp.textoSuave, fontWeight: FontWeight.w600),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           _Opcion(
             elegida: _pagoYo,
-            icono: FontAwesomeIcons.qrcode,
+            icono: Iconos.qrcode,
             titulo: 'Pago yo',
             detalle: 'Por el QR del conductor, desde tu app, cuando acepte el viaje.',
             onTap: () => setState(() => _pagoYo = true),
@@ -124,12 +125,12 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
           const SizedBox(height: 8),
           _Opcion(
             elegida: !_pagoYo,
-            icono: FontAwesomeIcons.moneyBill1,
+            icono: Iconos.moneyBill1,
             titulo: 'Paga la persona que viaja',
             detalle: 'En efectivo o por QR al conductor.',
             onTap: () => setState(() => _pagoYo = false),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 16),
           BotonPrincipal(texto: 'Guardar', onPressed: _guardar),
         ],
       ),
@@ -139,7 +140,7 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
 
 class _Opcion extends StatelessWidget {
   final bool elegida;
-  final FaIconData icono;
+  final IconData icono;
   final String titulo;
   final String detalle;
   final VoidCallback onTap;
@@ -167,7 +168,7 @@ class _Opcion extends StatelessWidget {
             ),
             child: Row(
               children: [
-                FaIcon(icono, size: 16, color: ColoresApp.azul),
+                Icon(icono, size: 16, color: ColoresApp.azul),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -178,7 +179,7 @@ class _Opcion extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (elegida) const FaIcon(FontAwesomeIcons.circleCheck, size: 16, color: ColoresApp.azul),
+                if (elegida) const Icon(Iconos.circleCheck, size: 16, color: ColoresApp.azul),
               ],
             ),
           ),

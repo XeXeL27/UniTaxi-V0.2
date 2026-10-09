@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:latlong2/latlong.dart' show LatLng;
 
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import 'favoritos_api.dart';
 import 'lugares_frecuentes.dart';
@@ -159,7 +159,7 @@ class _TarjetaFavorito extends StatelessWidget {
       accion: IconButton(
         onPressed: onEliminar,
         tooltip: 'Eliminar',
-        icon: const FaIcon(FontAwesomeIcons.trashCan, color: ColoresApp.textoSuave, size: 16),
+        icon: const Icon(Iconos.trashCan, color: ColoresApp.textoSuave, size: 16),
       ),
     );
   }
@@ -183,7 +183,7 @@ class _TarjetaFrecuente extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _Tarjeta(
-      icono: FontAwesomeIcons.clockRotateLeft,
+      icono: Iconos.clockRotateLeft,
       titulo: lugar.nombre,
       detalle: lugar.resumen,
       onTap: () => onElegir(lugar.posicion, lugar.nombre),
@@ -193,12 +193,12 @@ class _TarjetaFrecuente extends StatelessWidget {
           IconButton(
             onPressed: onPromover,
             tooltip: 'Agregar a favoritos',
-            icon: const FaIcon(FontAwesomeIcons.plus, color: ColoresApp.azul, size: 16),
+            icon: const Icon(Iconos.plus, color: ColoresApp.azul, size: 16),
           ),
           IconButton(
             onPressed: onQuitar,
             tooltip: 'Quitar de la lista',
-            icon: const FaIcon(FontAwesomeIcons.trashCan, color: ColoresApp.textoSuave, size: 16),
+            icon: const Icon(Iconos.trashCan, color: ColoresApp.textoSuave, size: 16),
           ),
         ],
       ),
@@ -209,7 +209,7 @@ class _TarjetaFrecuente extends StatelessWidget {
 /// Tarjeta blanca de un lugar, con el icono en circulo, el nombre, el detalle y una accion a la
 /// derecha. La comparten los dos grupos.
 class _Tarjeta extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String titulo;
   final String detalle;
 
@@ -245,7 +245,7 @@ class _Tarjeta extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(color: ColoresApp.rojoSuave, shape: BoxShape.circle),
-                child: Center(child: FaIcon(icono, color: ColoresApp.rojo, size: 18)),
+                child: Center(child: Icon(icono, color: ColoresApp.rojo, size: 18)),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -294,7 +294,7 @@ class _BotonAnadir extends StatelessWidget {
           padding: EdgeInsets.symmetric(vertical: 18),
           child: Column(
             children: [
-              FaIcon(FontAwesomeIcons.plus, color: ColoresApp.azul, size: 20),
+              Icon(Iconos.plus, color: ColoresApp.azul, size: 20),
               SizedBox(height: 8),
               Text(
                 'Añadir lugar',

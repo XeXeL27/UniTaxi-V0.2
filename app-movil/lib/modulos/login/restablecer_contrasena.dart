@@ -1,14 +1,17 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/credenciales.dart';
 import '../../core/huella.dart';
+import '../../core/iconos.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
+import '../../widgets/cuenta_regresiva.dart';
 import '../../widgets/dialogos.dart';
 
 /// Ancho desde el que el formulario se abre como modal en lugar de pantalla completa.
@@ -84,11 +87,19 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
   bool _codigoEnviado = false;
   bool _enviando = false;
   String? _error;
+  String? _aviso;
+
+  /// El servidor no envia otro codigo al mismo correo antes de 90 segundos: hasta entonces el boton
+  /// "Reenviar codigo" muestra la cuenta regresiva.
+  static const _esperaReenvio = Duration(seconds: 90);
+  DateTime? _reenvioDesde;
+  Timer? _reloj;
 
   static bool _pareceCorreo(String? texto) => texto != null && RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(texto.trim());
 
   @override
   void dispose() {
+    _reloj?.cancel();
     _correo.dispose();
     _codigo.dispose();
     _nueva.dispose();
@@ -101,7 +112,31 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
     if (!(_clave.currentState?.validate() ?? false)) return;
     await _ejecutar(() async {
       await context.read<Sesion>().pedirCodigoContrasena(_correo.text);
-      if (mounted) setState(() => _codigoEnviado = true);
+      if (!mounted) return;
+      setState(() => _codigoEnviado = true);
+      _iniciarCuenta();
+    });
+  }
+
+  /// Pide otro codigo al mismo correo (el anterior deja de valer).
+  Future<void> _reenviarCodigo() async {
+    FocusScope.of(context).unfocus();
+    await _ejecutar(() async {
+      await context.read<Sesion>().pedirCodigoContrasena(_correo.text);
+      if (!mounted) return;
+      _codigo.clear();
+      setState(() => _aviso = 'Te enviamos un código nuevo. Usa el último que te llegó.');
+      _iniciarCuenta();
+    });
+  }
+
+  void _iniciarCuenta() {
+    _reenvioDesde = DateTime.now().add(_esperaReenvio);
+    _reloj?.cancel();
+    _reloj = Timer.periodic(const Duration(seconds: 1), (reloj) {
+      if (!mounted) return reloj.cancel();
+      if (segundosHasta(_reenvioDesde) == 0) reloj.cancel();
+      setState(() {});
     });
   }
 
@@ -127,6 +162,7 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
     setState(() {
       _enviando = true;
       _error = null;
+      _aviso = null;
     });
     try {
       await accion();
@@ -152,8 +188,8 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
                 height: 48,
                 decoration: BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
                 child: Center(
-                  child: FaIcon(
-                    _codigoEnviado ? FontAwesomeIcons.envelopeOpenText : FontAwesomeIcons.envelope,
+                  child: Icon(
+                    _codigoEnviado ? Iconos.envelopeOpenText : Iconos.envelope,
                     color: ColoresApp.azul,
                     size: 19,
                   ),
@@ -182,7 +218,7 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
                 IconButton(
                   tooltip: 'Cerrar',
                   onPressed: _enviando ? null : () => Navigator.of(context).pop(),
-                  icon: const FaIcon(FontAwesomeIcons.xmark, size: 18, color: ColoresApp.textoSuave),
+                  icon: const Icon(Iconos.xmark, size: 18, color: ColoresApp.textoSuave),
                 ),
             ],
           ),
@@ -193,9 +229,26 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
               decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
-                  const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                  const Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                   const SizedBox(width: 10),
                   Expanded(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro))),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+          if (_aviso != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: ColoresApp.exito.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Iconos.circleCheck, color: ColoresApp.exito, size: 16),
+                  const SizedBox(width: 10),
+                  Expanded(child: Text(_aviso!, style: const TextStyle(color: ColoresApp.exito))),
                 ],
               ),
             ),
@@ -212,7 +265,7 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
               labelText: 'Correo electrónico',
               prefixIcon: SizedBox(
                 width: 44,
-                child: Center(child: FaIcon(FontAwesomeIcons.at, size: 15, color: ColoresApp.textoSuave)),
+                child: Center(child: Icon(Iconos.at, size: 15, color: ColoresApp.textoSuave)),
               ),
             ),
             validator: (v) => _pareceCorreo(v) ? null : 'Escribe un correo válido',
@@ -229,7 +282,7 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
                 labelText: 'Código de 6 dígitos',
                 prefixIcon: SizedBox(
                   width: 44,
-                  child: Center(child: FaIcon(FontAwesomeIcons.hashtag, size: 15, color: ColoresApp.textoSuave)),
+                  child: Center(child: Icon(Iconos.hashtag, size: 15, color: ColoresApp.textoSuave)),
                 ),
               ),
               validator: (v) => (v == null || v.length != 6) ? 'El código tiene 6 dígitos' : null,
@@ -255,16 +308,22 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
             onPressed: _codigoEnviado ? _restablecer : _enviarCodigo,
           ),
           if (_codigoEnviado) ...[
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            _BotonReenviar(
+              faltan: segundosHasta(_reenvioDesde),
+              total: _esperaReenvio.inSeconds,
+              onPressed: _enviando ? null : _reenviarCodigo,
+            ),
             TextButton(
               onPressed: _enviando
                   ? null
                   : () => setState(() {
                       _codigoEnviado = false;
                       _error = null;
+                      _aviso = null;
                       _codigo.clear();
                     }),
-              child: const Text('Usar otro correo o pedir otro código', style: TextStyle(color: ColoresApp.textoSuave)),
+              child: const Text('Usar otro correo', style: TextStyle(color: ColoresApp.textoSuave)),
             ),
           ] else if (widget.enModal) ...[
             const SizedBox(height: 10),
@@ -295,19 +354,69 @@ class _FormularioRestablecerState extends State<_FormularioRestablecer> {
         labelText: etiqueta,
         prefixIcon: const SizedBox(
           width: 44,
-          child: Center(child: FaIcon(FontAwesomeIcons.key, size: 15, color: ColoresApp.textoSuave)),
+          child: Center(child: Icon(Iconos.key, size: 15, color: ColoresApp.textoSuave)),
         ),
         suffixIcon: IconButton(
           tooltip: _ocultos[indice] ? 'Mostrar' : 'Ocultar',
           onPressed: () => setState(() => _ocultos[indice] = !_ocultos[indice]),
-          icon: FaIcon(
-            _ocultos[indice] ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash,
+          icon: Icon(
+            _ocultos[indice] ? Iconos.eye : Iconos.eyeSlash,
             size: 16,
             color: ColoresApp.textoSuave,
           ),
         ),
       ),
       validator: validar,
+    );
+  }
+}
+
+/// "Reenviar codigo": mientras corre la espera muestra "Reenviar código en 1:29" con una barra que se
+/// va llenando; al llegar a 0:00 se habilita.
+class _BotonReenviar extends StatelessWidget {
+  final int faltan;
+  final int total;
+  final VoidCallback? onPressed;
+
+  const _BotonReenviar({required this.faltan, required this.total, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    final esperando = faltan > 0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        OutlinedButton.icon(
+          onPressed: esperando ? null : onPressed,
+          style: OutlinedButton.styleFrom(
+            minimumSize: const Size.fromHeight(46),
+            foregroundColor: ColoresApp.azul,
+            side: BorderSide(color: esperando ? ColoresApp.borde : ColoresApp.azul),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          ),
+          icon: Icon(esperando ? Iconos.clock : Iconos.rotateRight, size: 14),
+          label: Text(
+            esperando ? 'Reenviar código en ${formatoReloj(faltan)}' : 'Reenviar código',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontFeatures: const [FontFeature.tabularFigures()],
+              color: esperando ? ColoresApp.textoSuave : ColoresApp.azul,
+            ),
+          ),
+        ),
+        if (esperando) ...[
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+              value: 1 - faltan / total,
+              minHeight: 3,
+              backgroundColor: ColoresApp.borde,
+              color: ColoresApp.azul,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

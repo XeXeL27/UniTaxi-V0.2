@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../core/iconos.dart';
 import '../core/tema.dart';
 
 /// Panel blanco inferior con esquinas redondeadas y sombra, sobre el mapa.
@@ -54,7 +54,7 @@ class PanelInferior extends StatelessWidget {
           children: [
             Flexible(
               child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(20, 18, 20, pie == null ? 18 + abajo : 10),
+                padding: EdgeInsets.fromLTRB(16, 16, 16, pie == null ? 16 + abajo : 12),
                 child: AnimatedSize(
                   duration: const Duration(milliseconds: 200),
                   alignment: Alignment.topCenter,
@@ -62,7 +62,7 @@ class PanelInferior extends StatelessWidget {
                 ),
               ),
             ),
-            if (pie != null) Padding(padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + abajo), child: pie),
+            if (pie != null) Padding(padding: EdgeInsets.fromLTRB(16, 0, 16, 16 + abajo), child: pie),
           ],
         ),
       ),
@@ -103,7 +103,7 @@ class FilaLugar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 5),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         children: [
           Container(
@@ -115,7 +115,7 @@ class FilaLugar extends StatelessWidget {
               border: Border.all(color: colorSuave, width: 4),
             ),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -124,7 +124,7 @@ class FilaLugar extends StatelessWidget {
                   etiqueta,
                   style: const TextStyle(fontSize: 12, color: ColoresApp.textoSuave, fontWeight: FontWeight.w600),
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(height: 4),
                 Text(
                   texto,
                   maxLines: 2,
@@ -160,7 +160,7 @@ class RecuadroPrecio extends StatelessWidget {
       ),
       child: Row(
         children: [
-          const FaIcon(FontAwesomeIcons.moneyBillWave, color: ColoresApp.exito, size: 20),
+          const Icon(Iconos.moneyBillWave, color: ColoresApp.exito, size: 20),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -183,7 +183,7 @@ class RecuadroPrecio extends StatelessWidget {
 
 /// Dato corto con icono (distancia, tiempo).
 class DatoRuta extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String texto;
 
   const DatoRuta({super.key, required this.icono, required this.texto});
@@ -193,8 +193,8 @@ class DatoRuta extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        FaIcon(icono, color: ColoresApp.ruta, size: 14),
-        const SizedBox(width: 6),
+        Icon(icono, color: ColoresApp.ruta, size: 14),
+        const SizedBox(width: 8),
         Text(
           texto,
           style: const TextStyle(color: ColoresApp.texto, fontSize: 14, fontWeight: FontWeight.w600),
@@ -218,13 +218,13 @@ class Estrellas extends StatelessWidget {
       children: [
         for (var i = 1; i <= 5; i++)
           Padding(
-            padding: const EdgeInsets.only(right: 2),
-            child: FaIcon(
+            padding: const EdgeInsets.only(right: 4),
+            child: Icon(
               valor >= i
-                  ? FontAwesomeIcons.solidStar
+                  ? Iconos.solidStar
                   : valor >= i - 0.5
-                  ? FontAwesomeIcons.starHalfStroke
-                  : FontAwesomeIcons.star,
+                  ? Iconos.starHalfStroke
+                  : Iconos.star,
               color: const Color(0xFFF5A623),
               size: tamano,
             ),
@@ -263,7 +263,7 @@ class AvatarIniciales extends StatelessWidget {
 class PanelPlegable extends StatelessWidget {
   final bool abierto;
   final VoidCallback onAlternar;
-  final FaIconData icono;
+  final IconData icono;
   final Color color;
 
   /// Lo que se ve con el panel cerrado (por ejemplo "Buscando conductor...").
@@ -307,7 +307,7 @@ class PanelPlegable extends StatelessWidget {
         },
         child: Row(
           children: [
-            if (!abierto) ...[FaIcon(icono, color: color, size: 16), const SizedBox(width: 10)],
+            if (!abierto) ...[Icon(icono, color: color, size: 16), const SizedBox(width: 12)],
             Expanded(
               child: Text(
                 abierto ? tituloAbierto : resumen,
@@ -325,7 +325,7 @@ class PanelPlegable extends StatelessWidget {
               icon: AnimatedRotation(
                 turns: abierto ? 0.5 : 0,
                 duration: const Duration(milliseconds: 200),
-                child: const FaIcon(FontAwesomeIcons.chevronUp, color: ColoresApp.azul, size: 15),
+                child: const Icon(Iconos.chevronUp, color: ColoresApp.azul, size: 15),
               ),
             ),
           ],
@@ -362,7 +362,7 @@ class PanelPlegable extends StatelessWidget {
 class SeccionDesplegable extends StatefulWidget {
   final String titulo;
   final String? ayuda;
-  final FaIconData icono;
+  final IconData icono;
   final Color color;
   final Widget child;
 
@@ -411,8 +411,8 @@ class _SeccionDesplegableState extends State<SeccionDesplegable> {
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: Row(
                       children: [
-                        FaIcon(widget.icono, color: widget.color, size: 15),
-                        const SizedBox(width: 10),
+                        Icon(widget.icono, color: widget.color, size: 15),
+                        const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             widget.titulo,
@@ -422,7 +422,7 @@ class _SeccionDesplegableState extends State<SeccionDesplegable> {
                         AnimatedRotation(
                           turns: _abierto ? 0.5 : 0,
                           duration: const Duration(milliseconds: 180),
-                          child: FaIcon(FontAwesomeIcons.chevronDown, color: widget.color, size: 12),
+                          child: Icon(Iconos.chevronDown, color: widget.color, size: 12),
                         ),
                       ],
                     ),
@@ -435,7 +435,7 @@ class _SeccionDesplegableState extends State<SeccionDesplegable> {
           if (_abierto) ...[
             if (widget.ayuda != null) ...[
               Text(widget.ayuda!, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
             ],
             Padding(
               padding: const EdgeInsets.only(bottom: 12),

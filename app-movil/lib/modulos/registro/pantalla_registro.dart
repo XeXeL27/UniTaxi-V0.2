@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../../core/iconos.dart';
 import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
 import '../../widgets/marco_acceso.dart';
@@ -50,7 +50,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
             children: [
               Expanded(
                 child: _OpcionTipo(
-                  icono: FontAwesomeIcons.personWalking,
+                  icono: Iconos.personWalking,
                   titulo: 'Pasajero',
                   detalle: 'Pido mototaxi',
                   color: ColoresApp.rojo,
@@ -61,7 +61,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
               const SizedBox(width: 10),
               Expanded(
                 child: _OpcionTipo(
-                  icono: FontAwesomeIcons.graduationCap,
+                  icono: Iconos.graduationCap,
                   titulo: 'Estudiante',
                   detalle: 'UAP, con descuento',
                   color: ColoresApp.ruta,
@@ -72,7 +72,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
               const SizedBox(width: 10),
               Expanded(
                 child: _OpcionTipo(
-                  icono: FontAwesomeIcons.motorcycle,
+                  icono: Iconos.motorcycle,
                   titulo: 'Conductor',
                   detalle: 'Llevo pasajeros',
                   color: ColoresApp.azul,
@@ -114,7 +114,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _Nota(
-          icono: FontAwesomeIcons.circleInfo,
+          icono: Iconos.circleInfo,
           texto: 'Solo necesitas tu cuenta de Google. Guardamos tu nombre y tu correo y entras directo a pedir tu mototaxi.',
         ),
         const SizedBox(height: 16),
@@ -125,7 +125,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
           )
         else
           const _Nota(
-            icono: FontAwesomeIcons.globe,
+            icono: Iconos.globe,
             texto: 'Por ahora el registro con Google se hace desde la versión web de UNITAXI.',
           ),
       ],
@@ -138,7 +138,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const _Nota(
-          icono: FontAwesomeIcons.idCard,
+          icono: Iconos.idCard,
           texto: 'Además de tus datos te pediremos tu licencia, los datos de tu moto y tu CI y licencia en PDF. '
               'Tu cuenta quedará en revisión hasta que la administración la apruebe.',
         ),
@@ -171,7 +171,7 @@ class _PantallaRegistroState extends State<PantallaRegistro> {
 }
 
 class _OpcionTipo extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String titulo;
   final String detalle;
   final Color color;
@@ -209,7 +209,7 @@ class _OpcionTipo extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(color: activa ? color : ColoresApp.blanco, shape: BoxShape.circle),
-                child: Center(child: FaIcon(icono, size: 20, color: activa ? ColoresApp.blanco : color)),
+                child: Center(child: Icon(icono, size: 20, color: activa ? ColoresApp.blanco : color)),
               ),
               const SizedBox(height: 10),
               // Con tres opciones en un celular angosto el titulo se achica en vez de partirse.
@@ -228,7 +228,7 @@ class _OpcionTipo extends StatelessWidget {
 }
 
 class _Nota extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String texto;
 
   const _Nota({required this.icono, required this.texto});
@@ -241,7 +241,7 @@ class _Nota extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(padding: const EdgeInsets.only(top: 2), child: FaIcon(icono, size: 14, color: ColoresApp.azul)),
+          Padding(padding: const EdgeInsets.only(top: 2), child: Icon(icono, size: 14, color: ColoresApp.azul)),
           const SizedBox(width: 10),
           Expanded(child: Text(texto, style: const TextStyle(color: ColoresApp.texto, fontSize: 13.5, height: 1.35))),
         ],

@@ -47,16 +47,19 @@ Future<void> mostrarErrorDialogo(
   return _mostrar(context, TipoDialogo.error, titulo, mensaje);
 }
 
-/// Modal naranja con signo de exclamacion: avisa algo sin pedir confirmacion.
+/// Modal naranja con signo de exclamacion: avisa algo sin pedir confirmacion. [alAbrir] recibe la
+/// ruta del modal, para poder cerrarlo desde afuera si el aviso queda viejo.
 Future<void> mostrarAviso(
   BuildContext context, {
   required String titulo,
   required String mensaje,
   String textoBoton = 'Entendido',
+  ValueChanged<Route<dynamic>>? alAbrir,
 }) {
   return _abrir<void>(
     context,
     barreraCierra: true,
+    alAbrir: alAbrir,
     tarjeta: _TarjetaAlerta(tipo: TipoDialogo.aviso, titulo: titulo, mensaje: mensaje, textoBoton: textoBoton),
   );
 }
@@ -253,14 +256,23 @@ class _BotonModal extends StatelessWidget {
 };
 
 /// Fondo oscuro que aparece en 0,3 s y tarjeta que entra con escala 0,8 -> 1 con rebote.
-Future<R?> _abrir<R>(BuildContext context, {required bool barreraCierra, required Widget tarjeta}) {
+Future<R?> _abrir<R>(
+  BuildContext context, {
+  required bool barreraCierra,
+  required Widget tarjeta,
+  ValueChanged<Route<dynamic>>? alAbrir,
+}) {
   return showGeneralDialog<R>(
     context: context,
     barrierDismissible: barreraCierra,
     barrierLabel: 'Cerrar',
     barrierColor: const Color(0x66000000),
     transitionDuration: const Duration(milliseconds: 300),
-    pageBuilder: (_, _, _) => Center(child: tarjeta),
+    pageBuilder: (contexto, _, _) {
+      final ruta = ModalRoute.of(contexto);
+      if (ruta != null) alAbrir?.call(ruta);
+      return Center(child: tarjeta);
+    },
     transitionBuilder: (context, animacion, _, hijo) {
       final escala = Tween<double>(
         begin: 0.8,

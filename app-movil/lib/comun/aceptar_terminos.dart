@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../widgets/dialogos.dart';
 import 'textos_legales.dart';
@@ -59,7 +60,7 @@ class _ModalTerminosState extends State<_ModalTerminos> {
                   color: ColoresApp.azul,
                   child: const Column(
                     children: [
-                      Icon(Icons.description_rounded, color: ColoresApp.blanco, size: 34),
+                      Icon(Iconos.filePdf, color: ColoresApp.blanco, size: 34),
                       SizedBox(height: 8),
                       Text(
                         'Términos y condiciones',

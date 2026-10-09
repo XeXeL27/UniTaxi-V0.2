@@ -30,6 +30,29 @@ class ColoresApp {
   static const Color grisTexto = Color(0xFF5E5E5E);
 }
 
+/// Escala de espacios (margenes, rellenos y separaciones) de las pantallas del rediseno: pasos de
+/// 8 px, con 4 y 12 como medios pasos. Ninguna separacion nueva debe salir de esta escala.
+class Espacio {
+  Espacio._();
+
+  static const double xs = 4;
+  static const double s = 8;
+  static const double m = 12;
+  static const double l = 16;
+  static const double xl = 24;
+  static const double xxl = 32;
+}
+
+/// Bordes redondeados: chico (etiquetas), tarjetas y botones, paneles y hojas inferiores.
+class Redondeo {
+  Redondeo._();
+
+  static const double chico = 8;
+  static const double tarjeta = 12;
+  static const double panel = 16;
+  static const double hoja = 24;
+}
+
 ThemeData temaApp() {
   final esquema = ColorScheme.fromSeed(
     seedColor: ColoresApp.azul,

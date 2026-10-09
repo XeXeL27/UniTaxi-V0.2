@@ -1,10 +1,10 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/config.dart';
+import '../../core/iconos.dart';
 import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 
@@ -126,12 +126,12 @@ class _PantallaPanelAdminState extends State<PantallaPanelAdmin> {
                 setState(() => _error = null);
                 _web.loadRequest(Uri.parse(_urlPanel));
               },
-              icon: const FaIcon(FontAwesomeIcons.rotateRight, size: 17),
+              icon: const Icon(Iconos.rotateRight, size: 17),
             ),
             TextButton.icon(
               onPressed: _salir,
               style: TextButton.styleFrom(foregroundColor: ColoresApp.blanco),
-              icon: const FaIcon(FontAwesomeIcons.rightFromBracket, size: 15),
+              icon: const Icon(Iconos.rightFromBracket, size: 15),
               label: const Text('Salir'),
             ),
             const SizedBox(width: 6),

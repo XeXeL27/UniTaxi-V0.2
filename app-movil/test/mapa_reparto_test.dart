@@ -396,6 +396,12 @@ class _ApiPasajero extends ViajeApi {
   Future<Viaje?> viajeEnCurso() async => viajeActual;
 
   @override
+  Future<ViajesActivos> viajesActivos() async => ViajesActivos(viajes: [?viajeActual], maximo: 2);
+
+  @override
+  Future<List<Solicitud>> misSolicitudes() async => const [];
+
+  @override
   Future<Viaje> viaje(int id) async => viajeActual!;
 
   @override
@@ -434,6 +440,9 @@ class _ApiConductor extends ConductorApi {
 
   @override
   Future<Viaje> aceptar(int idSolicitud) async => asignado!;
+
+  @override
+  Future<ViajesActivos> viajesActivos() async => ViajesActivos(viajes: [?asignado], maximo: 3);
 
   @override
   Future<Viaje> registrarCompra(

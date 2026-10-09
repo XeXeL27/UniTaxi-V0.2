@@ -42,7 +42,25 @@ class FlujoConductor extends ChangeNotifier {
   String? errorLista;
   bool listaCargada = false;
   Solicitud? seleccionada;
+
+  /// Viaje que se ve y se maneja en la pantalla de Inicio (uno de [enCurso]).
   Viaje? viaje;
+
+  /// Todos los viajes en curso: el taxista lleva uno; el repartidor hasta [maximoViajes] pedidos y
+  /// los coordina desde Actividad > En curso.
+  List<Viaje> enCurso = const [];
+
+  /// Cuantos puede llevar a la vez (lo dice el servidor: 3 el repartidor, 1 el taxista).
+  int maximoViajes = 1;
+
+  /// Su moto es de reparto (lleva varios pedidos): los textos hablan de pedidos y entregas, no de viajes.
+  bool get esRepartidor => maximoViajes > 1 || viaje?.datosEntrega != null || solicitudes.any((s) => s.datosEntrega != null);
+
+  /// Puede aceptar otro pedido: conectado, habilitado y con lugar.
+  bool get puedeTomarMas => enLinea && !enRevision && enCurso.length < maximoViajes;
+
+  /// Los otros servicios en curso (no el que esta en pantalla).
+  List<Viaje> get otrosEnCurso => [for (final v in enCurso) if (v.id != viaje?.id) v];
 
   /// Mensaje para mostrar una vez.
   String? aviso;
@@ -70,8 +88,19 @@ class FlujoConductor extends ChangeNotifier {
   /// bloqueada salvo Mas, donde los sube.
   List<String> documentosFaltantes = const [];
 
-  /// Panel "Solicitudes de viaje" desplegado. Empieza cerrado para no tapar el mapa.
-  bool listaAbierta = false;
+  /// La lista de solicitudes esta a la vista (desde el rediseno siempre lo esta en Inicio: el panel
+  /// "Solicitudes cerca" ya no se pliega). Lo que se ve en ella deja de contar como nuevo.
+  bool listaAbierta = true;
+
+  /// Viajes o entregas completados hoy (null mientras no se consulto). Solo la cantidad.
+  int? viajesHoy;
+
+  /// Solicitudes que el conductor rechazo (o dejo pasar en la tarjeta de 15 s): no se le vuelven a
+  /// mostrar. Los demas conductores las siguen viendo.
+  final Set<int> _ocultas = {};
+
+  /// La solicitud del detalle se abrio sola al llegar (tarjeta con cuenta regresiva de 15 s).
+  bool conCuentaRegresiva = false;
 
   /// La pantalla de Inicio esta a la vista (no Historial, Opiniones ni Mas).
   bool inicioVisible = true;
@@ -85,6 +114,10 @@ class FlujoConductor extends ChangeNotifier {
   Set<int>? _conocidas;
 
   Timer? _sondeo;
+
+  /// Con servicios en curso: refresca la lista de todos y, si hay lugar, las solicitudes nuevas.
+  Timer? _sondeoActivos;
+  bool _consultandoActivos = false;
   bool _consultando = false;
   bool _finalizandoSolo = false;
   bool _cerrado = false;
@@ -99,13 +132,16 @@ class FlujoConductor extends ChangeNotifier {
   Future<void> iniciar() async {
     unawaited(mapa.iniciarGps());
     unawaited(_cargarPrecio());
+    unawaited(cargarViajesHoy());
     // El viaje en curso se recupera primero; sin conexion se reintenta cada 3 segundos para no
     // perderlo (no se muestra la lista hasta saber si hay uno).
     while (!_cerrado) {
       try {
-        final enCurso = await api.viajeEnCurso();
+        final activos = await api.viajesActivos();
         recuperandoSinRed = false;
-        if (enCurso != null) return _entrarViaje(enCurso);
+        maximoViajes = activos.maximo;
+        enCurso = activos.viajes;
+        if (enCurso.isNotEmpty) return _entrarViaje(enCurso.first);
         break;
       } on ApiExcepcion catch (e) {
         final codigo = e.codigo;
@@ -119,6 +155,15 @@ class FlujoConductor extends ChangeNotifier {
     }
     recuperandoSinRed = false;
     if (!_cerrado) _entrarLista();
+  }
+
+  Future<void> cargarViajesHoy() async {
+    try {
+      viajesHoy = await api.viajesHoy();
+      _avisar();
+    } catch (_) {
+      // Sin respuesta no se muestra el contador.
+    }
   }
 
   Future<void> _cargarPrecio() async {
@@ -135,11 +180,13 @@ class FlujoConductor extends ChangeNotifier {
   void _entrarLista() {
     etapa = EtapaConductor.lista;
     seleccionada = null;
+    conCuentaRegresiva = false;
     viaje = null;
     mapa.limpiar();
     final gps = mapa.miUbicacion;
     if (gps != null) mapa.centrarEn(gps, zoom: 15);
-    if (enLinea && !enRevision) {
+    _revisarSondeoActivos();
+    if (enLinea && !enRevision && enCurso.length < maximoViajes) {
       unawaited(Notificador.iniciar());
       _iniciarSondeo(_consultarLista, _intervaloLista, inmediato: true);
     } else {
@@ -163,7 +210,7 @@ class FlujoConductor extends ChangeNotifier {
   /// Se conecta o desconecta para recibir solicitudes. Con un viaje en curso no cambia nada: el
   /// viaje sigue hasta terminar.
   void cambiarEnLinea(bool valor) {
-    if (enLinea == valor || etapa == EtapaConductor.enViaje) return;
+    if (enLinea == valor || etapa == EtapaConductor.enViaje || enCurso.isNotEmpty) return;
     enLinea = valor;
     if (etapa == EtapaConductor.lista || etapa == EtapaConductor.detalle) _entrarLista();
     _avisar();
@@ -173,7 +220,8 @@ class FlujoConductor extends ChangeNotifier {
     try {
       final lista = await api.solicitudes();
       if (_cerrado) return;
-      solicitudes = lista;
+      _ocultas.retainAll({for (final s in lista) s.id});
+      solicitudes = [for (final s in lista) if (!_ocultas.contains(s.id)) s];
       errorLista = null;
     } on ApiExcepcion catch (e) {
       if (_cerrado) return;
@@ -198,9 +246,23 @@ class FlujoConductor extends ChangeNotifier {
     final conocidas = _conocidas;
     final ids = {for (final s in solicitudes) s.id};
     _conocidas = ids;
-    if (conocidas == null || etapa == EtapaConductor.enViaje) return;
+    if (conocidas == null || (etapa == EtapaConductor.enViaje && !puedeTomarMas)) return;
     final nuevas = solicitudes.where((s) => !conocidas.contains(s.id)).toList();
     if (nuevas.isNotEmpty) unawaited(Notificador.solicitudesNuevas(nuevas));
+    // Libre y mirando Inicio: la solicitud nueva se abre sola en la tarjeta de 15 segundos.
+    if (nuevas.isNotEmpty && etapa == EtapaConductor.lista && enLinea && !enRevision && inicioVisible) {
+      verSolicitud(nuevas.first, aviso: true);
+    }
+  }
+
+  /// Rechazar la solicitud del detalle (o dejar pasar los 15 s): se oculta solo para este conductor y
+  /// vuelve a la lista.
+  void rechazarSolicitud() {
+    final elegida = seleccionada;
+    if (elegida == null || ocupado) return;
+    _ocultas.add(elegida.id);
+    solicitudes = [for (final s in solicitudes) if (s.id != elegida.id) s];
+    _entrarLista();
   }
 
   Future<void> refrescarLista() => _consultarLista();
@@ -239,11 +301,12 @@ class FlujoConductor extends ChangeNotifier {
   /// Muestra en el mapa la ruta de la solicitud y el camino desde el conductor hasta el pasajero.
   /// En una compra todavia sin comercio no hay partida (el diseno solo define B para compra), y el
   /// detalle se abre igual: solo B, con el tramo naranja hasta el pasajero (H10).
-  void verSolicitud(Solicitud solicitud) {
+  void verSolicitud(Solicitud solicitud, {bool aviso = false}) {
     final destino = solicitud.destino == null ? null : solicitud.puntoB;
     // Sin destino no hay nada que dibujar; sin partida solo se abre si es un reparto.
     if (destino == null || (solicitud.partida == null && solicitud.datosEntrega == null)) return;
     seleccionada = solicitud;
+    conCuentaRegresiva = aviso;
     etapa = EtapaConductor.detalle;
     mapa.actualizarPuntos(
       partida: solicitud.partida,
@@ -264,6 +327,9 @@ class FlujoConductor extends ChangeNotifier {
     try {
       final asignado = await api.aceptar(solicitud.id);
       _entrarViaje(asignado);
+      if (enCurso.length > 1) {
+        novedad = 'Pedido aceptado. Llevas ${enCurso.length} pedidos: los ves en Actividad > En curso.';
+      }
     } on ApiExcepcion catch (e) {
       if (e.codigo == 409) {
         aviso = 'Otro conductor ya tomó esta solicitud o el pasajero la canceló.';
@@ -284,6 +350,7 @@ class FlujoConductor extends ChangeNotifier {
     // Al retomar el viaje (app recien abierta) tambien se pregunta por un pedido de cambio de pago.
     if (esOtro && nuevo.metodoPagoPedido != null) pedidoPago = nuevo;
     viaje = nuevo;
+    _guardarEnCurso(nuevo);
     _conocidas = null;
     etapa = EtapaConductor.enViaje;
     seleccionada = null;
@@ -310,6 +377,80 @@ class FlujoConductor extends ChangeNotifier {
       );
     }
     _iniciarSondeo(_consultarViaje, _intervaloViaje);
+    _revisarSondeoActivos();
+    _avisar();
+  }
+
+  /// Pone (o actualiza) el viaje en la lista de los que estan en curso.
+  void _guardarEnCurso(Viaje nuevo) {
+    final i = enCurso.indexWhere((v) => v.id == nuevo.id);
+    enCurso = i < 0 ? [...enCurso, nuevo] : [...enCurso.sublist(0, i), nuevo, ...enCurso.sublist(i + 1)];
+  }
+
+  /// Muestra en Inicio otro de los servicios en curso (desde Actividad > En curso o el boton del mapa).
+  void enfocar(Viaje elegido) {
+    if (elegido.id == viaje?.id && etapa == EtapaConductor.enViaje) return;
+    _entrarViaje(enCurso.firstWhere((v) => v.id == elegido.id, orElse: () => elegido));
+  }
+
+  /// Con lugar para otro pedido: deja el viaje en curso de fondo y muestra las solicitudes.
+  void verSolicitudes() {
+    if (!puedeTomarMas) return;
+    listaAbierta = true;
+    _entrarLista();
+  }
+
+  /// Un viaje se cerro (terminado o cancelado): se quita de la lista y se pasa al siguiente en curso,
+  /// o a las solicitudes si no queda ninguno.
+  void _trasCerrar(int idViaje) {
+    enCurso = [for (final v in enCurso) if (v.id != idViaje) v];
+    if (enCurso.isNotEmpty) {
+      _entrarViaje(enCurso.first);
+    } else {
+      _entrarLista();
+    }
+  }
+
+  /// Arranca o detiene la consulta de todos los servicios en curso (y de las solicitudes mientras se
+  /// lleva un pedido con lugar para otro).
+  void _revisarSondeoActivos() {
+    if (enCurso.isEmpty) {
+      _sondeoActivos?.cancel();
+      _sondeoActivos = null;
+      return;
+    }
+    _sondeoActivos ??= Timer.periodic(_intervaloViaje, (_) async {
+      if (_consultandoActivos || _cerrado) return;
+      _consultandoActivos = true;
+      try {
+        await _consultarActivos();
+        if (etapa == EtapaConductor.enViaje && puedeTomarMas) await _consultarLista();
+      } catch (_) {
+        // Un fallo de red puntual: se reintenta en la proxima vuelta.
+      } finally {
+        _consultandoActivos = false;
+      }
+    });
+  }
+
+  /// Refresca todos los servicios en curso. Si uno de los que no estan en pantalla se cerro (el
+  /// cliente lo cancelo), se avisa; el de la pantalla lo sigue su propia consulta.
+  Future<void> _consultarActivos() async {
+    final activos = await api.viajesActivos();
+    if (_cerrado) return;
+    maximoViajes = activos.maximo;
+    final ids = {for (final v in activos.viajes) v.id};
+    final cerrados = [for (final v in enCurso) if (!ids.contains(v.id) && v.id != viaje?.id) v];
+    for (final cerrado in cerrados) {
+      aviso = 'El pedido de ${cerrado.primerNombrePasajero} ya no está en curso (se canceló o terminó).';
+    }
+    final enPantalla = viaje;
+    enCurso = [
+      for (final v in activos.viajes) v,
+      // El de la pantalla se queda hasta que su consulta vea que termino.
+      if (enPantalla != null && etapa == EtapaConductor.enViaje && !ids.contains(enPantalla.id)) enPantalla,
+    ];
+    _revisarSondeoActivos();
     _avisar();
   }
 
@@ -330,9 +471,9 @@ class FlujoConductor extends ChangeNotifier {
     final nuevo = await api.viaje(actual.id);
     if (_cerrado || etapa != EtapaConductor.enViaje) return;
     if (nuevo.situacion == SituacionViaje.cancelado) {
-      chat?.cerrar();
+      chat?.cerrar(nuevo.id);
       aviso = nuevo.canceladoPor == 'PASAJERO' ? 'El pasajero canceló el viaje.' : 'El viaje fue cancelado.';
-      _entrarLista();
+      _trasCerrar(nuevo.id);
       return;
     }
     if (nuevo.metodoPagoPedido != null && nuevo.metodoPagoPedido != actual.metodoPagoPedido) pedidoPago = nuevo;
@@ -382,7 +523,10 @@ class FlujoConductor extends ChangeNotifier {
     _avisar();
     try {
       final nuevo = await accion(actual.id);
-      if (etapa == EtapaConductor.enViaje) viaje = nuevo;
+      if (etapa == EtapaConductor.enViaje && viaje?.id == nuevo.id) {
+        viaje = nuevo;
+        _guardarEnCurso(nuevo);
+      }
     } finally {
       ocupado = false;
       _avisar();
@@ -414,7 +558,7 @@ class FlujoConductor extends ChangeNotifier {
     final actual = viaje;
     if (actual == null) return;
     await api.cancelar(actual.id);
-    _entrarLista();
+    _trasCerrar(actual.id);
   }
 
   bool get esDelivery => viaje?.datosEntrega != null;
@@ -448,6 +592,16 @@ class FlujoConductor extends ChangeNotifier {
     return metros != null && metros <= metrosEntrega;
   }
 
+  /// Llego al punto de entrega (B): al cliente le suena el aviso del taxi que llego.
+  Future<void> llegueEntrega() async {
+    final gps = mapa.miUbicacion;
+    if (gps == null) throw ApiExcepcion('Activa el GPS: la llegada se confirma con tu ubicación');
+    await _accionDelivery((id) => api.llegueEntrega(id, gps));
+  }
+
+  /// Otro aviso "te estoy esperando" en el punto de entrega.
+  Future<void> avisarEsperaEntrega() => _accionDelivery((id) => api.avisarEsperaEntrega(id));
+
   Future<void> noSePudoEntregar(String motivo, Uint8List foto) =>
       _accionDelivery((id) => api.noSePudoEntregar(id, motivo, foto));
 
@@ -472,17 +626,18 @@ class FlujoConductor extends ChangeNotifier {
       // Viaje finalizado (con el boton o solo, a 50 m del destino): su audio y vibracion.
       if (PreferenciasAviso.sonido.value) unawaited(Sonido.aviso(SonidoAviso.viajeFinalizado));
       unawaited(Vibracion.corta());
-      chat?.cerrar();
+      chat?.cerrar(nuevo.id);
       finalizado = nuevo;
-      _entrarLista();
+      unawaited(cargarViajesHoy());
+      _trasCerrar(nuevo.id);
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
-      chat?.cerrar();
+      chat?.cerrar(nuevo.id);
       aviso = nuevo.pasajeroNoSePresento
           ? 'Viaje cancelado. El administrador revisará tu reporte del pasajero.'
           : nuevo.datosEntrega?.estadoEntrega == EstadoEntrega.noEntregado
               ? 'La entrega fue reportada como no entregada.'
               : 'El pedido fue reportado y cancelado.';
-      _entrarLista();
+      _trasCerrar(nuevo.id);
     } else {
       _entrarViaje(nuevo);
     }
@@ -533,6 +688,15 @@ class FlujoConductor extends ChangeNotifier {
     _sondeo = null;
   }
 
+  /// Buena noticia para mostrar una vez (por ejemplo "Pedido aceptado. Llevas 2 pedidos").
+  String? novedad;
+
+  String? tomarNovedad() {
+    final texto = novedad;
+    novedad = null;
+    return texto;
+  }
+
   String? tomarAviso() {
     final texto = aviso;
     aviso = null;
@@ -560,7 +724,8 @@ class FlujoConductor extends ChangeNotifier {
   /// Conectado (o en viaje): la notificacion fija mantiene viva la app minimizada, asi sigue
   /// enviando su GPS y avisando las solicitudes nuevas (Android la congela si no).
   void _revisarSeguimiento() {
-    final activo = !enRevision && etapa != EtapaConductor.cargando && (enLinea || etapa == EtapaConductor.enViaje);
+    final activo =
+        !enRevision && etapa != EtapaConductor.cargando && (enLinea || etapa == EtapaConductor.enViaje || enCurso.isNotEmpty);
     if (activo) {
       unawaited(Notificador.seguirViaje(
         'Conectado: recibes solicitudes de viaje y compartes tu ubicación.',
@@ -576,6 +741,7 @@ class FlujoConductor extends ChangeNotifier {
     _cerrado = true;
     unawaited(Notificador.dejarDeSeguir());
     _detenerSondeo();
+    _sondeoActivos?.cancel();
     mapa.alMoverseGps = null;
     super.dispose();
   }

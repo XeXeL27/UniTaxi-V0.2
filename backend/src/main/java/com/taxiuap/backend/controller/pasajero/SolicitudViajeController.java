@@ -53,14 +53,15 @@ public class SolicitudViajeController {
         return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.precioVigente()));
     }
 
-    /** Precio del viaje de origen a destino, con el descuento de estudiante, antes de pedirlo. */
+    /** Precio del viaje de origen a destino, con el descuento de estudiante, antes de pedirlo (entrega: el de la encomienda). */
     @GetMapping("/cotizacion")
     public ResponseEntity<ApiResponse<CotizacionViajeResponse>> cotizacion(
             @RequestParam double origenLat, @RequestParam double origenLng,
             @RequestParam double destinoLat, @RequestParam double destinoLng,
-            @RequestParam(defaultValue = "false") boolean paraOtraPersona) {
+            @RequestParam(defaultValue = "false") boolean paraOtraPersona,
+            @RequestParam(defaultValue = "false") boolean entrega) {
         return ResponseEntity.ok(ApiResponse.exito(
-                solicitudViajeService.cotizar(origenLat, origenLng, destinoLat, destinoLng, paraOtraPersona)));
+                solicitudViajeService.cotizar(origenLat, origenLng, destinoLat, destinoLng, paraOtraPersona, entrega)));
     }
 
     @GetMapping("/{id}")

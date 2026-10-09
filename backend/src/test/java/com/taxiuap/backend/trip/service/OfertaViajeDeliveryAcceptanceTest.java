@@ -113,7 +113,7 @@ class OfertaViajeDeliveryAcceptanceTest {
     @Test
     void aceptaSolicitudDeliveryConMotoCompatibleConLimiteSuficiente() {
         when(documentoService.puedeOperar(20L)).thenReturn(true);
-        when(viajeService.conductorTieneViajeActivo(20L)).thenReturn(false);
+        when(viajeService.conductorPuedeTomarOtro(20L)).thenReturn(true);
         when(solicitudRepository.existsById(30L)).thenReturn(true);
         when(solicitudRepository.findById(30L)).thenReturn(Optional.of(compra));
         when(solicitudRepository.aceptarSiDisponible(30L)).thenAnswer(invocacion -> {
@@ -138,7 +138,7 @@ class OfertaViajeDeliveryAcceptanceTest {
     @Test
     void rechazaSolicitudDeliveryCuandoSoloTieneVehiculosEstandar() {
         when(documentoService.puedeOperar(20L)).thenReturn(true);
-        when(viajeService.conductorTieneViajeActivo(20L)).thenReturn(false);
+        when(viajeService.conductorPuedeTomarOtro(20L)).thenReturn(true);
         when(solicitudRepository.existsById(30L)).thenReturn(true);
         when(solicitudRepository.findById(30L)).thenReturn(Optional.of(compra));
         TipoVehiculo tipoMoto = new TipoVehiculo();
@@ -183,7 +183,7 @@ class OfertaViajeDeliveryAcceptanceTest {
     void rechazaCompraQueSuperaElLimiteDeAdelantoActual() {
         conductor.setLimiteAdelantoCompra(new BigDecimal("24.99"));
         when(documentoService.puedeOperar(20L)).thenReturn(true);
-        when(viajeService.conductorTieneViajeActivo(20L)).thenReturn(false);
+        when(viajeService.conductorPuedeTomarOtro(20L)).thenReturn(true);
         when(solicitudRepository.existsById(30L)).thenReturn(true);
         when(solicitudRepository.findById(30L)).thenReturn(Optional.of(compra));
         when(vehiculoRepository.findByConductorId(20L)).thenReturn(List.of(motoDelivery));
@@ -238,7 +238,7 @@ class OfertaViajeDeliveryAcceptanceTest {
                 new JwtUser(30L, "pasajero", "PASAJERO"), null));
         when(ofertaRepository.findById(31L)).thenReturn(Optional.of(oferta));
         when(pasajeroRepository.findByUsuarioId(30L)).thenReturn(Optional.of(pasajero));
-        lenient().when(viajeService.conductorTieneViajeActivo(20L)).thenReturn(false);
+        lenient().when(viajeService.conductorPuedeTomarOtro(20L)).thenReturn(true);
         when(documentoService.puedeOperar(20L)).thenReturn(false);
         lenient().when(viajeService.crearDesdeOferta(any(), any())).thenAnswer(invocacion -> {
             com.taxiuap.backend.trip.entity.Viaje viaje = new com.taxiuap.backend.trip.entity.Viaje();

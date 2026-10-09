@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../core/chat.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 
 /// Botón de chat para el panel del viaje, con badge de mensajes no leidos.
@@ -19,26 +19,75 @@ class BotonChat extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final noLeidos = context.select<ChatEstado, int>((chat) => chat.idViaje == idViaje ? chat.noLeidos : 0);
-    return IconButton(
-      onPressed: () => showDialog<void>(
-        context: context,
-        builder: (_) => Dialog(
-          insetPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 420, maxHeight: 520),
-            child: VistaChat(idViaje: idViaje, nombreContraparte: nombreContraparte),
-          ),
+    return VinculoChat(
+      idViaje: idViaje,
+      nombreContraparte: nombreContraparte,
+      child: IconButton(
+        onPressed: () => abrirChat(context, idViaje: idViaje, nombreContraparte: nombreContraparte),
+        tooltip: 'Chat',
+        icon: Badge(
+          isLabelVisible: noLeidos > 0,
+          backgroundColor: ColoresApp.rojo,
+          label: Text('$noLeidos', style: const TextStyle(color: ColoresApp.blanco, fontSize: 10)),
+          child: const Icon(Iconos.commentDots, color: ColoresApp.azul),
         ),
-      ),
-      tooltip: 'Chat',
-      icon: Badge(
-        isLabelVisible: noLeidos > 0,
-        backgroundColor: ColoresApp.rojo,
-        label: Text('$noLeidos', style: const TextStyle(color: ColoresApp.blanco, fontSize: 10)),
-        child: const FaIcon(FontAwesomeIcons.commentDots, color: ColoresApp.azul),
       ),
     );
   }
+}
+
+/// Mantiene conectado el chat del viaje que esta a la vista (aunque la pantalla del chat no se haya
+/// abierto nunca), asi el boton Mensaje cuenta los mensajes que llegan. Si el panel pasa a otro
+/// viaje (otro pedido del repartidor), se vincula al nuevo.
+class VinculoChat extends StatefulWidget {
+  final int idViaje;
+  final String nombreContraparte;
+  final Widget child;
+
+  const VinculoChat({super.key, required this.idViaje, required this.nombreContraparte, required this.child});
+
+  @override
+  State<VinculoChat> createState() => _VinculoChatState();
+}
+
+class _VinculoChatState extends State<VinculoChat> {
+  @override
+  void initState() {
+    super.initState();
+    _vincular();
+  }
+
+  @override
+  void didUpdateWidget(VinculoChat anterior) {
+    super.didUpdateWidget(anterior);
+    if (anterior.idViaje != widget.idViaje) _vincular();
+  }
+
+  // Despues del cuadro: vincular avisa a los que escuchan el chat y no se puede durante el build.
+  void _vincular() => WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (mounted) context.read<ChatEstado>().vincular(widget.idViaje, widget.nombreContraparte);
+  });
+
+  @override
+  Widget build(BuildContext context) => widget.child;
+}
+
+/// Abre el chat del viaje como modal flotante sobre el mapa (boton de chat o "Mensaje" del panel).
+/// Al cerrarlo el socket sigue vivo para contar los mensajes que lleguen. El estado del chat se toma
+/// aqui, con el contexto del panel: en el dispose de la pantalla el contexto ya no sirve (en release
+/// leerlo fallaba con "Null check" y el chat quedaba como abierto, sin contar no leidos).
+Future<void> abrirChat(BuildContext context, {required int idViaje, required String nombreContraparte}) {
+  final chat = context.read<ChatEstado>();
+  return showDialog<void>(
+    context: context,
+    builder: (_) => Dialog(
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 420, maxHeight: 520),
+        child: VistaChat(idViaje: idViaje, nombreContraparte: nombreContraparte),
+      ),
+    ),
+  ).whenComplete(chat.cerrarPantalla);
 }
 
 /// Chat entre el pasajero y el conductor de un viaje, mostrado como modal flotante.
@@ -73,7 +122,6 @@ class _VistaChatState extends State<VistaChat> {
 
   @override
   void dispose() {
-    context.read<ChatEstado>().cerrarPantalla();
     _controladorTexto.dispose();
     _scroll.dispose();
     super.dispose();
@@ -173,11 +221,11 @@ class _Cabecera extends StatelessWidget {
   Widget build(BuildContext context) {
     // CAMBIO CODEX 2026-10-07: estado visual real del socket para que ambas sesiones sepan si el chat esta activo.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 6, 10),
+      padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
       child: Row(
         children: [
-          const FaIcon(FontAwesomeIcons.commentDots, size: 16, color: ColoresApp.azul),
-          const SizedBox(width: 10),
+          const Icon(Iconos.commentDots, size: 16, color: ColoresApp.azul),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,11 +237,11 @@ class _Cabecera extends StatelessWidget {
                       const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5))
                     else
                       Icon(
-                        Icons.circle,
+                        Iconos.circulo,
                         size: 9,
                         color: estado == EstadoConexionChat.conectado ? ColoresApp.exito : ColoresApp.rojo,
                       ),
-                    const SizedBox(width: 5),
+                    const SizedBox(width: 4),
                     Text(
                       estado == EstadoConexionChat.conectado
                           ? 'Chat activo'
@@ -210,7 +258,7 @@ class _Cabecera extends StatelessWidget {
           IconButton(
             onPressed: () => Navigator.of(context).pop(),
             tooltip: 'Cerrar',
-            icon: const Icon(Icons.close, size: 20),
+            icon: const Icon(Iconos.xmark, size: 20),
             color: ColoresApp.textoSuave,
           ),
         ],
@@ -230,7 +278,7 @@ class _Burbuja extends StatelessWidget {
     return Align(
       alignment: propio ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 3),
+        margin: const EdgeInsets.symmetric(vertical: 4),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
         decoration: BoxDecoration(
@@ -262,7 +310,7 @@ class _BarraEnvio extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
       decoration: const BoxDecoration(
         color: ColoresApp.blanco,
         border: Border(top: BorderSide(color: ColoresApp.borde)),
@@ -278,12 +326,16 @@ class _BarraEnvio extends StatelessWidget {
                 hintText: 'Mensaje...',
                 border: OutlineInputBorder(),
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               ),
             ),
           ),
-          const SizedBox(width: 6),
-          IconButton(onPressed: enviando ? null : alEnviar, icon: const Icon(Icons.send), color: ColoresApp.ruta),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: enviando ? null : alEnviar,
+            icon: const Icon(Iconos.paperPlane),
+            color: ColoresApp.ruta,
+          ),
         ],
       ),
     );

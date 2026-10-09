@@ -57,8 +57,11 @@ ServicioActivo servicioDe(TipoEnvio? tipoEnvio) => tipoEnvio == null ? ServicioA
 
 /// Textos que cambian según el servicio. En un pedido de reparto se habla de repartidores y no de
 /// taxistas: son otros vehículos y otro trabajo.
-String textoSolicitar(ServicioActivo servicio) =>
-    servicio == ServicioActivo.entrega ? 'Solicitar entrega' : 'Solicitar taxi';
+String textoSolicitar(ServicioActivo servicio, [TipoEnvio? tipo]) => switch (servicio) {
+  ServicioActivo.viaje => 'Solicitar moto taxi',
+  ServicioActivo.entrega when tipo == TipoEnvio.compraYEntrega => 'Solicitar compra',
+  ServicioActivo.entrega => 'Solicitar envío',
+};
 
 String textoConfirmacion(ServicioActivo servicio) =>
     servicio == ServicioActivo.entrega ? '¿Confirmas tu entrega?' : '¿Confirmas tu viaje?';
@@ -76,6 +79,16 @@ String textoSinLibresTitulo(ServicioActivo servicio) =>
 String textoSinLibresAviso(ServicioActivo servicio) => servicio == ServicioActivo.entrega
     ? 'Tu pedido ya fue enviado. En este momento no hay repartidores libres, así que puede demorar un poco.'
     : 'Tu solicitud ya fue enviada. En este momento no hay taxistas libres, así que puede demorar un poco.';
+
+/// Lo mismo antes de pedir: todavia no se envio nada, se puede pedir igual.
+String textoSinLibresAntes(ServicioActivo servicio) => servicio == ServicioActivo.entrega
+    ? 'En este momento no hay repartidores libres. Puedes pedir igual: tu pedido les llegará apenas se conecten.'
+    : 'En este momento no hay taxistas libres. Puedes pedir igual: tu solicitud les llegará apenas se conecten.';
+
+/// Confirmacion de cancelar mientras se busca: quienes dejan de ver el pedido.
+String textoCancelarBusqueda(ServicioActivo servicio) => servicio == ServicioActivo.entrega
+    ? 'Los repartidores dejarán de ver tu pedido de entrega.'
+    : 'Los conductores dejarán de ver tu pedido de taxi.';
 
 /// "3 repartidores libres cerca de ti", con el singular y el plural correctos.
 String textoLibres(int n, ServicioActivo servicio) {

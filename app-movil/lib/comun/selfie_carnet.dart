@@ -1,11 +1,11 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_excepcion.dart';
 import '../core/carnet/lector_documentos.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import 'selector_carnet.dart';
 
@@ -83,12 +83,12 @@ class _SelectorSelfieCarnetState extends State<SelectorSelfieCarnet> {
             mainAxisSize: MainAxisSize.min,
             children: [
               ListTile(
-                leading: const FaIcon(FontAwesomeIcons.magnifyingGlassPlus, color: ColoresApp.tinta),
+                leading: const Icon(Iconos.magnifyingGlassPlus, color: ColoresApp.tinta),
                 title: const Text('Ver la foto'),
                 onTap: () => Navigator.of(context).pop(false),
               ),
               ListTile(
-                leading: const FaIcon(FontAwesomeIcons.camera, color: ColoresApp.tinta),
+                leading: const Icon(Iconos.camera, color: ColoresApp.tinta),
                 title: const Text('Tomar otra foto'),
                 onTap: () => Navigator.of(context).pop(true),
               ),
@@ -180,7 +180,7 @@ class _SelectorSelfieCarnetState extends State<SelectorSelfieCarnet> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          FaIcon(FontAwesomeIcons.userCheck, color: ColoresApp.tinta, size: 26),
+                          Icon(Iconos.userCheck, color: ColoresApp.tinta, size: 26),
                           SizedBox(height: 8),
                           Text(
                             'Tu foto con el carnet',
@@ -206,7 +206,7 @@ class _SelectorSelfieCarnetState extends State<SelectorSelfieCarnet> {
                         child: const Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            FaIcon(FontAwesomeIcons.check, color: ColoresApp.blanco, size: 11),
+                            Icon(Iconos.check, color: ColoresApp.blanco, size: 11),
                             SizedBox(width: 5),
                             Text(
                               'Foto con el carnet',
@@ -255,7 +255,7 @@ class _SelectorSelfieCarnetState extends State<SelectorSelfieCarnet> {
       children: [
         Padding(
           padding: const EdgeInsets.only(top: 2),
-          child: FaIcon(FontAwesomeIcons.circleExclamation, color: color, size: 14),
+          child: Icon(Iconos.circleExclamation, color: color, size: 14),
         ),
         const SizedBox(width: 8),
         Expanded(child: Text(texto, style: TextStyle(color: color, fontSize: 13))),

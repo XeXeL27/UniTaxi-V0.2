@@ -1,10 +1,10 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/api_excepcion.dart';
 import '../core/formato.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../mapa/controlador_mapa.dart';
 import '../mapa/vista_mapa.dart';
@@ -44,6 +44,9 @@ class PantallaHistorial extends StatefulWidget {
   /// Foto de la entrega de un pedido DELIVERY (solo el pasajero; el repartidor ve solo el detalle).
   final Future<Uint8List?> Function(int idViaje)? cargarFotoEntrega;
 
+  /// Servicios en curso arriba de la lista (Actividad > En curso), si hay.
+  final Widget? enCurso;
+
   const PantallaHistorial({
     super.key,
     required this.cargarHistorial,
@@ -51,6 +54,7 @@ class PantallaHistorial extends StatefulWidget {
     this.cargarTodos,
     this.pestanaFavoritos,
     this.cargarFotoEntrega,
+    this.enCurso,
   });
 
   @override
@@ -194,6 +198,7 @@ class PantallaHistorialState extends State<PantallaHistorial> {
       child: ListView(
         padding: relleno,
         children: [
+          ?widget.enCurso,
           _SelectorPeriodo(periodo: _periodo, onElegir: _elegirPeriodo),
           const SizedBox(height: 14),
           Row(
@@ -355,7 +360,7 @@ class _Paginador extends StatelessWidget {
           IconButton.outlined(
             tooltip: 'Página anterior',
             onPressed: hayAnterior ? () => onIr(pagina - 1) : null,
-            icon: const FaIcon(FontAwesomeIcons.chevronLeft, size: 14),
+            icon: const Icon(Iconos.chevronLeft, size: 14),
           ),
           Expanded(
             child: Text(
@@ -367,7 +372,7 @@ class _Paginador extends StatelessWidget {
           IconButton.outlined(
             tooltip: 'Página siguiente',
             onPressed: haySiguiente ? () => onIr(pagina + 1) : null,
-            icon: const FaIcon(FontAwesomeIcons.chevronRight, size: 14),
+            icon: const Icon(Iconos.chevronRight, size: 14),
           ),
         ],
       ),
@@ -431,7 +436,7 @@ class _TarjetaViaje extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  const FaIcon(FontAwesomeIcons.calendar, color: ColoresApp.textoSuave, size: 13),
+                  const Icon(Iconos.calendar, color: ColoresApp.textoSuave, size: 13),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -458,8 +463,8 @@ class _TarjetaViaje extends StatelessWidget {
               const SizedBox(height: 4),
               Row(
                 children: [
-                  FaIcon(
-                    esConductor ? FontAwesomeIcons.solidUser : FontAwesomeIcons.motorcycle,
+                  Icon(
+                    esConductor ? Iconos.solidUser : Iconos.motorcycle,
                     color: ColoresApp.textoSuave,
                     size: 12,
                   ),
@@ -556,7 +561,7 @@ class _PantallaDetalleViajeState extends State<PantallaDetalleViaje> {
                   builder: (context, _) => _mapa.ruta == null
                       ? const SizedBox.shrink()
                       : DatoRuta(
-                          icono: FontAwesomeIcons.route,
+                          icono: Iconos.route,
                           texto: 'Recorrido: ${_mapa.ruta!.distanciaTexto}, ${_mapa.ruta!.duracionTexto}',
                         ),
                 ),

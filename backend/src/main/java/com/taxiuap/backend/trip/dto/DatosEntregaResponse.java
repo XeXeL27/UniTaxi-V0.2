@@ -42,7 +42,10 @@ public record DatosEntregaResponse(
         String fotoEntregaUrl,
         String ubicacionRecogidaWkt,
         String ubicacionEntregaWkt,
-        String receptorIdentificado) {
+        String receptorIdentificado,
+        LocalDateTime fechaLlegadaEntrega,
+        Integer avisosEntrega,
+        LocalDateTime ultimoAvisoEntrega) {
 
     /**
      * Vista del repartidor: sin codigos. Se los dicta la persona que se los tiene que dictar y por eso
@@ -55,7 +58,8 @@ public record DatosEntregaResponse(
                 nombreRemitente, telefonoRemitente, nombreReceptor, telefonoReceptor, null, null,
                 detalleCompraPropuesto, detalleCompra, puntoCompraPropuestoWkt, puntoCompraWkt, fotoPaqueteUrl,
                 fotoComprobanteUrl, fotoFallaUrl, motivoFalla, estadoEntrega, fechaLlegadaRecogida, fechaRecogida,
-                fechaEntrega, null, null, ubicacionRecogidaWkt, ubicacionEntregaWkt, receptorIdentificado);
+                fechaEntrega, null, null, ubicacionRecogidaWkt, ubicacionEntregaWkt, receptorIdentificado,
+                fechaLlegadaEntrega, avisosEntrega, ultimoAvisoEntrega);
     }
 
     public static DatosEntregaResponse desde(DatosEntrega datos, boolean mostrarCodigos) {
@@ -73,7 +77,8 @@ public record DatosEntregaResponse(
                 datos.getEstadoEntrega(), datos.getFechaLlegadaRecogida(), datos.getFechaRecogida(),
                 datos.getFechaEntrega(), datos.getFotoRecogidaUrl(), datos.getFotoEntregaUrl(),
                 aWkt(datos.getUbicacionRecogida()), aWkt(datos.getUbicacionEntrega()),
-                datos.getReceptorIdentificado());
+                datos.getReceptorIdentificado(), datos.getFechaLlegadaEntrega(), datos.getAvisosEntrega(),
+                datos.getUltimoAvisoEntrega());
         return mostrarCodigos ? respuesta : respuesta.paraConductor();
     }
 
@@ -91,7 +96,8 @@ public record DatosEntregaResponse(
                 completo.puntoCompraWkt, completo.fotoPaqueteUrl, completo.fotoComprobanteUrl, completo.fotoFallaUrl,
                 completo.motivoFalla, completo.estadoEntrega, completo.fechaLlegadaRecogida, completo.fechaRecogida,
                 completo.fechaEntrega, completo.fotoRecogidaUrl, completo.fotoEntregaUrl,
-                completo.ubicacionRecogidaWkt, completo.ubicacionEntregaWkt, completo.receptorIdentificado);
+                completo.ubicacionRecogidaWkt, completo.ubicacionEntregaWkt, completo.receptorIdentificado,
+                completo.fechaLlegadaEntrega, completo.avisosEntrega, completo.ultimoAvisoEntrega);
     }
 
     /** Los puntos van como texto porque la app los dibuja en el mapa y no necesita la columna cruda. */

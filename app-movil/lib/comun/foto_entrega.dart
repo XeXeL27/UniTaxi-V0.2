@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
+import '../core/iconos.dart';
 import '../core/tema.dart';
 
 /// Foto que tomo el repartidor al entregar el paquete (la persona con su paquete). Se carga del
@@ -34,7 +35,7 @@ class _FotoEntregaState extends State<FotoEntrega> {
               child: IconButton(
                 onPressed: () => Navigator.of(contexto).pop(),
                 tooltip: 'Cerrar',
-                icon: const Icon(Icons.close, color: ColoresApp.blanco),
+                icon: const Icon(Iconos.xmark, color: ColoresApp.blanco),
               ),
             ),
           ],

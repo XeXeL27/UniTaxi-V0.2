@@ -79,16 +79,34 @@ class ChatEstado extends ChangeNotifier {
     return '/api/$actor/viajes/$_idViaje/mensajes';
   }
 
-  /// Abre el chat de un viaje: conecta el socket, trae el historial y marca leidos.
-  Future<void> abrir(int idViaje, String nombreContraparte) async {
+  /// Conecta el chat del viaje que esta a la vista sin abrir la pantalla, para contar los mensajes
+  /// que llegan (la marca del boton Mensaje). Trae del servidor los que ya estaban sin leer. Con la
+  /// pantalla abierta de otro viaje no cambia nada.
+  Future<void> vincular(int idViaje, String nombreContraparte) async {
+    if (_idViaje == idViaje && _canal != null) return;
+    if (_pantallaAbierta) return;
     _idViaje = idViaje;
     _nombreContraparte = nombreContraparte;
-    _pantallaAbierta = true;
     _mensajes.clear();
     _noLeidos = 0;
-    _estadoConexion = EstadoConexionChat.conectando;
+    _conectar();
     notifyListeners();
+    try {
+      final historial = await api.lista(_rutaMensajes, MensajeChat.desdeJson);
+      if (_idViaje != idViaje || _pantallaAbierta) return;
+      final miId = sesion.usuario?.idUsuario;
+      _mensajes
+        ..clear()
+        ..addAll(historial);
+      _noLeidos = historial.where((m) => !m.leido && (miId == null || !m.esDe(miId))).length;
+    } catch (e) {
+      debugPrint('No se pudo cargar el historial del chat: $e');
+    }
+    notifyListeners();
+  }
 
+  void _conectar() {
+    _estadoConexion = EstadoConexionChat.conectando;
     _canal?.dispose();
     _canal = CanalChat(
       sesion: sesion,
@@ -97,6 +115,19 @@ class ChatEstado extends ChangeNotifier {
       alDesconectar: () => _cambiarConexion(EstadoConexionChat.desconectado),
       alError: () => _cambiarConexion(EstadoConexionChat.desconectado),
     )..iniciar();
+  }
+
+  /// Abre el chat de un viaje: conecta el socket, trae el historial y marca leidos. Si el chat ya
+  /// estaba vinculado a este viaje se aprovecha el mismo socket.
+  Future<void> abrir(int idViaje, String nombreContraparte) async {
+    final yaConectado = _canal != null && _idViaje == idViaje;
+    _idViaje = idViaje;
+    _nombreContraparte = nombreContraparte;
+    _pantallaAbierta = true;
+    _mensajes.clear();
+    _noLeidos = 0;
+    if (!yaConectado) _conectar();
+    notifyListeners();
 
     try {
       final historial = await api.lista(_rutaMensajes, MensajeChat.desdeJson);
@@ -116,8 +147,10 @@ class ChatEstado extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Corta el socket y olvida el viaje: se llama cuando el viaje termina.
-  void cerrar() {
+  /// Corta el socket y olvida el viaje: se llama cuando el viaje termina. Con [idViaje] solo si el
+  /// chat es de ese viaje (con varios servicios a la vez, terminar uno no cierra el chat de otro).
+  void cerrar([int? idViaje]) {
+    if (idViaje != null && _idViaje != null && idViaje != _idViaje) return;
     _pantallaAbierta = false;
     _canal?.dispose();
     _canal = null;

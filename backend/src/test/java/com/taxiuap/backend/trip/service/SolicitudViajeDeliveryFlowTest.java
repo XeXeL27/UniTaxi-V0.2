@@ -107,7 +107,7 @@ class SolicitudViajeDeliveryFlowTest {
         lenient().when(solicitudRepository
                 .existsByPasajeroIdAndSituacionSolicitudInAndEstadoSolViaje(any(), any(), any()))
                 .thenReturn(false);
-        lenient().when(viajeService.pasajeroTieneViajeActivo(30L)).thenReturn(false);
+        lenient().when(viajeService.pasajeroPuedePedirOtro(30L)).thenReturn(true);
         // Taxi: precio por tramos de km (8 Bs, sin descuento de estudiante).
         lenient().when(precioService.cotizar(any(), any(), any())).thenReturn(new CotizacionViaje(
                 new BigDecimal("3.00"), 5, true, new BigDecimal("8.00"), new BigDecimal("0.00"),
@@ -153,6 +153,28 @@ class SolicitudViajeDeliveryFlowTest {
         assertEquals("70000000", solicitudGuardada.getValue().getDatosEntrega().getTelefonoRemitente());
         assertEquals("Luis", solicitudGuardada.getValue().getDatosEntrega().getNombreReceptor());
         verify(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class));
+    }
+
+    @Test
+    void laCotizacionDeEntregaUsaLaTarifaDeliveryDelPedido() {
+        when(precioDeliveryService.calcularEncomienda(any(Point.class), any(Point.class)))
+                .thenReturn(new DesglosePrecioDelivery(new BigDecimal("11.76"), new BigDecimal("1.88"), 6, false));
+
+        var cotizacion = service.cotizar(-11.0267, -68.7692, -11.0201, -68.7601, false, true);
+
+        // Lo que ve el pasajero antes de pedir es lo mismo que se fija al crear la encomienda.
+        assertEquals(new BigDecimal("11.76"), cotizacion.precio());
+        assertEquals(new BigDecimal("11.76"), cotizacion.precioNormal());
+        assertEquals(0, cotizacion.descuentoEstudiante().signum());
+        verify(precioService, never()).cotizar(any(), any(), any());
+    }
+
+    @Test
+    void laCotizacionSinEntregaSigueSiendoLaDelTaxi() {
+        var cotizacion = service.cotizar(-11.0267, -68.7692, -11.0201, -68.7601, false, false);
+
+        assertEquals(new BigDecimal("8.00"), cotizacion.precio());
+        verify(precioDeliveryService, never()).calcularEncomienda(any(Point.class), any(Point.class));
     }
 
     @Test

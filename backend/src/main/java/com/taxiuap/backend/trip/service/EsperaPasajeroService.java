@@ -21,15 +21,19 @@ import lombok.RequiredArgsConstructor;
 
 /**
  * El conductor llego y el pasajero no aparece. "Llegue" es el primer aviso; el conductor puede volver
- * a avisar "te estoy esperando" hasta completar {@link #MAXIMO_AVISOS}, con {@link #ESPERA_ENTRE_AVISOS}
- * entre uno y otro. Un minuto despues del ultimo aviso puede cancelar porque el pasajero no se presento:
- * el viaje no se republica (el pasajero no esta) y queda un reporte para que el admin lo revise.
+ * a avisar "te estoy esperando" con {@link #ESPERA_ENTRE_AVISOS} entre uno y otro. Un minuto despues
+ * del aviso {@link #MAXIMO_AVISOS} puede cancelar porque el pasajero no se presento (el viaje no se
+ * republica y queda un reporte para el admin) o seguir esperando y avisando, hasta
+ * {@link #LIMITE_AVISOS} avisos; mientras espera, el reporte sigue disponible.
  */
 @Service
 @RequiredArgsConstructor
 public class EsperaPasajeroService {
 
+    /** Avisos que hacen falta para poder reportar que el pasajero no se presento. */
     public static final int MAXIMO_AVISOS = 3;
+    /** Seguir esperando: avisos en total, para no molestar al pasajero sin fin. */
+    public static final int LIMITE_AVISOS = 10;
     public static final Duration ESPERA_ENTRE_AVISOS = Duration.ofMinutes(1);
     public static final String MOTIVO_REPORTE = "PASAJERO_NO_SE_PRESENTO";
 
@@ -44,8 +48,8 @@ public class EsperaPasajeroService {
         Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
         exigirEsperando(viaje);
         int avisos = avisos(viaje);
-        if (avisos >= MAXIMO_AVISOS) {
-            throw new NegocioException("Ya avisaste " + MAXIMO_AVISOS + " veces: llama al pasajero o marca que no se presentó");
+        if (avisos >= LIMITE_AVISOS) {
+            throw new NegocioException("Ya avisaste " + LIMITE_AVISOS + " veces: llama al pasajero o reporta que no se presentó");
         }
         exigirMinutoCumplido(viaje, "Podrás avisar de nuevo en ");
         viaje.setAvisosEspera(avisos + 1);
@@ -56,7 +60,7 @@ public class EsperaPasajeroService {
     }
 
     /**
-     * Tras los 3 avisos y un minuto mas: cancela el viaje sin republicarlo y deja el reporte con el
+     * Tras los 3 avisos y un minuto mas (o con mas avisos, si siguio esperando): cancela el viaje sin republicarlo y deja el reporte con el
      * comentario del conductor (por ejemplo, que lo llamo y no contesto) para que el admin decida.
      */
     @Transactional
@@ -66,7 +70,10 @@ public class EsperaPasajeroService {
         if (avisos(viaje) < MAXIMO_AVISOS) {
             throw new NegocioException("Primero avisa " + MAXIMO_AVISOS + " veces que estás esperando");
         }
-        exigirMinutoCumplido(viaje, "Espera un poco más antes de cancelar: ");
+        // Con un cuarto aviso ya espero mas de 3 minutos: puede reportar sin esperar otro minuto.
+        if (avisos(viaje) == MAXIMO_AVISOS) {
+            exigirMinutoCumplido(viaje, "Espera un poco más antes de cancelar: ");
+        }
         String texto = comentario == null ? "" : comentario.trim();
         if (texto.isEmpty()) {
             throw new NegocioException("Cuenta qué pasó (por ejemplo, si lo llamaste) para que el administrador lo revise");

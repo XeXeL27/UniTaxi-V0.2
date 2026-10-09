@@ -47,6 +47,7 @@ import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
 import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
+import com.taxiuap.backend.trip.dto.LlegadaEntregaRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
@@ -377,6 +378,75 @@ class EntregaServiceRecogidaEntregaTest {
         // La recogida no usa iniciar(): el viaje pasa a EN_CURSO por registrarPedidoEnMano.
         verify(viajeService).registrarPedidoEnMano(500L, null);
         verify(viajeService, never()).iniciar(anyLong());
+    }
+
+    @Test
+    void llegarAlPuntoDeEntregaCercaDeBEsElPrimerAvisoAlCliente() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        entregaService.llegadaEntrega(500L, new LlegadaEntregaRequest(-11.0301, -68.7401));
+
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        assertEquals(1, datos.getAvisosEntrega());
+        assertEquals(true, datos.getFechaLlegadaEntrega() != null);
+        verify(viajeService).avisarPasajero(eq(viaje), eq("REPARTIDOR_EN_ENTREGA"), anyString(), anyString(),
+                eq(java.util.Map.of("aviso", "1")));
+    }
+
+    @Test
+    void lejosDeBNoSeMarcaLaLlegadaAlPuntoDeEntrega() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class,
+                () -> entregaService.llegadaEntrega(500L, new LlegadaEntregaRequest(-11.02, -68.75)));
+
+        assertEquals(true, error.getMessage().contains("m del destino"));
+        assertEquals(null, viaje.getSolicitud().getDatosEntrega().getAvisosEntrega());
+    }
+
+    @Test
+    void enElPuntoDeEntregaSeAvisaDeNuevoSoloUnMinutoDespues() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        datos.setFechaLlegadaEntrega(java.time.LocalDateTime.now().minusMinutes(2));
+        datos.setAvisosEntrega(1);
+        datos.setUltimoAvisoEntrega(java.time.LocalDateTime.now().minusSeconds(20));
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.avisarDeNuevoEnEntrega(500L));
+        assertEquals(true, error.getMessage().contains("Podrás avisar de nuevo"));
+
+        datos.setUltimoAvisoEntrega(java.time.LocalDateTime.now().minusSeconds(61));
+        entregaService.avisarDeNuevoEnEntrega(500L);
+
+        assertEquals(2, datos.getAvisosEntrega());
+    }
+
+    @Test
+    void despuesDelTercerAvisoSigueEsperandoHastaElLimite() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        datos.setFechaLlegadaEntrega(java.time.LocalDateTime.now().minusMinutes(5));
+        datos.setAvisosEntrega(3);
+        datos.setUltimoAvisoEntrega(java.time.LocalDateTime.now().minusSeconds(90));
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        entregaService.avisarDeNuevoEnEntrega(500L);
+        assertEquals(4, datos.getAvisosEntrega());
+
+        datos.setAvisosEntrega(EsperaPasajeroService.LIMITE_AVISOS);
+        datos.setUltimoAvisoEntrega(java.time.LocalDateTime.now().minusSeconds(90));
+        assertThrows(NegocioException.class, () -> entregaService.avisarDeNuevoEnEntrega(500L));
+    }
+
+    @Test
+    void sinMarcarLaLlegadaABNoSeAvisaDeNuevo() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        assertThrows(NegocioException.class, () -> entregaService.avisarDeNuevoEnEntrega(500L));
     }
 
     private Viaje viajeEncomienda(SituacionViaje situacion, EstadoEntrega estadoEntrega) {

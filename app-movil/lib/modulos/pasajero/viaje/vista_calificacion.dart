@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/api_excepcion.dart';
 import '../../../core/formato.dart';
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
-import '../../../widgets/dialogos.dart';
+import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import '../../../comun/foto_entrega.dart';
 import '../../../comun/modelos_viaje.dart';
@@ -53,9 +53,9 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
       if (!mounted) return;
       Navigator.of(context).pop();
       widget.flujo.terminarCalificacion();
-      await mostrarExito(context, titulo: '¡Gracias!', mensaje: 'Tu calificación ayuda a mejorar el servicio.');
+      mostrarMensaje(context, '¡Gracias! Tu calificación ayuda a mejorar el servicio.');
     } on ApiExcepcion catch (e) {
-      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+      if (mounted) mostrarMensaje(context, e.mensaje, error: true);
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
@@ -78,7 +78,7 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 380),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -90,7 +90,7 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                 ),
                 const SizedBox(height: 8),
                 FotoEntrega(cargar: () => widget.flujo.api.fotoEntrega(viaje.id), alto: 160),
-                const SizedBox(height: 14),
+                const SizedBox(height: 16),
               ],
               Row(
                 children: [
@@ -121,7 +121,7 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -130,8 +130,8 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                       onPressed: _enviando ? null : () => setState(() => _nota = i),
                       tooltip: '$i ${i == 1 ? 'estrella' : 'estrellas'}',
                       visualDensity: VisualDensity.compact,
-                      icon: FaIcon(
-                        i <= _nota ? FontAwesomeIcons.solidStar : FontAwesomeIcons.star,
+                      icon: Icon(
+                        i <= _nota ? Iconos.solidStar : Iconos.star,
                         color: i <= _nota ? const Color(0xFFF5A623) : ColoresApp.borde,
                         size: 30,
                       ),

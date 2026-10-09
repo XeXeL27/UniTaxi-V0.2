@@ -20,6 +20,7 @@ import '../../core/categorias_servicio.dart';
 import '../../core/cliente_api.dart';
 import '../../core/config.dart';
 import '../../core/formato.dart';
+import '../../core/iconos.dart';
 import '../../core/navegador.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
@@ -754,7 +755,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         leading: IconButton(
           tooltip: widget.enModal ? 'Cerrar' : 'Volver',
           onPressed: _volver,
-          icon: Icon(widget.enModal ? Icons.close_rounded : Icons.arrow_back_rounded),
+          icon: Icon(widget.enModal ? Iconos.xmark : Iconos.arrowLeft),
         ),
         title: const Text('Registro de conductor', style: TextStyle(fontWeight: FontWeight.w600)),
       ),
@@ -770,7 +771,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 30),
+            const Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 30),
             const SizedBox(height: 12),
             Text(
               _errorGoogle!,
@@ -829,7 +830,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                     if (_datosConocidos) _tarjetaGoogle(),
                     if (_pideCarnet)
                       _Seccion(
-                        icono: FontAwesomeIcons.idCard,
+                        icono: Iconos.idCard,
                         titulo: 'Foto de tu carnet',
                         children: [
                           Text(
@@ -853,7 +854,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                         ],
                       ),
                     _Seccion(
-                      icono: FontAwesomeIcons.solidUser,
+                      icono: Iconos.solidUser,
                       titulo: 'Datos personales',
                       children: [
                         // Nombre: se lee del carnet en el APK (sin teclado); en la web se escribe.
@@ -963,7 +964,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                     ),
                     if (!_datosConocidos)
                       _Seccion(
-                        icono: FontAwesomeIcons.key,
+                        icono: Iconos.key,
                         titulo: 'Tu cuenta',
                         children: [
                           _campo(
@@ -996,7 +997,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                         ],
                       ),
                     _Seccion(
-                      icono: FontAwesomeIcons.solidIdBadge,
+                      icono: Iconos.solidIdBadge,
                       titulo: 'Licencia de conducir',
                       children: [
                         Text(
@@ -1035,7 +1036,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                               padding: EdgeInsets.only(top: 8),
                               child: Row(
                                 children: [
-                                  FaIcon(FontAwesomeIcons.solidCircleCheck, color: ColoresApp.exito, size: 14),
+                                  Icon(Iconos.solidCircleCheck, color: ColoresApp.exito, size: 14),
                                   SizedBox(width: 8),
                                   Text(
                                     'Número de licencia confirmado',
@@ -1048,7 +1049,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                       ],
                     ),
                     _Seccion(
-                      icono: FontAwesomeIcons.motorcycle,
+                      icono: Iconos.motorcycle,
                       titulo: 'Tu moto',
                       children: [
                         fila([
@@ -1117,7 +1118,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                       ],
                     ),
                     _Seccion(
-                      icono: FontAwesomeIcons.filePdf,
+                      icono: Iconos.filePdf,
                       titulo: 'SOAT en PDF (opcional)',
                       children: [
                         const Text(
@@ -1129,7 +1130,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                       ],
                     ),
                     _Seccion(
-                      icono: FontAwesomeIcons.qrcode,
+                      icono: Iconos.qrcode,
                       titulo: 'QR de cobro (opcional)',
                       children: [
                         const Text(
@@ -1147,7 +1148,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                         decoration: BoxDecoration(color: ColoresApp.rojoSuave, borderRadius: BorderRadius.circular(12)),
                         child: Row(
                           children: [
-                            const FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                            const Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(_error!, style: const TextStyle(color: ColoresApp.rojoOscuro)),
@@ -1180,11 +1181,10 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       ),
       child: Row(
         children: [
-          FaIcon(
-            widget.desdePasajero ? FontAwesomeIcons.solidUser : FontAwesomeIcons.google,
-            color: ColoresApp.azul,
-            size: 22,
-          ),
+          if (widget.desdePasajero)
+            const Icon(Iconos.solidUser, color: ColoresApp.azul, size: 22)
+          else
+            const FaIcon(FontAwesomeIcons.google, color: ColoresApp.azul, size: 22),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -1245,8 +1245,8 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             ? IconButton(
                 tooltip: _ocultar ? 'Mostrar' : 'Ocultar',
                 onPressed: () => setState(() => _ocultar = !_ocultar),
-                icon: FaIcon(
-                  _ocultar ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash,
+                icon: Icon(
+                  _ocultar ? Iconos.eye : Iconos.eyeSlash,
                   size: 15,
                   color: ColoresApp.textoSuave,
                 ),
@@ -1254,7 +1254,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             : soloLectura
             ? const SizedBox(
                 width: 40,
-                child: Center(child: FaIcon(FontAwesomeIcons.lock, size: 13, color: ColoresApp.textoSuave)),
+                child: Center(child: Icon(Iconos.lock, size: 13, color: ColoresApp.textoSuave)),
               )
             : null,
       ),
@@ -1279,7 +1279,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
           suffixIcon: SizedBox(
             width: 44,
             child: Center(
-              child: FaIcon(fija ? FontAwesomeIcons.lock : FontAwesomeIcons.calendar, size: fija ? 13 : 15),
+              child: Icon(fija ? Iconos.lock : Iconos.calendar, size: fija ? 13 : 15),
             ),
           ),
         ),
@@ -1305,7 +1305,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
           suffixIcon: SizedBox(
             width: 44,
             child: Center(
-              child: FaIcon(fijo ? FontAwesomeIcons.lock : FontAwesomeIcons.calendar, size: fijo ? 13 : 15),
+              child: Icon(fijo ? Iconos.lock : Iconos.calendar, size: fijo ? 13 : 15),
             ),
           ),
         ),
@@ -1345,7 +1345,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 2),
-            child: FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 15),
+            child: Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 15),
           ),
           const SizedBox(width: 10),
           Expanded(
@@ -1370,8 +1370,8 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
             padding: const EdgeInsets.all(12),
             child: Row(
               children: [
-                FaIcon(
-                  elegido == null ? FontAwesomeIcons.fileArrowUp : FontAwesomeIcons.solidCircleCheck,
+                Icon(
+                  elegido == null ? Iconos.fileArrowUp : Iconos.solidCircleCheck,
                   color: elegido == null ? ColoresApp.azul : ColoresApp.exito,
                   size: 20,
                 ),
@@ -1397,7 +1397,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
                   IconButton(
                     tooltip: 'Quitar',
                     onPressed: () => setState(() => _pdf.remove(documento.tipo)),
-                    icon: const FaIcon(FontAwesomeIcons.xmark, size: 15, color: ColoresApp.textoSuave),
+                    icon: const Icon(Iconos.xmark, size: 15, color: ColoresApp.textoSuave),
                   ),
               ],
             ),
@@ -1454,7 +1454,7 @@ class _SelectorCategoriaMoto extends StatelessWidget {
 }
 
 class _Seccion extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String titulo;
   final List<Widget> children;
 
@@ -1475,7 +1475,7 @@ class _Seccion extends StatelessWidget {
         children: [
           Row(
             children: [
-              FaIcon(icono, size: 15, color: ColoresApp.rojo),
+              Icon(icono, size: 15, color: ColoresApp.rojo),
               const SizedBox(width: 10),
               Text(
                 titulo,

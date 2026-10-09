@@ -72,6 +72,16 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
     /** Viaje activo (no finalizado ni cancelado) del conductor, usado para saber si tiene uno en curso. */
     Optional<Viaje> findFirstByConductorIdAndSituacionViajeNotIn(Long idConductor, List<SituacionViaje> situaciones);
 
+    /** Viajes activos del pasajero (puede tener hasta 2 servicios a la vez), del mas antiguo al mas nuevo. */
+    List<Viaje> findByPasajeroIdAndSituacionViajeNotInOrderByIdAsc(Long idPasajero, List<SituacionViaje> situaciones);
+
+    /** Viajes activos del conductor (el repartidor lleva hasta 3 pedidos), del mas antiguo al mas nuevo. */
+    List<Viaje> findByConductorIdAndSituacionViajeNotInOrderByIdAsc(Long idConductor, List<SituacionViaje> situaciones);
+
+    long countByPasajeroIdAndSituacionViajeNotIn(Long idPasajero, List<SituacionViaje> situaciones);
+
+    long countByConductorIdAndSituacionViajeNotIn(Long idConductor, List<SituacionViaje> situaciones);
+
     /**
      * Cuenta los viajes de un estudiante con descuento estudiantil aplicado en un rango de
      * fechas, usado por el calculo de precio para respetar viajes_maximos_dia de la regla 3.
@@ -107,6 +117,13 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
             and v.situacionViaje = :situacion and v.estadoViaje = :estado
             and v.fechaFin >= :desde and v.fechaFin < :hasta""")
     BigDecimal montoHistorialDePasajero(@Param("id") Long idPasajero, @Param("situacion") SituacionViaje situacion,
+            @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta);
+
+    @Query("""
+            select count(v) from Viaje v where v.conductor.id = :id and v.situacionViaje = :situacion
+            and v.estadoViaje = :estado and v.fechaFin >= :desde and v.fechaFin < :hasta""")
+    long contarHistorialDeConductor(@Param("id") Long idConductor, @Param("situacion") SituacionViaje situacion,
             @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 

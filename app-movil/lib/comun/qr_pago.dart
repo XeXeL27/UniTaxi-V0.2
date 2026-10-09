@@ -1,6 +1,5 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:http_parser/http_parser.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -8,6 +7,7 @@ import 'package:provider/provider.dart';
 import '../core/api_excepcion.dart';
 import '../core/cliente_api.dart';
 import '../core/descargas.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../widgets/dialogos.dart';
 import '../widgets/notificaciones.dart';
@@ -32,14 +32,14 @@ Future<ImagenElegida?> elegirImagenQr(BuildContext context) async {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
             ListTile(
-              leading: const FaIcon(FontAwesomeIcons.image, color: ColoresApp.azul),
+              leading: const Icon(Iconos.image, color: ColoresApp.azul),
               title: const Text('Elegir de la galería'),
               onTap: () => Navigator.of(context).pop(ImageSource.gallery),
             ),
             ListTile(
-              leading: const FaIcon(FontAwesomeIcons.camera, color: ColoresApp.azul),
+              leading: const Icon(Iconos.camera, color: ColoresApp.azul),
               title: const Text('Tomar una foto'),
               onTap: () => Navigator.of(context).pop(ImageSource.camera),
             ),
@@ -130,7 +130,7 @@ class _PantallaMisQrState extends State<PantallaMisQr> {
       _recargar();
       mostrarMensaje(context, exito);
     } on ApiExcepcion catch (e) {
-      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+      if (mounted) mostrarMensaje(context, e.mensaje, error: true);
     } finally {
       if (mounted) setState(() => _trabajando = false);
     }
@@ -165,7 +165,7 @@ class _PantallaMisQrState extends State<PantallaMisQr> {
                     'lo verá en su viaje y lo podrá descargar. Puedes cambiarlos cuando quieras.',
                     style: TextStyle(color: ColoresApp.textoSuave, height: 1.35),
                   ),
-                  const SizedBox(height: 14),
+                  const SizedBox(height: 16),
                   for (final qr in qrs)
                     _TarjetaQr(
                       // Con otra fecha (QR cambiado) la tarjeta vuelve a pedir la imagen.
@@ -175,13 +175,13 @@ class _PantallaMisQrState extends State<PantallaMisQr> {
                       acciones: [
                         OutlinedButton.icon(
                           onPressed: _trabajando ? null : () => _reemplazar(qr),
-                          icon: const FaIcon(FontAwesomeIcons.arrowsRotate, size: 14),
+                          icon: const Icon(Iconos.arrowsRotate, size: 14),
                           label: const Text('Cambiar'),
                         ),
                         OutlinedButton.icon(
                           onPressed: _trabajando ? null : () => _eliminar(qr),
                           style: OutlinedButton.styleFrom(foregroundColor: ColoresApp.rojo),
-                          icon: const FaIcon(FontAwesomeIcons.trashCan, size: 14),
+                          icon: const Icon(Iconos.trashCan, size: 14),
                           label: const Text('Quitar'),
                         ),
                       ],
@@ -210,14 +210,14 @@ class _BotonAgregarQr extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: ColoresApp.azulSuave,
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         onTap: trabajando ? null : onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 26),
+          padding: const EdgeInsets.symmetric(vertical: 24),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: ColoresApp.azul.withValues(alpha: 0.25)),
           ),
           child: Column(
@@ -225,8 +225,8 @@ class _BotonAgregarQr extends StatelessWidget {
               if (trabajando)
                 const SizedBox(width: 26, height: 26, child: CircularProgressIndicator(color: ColoresApp.azul))
               else
-                const FaIcon(FontAwesomeIcons.qrcode, color: ColoresApp.azul, size: 30),
-              const SizedBox(height: 10),
+                const Icon(Iconos.qrcode, color: ColoresApp.azul, size: 30),
+              const SizedBox(height: 12),
               Text(
                 vacio ? 'Agregar mi QR' : 'Agregar otro QR',
                 style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
@@ -270,7 +270,7 @@ class _TarjetaQrState extends State<_TarjetaQr> {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: ColoresApp.blanco,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: ColoresApp.borde),
       ),
       child: FutureBuilder<Uint8List?>(
@@ -288,7 +288,7 @@ class _TarjetaQrState extends State<_TarjetaQr> {
                 widget.titulo,
                 style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 12),
               SizedBox(
                 height: 240,
                 child: switch (instantanea.connectionState) {
@@ -300,11 +300,11 @@ class _TarjetaQrState extends State<_TarjetaQr> {
                 },
               ),
               if (acciones.isNotEmpty) ...[
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 Row(
                   children: [
                     for (var i = 0; i < acciones.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 10),
+                      if (i > 0) const SizedBox(width: 12),
                       Expanded(child: acciones[i]),
                     ],
                   ],
@@ -384,7 +384,7 @@ class _QrDelConductorState extends State<QrDelConductor> {
                   FilledButton.icon(
                     onPressed: () => _descargar(qr, bytes),
                     style: FilledButton.styleFrom(backgroundColor: ColoresApp.azul),
-                    icon: const FaIcon(FontAwesomeIcons.download, size: 14),
+                    icon: const Icon(Iconos.download, size: 14),
                     label: const Text('Descargar'),
                   ),
                 ],
@@ -439,7 +439,7 @@ class SelectorQrRegistro extends StatelessWidget {
                         child: const SizedBox(
                           width: 26,
                           height: 26,
-                          child: Center(child: FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.blanco, size: 13)),
+                          child: Center(child: Icon(Iconos.xmark, color: ColoresApp.blanco, size: 13)),
                         ),
                       ),
                     ),
@@ -462,8 +462,8 @@ class SelectorQrRegistro extends StatelessWidget {
                   child: const Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      FaIcon(FontAwesomeIcons.qrcode, size: 22),
-                      SizedBox(height: 6),
+                      Icon(Iconos.qrcode, size: 22),
+                      SizedBox(height: 8),
                       Text('Agregar', style: TextStyle(fontSize: 12.5)),
                     ],
                   ),

@@ -12,6 +12,7 @@ import '../../widgets/insignia_estado.dart';
 import '../expediente/modelos.dart';
 import '../expediente/vista_expediente.dart';
 import 'entregas_api.dart';
+import 'pantalla_entregas.dart';
 
 /// Detalle de un pedido DELIVERY: datos, cada confirmacion del repartidor con su hora y GPS, y las
 /// fotos que confirman la recogida y la entrega. Bajo 600 px ocupa toda la pantalla.
@@ -68,7 +69,7 @@ class _DetalleEntrega extends StatelessWidget {
                   style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ColoresApp.azul),
                 ),
               ),
-              InsigniaEstado(entrega.estadoEntrega),
+              InsigniaEstado(estadoDelPedido(viaje)),
               IconButton(
                 onPressed: () => Navigator.of(context).pop(),
                 tooltip: 'Cerrar',

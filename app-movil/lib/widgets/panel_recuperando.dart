@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
+import '../core/iconos.dart';
 import '../core/tema.dart';
 
 /// Panel mientras la app recupera el viaje o la solicitud en curso al abrirse. Sin conexion avisa
@@ -20,7 +20,7 @@ class PanelRecuperando extends StatelessWidget {
             width: 22,
             height: 22,
             child: sinRed
-                ? const Center(child: FaIcon(FontAwesomeIcons.wifi, size: 16, color: ColoresApp.rojo))
+                ? const Center(child: Icon(Iconos.wifi, size: 16, color: ColoresApp.rojo))
                 : const CircularProgressIndicator(strokeWidth: 2.4),
           ),
           const SizedBox(width: 14),

@@ -1,10 +1,11 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image/image.dart' as img;
 
+import '../core/iconos.dart';
 import '../core/tema.dart';
+import '../widgets/notificaciones.dart';
 
 /// Pantalla para enderezar la foto del carnet o de la licencia antes de leerla. Con el telefono sobre
 /// la mesa la camara suele guardar la foto de costado: la persona la gira de a un cuarto de vuelta
@@ -95,9 +96,7 @@ class _EditorFotoState extends State<_EditorFoto> {
     } catch (_) {
       if (!mounted) return;
       setState(() => _girando = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se pudo girar la foto en este teléfono. Intenta con otra foto.')),
-      );
+      mostrarMensaje(context, 'No se pudo girar la foto en este teléfono. Intenta con otra foto.', error: true);
     }
   }
 
@@ -120,7 +119,7 @@ class _EditorFotoState extends State<_EditorFoto> {
                       IconButton(
                         tooltip: 'Cancelar',
                         onPressed: _girando ? null : () => Navigator.of(context).pop(),
-                        icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.blanco, size: 20),
+                        icon: const Icon(Iconos.xmark, color: ColoresApp.blanco, size: 20),
                       ),
                       const SizedBox(width: 4),
                       Expanded(
@@ -167,9 +166,9 @@ class _EditorFotoState extends State<_EditorFoto> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          _botonGiro(FontAwesomeIcons.rotateLeft, 'Girar a la izquierda', () => _girar(-1)),
+                          _botonGiro(Iconos.rotateLeft, 'Girar a la izquierda', () => _girar(-1)),
                           const SizedBox(width: 32),
-                          _botonGiro(FontAwesomeIcons.rotateRight, 'Girar a la derecha', () => _girar(1)),
+                          _botonGiro(Iconos.rotateRight, 'Girar a la derecha', () => _girar(1)),
                         ],
                       ),
                       const SizedBox(height: 18),
@@ -205,7 +204,7 @@ class _EditorFotoState extends State<_EditorFoto> {
     );
   }
 
-  Widget _botonGiro(FaIconData icono, String texto, VoidCallback alTocar) {
+  Widget _botonGiro(IconData icono, String texto, VoidCallback alTocar) {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -218,7 +217,7 @@ class _EditorFotoState extends State<_EditorFoto> {
             child: SizedBox(
               width: 58,
               height: 58,
-              child: Center(child: FaIcon(icono, color: ColoresApp.blanco, size: 21)),
+              child: Center(child: Icon(icono, color: ColoresApp.blanco, size: 21)),
             ),
           ),
         ),
@@ -244,7 +243,7 @@ class _Requisito extends StatelessWidget {
         children: [
           const Padding(
             padding: EdgeInsets.only(top: 3),
-            child: FaIcon(FontAwesomeIcons.circleCheck, color: Color(0xFF66BB6A), size: 16),
+            child: Icon(Iconos.circleCheck, color: Color(0xFF66BB6A), size: 16),
           ),
           const SizedBox(width: 10),
           Expanded(

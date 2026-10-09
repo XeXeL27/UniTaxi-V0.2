@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../../../core/api_excepcion.dart';
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/controlador_mapa.dart';
 import '../../../widgets/boton_principal.dart';
@@ -86,7 +86,7 @@ class _FormularioLugarState extends State<_FormularioLugar> {
             const SizedBox(height: 16),
             const Row(
               children: [
-                FaIcon(FontAwesomeIcons.solidStar, color: ColoresApp.rojo, size: 18),
+                Icon(Iconos.solidStar, color: ColoresApp.rojo, size: 18),
                 SizedBox(width: 10),
                 Text(
                   'Guardar lugar favorito',

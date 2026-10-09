@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'comun/carnet_observado.dart';
 import 'comun/completar_correo.dart';
 import 'comun/foto_con_carnet.dart';
+import 'comun/presentacion.dart';
 import 'comun/verificar_carnet.dart';
 import 'core/api_excepcion.dart';
 import 'core/chat.dart';
@@ -94,6 +95,9 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
 
   DateTime? _ultimaConsultaUsuario;
 
+  /// La presentacion animada se ve cada vez que se abre la app (no al volver de segundo plano).
+  bool _presentando = true;
+
   @override
   void initState() {
     super.initState();
@@ -157,38 +161,56 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
         value: BarraSistema.sobreAzul,
         child: AvisoSinInternet(child: child ?? const SizedBox.shrink()),
       ),
-      // La clave por rol reconstruye la pantalla al cambiar de modo.
-      // Pasajero y conductor necesitan un correo (credenciales, restablecer la contrasena) y el GPS
-      // encendido.
-      home: switch (rol) {
-        _ when panelAdmin != null => PantallaPanelAdmin(
-          datos: panelAdmin,
-          onSalir: context.read<Sesion>().salirDelPanel,
-        ),
-        _ when rol != null && sinCorreo => const PantallaCompletarCorreo(),
-        // Entro con Google sin CI: primero la foto de su carnet.
-        _ when rol != null && sinCarnet => const PantallaVerificarCarnet(),
-        // Envio sus datos del carnet a revision: espera a que la administracion los apruebe.
-        _ when rol != null && carnetObservado => const PantallaCarnetObservado(),
-        _ when rol != null && pideFotoCarnet => const PantallaFotoConCarnet(),
-        Config.rolConductor => const RequiereGps(
-          key: ValueKey(Config.rolConductor),
-          child: PantallaInicioConductor(),
-        ),
-        Config.rolPasajero => const RequiereGps(
-          key: ValueKey(Config.rolPasajero),
-          child: PantallaInicioPasajero(),
-        ),
-        _ when _codigoPasajero != null => PantallaVerificarCarnet(
-          codigoGoogle: _codigoPasajero,
-          onCancelar: () => setState(() => _codigoPasajero = null),
-        ),
-        _ when _codigoRegistro != null => PantallaFormularioConductor(
-          codigoGoogle: _codigoRegistro,
-          onCancelar: () => setState(() => _codigoRegistro = null),
-        ),
-        _ => PantallaLogin(key: ValueKey(motivoCierre), errorInicial: _error ?? motivoCierre),
-      },
+      // Primero la presentacion; al terminar se funde (400 ms) con el login o el inicio. La clave
+      // 'app' no cambia despues, asi los cambios de pantalla de abajo no se animan.
+      home: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 400),
+        switchInCurve: Curves.easeOut,
+        switchOutCurve: Curves.easeIn,
+        child: _presentando
+            ? PantallaPresentacion(
+                key: const ValueKey('presentacion'),
+                alTerminar: () => setState(() => _presentando = false),
+              )
+            : KeyedSubtree(
+                key: const ValueKey('app'),
+                child: _pantalla(rol, motivoCierre, sinCorreo, sinCarnet, carnetObservado, pideFotoCarnet, panelAdmin),
+              ),
+      ),
     );
+  }
+
+  Widget _pantalla(
+    String? rol,
+    String? motivoCierre,
+    bool sinCorreo,
+    bool sinCarnet,
+    bool carnetObservado,
+    bool pideFotoCarnet,
+    Map<String, dynamic>? panelAdmin,
+  ) {
+    // La clave por rol reconstruye la pantalla al cambiar de modo.
+    // Pasajero y conductor necesitan un correo (credenciales, restablecer la contrasena) y el GPS
+    // encendido.
+    return switch (rol) {
+      _ when panelAdmin != null => PantallaPanelAdmin(datos: panelAdmin, onSalir: context.read<Sesion>().salirDelPanel),
+      _ when rol != null && sinCorreo => const PantallaCompletarCorreo(),
+      // Entro con Google sin CI: primero la foto de su carnet.
+      _ when rol != null && sinCarnet => const PantallaVerificarCarnet(),
+      // Envio sus datos del carnet a revision: espera a que la administracion los apruebe.
+      _ when rol != null && carnetObservado => const PantallaCarnetObservado(),
+      _ when rol != null && pideFotoCarnet => const PantallaFotoConCarnet(),
+      Config.rolConductor => const RequiereGps(key: ValueKey(Config.rolConductor), child: PantallaInicioConductor()),
+      Config.rolPasajero => const RequiereGps(key: ValueKey(Config.rolPasajero), child: PantallaInicioPasajero()),
+      _ when _codigoPasajero != null => PantallaVerificarCarnet(
+        codigoGoogle: _codigoPasajero,
+        onCancelar: () => setState(() => _codigoPasajero = null),
+      ),
+      _ when _codigoRegistro != null => PantallaFormularioConductor(
+        codigoGoogle: _codigoRegistro,
+        onCancelar: () => setState(() => _codigoRegistro = null),
+      ),
+      _ => PantallaLogin(key: ValueKey(motivoCierre), errorInicial: _error ?? motivoCierre),
+    };
   }
 }

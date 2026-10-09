@@ -8,12 +8,15 @@ import 'sesion.dart';
 
 /// Posicion del conductor asignado a un viaje, recibida por WebSocket.
 class UbicacionRecibida {
+  /// Conductor de esta posicion: con varios servicios a la vez llegan las de mas de uno.
+  final int? idConductor;
   final LatLng posicion;
   final double? rumbo;
   final double? velocidad;
   final DateTime actualizadoEn;
 
   const UbicacionRecibida({
+    this.idConductor,
     required this.posicion,
     this.rumbo,
     this.velocidad,
@@ -27,6 +30,7 @@ class UbicacionRecibida {
     final actualizadoEnStr = json['actualizadoEn'] as String?;
     final actualizadoEn = actualizadoEnStr != null ? DateTime.tryParse(actualizadoEnStr) : null;
     return UbicacionRecibida(
+      idConductor: (json['idConductor'] as num?)?.toInt(),
       posicion: LatLng(latitud, longitud),
       rumbo: (json['rumbo'] as num?)?.toDouble(),
       velocidad: (json['velocidad'] as num?)?.toDouble(),

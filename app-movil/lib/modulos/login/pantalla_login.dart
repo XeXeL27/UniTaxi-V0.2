@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
@@ -9,6 +8,7 @@ import '../../core/conexion.dart';
 import '../../core/config.dart';
 import '../../core/credenciales.dart';
 import '../../core/huella.dart';
+import '../../core/iconos.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
@@ -176,7 +176,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
               const SizedBox(height: 16),
               if (modos.contains(Config.rolPasajero))
                 _OpcionModo(
-                  icono: FontAwesomeIcons.personWalking,
+                  icono: Iconos.personWalking,
                   titulo: 'Pasajero',
                   detalle: 'Pide un taxi',
                   color: ColoresApp.rojo,
@@ -185,7 +185,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
               const SizedBox(height: 10),
               if (modos.contains(Config.rolConductor))
                 _OpcionModo(
-                  icono: FontAwesomeIcons.motorcycle,
+                  icono: Iconos.motorcycle,
                   titulo: 'Conductor',
                   detalle: conGoogle ? 'Llevo pasajeros y recibo solicitudes de viaje' : 'Recibe solicitudes de viaje',
                   color: ColoresApp.azul,
@@ -194,7 +194,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
               if (modos.contains(Config.rolAdmin)) ...[
                 const SizedBox(height: 10),
                 _OpcionModo(
-                  icono: FontAwesomeIcons.userShield,
+                  icono: Iconos.userShield,
                   titulo: 'Administrador',
                   detalle: 'Abre el panel de administración',
                   color: ColoresApp.texto,
@@ -267,12 +267,12 @@ class _PantallaLoginState extends State<PantallaLogin> {
               valueListenable: Conexion.sinInternet,
               builder: (context, sinInternet, _) => sinInternet
                   ? const _AvisoRed(
-                      icono: FontAwesomeIcons.wifi,
+                      icono: Iconos.wifi,
                       texto: 'Sin conexión a internet. Conéctate a una red Wi-Fi o a tus datos móviles para iniciar sesión.',
                     )
                   : const SizedBox.shrink(),
             ),
-            if (_avisoLento != null) _AvisoRed(icono: FontAwesomeIcons.hourglassHalf, texto: _avisoLento!),
+            if (_avisoLento != null) _AvisoRed(icono: Iconos.hourglassHalf, texto: _avisoLento!),
             if (_error != null) ...[
               Container(
                 padding: const EdgeInsets.all(12),
@@ -286,7 +286,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   children: [
                     const Padding(
                       padding: EdgeInsets.only(top: 2),
-                      child: FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 16),
+                      child: Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 16),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
@@ -305,7 +305,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
               autofillHints: const [AutofillHints.username, AutofillHints.email],
               decoration: const InputDecoration(
                 labelText: 'Usuario, correo o teléfono',
-                prefixIcon: _IconoCampo(FontAwesomeIcons.solidUser),
+                prefixIcon: _IconoCampo(Iconos.solidUser),
               ),
               validator: (v) => (v == null || v.trim().isEmpty) ? 'Ingrese su usuario' : null,
             ),
@@ -318,12 +318,12 @@ class _PantallaLoginState extends State<PantallaLogin> {
               onFieldSubmitted: (_) => _ingresar(),
               decoration: InputDecoration(
                 labelText: 'Contraseña',
-                prefixIcon: const _IconoCampo(FontAwesomeIcons.lock),
+                prefixIcon: const _IconoCampo(Iconos.lock),
                 suffixIcon: IconButton(
                   tooltip: _ocultarPassword ? 'Mostrar contraseña' : 'Ocultar contraseña',
                   onPressed: () => setState(() => _ocultarPassword = !_ocultarPassword),
-                  icon: FaIcon(
-                    _ocultarPassword ? FontAwesomeIcons.eye : FontAwesomeIcons.eyeSlash,
+                  icon: Icon(
+                    _ocultarPassword ? Iconos.eye : Iconos.eyeSlash,
                     size: 16,
                     color: ColoresApp.textoSuave,
                   ),
@@ -366,7 +366,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   side: const BorderSide(color: ColoresApp.borde),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                 ),
-                icon: const FaIcon(FontAwesomeIcons.fingerprint, size: 18),
+                icon: const Icon(Iconos.fingerprint, size: 18),
                 label: const Text('Ingresar con huella', style: TextStyle(fontWeight: FontWeight.w600)),
               ),
             ],
@@ -400,7 +400,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                 side: const BorderSide(color: ColoresApp.borde),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               ),
-              icon: const FaIcon(FontAwesomeIcons.graduationCap, size: 18, color: ColoresApp.ruta),
+              icon: const Icon(Iconos.graduationCap, size: 18, color: ColoresApp.ruta),
               label: const Text('Ingresar como estudiante U.A.P.', style: TextStyle(fontSize: 15.5, fontWeight: FontWeight.w600)),
             ),
             const SizedBox(height: 18),
@@ -425,7 +425,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
 }
 
 class _IconoCampo extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
 
   const _IconoCampo(this.icono);
 
@@ -433,13 +433,13 @@ class _IconoCampo extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: 44,
-      child: Center(child: FaIcon(icono, size: 16, color: ColoresApp.textoSuave)),
+      child: Center(child: Icon(icono, size: 16, color: ColoresApp.textoSuave)),
     );
   }
 }
 
 class _OpcionModo extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String titulo;
   final String detalle;
   final Color color;
@@ -473,7 +473,7 @@ class _OpcionModo extends StatelessWidget {
                 height: 48,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-                child: FaIcon(icono, color: ColoresApp.blanco, size: 20),
+                child: Icon(icono, color: ColoresApp.blanco, size: 20),
               ),
               const SizedBox(width: 14),
               Expanded(
@@ -485,7 +485,7 @@ class _OpcionModo extends StatelessWidget {
                   ],
                 ),
               ),
-              const FaIcon(FontAwesomeIcons.chevronRight, color: ColoresApp.textoSuave, size: 14),
+              const Icon(Iconos.chevronRight, color: ColoresApp.textoSuave, size: 14),
             ],
           ),
         ),
@@ -496,7 +496,7 @@ class _OpcionModo extends StatelessWidget {
 
 /// Aviso naranja de la red en el login (sin internet o internet lento).
 class _AvisoRed extends StatelessWidget {
-  final FaIconData icono;
+  final IconData icono;
   final String texto;
 
   const _AvisoRed({required this.icono, required this.texto});
@@ -516,7 +516,7 @@ class _AvisoRed extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: FaIcon(icono, color: const Color(0xFFB26A00), size: 15),
+            child: Icon(icono, color: const Color(0xFFB26A00), size: 15),
           ),
           const SizedBox(width: 10),
           Expanded(child: Text(texto, style: const TextStyle(color: Color(0xFF7A4A00), height: 1.35))),

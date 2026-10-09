@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../core/tema.dart';
 
@@ -11,7 +10,7 @@ class PinMapa extends StatelessWidget {
 
   final Color color;
   final String? letra;
-  final FaIconData? icono;
+  final IconData? icono;
 
   /// Pin levantado mientras el mapa se mueve (con sombra en el suelo).
   final bool levantado;
@@ -57,7 +56,7 @@ class PinMapa extends StatelessWidget {
                     ],
                   ),
                   child: icono != null
-                      ? FaIcon(icono, color: ColoresApp.blanco, size: 16)
+                      ? Icon(icono, color: ColoresApp.blanco, size: 16)
                       : Text(
                           letra ?? '',
                           style: const TextStyle(color: ColoresApp.blanco, fontSize: 17, fontWeight: FontWeight.w700),

@@ -28,6 +28,7 @@ import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
 import com.taxiuap.backend.trip.dto.ProponerCompraRequest;
 import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
+import com.taxiuap.backend.trip.dto.LlegadaEntregaRequest;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.Viaje;
@@ -374,6 +375,85 @@ public class EntregaService {
                 " confirmó la entrega con una foto.");
         actualizarConstancia(idViaje);
         return respuesta;
+    }
+
+    // ---------------------------------------------------------------- espera en el punto de entrega
+
+    /**
+     * El repartidor llego al punto de entrega (B) con el pedido en mano: es el primer aviso. Al cliente
+     * le suena el mismo aviso del taxi que llego. Se confirma con el GPS a 100 m o menos de B.
+     */
+    @Transactional
+    public ViajeResponse llegadaEntrega(Long idViaje, LlegadaEntregaRequest request) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        DatosEntrega datos = datosDe(viaje);
+        if (datos.getEstadoEntrega() != EstadoEntrega.EN_MANO) {
+            throw new NegocioException("Primero recoge el pedido");
+        }
+        if (datos.getFechaLlegadaEntrega() != null) {
+            throw new NegocioException("Ya marcaste que llegaste al punto de entrega");
+        }
+        exigirCercaDelDestino(viaje, request == null ? null : request.latitud(),
+                request == null ? null : request.longitud());
+        LocalDateTime ahora = LocalDateTime.now();
+        datos.setFechaLlegadaEntrega(ahora);
+        datos.setAvisosEntrega(1);
+        datos.setUltimoAvisoEntrega(ahora);
+        datosEntregaRepository.save(datos);
+        avisarEsperaEntrega(viaje, datos, 1);
+        actualizarConstancia(idViaje);
+        return viajeService.obtener(idViaje);
+    }
+
+    /**
+     * Nuevo aviso "te estoy esperando" en el punto de entrega, con 1 minuto entre cada uno. Despues del
+     * tercero el repartidor puede reportar que no pudo entregar (noSePudoEntregar) o seguir esperando,
+     * hasta {@link EsperaPasajeroService#LIMITE_AVISOS} avisos.
+     */
+    @Transactional
+    public ViajeResponse avisarDeNuevoEnEntrega(Long idViaje) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        DatosEntrega datos = datosDe(viaje);
+        if (datos.getEstadoEntrega() != EstadoEntrega.EN_MANO || datos.getFechaLlegadaEntrega() == null) {
+            throw new NegocioException("Marca primero que llegaste al punto de entrega");
+        }
+        int avisos = datos.getAvisosEntrega() == null ? 1 : datos.getAvisosEntrega();
+        if (avisos >= EsperaPasajeroService.LIMITE_AVISOS) {
+            throw new NegocioException("Ya avisaste " + EsperaPasajeroService.LIMITE_AVISOS
+                    + " veces: llama o reporta que no pudiste entregar");
+        }
+        LocalDateTime ultimo = datos.getUltimoAvisoEntrega();
+        if (ultimo != null) {
+            long faltan = EsperaPasajeroService.ESPERA_ENTRE_AVISOS
+                    .minus(java.time.Duration.between(ultimo, LocalDateTime.now())).toSeconds();
+            if (faltan > 0) {
+                throw new NegocioException("Podrás avisar de nuevo en " + faltan + " s");
+            }
+        }
+        datos.setAvisosEntrega(avisos + 1);
+        datos.setUltimoAvisoEntrega(LocalDateTime.now());
+        datosEntregaRepository.save(datos);
+        avisarEsperaEntrega(viaje, datos, avisos + 1);
+        return viajeService.obtener(idViaje);
+    }
+
+    /** Push "REPARTIDOR_EN_ENTREGA" con el numero del aviso: la app hace sonar el aviso del taxi que llego. */
+    private void avisarEsperaEntrega(Viaje viaje, DatosEntrega datos, int aviso) {
+        java.util.Map<String, String> extra = java.util.Map.of("aviso", String.valueOf(aviso));
+        String receptor = datos.getTipoEnvio() == TipoEnvio.ENCOMIENDA ? primerNombre(datos.getNombreReceptor()) : null;
+        if (receptor != null) {
+            viajeService.avisarPasajero(viaje, "REPARTIDOR_EN_ENTREGA",
+                    "Avísale a " + receptor + ": su paquete llegó",
+                    " está en el punto de entrega" + ViajeService.textoAviso(aviso) + ".", extra);
+        } else {
+            viajeService.avisarPasajero(viaje, "REPARTIDOR_EN_ENTREGA",
+                    aviso == 1 ? "Tu repartidor llegó con tu pedido" : "Tu repartidor te está esperando",
+                    " te espera en el punto de entrega" + ViajeService.textoAviso(aviso) + ".", extra);
+        }
+    }
+
+    private static String primerNombre(String nombre) {
+        return nombre == null || nombre.isBlank() ? null : ViajeService.primerNombre(nombre);
     }
 
     // ---------------------------------------------------------------- fallo de entrega

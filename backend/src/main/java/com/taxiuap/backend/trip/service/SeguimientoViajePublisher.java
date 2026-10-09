@@ -15,7 +15,7 @@ import com.taxiuap.backend.trip.repository.ViajeRepository;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Publica la posicion del conductor al pasajero de su viaje activo, para que el pasajero vea en
+ * Publica la posicion del conductor a los pasajeros de sus viajes activos (el repartidor lleva hasta 3), para que el pasajero vea en
  * tiempo real de donde viene el conductor, a que distancia esta y cuanto tarda en llegar.
  *
  * Solo se publica cuando el conductor tiene un viaje activo (no finalizado ni cancelado). El
@@ -39,11 +39,13 @@ public class SeguimientoViajePublisher {
      */
     public void publicarAlPasajero(PosicionConductorMensaje mensaje) {
         try {
-            viajeRepository.findFirstByConductorIdAndSituacionViajeNotIn(mensaje.idConductor(), ESTADOS_FINALES)
-                    .ifPresent(viaje -> simpMessagingTemplate.convertAndSendToUser(
-                            String.valueOf(viaje.getPasajero().getUsuario().getId()),
-                            "/queue/conductor-ubicacion",
-                            mensaje));
+            // El repartidor puede llevar varios pedidos: cada cliente recibe la posicion (una vez).
+            viajeRepository.findByConductorIdAndSituacionViajeNotInOrderByIdAsc(mensaje.idConductor(), ESTADOS_FINALES)
+                    .stream()
+                    .map(viaje -> viaje.getPasajero().getUsuario().getId())
+                    .distinct()
+                    .forEach(idUsuario -> simpMessagingTemplate.convertAndSendToUser(
+                            String.valueOf(idUsuario), "/queue/conductor-ubicacion", mensaje));
         } catch (Exception excepcion) {
             LOG.warn("No se pudo publicar la posicion del conductor {} al pasajero de su viaje activo",
                     mensaje.idConductor(), excepcion);

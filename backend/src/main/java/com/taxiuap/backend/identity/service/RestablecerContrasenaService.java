@@ -31,7 +31,8 @@ import lombok.extern.slf4j.Slf4j;
  * el se pone una contrasena nueva en sus cuentas de pasajero y conductor (regla 12).
  *
  * Los codigos viven en memoria (se pierden al reiniciar: solo hay que pedir otro). Vencen a los 15
- * minutos, admiten 5 intentos y no se envia mas de uno por minuto al mismo correo. La respuesta de
+ * minutos, admiten 5 intentos y no se envia mas de uno cada 90 segundos al mismo correo (la app muestra la
+ * cuenta regresiva para reenviarlo). La respuesta de
  * "olvide" es siempre la misma, exista o no el correo, para no revelar quien esta registrado.
  */
 @Slf4j
@@ -42,7 +43,7 @@ public class RestablecerContrasenaService {
 
     private static final long MINUTOS_VIGENCIA = 15;
     private static final int INTENTOS_MAXIMOS = 5;
-    private static final Duration ESPERA_REENVIO = Duration.ofSeconds(60);
+    private static final Duration ESPERA_REENVIO = Duration.ofSeconds(90);
     private static final SecureRandom AZAR = new SecureRandom();
 
     private record Codigo(String valor, Instant vence, Instant enviado, int intentos) {
@@ -59,7 +60,8 @@ public class RestablecerContrasenaService {
         codigos.values().removeIf(c -> c.vence().isBefore(Instant.now()));
         Codigo anterior = codigos.get(clave);
         if (anterior != null && anterior.enviado().plus(ESPERA_REENVIO).isAfter(Instant.now())) {
-            throw new NegocioException("Ya te enviamos un codigo. Espera un minuto antes de pedir otro");
+            long faltan = Duration.between(Instant.now(), anterior.enviado().plus(ESPERA_REENVIO)).toSeconds() + 1;
+            throw new NegocioException("Ya te enviamos un código. Podrás pedir otro en " + faltan + " s");
         }
 
         Optional<Persona> persona = personaConCuentas(clave);

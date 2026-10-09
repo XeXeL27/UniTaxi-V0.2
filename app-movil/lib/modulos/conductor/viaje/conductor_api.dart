@@ -63,9 +63,19 @@ class ConductorApi {
 
   Future<List<Solicitud>> solicitudes() => cliente.lista('/api/conductor/solicitudes', Solicitud.desdeJson);
 
+  /// Cuantos viajes o entregas completo hoy (solo la cantidad: nunca se muestra lo ganado).
+  Future<int> viajesHoy() async {
+    final datos = await cliente.get('/api/conductor/viajes/hoy') as Map<String, dynamic>;
+    return (datos['viajes'] as num?)?.toInt() ?? 0;
+  }
+
   /// Toma la solicitud; si otro conductor la tomo antes el backend responde 409.
   Future<Viaje> aceptar(int idSolicitud) async =>
       _viaje(await cliente.post('/api/conductor/solicitudes/$idSolicitud/aceptar', const {}));
+
+  /// Servicios en curso y cuantos se pueden tener a la vez.
+  Future<ViajesActivos> viajesActivos() async =>
+      ViajesActivos.desdeJson(await cliente.get('/api/conductor/viajes/activos') as Map<String, dynamic>);
 
   Future<Viaje?> viajeEnCurso() async {
     final datos = await cliente.get('/api/conductor/viajes/en-curso');
@@ -119,6 +129,16 @@ class ConductorApi {
 
   Future<Viaje> llegueRecogida(int id) async =>
       _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/llegue-recogida', {}));
+
+  /// Llego al punto de entrega (B) con el GPS a 100 m o menos: primer aviso al cliente.
+  Future<Viaje> llegueEntrega(int id, LatLng gps) async => _viaje(await cliente.post(
+    '/api/conductor/viajes/$id/entrega/llegue-entrega',
+    {'latitud': gps.latitude, 'longitud': gps.longitude},
+  ));
+
+  /// Otro aviso "te estoy esperando" en el punto de entrega (1 minuto entre cada uno).
+  Future<Viaje> avisarEsperaEntrega(int id) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/avisar-espera', {}));
 
   /// Codigo del remitente con la foto del paquete (obligatoria) y el GPS del telefono.
   Future<Viaje> validarRecogida(int id, String codigo, Uint8List foto, LatLng? gps) async =>

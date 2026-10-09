@@ -20,13 +20,16 @@ import com.taxiuap.backend.trip.dto.CambioMetodoPagoRequest;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
+import com.taxiuap.backend.trip.dto.ViajesHoyResponse;
 import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
 import com.taxiuap.backend.trip.dto.ProponerCompraRequest;
 import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
 import com.taxiuap.backend.trip.dto.RespuestaCambioPagoRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
+import com.taxiuap.backend.trip.dto.LlegadaEntregaRequest;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.dto.ViajesActivosResponse;
 import com.taxiuap.backend.trip.enums.PeriodoHistorial;
 import com.taxiuap.backend.trip.service.EntregaService;
 import com.taxiuap.backend.trip.service.EsperaPasajeroService;
@@ -56,6 +59,18 @@ public class ViajeConductorController {
             @RequestParam(defaultValue = "RECIENTES") PeriodoHistorial periodo,
             @RequestParam(defaultValue = "0") int pagina) {
         return ResponseEntity.ok(ApiResponse.exito(viajeService.historialDelConductor(periodo, pagina)));
+    }
+
+    /** Servicios en curso (hasta 2 del pasajero, hasta 3 pedidos del repartidor) y el maximo permitido. */
+    /** Cuantos viajes o entregas completo hoy (la cantidad, nunca lo ganado). */
+    @GetMapping("/hoy")
+    public ResponseEntity<ApiResponse<ViajesHoyResponse>> hoy() {
+        return ResponseEntity.ok(ApiResponse.exito(viajeService.viajesDeHoyDelConductor()));
+    }
+
+    @GetMapping("/activos")
+    public ResponseEntity<ApiResponse<ViajesActivosResponse>> activos() {
+        return ResponseEntity.ok(ApiResponse.exito(viajeService.activosDelConductor()));
     }
 
     @GetMapping("/en-curso")
@@ -192,6 +207,20 @@ public class ViajeConductorController {
             @RequestPart(value = "foto", required = false) MultipartFile foto) {
         return ResponseEntity.ok(ApiResponse.exito("Entrega completada",
                 entregaService.entregarConReceptor(id, request, foto)));
+    }
+
+    /** Llego al punto de entrega (B), con el GPS a 100 m o menos: primer aviso al cliente. */
+    @PostMapping("/{id}/entrega/llegue-entrega")
+    public ResponseEntity<ApiResponse<ViajeResponse>> llegueEntrega(
+            @PathVariable Long id, @RequestBody LlegadaEntregaRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Llegada al punto de entrega registrada",
+                entregaService.llegadaEntrega(id, request)));
+    }
+
+    /** Otro aviso "te estoy esperando" en el punto de entrega (1 minuto entre cada uno). */
+    @PostMapping("/{id}/entrega/avisar-espera")
+    public ResponseEntity<ApiResponse<ViajeResponse>> avisarEsperaEntrega(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito("Aviso enviado", entregaService.avisarDeNuevoEnEntrega(id)));
     }
 
     /** No se pudo entregar: exige foto y motivo, cancela el viaje y no republica el pedido. */

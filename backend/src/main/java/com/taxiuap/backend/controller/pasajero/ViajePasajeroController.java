@@ -29,6 +29,7 @@ import com.taxiuap.backend.trip.dto.CambioMetodoPagoRequest;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.dto.ViajesActivosResponse;
 import com.taxiuap.backend.trip.enums.PeriodoHistorial;
 import com.taxiuap.backend.trip.service.EntregaService;
 import com.taxiuap.backend.trip.service.ViajeService;
@@ -65,6 +66,12 @@ public class ViajePasajeroController {
     public ResponseEntity<ApiResponse<Void>> calificacionOfrecida(@PathVariable Long id) {
         viajeService.marcarCalificacionOfrecida(id);
         return ResponseEntity.ok(ApiResponse.exito("Calificacion ofrecida", null));
+    }
+
+    /** Servicios en curso (hasta 2 del pasajero, hasta 3 pedidos del repartidor) y el maximo permitido. */
+    @GetMapping("/activos")
+    public ResponseEntity<ApiResponse<ViajesActivosResponse>> activos() {
+        return ResponseEntity.ok(ApiResponse.exito(viajeService.activosDelPasajero()));
     }
 
     @GetMapping("/en-curso")

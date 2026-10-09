@@ -92,7 +92,7 @@ class SolicitudParaOtraPersonaTest {
                 new JwtUser(10L, "pasajero", "PASAJERO"), null));
         lenient().when(pasajeroRepository.findByUsuarioId(10L)).thenReturn(Optional.of(pasajero));
         lenient().when(solicitudRepository.existsByPasajeroIdAndSituacionSolicitudIn(any(), any())).thenReturn(false);
-        lenient().when(viajeService.pasajeroTieneViajeActivo(30L)).thenReturn(false);
+        lenient().when(viajeService.pasajeroPuedePedirOtro(30L)).thenReturn(true);
         lenient().when(categoriaRepository.findById(1)).thenReturn(Optional.of(estandar));
         // Quien pide es estudiante: 8 Bs con 2 Bs de descuento.
         lenient().when(precioService.cotizar(any(), any(), any())).thenReturn(new CotizacionViaje(

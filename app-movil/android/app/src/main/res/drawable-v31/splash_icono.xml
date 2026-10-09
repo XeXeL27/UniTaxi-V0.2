@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono de la pantalla de arranque de Android 12+: el logo del icono adaptativo un poco reducido para
+     que el circulo con que Android recorta el icono no le corte las esquinas. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ic_launcher_foreground"
+    android:inset="5%" />

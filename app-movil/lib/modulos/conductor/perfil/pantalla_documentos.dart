@@ -1,6 +1,5 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../../comun/confirmar_identidad.dart';
@@ -9,8 +8,10 @@ import '../../../comun/selector_carnet.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/dialogos.dart';
+import '../../../widgets/notificaciones.dart';
 import '../../../widgets/visor_pdf.dart';
 import 'documentos_api.dart';
 import 'fotos_documento.dart';
@@ -66,11 +67,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
       await _api.reemplazarPdf(documento.id, await archivo.readAsBytes(), archivo.name, contrasena);
       if (!mounted) return;
       setState(() => _datos = _cargar());
-      await mostrarExito(
-        context,
-        titulo: '¡Documento enviado!',
-        mensaje: 'Tu ${_enFrase(documento.nombre)} quedó pendiente de revisión por la administración.',
-      );
+      mostrarMensaje(context, 'Enviaste tu ${_enFrase(documento.nombre)}: queda pendiente de revisión.');
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
@@ -93,11 +90,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
       await _api.agregar(pedido.tipo, await archivo.readAsBytes(), archivo.name);
       if (!mounted) return;
       setState(() => _datos = _cargar());
-      await mostrarExito(
-        context,
-        titulo: '¡Documento enviado!',
-        mensaje: 'Tu ${_enFrase(pedido.nombre)} quedó pendiente de revisión por la administración.',
-      );
+      mostrarMensaje(context, 'Enviaste tu ${_enFrase(pedido.nombre)}: queda pendiente de revisión.');
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     } finally {
@@ -190,7 +183,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
                       children: [
                         const Padding(
                           padding: EdgeInsets.only(top: 2),
-                          child: FaIcon(FontAwesomeIcons.lock, color: ColoresApp.rojo, size: 15),
+                          child: Icon(Iconos.lock, color: ColoresApp.rojo, size: 15),
                         ),
                         const SizedBox(width: 10),
                         Expanded(
@@ -234,7 +227,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
                       children: [
                         Row(
                           children: [
-                            const FaIcon(FontAwesomeIcons.filePdf, color: ColoresApp.rojo, size: 24),
+                            const Icon(Iconos.filePdf, color: ColoresApp.rojo, size: 24),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
@@ -262,7 +255,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
                             Expanded(
                               child: OutlinedButton.icon(
                                 onPressed: () => mostrarPdf(context, titulo: d.nombre, cargar: () => _api.pdf(d.id)),
-                                icon: const FaIcon(FontAwesomeIcons.eye, size: 14),
+                                icon: const Icon(Iconos.eye, size: 14),
                                 label: const Text('Ver'),
                               ),
                             ),
@@ -278,7 +271,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
                                           height: 14,
                                           child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.blanco),
                                         )
-                                      : const FaIcon(FontAwesomeIcons.fileArrowUp, size: 14),
+                                      : const Icon(Iconos.fileArrowUp, size: 14),
                                   label: const Text('Reemplazar'),
                                 ),
                               ),
@@ -331,7 +324,7 @@ class _DocumentoFaltante extends StatelessWidget {
         children: [
           Row(
             children: [
-              FaIcon(FontAwesomeIcons.fileCircleExclamation, color: color, size: 24),
+              Icon(Iconos.fileCircleExclamation, color: color, size: 24),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -371,7 +364,7 @@ class _DocumentoFaltante extends StatelessWidget {
                     height: 14,
                     child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.blanco),
                   )
-                : const FaIcon(FontAwesomeIcons.fileArrowUp, size: 14),
+                : const Icon(Iconos.fileArrowUp, size: 14),
             label: const Text('Agregar PDF'),
           ),
         ],

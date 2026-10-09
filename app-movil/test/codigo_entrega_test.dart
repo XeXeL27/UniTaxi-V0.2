@@ -145,12 +145,17 @@ void main() {
       await tester.pumpWidget(_envolver(TarjetaCodigoEntrega(fases: _entrega(estado: 'EN_MANO').codigos)));
 
       await tester.tap(find.text('354208'));
-      await tester.pumpAndSettle();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
 
       expect(copiados, ['354208']);
       expect(find.text('Copiado al portapapeles'), findsOneWidget);
       // Copiar no debe abrir nada encima: el pasajero sigue viendo el pedido.
       expect(find.byType(Dialog), findsNothing);
+
+      // El mensaje corto se va solo.
+      await tester.pumpAndSettle();
+      expect(find.text('Copiado al portapapeles'), findsNothing);
     });
 
     testWidgets('tambien se copia el codigo del punto B con su propio toque', (tester) async {

@@ -92,11 +92,32 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
     return;
   }
   final idViaje = int.tryParse('${datos['idViaje'] ?? ''}');
+  // Cada aviso de espera (taxi o repartidor en la recogida desde el cuarto, y repartidor en el punto
+  // de entrega siempre) tiene su propio id, con el sonido del taxi que llego.
+  final aviso = int.tryParse('${datos['aviso'] ?? ''}') ?? 1;
+  final tipo = datos['tipo'];
+  final idEspera = idViaje == null
+      ? null
+      : tipo == 'REPARTIDOR_EN_ENTREGA'
+      ? idAvisoEntrega(idViaje, aviso)
+      : (tipo == 'CONDUCTOR_LLEGO' || tipo == 'REPARTIDOR_LLEGO') && aviso > 3
+      ? idAvisoLlegada(idViaje, aviso)
+      : null;
+  if (idEspera != null) {
+    await Notificador.avisoViaje(
+      '${datos['titulo'] ?? 'UNITAXI'}',
+      '${datos['cuerpo'] ?? ''}',
+      id: idEspera,
+      pedirPermiso: false,
+      sonido: SonidoAviso.llegoTaxi,
+    );
+    return;
+  }
   final evento = switch (datos['tipo']) {
     'VIAJE_ACEPTADO' => 1,
     'VIAJE_COMPLETADO' => 5,
-    'CONDUCTOR_LLEGO' => eventoLlegada(int.tryParse('${datos['aviso'] ?? ''}') ?? 1),
-    'REPARTIDOR_LLEGO' => 2,
+    'CONDUCTOR_LLEGO' => eventoLlegada(aviso),
+    'REPARTIDOR_LLEGO' => eventoLlegada(aviso),
     'PAQUETE_RECOGIDO' => 3,
     'PAQUETE_ENTREGADO' => 4,
     'VIAJE_CANCELADO' => 8,
@@ -127,3 +148,13 @@ SonidoAviso? sonidoDeEvento(int evento) => switch (evento) {
 
 /// Id de la notificacion de un aviso del viaje: el mismo en la app y en el push.
 int idNotificacionViaje(int idViaje, int evento) => 100000 + (idViaje % 100000) * 10 + evento;
+
+/// Id de la notificacion del aviso [aviso] del repartidor en el punto de entrega (1 = llego): uno
+/// propio por aviso (hasta 10), para que cada uno vuelva a sonar.
+int idAvisoEntrega(int idViaje, int aviso) => 3000000 + (idViaje % 100000) * 10 + aviso % 10;
+
+/// Id de la notificacion del aviso [aviso] de que el conductor espera: los 3 primeros usan los eventos 2,
+/// 6 y 7; desde el cuarto (siguio esperando, hasta 10 avisos) cada uno tiene un id propio para que
+/// vuelva a sonar aunque la notificacion anterior siga a la vista.
+int idAvisoLlegada(int idViaje, int aviso) =>
+    aviso <= 3 ? idNotificacionViaje(idViaje, eventoLlegada(aviso)) : 2000000 + (idViaje % 100000) * 10 + aviso % 10;

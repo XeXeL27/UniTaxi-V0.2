@@ -3,9 +3,9 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../core/iconos.dart';
 import '../core/navegador.dart';
 import '../core/tema.dart';
 import 'boton_principal.dart';
@@ -74,42 +74,59 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
   Future<void> _verificar({bool pedir = false}) async {
     if (_pidiendo) return;
     _EstadoGps nuevo;
+    var reintentarPidiendo = false;
     try {
-      if (!kIsWeb && !await Geolocator.isLocationServiceEnabled()) {
-        nuevo = _EstadoGps.apagado;
-      } else {
-        var permiso = await Geolocator.checkPermission();
-        if (permiso == LocationPermission.denied && pedir) {
-          _pidiendo = true;
-          try {
-            permiso = await Geolocator.requestPermission();
-          } finally {
-            _pidiendo = false;
-          }
+      // Primero el permiso (Android lo pregunta aunque el GPS este apagado) y despues el GPS: asi
+      // el servicio de ubicacion del conductor ya tiene permiso cuando la persona enciende el GPS.
+      var permiso = await Geolocator.checkPermission();
+      if (permiso == LocationPermission.denied && pedir) {
+        _pidiendo = true;
+        try {
+          permiso = await Geolocator.requestPermission();
+        } finally {
+          _pidiendo = false;
         }
-        nuevo = switch (permiso) {
-          LocationPermission.always || LocationPermission.whileInUse => _EstadoGps.listo,
-          LocationPermission.deniedForever => _EstadoGps.bloqueado,
-          _ => _EstadoGps.sinPermiso,
-        };
+      }
+      nuevo = switch (permiso) {
+        LocationPermission.always || LocationPermission.whileInUse => _EstadoGps.listo,
+        LocationPermission.deniedForever => _EstadoGps.bloqueado,
+        _ => _EstadoGps.sinPermiso,
+      };
+      if (nuevo == _EstadoGps.listo && !kIsWeb && !await Geolocator.isLocationServiceEnabled()) {
+        nuevo = _EstadoGps.apagado;
       }
     } catch (_) {
-      // El navegador sin soporte de ubicacion no bloquea la app.
-      nuevo = _EstadoGps.listo;
+      // El navegador sin soporte de ubicacion no bloquea la app. En el telefono el error suele ser
+      // que otro permiso se estaba preguntando (por ejemplo el de notificaciones): se vuelve a pedir.
+      if (kIsWeb) {
+        nuevo = _EstadoGps.listo;
+      } else {
+        nuevo = _EstadoGps.sinPermiso;
+        reintentarPidiendo = true;
+      }
     }
     if (!mounted) return;
     setState(() => _estado = nuevo);
     RequiereGps.listo.value = nuevo == _EstadoGps.listo;
     _reintento?.cancel();
     if (nuevo != _EstadoGps.listo) {
-      _reintento = Timer(const Duration(seconds: 3), _verificar);
+      _reintento = Timer(const Duration(seconds: 3), () => _verificar(pedir: reintentarPidiendo));
     }
   }
 
   Future<void> _activar() async {
     switch (_estado) {
       case _EstadoGps.apagado:
-        await Geolocator.openLocationSettings();
+        // Algunos telefonos no tienen la pantalla de ubicacion directa: entonces los ajustes de la app.
+        var abierto = false;
+        try {
+          abierto = await Geolocator.openLocationSettings();
+        } catch (_) {}
+        if (!abierto) {
+          try {
+            await Geolocator.openAppSettings();
+          } catch (_) {}
+        }
       case _EstadoGps.sinPermiso:
         await _verificar(pedir: true);
       case _EstadoGps.bloqueado:
@@ -118,7 +135,9 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
           // que la persona cambio en el icono de la barra de direcciones.
           Navegador.recargar();
         } else {
-          await Geolocator.openAppSettings();
+          try {
+            await Geolocator.openAppSettings();
+          } catch (_) {}
         }
       case _EstadoGps.verificando || _EstadoGps.listo:
         break;
@@ -174,7 +193,7 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
           height: 96,
           decoration: const BoxDecoration(color: ColoresApp.rojoSuave, shape: BoxShape.circle),
           child: const Center(
-            child: FaIcon(FontAwesomeIcons.locationDot, color: ColoresApp.rojo, size: 40),
+            child: Icon(Iconos.locationDot, color: ColoresApp.rojo, size: 40),
           ),
         ),
         const SizedBox(height: 24),

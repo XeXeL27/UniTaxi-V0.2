@@ -1,34 +1,40 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
+import '../../../comun/servicios_en_curso.dart';
 import '../../../core/api_excepcion.dart';
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../core/formato.dart';
 import '../../../comun/editor_foto.dart';
 import '../../../core/enlaces.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../widgets/boton_principal.dart';
-import '../../../widgets/dialogos.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import 'acciones_delivery.dart';
+import 'espera_cronometro.dart';
 import 'flujo_conductor.dart';
 
 /// Resumen del pedido para el panel plegado: texto, color y, solo para ir a recoger, el boton.
 (String, Color, String, Color) estadoEntregaConductor(Viaje viaje) {
   final datos = viaje.datosEntrega!;
+  if (datos.esperandoEnEntrega) {
+    return ('Esperando a quien recibe en B', const Color(0xFFE67E22), '', ColoresApp.azul);
+  }
   if (datos.estadoEntrega == EstadoEntrega.enMano) {
     return ('Lleva el paquete al destino (B)', ColoresApp.exito, '', ColoresApp.azul);
   }
   final irARecoger =
       datos.tipoEnvio == TipoEnvio.encomienda &&
       (viaje.situacion == SituacionViaje.confirmado || viaje.situacion == SituacionViaje.enCamino);
-  return irARecoger
-      ? ('Ve a recoger el paquete (A)', ColoresApp.azul, 'Llegué al punto de recogida', ColoresApp.azul)
-      : ('Recoge el paquete', ColoresApp.azul, '', ColoresApp.azul);
+  if (irARecoger) {
+    return ('Ve a recoger el paquete (A)', ColoresApp.azul, 'Llegué al punto de recogida', ColoresApp.azul);
+  }
+  final texto = datos.tipoEnvio == TipoEnvio.compraYEntrega ? 'Compra el pedido' : 'Recoge el paquete';
+  return (texto, ColoresApp.azul, '', ColoresApp.azul);
 }
 
 /// Datos del pedido que el repartidor necesita tener delante todo el viaje: qué lleva, dónde lo
@@ -66,13 +72,13 @@ class ResumenEntregaConductor extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           decoration: BoxDecoration(
             color: ColoresApp.azul.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
+            borderRadius: BorderRadius.circular(12),
           ),
           child: Text(
-            EstadoEntrega.nombre(datos.estadoEntrega),
+            estadoServicio(viaje),
             style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 15),
           ),
         ),
@@ -99,18 +105,18 @@ class ResumenEntregaConductor extends StatelessWidget {
             ?botonChat,
           ],
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         Text(datos.descripcion, style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
         const SizedBox(height: 12),
         _ContactosEntrega(datos: datos),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         if (!esCompra || viaje.partida != null)
           FilaLugar.partida(
             etiqueta: esCompra ? 'Comercio (A)' : 'Recoger en (A)',
             texto: esCompra ? viaje.partida!.texto : viaje.origenDireccion,
           ),
         FilaLugar.destino(etiqueta: 'Entregar en (B)', texto: viaje.destinoDireccion),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         RecuadroPrecio(
           etiqueta: esCompra ? 'Total a cobrar' : MetodoPago.frase('Cobra', viaje.metodoPago),
           monto: esCompra
@@ -144,7 +150,7 @@ class _ContactosEntrega extends StatelessWidget {
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: ColoresApp.fondo,
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(12),
         border: Border.all(color: ColoresApp.borde),
       ),
       child: Column(
@@ -194,14 +200,14 @@ class _ContactoEntrega extends StatelessWidget {
           onPressed: numero.isEmpty
               ? null
               : () => abrirEnlaceExterno(context, Uri(scheme: 'tel', path: numero), numero),
-          icon: const Icon(Icons.phone_outlined),
+          icon: const Icon(Iconos.phone),
         ),
       ],
     );
   }
 }
 
-/// Acciones del repartidor por etapas (los datos del pedido van arriba, en [ResumenEntregaConductor]):
+/// Acciones del repartidor por etapas (los datos del pedido van debajo, en [ResumenEntregaConductor]):
 /// 1. Encomienda: ir al punto de recogida (en el mapa solo se ve A) y marcar "Llegué al punto de
 ///    recogida"; ahi, codigo del remitente y foto del paquete. Compra: coordinar y registrar la compra.
 /// 2. Con el paquete: ir a B (en la encomienda el mapa solo muestra B), confirmar el cobro y entregar
@@ -304,7 +310,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     try {
       await accion();
     } on ApiExcepcion catch (e) {
-      if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
+      if (mounted) mostrarMensaje(context, e.mensaje, error: true);
     }
   }
 
@@ -317,19 +323,10 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     final llegoAlPunto = actual.situacion == SituacionViaje.llego;
     final esCompra = entrega.tipoEnvio == TipoEnvio.compraYEntrega;
 
+    // El paso ("Paso 1 de 2") ya lo dice la cabecera del panel.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _Etapa(
-          paso: conPaquete ? 2 : 1,
-          texto: conPaquete
-              ? 'Lleva el paquete al destino (B)'
-              : llegoAlPunto || esCompra
-              ? 'Recoge el paquete'
-              : 'Ve a recoger el paquete al punto A',
-        ),
-        const SizedBox(height: 6),
-        const SizedBox(height: 10),
         if (conPaquete)
           _enMano(entrega, actual)
         else if (esCompra)
@@ -344,25 +341,14 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   // ------------------------------------------------------------------ etapa 1: ir a A
 
+  /// El boton "Llegué al punto de recogida" va fijo en el pie del panel (pantalla de inicio): aqui
+  /// solo queda a cuanto esta.
   Widget _irARecoger(Viaje actual) {
     final metros = flujo.metrosDesdeMi(actual.origen);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (metros != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Text(
-              'Estás a ${_distancia(metros)} del punto de recogida.',
-              style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
-            ),
-          ),
-        BotonPrincipal(
-          texto: 'Llegué al punto de recogida',
-          cargando: flujo.ocupado,
-          onPressed: () => _ejecutar(flujo.llegueRecogida),
-        ),
-      ],
+    if (metros == null) return const SizedBox.shrink();
+    return Text(
+      'Estás a ${_distancia(metros)} del punto de recogida.',
+      style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
     );
   }
 
@@ -381,13 +367,13 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
       ),
       const SizedBox(height: 12),
       _campoCodigo(),
-      const SizedBox(height: 10),
+      const SizedBox(height: 12),
       _BotonFoto(
         foto: _fotoEvidencia,
         texto: 'Tomar foto del paquete',
         onTomar: () => _tomarFotoEvidencia(entrega: false),
       ),
-      const SizedBox(height: 10),
+      const SizedBox(height: 12),
       BotonPrincipal(
         texto: 'Recoger y empezar la entrega',
         cargando: flujo.ocupado,
@@ -427,7 +413,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     ayuda:
         'Escribe el motivo y luego toma una foto. Es una advertencia para el administrador, no '
         'una suspensión automática.',
-    icono: FontAwesomeIcons.boxOpen,
+    icono: Iconos.boxOpen,
     color: ColoresApp.textoSuave,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -437,10 +423,10 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           maxLines: 2,
           decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: flujo.ocupado ? null : _reportarPaquete,
-          icon: const FaIcon(FontAwesomeIcons.flag, size: 14),
+          icon: const Icon(Iconos.flag, size: 14),
           label: const Text('Rechazar paquete'),
           style: OutlinedButton.styleFrom(
             foregroundColor: ColoresApp.rojo,
@@ -524,7 +510,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
             fontWeight: cerca ? FontWeight.w600 : FontWeight.normal,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         if (!entrega.pagoConfirmado) ...[
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
@@ -548,7 +534,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
             'Pago confirmado: ${formatoBs(entrega.montoPagoRecibido ?? _totalACobrar)}',
             style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           if (entrega.tipoEnvio == TipoEnvio.encomienda) ...[
             const Text(
               'Código de entrega',
@@ -568,13 +554,13 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
               decoration: const InputDecoration(labelText: 'Teléfono del cliente'),
             ),
           ],
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _BotonFoto(
             foto: _fotoEvidencia,
             texto: 'Tomar foto de la persona con su paquete',
             onTomar: () => _tomarFotoEvidencia(entrega: true),
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           BotonPrincipal(
             texto: 'Confirmar entrega',
             cargando: flujo.ocupado,
@@ -606,7 +592,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   Widget _seccionFalla() => SeccionDesplegable(
     titulo: 'No se pudo entregar',
     ayuda: 'Explica qué pasó y toma una foto del lugar. Se envía al administrador.',
-    icono: FontAwesomeIcons.triangleExclamation,
+    icono: Iconos.triangleExclamation,
     color: ColoresApp.rojo,
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -616,10 +602,10 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           maxLines: 2,
           decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         OutlinedButton.icon(
           onPressed: flujo.ocupado ? null : _reportarFalla,
-          icon: const FaIcon(FontAwesomeIcons.camera, size: 15),
+          icon: const Icon(Iconos.camera, size: 15),
           label: const Text('Registrar la falla'),
           style: OutlinedButton.styleFrom(
             foregroundColor: ColoresApp.rojo,
@@ -649,49 +635,117 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   }
 }
 
+/// Lo urgente del reparto, arriba del panel (a la vista sin desplazar): en A, la espera a quien da el
+/// paquete; en B, "Llegue al punto de entrega" (a 100 m o menos) y despues la espera a quien recibe,
+/// con el cronometro entre avisos y, tras el tercero, seguir esperando o reportar.
+class EsperaDelivery extends StatelessWidget {
+  final FlujoConductor flujo;
+
+  const EsperaDelivery({super.key, required this.flujo});
+
+  @override
+  Widget build(BuildContext context) {
+    final contenido = _contenido(context);
+    return contenido == null ? const SizedBox.shrink() : Padding(padding: const EdgeInsets.only(bottom: 12), child: contenido);
+  }
+
+  Widget? _contenido(BuildContext context) {
+    final actual = flujo.viaje;
+    final entrega = actual?.datosEntrega;
+    if (actual == null || entrega == null) return null;
+    if (entrega.esperandoEnEntrega) return _esperaEnEntrega(context, entrega, actual);
+    if (entrega.estadoEntrega == EstadoEntrega.enMano) {
+      if (!flujo.cercaDelDestino) return null;
+      return BotonPrincipal(
+        texto: 'Llegué al punto de entrega',
+        cargando: flujo.ocupado,
+        onPressed: () async {
+          try {
+            await flujo.llegueEntrega();
+          } on ApiExcepcion catch (e) {
+            if (context.mounted) mostrarMensaje(context, e.mensaje, error: true);
+          }
+        },
+      );
+    }
+    final enRecogida = entrega.tipoEnvio == TipoEnvio.encomienda && actual.situacion == SituacionViaje.llego;
+    if (enRecogida) return _esperaEnRecogida(context, actual, entrega);
+    return null;
+  }
+
+  /// En A el repartidor espera a quien le entrega el paquete (el remitente o el cliente). Tras el
+  /// tercer aviso puede reportar que no se presento: el pedido se cancela sin republicarse.
+  Widget _esperaEnRecogida(BuildContext context, Viaje actual, DatosEntrega entrega) {
+    return EsperaConCronometro(
+      quien: _primerNombre(entrega.nombreRemitente) ?? actual.primerNombrePasajero,
+      avisos: actual.avisosEspera,
+      ultimoAviso: actual.ultimoAvisoEspera,
+      telefono: _conTexto(entrega.telefonoRemitente) ?? actual.telefonoPasajero,
+      ocupado: flujo.ocupado,
+      onAvisar: flujo.avisarEspera,
+      onReportar: () async {
+        final comentario = await pedirMotivo(
+          context,
+          titulo: 'Nadie entregó el paquete',
+          explicacion:
+              'El pedido se cancelará y quedará un reporte para que el administrador lo revise. '
+              'Cuenta qué pasó (por ejemplo, si llamaste).',
+        );
+        if (comentario == null) return;
+        await flujo.pasajeroNoSePresento(comentario);
+      },
+    );
+  }
+
+  /// En B espera a quien recibe (el receptor de la encomienda o el cliente de la compra). Tras el
+  /// tercer aviso puede reportar que no pudo entregar (motivo y foto, como "No se pudo entregar").
+  Widget _esperaEnEntrega(BuildContext context, DatosEntrega entrega, Viaje actual) {
+    final esEncomienda = entrega.tipoEnvio == TipoEnvio.encomienda;
+    return EsperaConCronometro(
+      quien: (esEncomienda ? _primerNombre(entrega.nombreReceptor) : null) ?? actual.primerNombrePasajero,
+      avisos: entrega.avisosEntrega,
+      ultimoAviso: entrega.ultimoAvisoEntrega,
+      telefono: (esEncomienda ? _conTexto(entrega.telefonoReceptor) : null) ?? actual.telefonoPasajero,
+      ocupado: flujo.ocupado,
+      onAvisar: flujo.avisarEsperaEntrega,
+      textoReportar: 'Reportar: no pude entregar',
+      queSeReporta: 'que no pudiste entregar',
+      onReportar: () async {
+        final motivo = await pedirMotivo(
+          context,
+          titulo: 'No pudiste entregar',
+          explicacion:
+              'Cuenta qué pasó (por ejemplo, si llamaste) y después toma una foto del lugar. '
+              'El pedido se cerrará y el administrador lo revisará.',
+          etiqueta: 'Motivo',
+          textoConfirmar: 'Tomar la foto',
+        );
+        if (motivo == null) return;
+        final tomada = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 2000);
+        if (tomada == null) {
+          if (context.mounted) mostrarMensaje(context, 'La foto es obligatoria.');
+          return;
+        }
+        final foto = await tomada.readAsBytes();
+        await flujo.noSePudoEntregar(motivo, foto);
+      },
+    );
+  }
+}
+
+String? _conTexto(String? texto) => texto == null || texto.trim().isEmpty ? null : texto.trim();
+
+/// "JUAN CARLOS PEREZ" -> "Juan".
+String? _primerNombre(String? nombre) {
+  final limpio = _conTexto(nombre);
+  if (limpio == null) return null;
+  final primero = limpio.split(RegExp(r'\s+')).first;
+  return primero[0].toUpperCase() + primero.substring(1).toLowerCase();
+}
+
 String _distancia(double metros) {
   if (metros < 1000) return '${metros.round()} m';
   return '${(metros / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
-}
-
-/// Paso del pedido (1 recoger, 2 entregar) en la cabecera del panel.
-class _Etapa extends StatelessWidget {
-  final int paso;
-  final String texto;
-
-  const _Etapa({required this.paso, required this.texto});
-
-  @override
-  Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-    decoration: BoxDecoration(
-      color: (paso == 1 ? ColoresApp.azul : ColoresApp.exito).withValues(alpha: 0.1),
-      borderRadius: BorderRadius.circular(10),
-    ),
-    child: Row(
-      children: [
-        Text(
-          'Paso $paso de 2',
-          style: TextStyle(
-            color: paso == 1 ? ColoresApp.azul : ColoresApp.exito,
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: Text(
-            texto,
-            style: TextStyle(
-              color: paso == 1 ? ColoresApp.azul : ColoresApp.exito,
-              fontWeight: FontWeight.w700,
-              fontSize: 15,
-            ),
-          ),
-        ),
-      ],
-    ),
-  );
 }
 
 /// Boton para tomar la foto de evidencia con su miniatura cuando ya se tomo.
@@ -708,7 +762,7 @@ class _BotonFoto extends StatelessWidget {
     if (lista == null) {
       return OutlinedButton.icon(
         onPressed: onTomar,
-        icon: const FaIcon(FontAwesomeIcons.camera, size: 16),
+        icon: const Icon(Iconos.camera, size: 16),
         label: Text(texto),
       );
     }

@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../core/api_excepcion.dart';
@@ -10,6 +9,7 @@ import '../core/carnet/lectura_carnet.dart';
 import '../core/carnet/lectura_licencia.dart';
 import '../core/carnet/ocr_carnet.dart';
 import '../core/formato.dart';
+import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../widgets/dialogos.dart';
 import 'editor_foto.dart';
@@ -111,23 +111,23 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
           children: [
             if (actual != null)
               ListTile(
-                leading: const FaIcon(FontAwesomeIcons.magnifyingGlassPlus, color: ColoresApp.tinta),
+                leading: const Icon(Iconos.magnifyingGlassPlus, color: ColoresApp.tinta),
                 title: const Text('Ver la foto'),
                 onTap: () => Navigator.of(context).pop(_Origen.ver),
               ),
             ListTile(
-              leading: const FaIcon(FontAwesomeIcons.camera, color: ColoresApp.tinta),
+              leading: const Icon(Iconos.camera, color: ColoresApp.tinta),
               title: const Text('Tomar una foto'),
               onTap: () => Navigator.of(context).pop(_Origen.camara),
             ),
             ListTile(
-              leading: const FaIcon(FontAwesomeIcons.image, color: ColoresApp.tinta),
+              leading: const Icon(Iconos.image, color: ColoresApp.tinta),
               title: const Text('Cargar de la galería'),
               onTap: () => Navigator.of(context).pop(_Origen.galeria),
             ),
             if (actual != null)
               ListTile(
-                leading: const FaIcon(FontAwesomeIcons.rotateRight, color: ColoresApp.tinta),
+                leading: const Icon(Iconos.rotateRight, color: ColoresApp.tinta),
                 title: const Text('Girar esta foto'),
                 onTap: () => Navigator.of(context).pop(_Origen.girar),
               ),
@@ -325,7 +325,7 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                 children: [
                   const Padding(
                     padding: EdgeInsets.only(top: 2),
-                    child: FaIcon(FontAwesomeIcons.circleExclamation, color: ColoresApp.rojo, size: 14),
+                    child: Icon(Iconos.circleExclamation, color: ColoresApp.rojo, size: 14),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -359,12 +359,12 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     // El anverso lleva la foto de la persona; el reverso, no (dorso de la tarjeta).
-                    FaIcon(
+                    Icon(
                       switch ((_esLicencia, lado)) {
-                        (false, _Lado.anverso) => FontAwesomeIcons.idCard,
-                        (false, _Lado.reverso) => FontAwesomeIcons.creditCard,
-                        (true, _Lado.anverso) => FontAwesomeIcons.solidIdBadge,
-                        (true, _Lado.reverso) => FontAwesomeIcons.solidCreditCard,
+                        (false, _Lado.anverso) => Iconos.idCard,
+                        (false, _Lado.reverso) => Iconos.creditCard,
+                        (true, _Lado.anverso) => Iconos.solidIdBadge,
+                        (true, _Lado.reverso) => Iconos.solidCreditCard,
                       },
                       color: ColoresApp.tinta,
                       size: 26,
@@ -387,7 +387,7 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const FaIcon(FontAwesomeIcons.check, color: ColoresApp.blanco, size: 11),
+                        const Icon(Iconos.check, color: ColoresApp.blanco, size: 11),
                         const SizedBox(width: 5),
                         Text(
                           titulo,
@@ -409,7 +409,7 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                       onTap: () => verFoto(context, foto, titulo: _tituloEditor(lado)),
                       child: const Padding(
                         padding: EdgeInsets.all(8),
-                        child: FaIcon(FontAwesomeIcons.magnifyingGlassPlus, color: ColoresApp.blanco, size: 14),
+                        child: Icon(Iconos.magnifyingGlassPlus, color: ColoresApp.blanco, size: 14),
                       ),
                     ),
                   ),
@@ -662,7 +662,7 @@ Future<void> verFoto(BuildContext context, Uint8List foto, {required String titu
           leading: IconButton(
             tooltip: 'Cerrar',
             onPressed: () => Navigator.of(context).pop(),
-            icon: const FaIcon(FontAwesomeIcons.xmark, color: ColoresApp.blanco, size: 20),
+            icon: const Icon(Iconos.xmark, color: ColoresApp.blanco, size: 20),
           ),
         ),
         body: SafeArea(

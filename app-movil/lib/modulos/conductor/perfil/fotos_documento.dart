@@ -1,7 +1,6 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:provider/provider.dart';
 
 import '../../../comun/confirmar_identidad.dart';
@@ -13,10 +12,11 @@ import '../../../core/carnet/lectura_licencia.dart';
 import '../../../core/carnet/lector_documentos.dart';
 import '../../../core/cliente_api.dart';
 import '../../../core/formato.dart';
+import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
-import '../../../widgets/dialogos.dart';
 import '../../../widgets/formatos.dart';
+import '../../../widgets/notificaciones.dart';
 import 'documentos_api.dart';
 
 /// Carnet o licencia del conductor en Mis documentos: se ven siempre (fotos del anverso y del
@@ -58,11 +58,7 @@ class TarjetaFotosDocumento extends StatelessWidget {
         children: [
           Row(
             children: [
-              FaIcon(
-                _esLicencia ? FontAwesomeIcons.solidIdBadge : FontAwesomeIcons.idCard,
-                color: ColoresApp.azul,
-                size: 22,
-              ),
+              Icon(_esLicencia ? Iconos.solidIdBadge : Iconos.idCard, color: ColoresApp.azul, size: 22),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -84,7 +80,7 @@ class TarjetaFotosDocumento extends StatelessWidget {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: tieneFotos ? () => _verFotos(context, titulo) : null,
-                  icon: const FaIcon(FontAwesomeIcons.eye, size: 14),
+                  icon: const Icon(Iconos.eye, size: 14),
                   label: Text(tieneFotos ? 'Ver fotos' : 'Sin fotos'),
                 ),
               ),
@@ -94,7 +90,7 @@ class TarjetaFotosDocumento extends StatelessWidget {
                   child: FilledButton.icon(
                     onPressed: alCambiar,
                     style: FilledButton.styleFrom(backgroundColor: ColoresApp.exito),
-                    icon: const FaIcon(FontAwesomeIcons.camera, size: 14),
+                    icon: const Icon(Iconos.camera, size: 14),
                     label: const Text('Cambiar fotos'),
                   ),
                 ),
@@ -133,7 +129,7 @@ class TarjetaFotosDocumento extends StatelessWidget {
                     IconButton(
                       tooltip: 'Cerrar',
                       onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded),
+                      icon: const Icon(Iconos.xmark),
                     ),
                   ],
                 ),
@@ -353,14 +349,11 @@ class _PantallaCambiarFotosState extends State<PantallaCambiarFotos> {
         );
       }
       if (!mounted) return;
-      await mostrarExito(
+      mostrarMensaje(
         context,
-        titulo: '¡Fotos actualizadas!',
-        mensaje: _esLicencia
-            ? 'Guardamos las fotos nuevas de tu licencia.'
-            : 'Guardamos las fotos nuevas de tu carnet.',
+        _esLicencia ? 'Guardamos las fotos nuevas de tu licencia.' : 'Guardamos las fotos nuevas de tu carnet.',
       );
-      if (mounted) Navigator.of(context).pop(true);
+      Navigator.of(context).pop(true);
     } on ApiExcepcion catch (e) {
       if (mounted) setState(() => _error = e.mensaje);
     } finally {
