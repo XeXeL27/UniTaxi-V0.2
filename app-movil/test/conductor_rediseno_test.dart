@@ -115,6 +115,21 @@ void main() {
     expect(flujo.solicitudes.map((s) => s.id), [2]);
   });
 
+  test('dejar pasar los 15 s cierra la tarjeta pero la solicitud queda en la lista', () {
+    final flujo = _flujo()
+      ..etapa = EtapaConductor.lista
+      ..solicitudes = [_solicitud(id: 1), _solicitud(id: 2)];
+    flujo.seleccionada = flujo.solicitudes.first;
+    flujo.etapa = EtapaConductor.detalle;
+    flujo.conCuentaRegresiva = true;
+
+    flujo.dejarPasarSolicitud();
+
+    expect(flujo.etapa, EtapaConductor.lista);
+    expect(flujo.conCuentaRegresiva, isFalse);
+    expect(flujo.solicitudes.map((s) => s.id), [1, 2]);
+  });
+
   group('la tarjeta de la solicitud', () {
     testWidgets('recien llegada: cuenta regresiva, cuanto cobra y Rechazar, sin ganancias', (tester) async {
       final flujo = _flujo()

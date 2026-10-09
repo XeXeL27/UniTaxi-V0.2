@@ -361,7 +361,7 @@ class PanelDetalleSolicitud extends StatelessWidget {
               CuentaRegresivaSolicitud(
                 key: ValueKey('cuenta-${solicitud.id}'),
                 pausada: flujo.ocupado,
-                onTerminado: flujo.rechazarSolicitud,
+                onTerminado: flujo.dejarPasarSolicitud,
               ),
           ],
         ),

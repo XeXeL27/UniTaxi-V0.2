@@ -95,8 +95,8 @@ class FlujoConductor extends ChangeNotifier {
   /// Viajes o entregas completados hoy (null mientras no se consulto). Solo la cantidad.
   int? viajesHoy;
 
-  /// Solicitudes que el conductor rechazo (o dejo pasar en la tarjeta de 15 s): no se le vuelven a
-  /// mostrar. Los demas conductores las siguen viendo.
+  /// Solicitudes que el conductor rechazo con el boton Rechazar: no se le vuelven a mostrar. Los demas
+  /// conductores las siguen viendo. Dejar pasar los 15 s de la tarjeta no la oculta: queda en la lista.
   final Set<int> _ocultas = {};
 
   /// La solicitud del detalle se abrio sola al llegar (tarjeta con cuenta regresiva de 15 s).
@@ -255,7 +255,16 @@ class FlujoConductor extends ChangeNotifier {
     }
   }
 
-  /// Rechazar la solicitud del detalle (o dejar pasar los 15 s): se oculta solo para este conductor y
+  /// Se acabaron los 15 s de la tarjeta (o volvio con atras) sin responder: la tarjeta se cierra y la
+  /// solicitud queda en la lista de espera, por si la quiere tomar despues (con pocos conductores, si
+  /// todos la dejaban pasar nadie la volvia a ver).
+  void dejarPasarSolicitud() {
+    final elegida = seleccionada;
+    if (elegida != null) _vistas.add(elegida.id);
+    _entrarLista();
+  }
+
+  /// Rechazar la solicitud del detalle con el boton Rechazar: se oculta solo para este conductor y
   /// vuelve a la lista.
   void rechazarSolicitud() {
     final elegida = seleccionada;

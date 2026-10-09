@@ -933,7 +933,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
           canPop: etapa != EtapaConductor.detalle,
           onPopInvokedWithResult: (didPop, _) {
             if (didPop || _flujo.etapa != EtapaConductor.detalle) return;
-            _flujo.conCuentaRegresiva ? _flujo.rechazarSolicitud() : _flujo.volverALista();
+            _flujo.conCuentaRegresiva ? _flujo.dejarPasarSolicitud() : _flujo.volverALista();
           },
           child: Stack(
             children: [
