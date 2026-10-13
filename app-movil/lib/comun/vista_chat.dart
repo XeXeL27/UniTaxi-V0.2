@@ -8,7 +8,7 @@ import '../core/tema.dart';
 /// Botón de chat para el panel del viaje, con badge de mensajes no leidos.
 ///
 /// Solo tiene sentido mientras el viaje esta activo: el chat se abre cuando el conductor acepta y
-/// se cierra cuando el viaje termina. Al tocarlo abre [VistaChat] como modal flotante sobre el
+/// se cierra cuando el viaje termina o se cancela. Al tocarlo abre [VistaChat] como modal flotante sobre el
 /// mapa, sin sacar al usuario de la pantalla del viaje.
 class BotonChat extends StatelessWidget {
   final int idViaje;
@@ -18,7 +18,7 @@ class BotonChat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final noLeidos = context.select<ChatEstado, int>((chat) => chat.idViaje == idViaje ? chat.noLeidos : 0);
+    final noLeidos = context.select<ChatEstado, int>((chat) => chat.noLeidosDe(idViaje));
     return VinculoChat(
       idViaje: idViaje,
       nombreContraparte: nombreContraparte,
@@ -110,6 +110,7 @@ class _VistaChatState extends State<VistaChat> {
   final _scroll = ScrollController();
   bool _enviando = false;
   String? _avisoEnvio;
+  int _mostrados = 0;
 
   @override
   void initState() {
@@ -127,22 +128,25 @@ class _VistaChatState extends State<VistaChat> {
     super.dispose();
   }
 
+  /// Envia por el servidor. Si no sale, el texto vuelve a la caja para reintentar (no se pierde).
   void _enviar(ChatEstado chat) {
     final texto = _controladorTexto.text;
     if (texto.trim().isEmpty || _enviando) return;
     setState(() => _enviando = true);
     _controladorTexto.clear();
-    chat.enviar(texto).then((enviado) {
+    chat.enviar(widget.idViaje, texto).then((enviado) {
       if (!mounted) return;
       setState(() {
         _enviando = false;
-        _avisoEnvio = enviado ? 'Mensaje enviado' : 'Sin conexión: no se envió';
+        _avisoEnvio = enviado ? null : 'No se envió. Revisa tu conexión e intenta de nuevo.';
+        if (!enviado && _controladorTexto.text.isEmpty) _controladorTexto.text = texto;
       });
-      Future<void>.delayed(const Duration(seconds: 2), () {
-        if (mounted && _avisoEnvio != null) setState(() => _avisoEnvio = null);
-      });
+      if (!enviado) {
+        Future<void>.delayed(const Duration(seconds: 4), () {
+          if (mounted && _avisoEnvio != null) setState(() => _avisoEnvio = null);
+        });
+      }
     });
-    _irAlFinal();
   }
 
   void _irAlFinal() {
@@ -160,6 +164,12 @@ class _VistaChatState extends State<VistaChat> {
   Widget build(BuildContext context) {
     final chat = context.watch<ChatEstado>();
     final idUsuario = chat.sesion.usuario?.idUsuario ?? 0;
+    final mensajes = chat.mensajesDe(widget.idViaje);
+    // Llego o salio un mensaje: se baja al ultimo.
+    if (mensajes.length != _mostrados) {
+      _mostrados = mensajes.length;
+      _irAlFinal();
+    }
     return ColoredBox(
       color: ColoresApp.blanco,
       child: Column(
@@ -170,7 +180,7 @@ class _VistaChatState extends State<VistaChat> {
           Flexible(
             child: ConstrainedBox(
               constraints: const BoxConstraints(minHeight: 180, maxHeight: 400),
-              child: chat.mensajes.isEmpty
+              child: mensajes.isEmpty
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(24),
@@ -185,9 +195,9 @@ class _VistaChatState extends State<VistaChat> {
                       controller: _scroll,
                       shrinkWrap: true,
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      itemCount: chat.mensajes.length,
+                      itemCount: mensajes.length,
                       itemBuilder: (context, indice) {
-                        final mensaje = chat.mensajes[indice];
+                        final mensaje = mensajes[indice];
                         return _Burbuja(mensaje: mensaje, propio: mensaje.esDe(idUsuario));
                       },
                     ),
@@ -201,7 +211,7 @@ class _VistaChatState extends State<VistaChat> {
                 _avisoEnvio!,
                 style: TextStyle(
                   fontSize: 11,
-                  color: _avisoEnvio!.startsWith('Sin') ? ColoresApp.rojo : ColoresApp.exito,
+                  color: ColoresApp.rojo,
                 ),
               ),
             ),
@@ -246,8 +256,8 @@ class _Cabecera extends StatelessWidget {
                       estado == EstadoConexionChat.conectado
                           ? 'Chat activo'
                           : estado == EstadoConexionChat.desconectado
-                          ? 'Sin conexión'
-                          : 'Chat',
+                          ? 'Sin conexión: reintentando...'
+                          : 'Conectando...',
                       style: const TextStyle(fontSize: 11, color: ColoresApp.textoSuave),
                     ),
                   ],

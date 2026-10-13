@@ -229,15 +229,17 @@ class Notificador {
     return _enCola(() => _seguimiento.invokeMethod<void>('detener'));
   }
 
-  /// Avisa un mensaje de chat con el nombre de quien lo escribio. Solo se llama cuando el chat no
-  /// esta abierto en pantalla: si esta abierto, el mensaje se ve directo en la conversacion.
-  static Future<void> mensajeChat(String nombreEmisor, String contenido) async {
-    await iniciar();
+  /// Avisa un mensaje de chat ("Mensaje de Rene"). Solo se llama cuando el chat no esta abierto en
+  /// pantalla: si esta abierto, el mensaje se ve directo en la conversacion. [id] es el del viaje
+  /// (idNotificacionChat), el mismo que usa el push: el siguiente mensaje reemplaza al anterior.
+  /// [pedirPermiso] en false para el push con la app cerrada (no hay pantalla).
+  static Future<void> mensajeChat(String titulo, String contenido, {int id = 7002, bool pedirPermiso = true}) async {
+    await iniciar(pedirPermiso: pedirPermiso);
     if (!_listo) return;
     try {
       await _plugin.show(
-        id: 7002,
-        title: nombreEmisor,
+        id: id,
+        title: titulo,
         body: contenido,
         notificationDetails: const NotificationDetails(android: _canalChat, web: WebNotificationDetails()),
       );

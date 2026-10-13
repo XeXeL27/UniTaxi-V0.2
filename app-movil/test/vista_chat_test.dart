@@ -19,6 +19,10 @@ class _ChatDePrueba extends ChatEstado {
   @override
   Future<void> vincular(int idViaje, String nombreContraparte) async {}
 
+  // Sin la ruedita de "Conectando..." (no dejaria terminar las animaciones).
+  @override
+  EstadoConexionChat get estadoConexion => EstadoConexionChat.conectado;
+
   @override
   void cerrarPantalla() {
     cerrados++;

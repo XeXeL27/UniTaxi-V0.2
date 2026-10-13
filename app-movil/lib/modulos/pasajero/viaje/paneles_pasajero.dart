@@ -684,7 +684,7 @@ class AccionesViaje extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final noLeidos = context.select<ChatEstado, int>((chat) => chat.idViaje == viaje.id ? chat.noLeidos : 0);
+    final noLeidos = context.select<ChatEstado, int>((chat) => chat.noLeidosDe(viaje.id));
     final telefono = viaje.telefonoConductor;
     final quien = viaje.datosEntrega == null ? 'conductor' : 'repartidor';
     return VinculoChat(

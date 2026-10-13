@@ -8,10 +8,12 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.verify;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
@@ -53,6 +55,8 @@ class ChatServiceTest {
     private ViajeService viajeService;
     @Mock
     private MensajeRepository mensajeRepository;
+    @Mock
+    private NotificacionPushService notificacionPushService;
 
     @InjectMocks
     private ChatService chatService;
@@ -72,6 +76,11 @@ class ChatServiceTest {
         lenient().when(mensajeRepository.findByViajeIdOrderByFechaAsc(anyLong())).thenAnswer(invocacion -> almacen.stream()
                 .filter(mensaje -> mensaje.getViaje().getId().equals(invocacion.getArgument(0)))
                 .toList());
+        lenient().when(mensajeRepository.findByViajeIdAndIdGreaterThanOrderByIdAsc(anyLong(), anyLong()))
+                .thenAnswer(invocacion -> almacen.stream()
+                        .filter(mensaje -> mensaje.getViaje().getId().equals(invocacion.getArgument(0)))
+                        .filter(mensaje -> mensaje.getId() > (Long) invocacion.getArgument(1))
+                        .toList());
         lenient().when(mensajeRepository.countByViajeIdAndLeidoFalseAndUsuarioEmisorIdNot(anyLong(), anyLong()))
                 .thenAnswer(invocacion -> almacen.stream()
                         .filter(mensaje -> mensaje.getViaje().getId().equals(invocacion.getArgument(0)))
@@ -259,5 +268,34 @@ class ChatServiceTest {
         chatService.enviar(ID_PASAJERO, new MensajeEnvioRequest(ID_VIAJE, "Mio"));
 
         assertEquals(2, chatService.contarNoLeidos(ID_VIAJE));
+    }
+
+    @Test
+    void enviarAvisaPorPushAlOtroConElPrimerNombre() {
+        comoConductor();
+
+        chatService.enviar(ID_CONDUCTOR, new MensajeEnvioRequest(ID_VIAJE, "Ya llegue"));
+
+        verify(notificacionPushService).enviar(eq(ID_PASAJERO), eq(Map.of(
+                "tipo", "CHAT_MENSAJE",
+                "idViaje", String.valueOf(ID_VIAJE),
+                "idMensaje", "1",
+                "titulo", "Mensaje de Carlos",
+                "cuerpo", "Ya llegue")));
+    }
+
+    @Test
+    void historialDesdeDevuelveSoloLosMensajesNuevos() {
+        comoPasajero();
+        comoConductor();
+        when(viajeService.obtenerViajeDelUsuario(ID_VIAJE)).thenReturn(viajeActivo());
+        chatService.enviar(ID_PASAJERO, new MensajeEnvioRequest(ID_VIAJE, "Uno"));
+        chatService.enviar(ID_CONDUCTOR, new MensajeEnvioRequest(ID_VIAJE, "Dos"));
+        chatService.enviar(ID_PASAJERO, new MensajeEnvioRequest(ID_VIAJE, "Tres"));
+
+        List<MensajeResponse> nuevos = chatService.historial(ID_VIAJE, 1L);
+
+        assertEquals(List.of("Dos", "Tres"), nuevos.stream().map(MensajeResponse::contenido).toList());
+        assertEquals(3, chatService.historial(ID_VIAJE, null).size());
     }
 }

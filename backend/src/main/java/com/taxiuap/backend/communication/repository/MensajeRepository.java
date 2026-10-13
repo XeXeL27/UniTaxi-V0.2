@@ -14,6 +14,9 @@ public interface MensajeRepository extends JpaRepository<Mensaje, Long> {
 
     List<Mensaje> findByViajeIdOrderByFechaAsc(Long idViaje);
 
+    /** Mensajes del viaje posteriores al id dado: los que la app todavia no tiene. */
+    List<Mensaje> findByViajeIdAndIdGreaterThanOrderByIdAsc(Long idViaje, Long idMensaje);
+
     long countByViajeIdAndLeidoFalse(Long idViaje);
 
     /** Mensajes sin leer que no escribio el usuario: los que el otro le dejo. */

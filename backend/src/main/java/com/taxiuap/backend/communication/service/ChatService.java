@@ -2,6 +2,8 @@ package com.taxiuap.backend.communication.service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,6 +32,7 @@ public class ChatService {
     private final UsuarioRepository usuarioRepository;
     private final MensajeRepository mensajeRepository;
     private final ViajeService viajeService;
+    private final NotificacionPushService notificacionPushService;
 
     /** Guarda el mensaje del emisor y lo devuelve, junto al usuario al que hay que reenviarlo. */
     @Transactional
@@ -51,21 +54,55 @@ public class ChatService {
         entidad.setLeido(false);
         entidad.setFecha(LocalDateTime.now());
         Mensaje guardado = mensajeRepository.save(entidad);
+        Long idReceptor = idReceptor(viaje, idUsuarioEmisor);
+        avisarPorPush(guardado, idReceptor);
 
-        return new MensajeGuardado(
-                respuesta(guardado),
-                idReceptor(viaje, idUsuarioEmisor));
+        return new MensajeGuardado(respuesta(guardado), idReceptor);
     }
 
     /** Historial del viaje, del mas viejo al mas nuevo. */
     public List<MensajeResponse> historial(Long idViaje) {
+        return historial(idViaje, null);
+    }
+
+    /**
+     * Historial del viaje; con [desde] solo los mensajes posteriores a ese id. La app lo consulta
+     * cada pocos segundos cuando el WebSocket no conecta, y al reconectarse o volver a la app, para
+     * traer lo que llego mientras tanto.
+     */
+    public List<MensajeResponse> historial(Long idViaje, Long desde) {
         Viaje viaje = viajeService.obtenerViajeDelUsuario(idViaje);
         if (terminado(viaje)) {
             return List.of();
         }
-        return mensajeRepository.findByViajeIdOrderByFechaAsc(idViaje).stream()
-                .map(ChatService::respuesta)
-                .toList();
+        List<Mensaje> mensajes = desde == null
+                ? mensajeRepository.findByViajeIdOrderByFechaAsc(idViaje)
+                : mensajeRepository.findByViajeIdAndIdGreaterThanOrderByIdAsc(idViaje, desde);
+        return mensajes.stream().map(ChatService::respuesta).toList();
+    }
+
+    /**
+     * Push al otro participante: con la app minimizada o cerrada le llega "Mensaje de Rene" aunque el
+     * WebSocket este cortado. Con la app abierta el aviso lo da el chat y el push no se muestra.
+     */
+    private void avisarPorPush(Mensaje mensaje, Long idReceptor) {
+        String contenido = mensaje.getContenido();
+        notificacionPushService.enviar(idReceptor, Map.of(
+                "tipo", "CHAT_MENSAJE",
+                "idViaje", String.valueOf(mensaje.getViaje().getId()),
+                "idMensaje", String.valueOf(mensaje.getId()),
+                "titulo", "Mensaje de " + primerNombre(mensaje.getUsuarioEmisor()),
+                "cuerpo", contenido.length() > 200 ? contenido.substring(0, 200) + "..." : contenido));
+    }
+
+    /** "Rene", no "RENE": los nombres se guardan en mayusculas. */
+    private static String primerNombre(Usuario usuario) {
+        String nombres = usuario.getPersona() == null ? null : usuario.getPersona().getNombres();
+        if (nombres == null || nombres.isBlank()) {
+            return usuario.getNombreUsuario();
+        }
+        String primero = nombres.trim().split("\\s+")[0].toLowerCase(Locale.forLanguageTag("es"));
+        return Character.toUpperCase(primero.charAt(0)) + primero.substring(1);
     }
 
     /** Marca como leidos los mensajes que el otro participante le dejo al usuario. */

@@ -478,6 +478,7 @@ class FlujoPasajero extends ChangeNotifier {
     // Los de fondo que ya no estan en curso: terminados (a calificar) o cancelados.
     for (final cerrado in antes.values) {
       if (ids.contains(cerrado.id) || cerrado.id == enPantalla?.id) continue;
+      chat?.cerrar(cerrado.id);
       try {
         final final_ = await api.viaje(cerrado.id);
         if (final_.situacion == SituacionViaje.completado) {
@@ -1315,7 +1316,22 @@ class FlujoPasajero extends ChangeNotifier {
     if (_cerrado) return;
     mapa.cambiarOcultarMiUbicacion(_ocultarMiUbicacion);
     _revisarSeguimiento();
+    _mantenerChats();
     notifyListeners();
+  }
+
+  /// Chat vinculado en cada servicio aceptado y sin terminar (el de la pantalla y los de fondo), aunque
+  /// el boton Mensaje no este a la vista: asi llegan y se cuentan los mensajes desde que se acepta,
+  /// tambien al reabrir la app. Se cierra al completar o cancelar (chat.cerrar).
+  void _mantenerChats() {
+    final chat = this.chat;
+    if (chat == null) return;
+    final actual = etapa == EtapaPasajero.enViaje ? viaje : null;
+    chat.mantener({
+      for (final v in [...enCurso, ?actual])
+        if (v.situacion != SituacionViaje.completado && v.situacion != SituacionViaje.cancelado)
+          v.id: v.nombreConductor,
+    });
   }
 
   /// Buscando taxi o en viaje: la notificacion fija "atento a tu viaje" mantiene viva la app

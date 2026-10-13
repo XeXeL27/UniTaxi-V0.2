@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
 
 import '../comun/carnet_observado.dart';
+import 'chat.dart';
 import 'cliente_api.dart';
 import 'notificador.dart';
 import 'sonido.dart';
@@ -92,6 +93,17 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
     return;
   }
   final idViaje = int.tryParse('${datos['idViaje'] ?? ''}');
+  // Mensaje de chat del viaje: el mismo id que el aviso de la app abierta (no se repite).
+  if (datos['tipo'] == 'CHAT_MENSAJE') {
+    if (idViaje == null) return;
+    await Notificador.mensajeChat(
+      '${datos['titulo'] ?? 'Nuevo mensaje'}',
+      '${datos['cuerpo'] ?? ''}',
+      id: idNotificacionChat(idViaje),
+      pedirPermiso: false,
+    );
+    return;
+  }
   // Cada aviso de espera (taxi o repartidor en la recogida desde el cuarto, y repartidor en el punto
   // de entrega siempre) tiene su propio id, con el sonido del taxi que llego.
   final aviso = int.tryParse('${datos['aviso'] ?? ''}') ?? 1;

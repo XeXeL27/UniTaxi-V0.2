@@ -451,6 +451,7 @@ class FlujoConductor extends ChangeNotifier {
     final ids = {for (final v in activos.viajes) v.id};
     final cerrados = [for (final v in enCurso) if (!ids.contains(v.id) && v.id != viaje?.id) v];
     for (final cerrado in cerrados) {
+      chat?.cerrar(cerrado.id);
       aviso = 'El pedido de ${cerrado.primerNombrePasajero} ya no está en curso (se canceló o terminó).';
     }
     final enPantalla = viaje;
@@ -727,7 +728,22 @@ class FlujoConductor extends ChangeNotifier {
   void _avisar() {
     if (_cerrado) return;
     _revisarSeguimiento();
+    _mantenerChats();
     notifyListeners();
+  }
+
+  /// Chat vinculado en cada viaje o pedido en curso (el de la pantalla y los otros), aunque el boton
+  /// Mensaje no este a la vista: asi llegan y se cuentan los mensajes desde que se acepta, tambien al
+  /// reabrir la app. Se cierra al finalizar o cancelar (chat.cerrar).
+  void _mantenerChats() {
+    final chat = this.chat;
+    if (chat == null) return;
+    final actual = etapa == EtapaConductor.enViaje ? viaje : null;
+    chat.mantener({
+      for (final v in [...enCurso, ?actual])
+        if (v.situacion != SituacionViaje.completado && v.situacion != SituacionViaje.cancelado)
+          v.id: v.nombrePasajero,
+    });
   }
 
   /// Conectado (o en viaje): la notificacion fija mantiene viva la app minimizada, asi sigue

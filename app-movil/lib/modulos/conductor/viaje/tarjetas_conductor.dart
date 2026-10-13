@@ -367,7 +367,7 @@ class FilaCliente extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final noLeidos = context.select<ChatEstado, int>((chat) => chat.idViaje == idViaje ? chat.noLeidos : 0);
+    final noLeidos = context.select<ChatEstado, int>((chat) => chat.noLeidosDe(idViaje));
     final numero = telefono?.trim() ?? '';
     return VinculoChat(
       idViaje: idViaje,
