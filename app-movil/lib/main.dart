@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -17,6 +18,7 @@ import 'core/config.dart';
 import 'core/navegador.dart';
 import 'core/preferencias_aviso.dart';
 import 'core/push.dart';
+import 'core/servidores.dart';
 import 'core/sesion.dart';
 import 'core/tema.dart';
 import 'modulos/conductor/inicio/pantalla_inicio.dart';
@@ -33,6 +35,12 @@ Future<void> main() async {
   unawaited(SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge));
   SystemChrome.setSystemUIOverlayStyle(BarraSistema.sobreAzul);
   unawaited(Conexion.iniciar());
+  // APK: el servidor por https://uni-taxi.uap.edu.bo o por http://virtual.uap.edu.bo:5557, el que responda.
+  // Se revisa mientras corre la presentacion, sin demorar el arranque.
+  if (!kIsWeb) {
+    await Servidores.cargar(Config.servidoresApk);
+    unawaited(Servidores.verificar());
+  }
   await PreferenciasAviso.cargar();
   // Notificaciones push (FCM): antes de runApp para recibir avisos con la app cerrada.
   await Push.preparar();

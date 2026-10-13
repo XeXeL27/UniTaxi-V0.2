@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:stomp_dart_client/stomp_dart_client.dart';
 
 import 'config.dart';
+import 'servidores.dart';
 import 'sesion.dart';
 
 /// Disponibilidad que se reporta junto con la posicion (enum Disponibilidad del backend).
@@ -42,6 +43,19 @@ class EmisorUbicacion {
 
   void iniciar() {
     _cerrando = false;
+    Servidores.cambios.addListener(_reconectar);
+    _conectar();
+    _timer = Timer.periodic(_revision, (_) => _revisar());
+  }
+
+  /// El APK paso al otro camino al servidor (Servidores): la conexion se rehace alli.
+  void _reconectar() {
+    if (_cerrando || _cliente == null) return;
+    _cliente?.deactivate();
+    _conectar();
+  }
+
+  void _conectar() {
     final cabeceras = <String, String>{};
     _cliente = StompClient(
       config: StompConfig(
@@ -59,7 +73,6 @@ class EmisorUbicacion {
       ),
     );
     _cliente!.activate();
-    _timer = Timer.periodic(_revision, (_) => _revisar());
   }
 
   void _revisar({bool forzar = false}) {
@@ -105,6 +118,7 @@ class EmisorUbicacion {
   }
 
   void dispose() {
+    Servidores.cambios.removeListener(_reconectar);
     _timer?.cancel();
     _timer = null;
     _cliente?.deactivate();

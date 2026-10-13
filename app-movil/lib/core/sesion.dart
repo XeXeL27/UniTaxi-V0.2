@@ -12,6 +12,7 @@ import 'formato.dart';
 import 'google_movil.dart';
 import 'navegador.dart';
 import 'push.dart';
+import 'servidores.dart';
 
 /// Datos del usuario autenticado (UsuarioResponse del backend).
 class UsuarioSesion {
@@ -394,6 +395,8 @@ class Sesion extends ChangeNotifier {
     try {
       respuesta = await http.Response.fromStream(await peticion.send().timeout(const Duration(seconds: 90)));
     } catch (_) {
+      // El proximo intento ya va al otro camino si este no responde (Servidores).
+      unawaited(Servidores.buscarOtro());
       throw ApiExcepcion('No se pudo conectar con el servidor');
     }
     final json = _decodificar(respuesta);
@@ -417,6 +420,8 @@ class Sesion extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 20));
     } catch (_) {
+      // El proximo intento ya va al otro camino si este no responde (Servidores).
+      unawaited(Servidores.buscarOtro());
       throw ApiExcepcion('No se pudo conectar con el servidor');
     }
     final json = _decodificar(respuesta);
@@ -455,6 +460,8 @@ class Sesion extends ChangeNotifier {
           )
           .timeout(const Duration(seconds: 20));
     } catch (_) {
+      // El proximo intento ya va al otro camino si este no responde (Servidores).
+      unawaited(Servidores.buscarOtro());
       throw ApiExcepcion('No se pudo conectar con el servidor');
     }
     final json = _decodificar(respuesta);
@@ -577,13 +584,24 @@ class Sesion extends ChangeNotifier {
   Future<dynamic> _getAuth(String ruta) => _auth(() => http.get(Uri.parse('${Config.apiUrl}$ruta')));
 
   /// Peticion sin token a /api/auth; desempaqueta ApiResponse. Espera hasta un minuto: con internet
-  /// lento el login avisa a los 20 y a los 40 segundos (PantallaLogin) antes de rendirse.
+  /// lento el login avisa a los 20 y a los 40 segundos (PantallaLogin) antes de rendirse. Si no pudo
+  /// conectar, en el APK la repite por el otro camino al servidor (Servidores); [enviar] arma la direccion
+  /// de nuevo en cada intento.
   Future<dynamic> _auth(Future<http.Response> Function() enviar) async {
-    final http.Response respuesta;
+    const sinConexion = 'No se pudo conectar con el servidor. Revisa tu conexión a internet e intenta de nuevo.';
+    http.Response respuesta;
     try {
       respuesta = await enviar().timeout(const Duration(seconds: 60));
+    } on TimeoutException {
+      unawaited(Servidores.buscarOtro());
+      throw ApiExcepcion(sinConexion);
     } catch (_) {
-      throw ApiExcepcion('No se pudo conectar con el servidor. Revisa tu conexión a internet e intenta de nuevo.');
+      if (!await Servidores.buscarOtro()) throw ApiExcepcion(sinConexion);
+      try {
+        respuesta = await enviar().timeout(const Duration(seconds: 60));
+      } catch (_) {
+        throw ApiExcepcion(sinConexion);
+      }
     }
     final json = _decodificar(respuesta);
     if (respuesta.statusCode >= 400 || json['ok'] != true) {

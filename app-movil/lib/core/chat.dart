@@ -7,6 +7,7 @@ import 'package:stomp_dart_client/stomp_dart_client.dart';
 import 'cliente_api.dart';
 import 'config.dart';
 import 'notificador.dart';
+import 'servidores.dart';
 import 'sesion.dart';
 
 enum EstadoConexionChat { conectando, conectado, desconectado }
@@ -225,6 +226,18 @@ class CanalChat {
 
   void iniciar() {
     _cerrando = false;
+    Servidores.cambios.addListener(_reconectar);
+    _conectar();
+  }
+
+  /// El APK paso al otro camino al servidor (Servidores): la conexion se rehace alli.
+  void _reconectar() {
+    if (_cerrando || _cliente == null) return;
+    _cliente?.deactivate();
+    _conectar();
+  }
+
+  void _conectar() {
     final cabeceras = <String, String>{};
     _cliente = StompClient(
       config: StompConfig(
@@ -275,6 +288,7 @@ class CanalChat {
 
   void dispose() {
     _cerrando = true;
+    Servidores.cambios.removeListener(_reconectar);
     _cliente?.deactivate();
     _cliente = null;
   }

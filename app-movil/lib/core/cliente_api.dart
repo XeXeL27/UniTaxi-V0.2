@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -6,6 +7,7 @@ import 'package:http_parser/http_parser.dart';
 
 import 'api_excepcion.dart';
 import 'config.dart';
+import 'servidores.dart';
 import 'sesion.dart';
 
 /// Cliente HTTP del backend. Agrega el JWT, desempaqueta ApiResponse y, si el token de acceso
@@ -119,10 +121,10 @@ class ClienteApi {
 
   /// Si el token de acceso vencio (401) lo renueva una vez y repite; si no se puede, cierra la sesion.
   Future<http.Response> _conReintento(http.BaseRequest Function() crear) async {
-    var respuesta = await _enviarPeticion(crear());
+    var respuesta = await _conOtroServidor(crear);
     if (respuesta.statusCode == 401) {
       if (await sesion.refrescar()) {
-        respuesta = await _enviarPeticion(crear());
+        respuesta = await _conOtroServidor(crear);
       }
       if (respuesta.statusCode == 401) {
         // Si la administracion suspendio o elimino la cuenta, el backend dice por que.
@@ -152,6 +154,28 @@ class ClienteApi {
     return json['datos'];
   }
 
+  /// Si la peticion no llego al servidor, el APK prueba el otro camino (Servidores) y la repite alli. Una
+  /// consulta (GET) se repite siempre; lo demas solo si no alcanzo a salir (no conecto), para no hacer dos
+  /// veces una accion que el servidor quiza ya recibio. La peticion se arma de nuevo con la direccion nueva.
+  Future<http.Response> _conOtroServidor(http.BaseRequest Function() crear) async {
+    final peticion = crear();
+    try {
+      return await _enviarPeticion(peticion);
+    } on _SinRespuesta catch (e) {
+      final repetir = peticion.method == 'GET' || !e.porTiempo;
+      if (repetir && await Servidores.buscarOtro()) {
+        try {
+          return await _enviarPeticion(crear());
+        } on _SinRespuesta {
+          // Tampoco respondio el otro.
+        }
+      } else if (!repetir) {
+        unawaited(Servidores.buscarOtro());
+      }
+      throw ApiExcepcion('No se pudo conectar con el servidor');
+    }
+  }
+
   Future<http.Response> _enviarPeticion(http.BaseRequest peticion) async {
     // JSON para la API y cualquier tipo para las descargas (foto JPEG, PDF).
     peticion.headers['Accept'] = 'application/json, */*;q=0.8';
@@ -163,8 +187,10 @@ class ClienteApi {
       // El envio tambien tiene limite: si Android congelo la app a mitad de una peticion, al volver
       // no queda colgada para siempre (y la consulta periodica sigue).
       return await http.Response.fromStream(await peticion.send().timeout(espera)).timeout(espera);
+    } on TimeoutException {
+      throw const _SinRespuesta(porTiempo: true);
     } catch (_) {
-      throw ApiExcepcion('No se pudo conectar con el servidor');
+      throw const _SinRespuesta(porTiempo: false);
     }
   }
 
@@ -176,4 +202,12 @@ class ClienteApi {
       return {'ok': false, 'mensaje': 'Respuesta invalida del servidor (${respuesta.statusCode})'};
     }
   }
+}
+
+/// La peticion no obtuvo respuesta: [porTiempo] si se espero de mas (quiza el servidor la recibio) o no
+/// si no se pudo conectar.
+class _SinRespuesta implements Exception {
+  final bool porTiempo;
+
+  const _SinRespuesta({required this.porTiempo});
 }
