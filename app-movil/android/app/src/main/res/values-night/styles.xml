@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Mientras arranca el proceso: pantalla de arranque azul marino con el logo UNITAXI. Se quita
+    <!-- Mientras arranca el proceso: pantalla de arranque azul marino lisa. Se quita
          sola cuando Flutter dibuja su primer cuadro (la presentacion animada, lib/comun/presentacion.dart). -->
     <style name="LaunchTheme" parent="@android:style/Theme.Black.NoTitleBar">
         <item name="android:windowBackground">@drawable/launch_background</item>

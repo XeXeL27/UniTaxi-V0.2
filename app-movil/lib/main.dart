@@ -40,14 +40,17 @@ Future<void> main() async {
   await sesion.cargar();
   final api = ClienteApi(sesion);
   final vuelta = await _vueltaDeGoogle(sesion);
+  final primeraVez = await PantallaPresentacion.esPrimeraVez();
   runApp(
     MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: sesion),
         Provider.value(value: api),
-        ChangeNotifierProvider(create: (_) => ChatEstado(sesion: sesion, api: api)),
+        ChangeNotifierProvider(
+          create: (_) => ChatEstado(sesion: sesion, api: api),
+        ),
       ],
-      child: TaxiUap(vuelta: vuelta),
+      child: TaxiUap(vuelta: vuelta, primeraVez: primeraVez),
     ),
   );
 }
@@ -82,7 +85,10 @@ Future<VueltaGoogle> _vueltaDeGoogle(Sesion sesion) async {
 class TaxiUap extends StatefulWidget {
   final VueltaGoogle vuelta;
 
-  const TaxiUap({super.key, required this.vuelta});
+  /// Primera vez que se abre la app en este telefono (o navegador): la presentacion larga.
+  final bool primeraVez;
+
+  const TaxiUap({super.key, required this.vuelta, this.primeraVez = false});
 
   @override
   State<TaxiUap> createState() => _TaxiUapState();
@@ -95,12 +101,18 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
 
   DateTime? _ultimaConsultaUsuario;
 
-  /// La presentacion animada se ve cada vez que se abre la app (no al volver de segundo plano).
+  /// La presentacion animada se ve cada vez que se abre la app (no al volver de segundo plano) y al
+  /// iniciar sesion. La larga solo la primera vez.
   bool _presentando = true;
+  late bool _presentacionCompleta = widget.primeraVez;
+
+  /// Rol de la sesion en el build anterior: de ninguno a uno = acaba de iniciar sesion.
+  String? _rolAnterior;
 
   @override
   void initState() {
     super.initState();
+    _rolAnterior = context.read<Sesion>().autenticado ? context.read<Sesion>().usuario?.rol : null;
     WidgetsBinding.instance.addObserver(this);
     unawaited(_actualizarUsuario());
   }
@@ -147,6 +159,9 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
     );
     // Administrador que entro desde el login del APK: el panel se abre dentro de la app.
     final panelAdmin = context.select<Sesion, Map<String, dynamic>?>((s) => s.panelAdmin);
+    // Acaba de iniciar sesion: la presentacion corta antes del inicio.
+    if (_rolAnterior == null && rol != null && panelAdmin == null) _presentando = true;
+    _rolAnterior = rol;
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
     if (rol != null) {
       _error = null;
@@ -170,7 +185,11 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
         child: _presentando
             ? PantallaPresentacion(
                 key: const ValueKey('presentacion'),
-                alTerminar: () => setState(() => _presentando = false),
+                completa: _presentacionCompleta,
+                alTerminar: () => setState(() {
+                  _presentando = false;
+                  _presentacionCompleta = false;
+                }),
               )
             : KeyedSubtree(
                 key: const ValueKey('app'),

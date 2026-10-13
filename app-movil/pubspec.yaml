@@ -86,6 +86,7 @@ flutter:
   assets:
     - assets/mototaxi.png
     - assets/logo_unitaxi.png
+    - assets/presentacion/
     - assets/sonidos/
 
   # Tipografia de la app (estilo Uber), incluida en el APK: no depende de internet.

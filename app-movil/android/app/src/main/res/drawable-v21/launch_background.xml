@@ -1,11 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Pantalla de arranque de Android 10 y 11 (desde Android 12 se usa values-v31): azul marino con el
-     logo UNITAXI al centro, del mismo tamano (132 dp) con que empieza la presentacion en Flutter. -->
+<!-- Pantalla de arranque de Android 10 y 11 (desde Android 12 se usa values-v31): azul marino liso, el
+     mismo fondo sobre el que se abre el camino de la presentacion (lib/comun/presentacion.dart). -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:drawable="@color/presentacion_fondo" />
-    <item>
-        <bitmap
-            android:gravity="center"
-            android:src="@drawable/splash_logo" />
-    </item>
 </layer-list>

@@ -1,11 +1,15 @@
-# TaxiUAP - Base de datos de desarrollo: PostgreSQL 16 + PostGIS 3
+# TaxiUAP - Base de datos: PostgreSQL 16 + PostGIS 3
 # El PostgreSQL 16 local no tiene PostGIS; esta imagen ya lo trae y crea la extension
 # automaticamente en la BD taxiuap al inicializar el volumen.
 # Puerto 5436 en el host (5432-5435 los usan los clusters locales).
 #
-#   docker compose up -d        levantar
+#   docker compose up -d        levantar la BD
 #   docker compose down         detener (los datos quedan en el volumen)
 #   docker compose down -v      detener y borrar los datos
+#
+# El backend como servicio (perfil "servidor", contenedor unitaxi-backend) se maneja con
+# ./despliegue/servicio.sh (iniciar, actualizar, detener, estado, logs): ese script fija las variables
+# UNITAXI_* de abajo segun la maquina.
 
 services:
   taxiuap-db:
@@ -28,6 +32,39 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # Backend (API, panel en /admin y app en /app) en el puerto 5557 de la maquina. Usa la red de la maquina:
+  # llega a la BD como bootRun (localhost:5436 u otra externa del .env) y responde en el mismo puerto al proxy
+  # de https://uni-taxi.uap.edu.bo y a http://virtual.uap.edu.bo:5557. Corre con el usuario duenio del
+  # repositorio y ve su carpeta personal en la misma ruta: las rutas del .env, la carpeta de archivos
+  # (Documentos Unitaxi) y los logs son los mismos que con ./iniciar.sh.
+  unitaxi:
+    profiles: ["servidor"]
+    build:
+      context: .
+      dockerfile: despliegue/Dockerfile
+    image: unitaxi-backend:latest
+    container_name: unitaxi-backend
+    restart: unless-stopped
+    network_mode: host
+    user: "${UNITAXI_UID:-1000}:${UNITAXI_GID:-1000}"
+    environment:
+      RAIZ: ${UNITAXI_RAIZ:-.}
+      HOME: ${UNITAXI_HOME:-/tmp}
+      TZ: America/La_Paz
+      LOG_DIR: ${UNITAXI_LOGS:-./logs}
+      UNITAXI_PUERTO: ${UNITAXI_PUERTO:-}
+      # El panel y la app compilados que trae el repositorio: git pull los actualiza sin reconstruir.
+      TAXIUAP_WEB_ADMIN: ${UNITAXI_RAIZ:-.}/backend/src/main/resources/web/admin
+      TAXIUAP_WEB_APP: ${UNITAXI_RAIZ:-.}/backend/src/main/resources/web/app
+    volumes:
+      - ${UNITAXI_HOME:-/tmp}:${UNITAXI_HOME:-/tmp}
+      - ${UNITAXI_RAIZ:-.}:${UNITAXI_RAIZ:-.}
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
 
 volumes:
   taxiuap-db-datos:

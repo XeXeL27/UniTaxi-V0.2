@@ -1,0 +1,10 @@
+# La imagen solo necesita el backend y el script de entrada. Los application-*.properties de la maquina
+# SI entran (son la configuracion del servidor, como con bootRun); el .env no (se lee al arrancar).
+*
+!backend/gradlew
+!backend/gradle/
+!backend/build.gradle
+!backend/settings.gradle
+!backend/src/
+!despliegue/entrada.sh
+backend/src/main/resources/web/
