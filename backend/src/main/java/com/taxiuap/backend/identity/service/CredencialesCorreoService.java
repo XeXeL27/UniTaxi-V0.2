@@ -205,6 +205,28 @@ public class CredencialesCorreoService {
         correoService.enviar(persona.getCorreo(), "Código para restablecer tu contraseña", cuerpo);
     }
 
+    /** Codigo de "Recuperar mis credenciales" (quien intento registrarse y ya lo estaba). */
+    public void codigoRecuperarCuenta(Persona persona, String codigo, long segundos) {
+        String cuerpo = saludo(persona)
+                + "Intentaste registrarte en UNITAXI, pero ya tienes una cuenta. Tu código para recuperarla es:\n\n"
+                + "    " + codigo + "\n\n"
+                + "Vence en " + segundos + " segundos. Si no lo pediste, puedes ignorar este correo: tu contraseña "
+                + "no cambia mientras no uses el código."
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Código para recuperar tu cuenta", cuerpo);
+    }
+
+    /** Aviso de que la contrasena se cambio con la recuperacion de cuenta, con el usuario para ingresar. */
+    public void contrasenaRecuperada(Persona persona, String nombreUsuario) {
+        String cuerpo = saludo(persona)
+                + "La contraseña de tu cuenta de UNITAXI se cambió con el código que te enviamos.\n\n"
+                + "Usuario: " + nombreUsuario + "\n\n"
+                + "Si no fuiste tú, comunícate con la administración."
+                + enlace("PASAJERO")
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Recuperaste tu cuenta de UNITAXI", cuerpo);
+    }
+
     /** Aviso al correo anterior de que la cuenta ya usa otro correo. */
     public void avisoCorreoCambiado(Persona persona, String correoAnterior) {
         String cuerpo = saludo(persona)

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -24,6 +25,7 @@ import '../../core/iconos.dart';
 import '../../core/navegador.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
+import '../login/recuperar_cuenta.dart';
 import '../../widgets/boton_principal.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/formatos.dart';
@@ -143,6 +145,45 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
 
   bool get _pideCarnet => !_tieneCarnet;
 
+  /// Registro nuevo (sin sesion): el ultimo carnet consultado y si ya era de alguien registrado
+  /// (entonces se ofrece recuperar la cuenta en lugar de registrarse de nuevo).
+  String? _carnetConsultado;
+  bool _carnetYaRegistrado = false;
+  Timer? _esperaCi;
+
+  bool get _revisaCarnetRegistrado => !widget.desdePasajero && _pideCarnet;
+
+  /// [siempre]: al enviar se vuelve a preguntar aunque ya se haya consultado ese carnet.
+  Future<bool> _revisarCarnetRegistrado({bool siempre = false}) async {
+    if (!_revisaCarnetRegistrado) return false;
+    final ci = _c['ci']!.text.trim();
+    final complemento = _c['complementoCi']!.text;
+    final clave = '$ci-${complemento.trim().toUpperCase()}';
+    if (!siempre && clave == _carnetConsultado) return _carnetYaRegistrado;
+    _carnetConsultado = clave;
+    final registrado = await revisarCarnetRegistrado(
+      context,
+      ci: ci,
+      complemento: complemento,
+      origen: OrigenRecuperacion.conductor,
+      alVolverAlLogin: widget.onCancelar,
+    );
+    _carnetYaRegistrado = registrado;
+    if (registrado && mounted) {
+      setState(() => _error = 'Este carnet ya está registrado en UNITAXI. Recupera tus credenciales en lugar de '
+          'registrarte de nuevo.');
+    }
+    return registrado;
+  }
+
+  /// En la web el numero se escribe: se consulta cuando la persona deja de escribir.
+  void _alEscribirCi() {
+    if (!_revisaCarnetRegistrado || _ciLeido) return;
+    _esperaCi?.cancel();
+    if (!RegExp(r'^\d{5,10}$').hasMatch(_c['ci']!.text.trim())) return;
+    _esperaCi = Timer(const Duration(milliseconds: 1500), _revisarCarnetRegistrado);
+  }
+
   /// Categorias de servicio que puede elegir para su moto (las compatibles con MOTO del catalogo
   /// publico) y la elegida. Empieza en la de taxi, que es la que deja el backend si no se elige
   /// ninguna.
@@ -179,6 +220,8 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   /// "No, no son mis datos": se descartan las fotos del carnet y todo lo leido de ellas.
   void _reiniciarCarnet(String aviso) {
     setState(() {
+      _carnetConsultado = null;
+      _carnetYaRegistrado = false;
       _intentoCarnet++;
       _carnet = const SeleccionCarnet();
       _selfie = const SeleccionSelfie();
@@ -234,6 +277,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
       }
     });
     if (_licencia.licencia != null) _revisarNombreLicencia();
+    if (datos?.ci != null) _revisarCarnetRegistrado();
   }
 
   /// Lo leido de la licencia con el numero del carnet como numero de licencia, si se leyo en ella: es
@@ -353,10 +397,12 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
     super.initState();
     if (_datosConocidos) _cargarGoogle();
     _cargarCategorias();
+    _c['ci']!.addListener(_alEscribirCi);
   }
 
   @override
   void dispose() {
+    _esperaCi?.cancel();
     for (final controlador in _c.values) {
       controlador.dispose();
     }
@@ -528,6 +574,8 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         _licencia.licencia?.numero == _c['ci']!.text.trim()) {
       _c['complementoCi']!.text = complementoLicencia;
     }
+    _esperaCi?.cancel();
+    if (await _revisarCarnetRegistrado(siempre: true) || !mounted) return;
     // Carnet nuevo: la persona confirma el nombre y el numero leidos de sus fotos. Si dice que no,
     // vuelve a tomar las fotos; con Observado los revisa el administrador.
     var observado = false;

@@ -10,6 +10,7 @@ import '../../core/tema.dart';
 import '../../widgets/boton_principal.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/marco_acceso.dart';
+import '../login/recuperar_cuenta.dart';
 
 /// Boton "Ingresar como estudiante U.A.P." del login: abre el registro con el RU (si ya tiene cuenta,
 /// solo queda marcado como estudiante y se le dice que ingrese con su usuario).
@@ -78,10 +79,22 @@ class _RegistroEstudianteUapState extends State<RegistroEstudianteUap> {
       final respuesta = await context.read<Sesion>().consultarRuUap(ru);
       if (!mounted) return;
       if (respuesta['tieneCuenta'] == true) {
-        // Ya tenia cuenta: quedo como estudiante (o se le dice que hacer); vuelve al login.
+        // Ya tenia cuenta: quedo como estudiante (o se le dice que hacer) y puede recuperar sus
+        // credenciales con un codigo al correo registrado; si no, vuelve al login.
         final navegador = Navigator.of(context);
-        await mostrarAviso(context, titulo: 'Ya tienes cuenta', mensaje: respuesta['mensaje'] as String? ?? '');
-        navegador.pop();
+        final mensaje = respuesta['mensaje'] as String? ?? '';
+        final cuenta = CuentaRegistrada.desdeJson(respuesta['cuentaRegistrada'] as Map<String, dynamic>?);
+        if (cuenta == null) {
+          await mostrarAviso(context, titulo: 'Ya tienes cuenta', mensaje: mensaje);
+        } else {
+          await avisarCuentaRegistrada(
+            context,
+            cuenta,
+            titulo: 'Ya tienes cuenta',
+            mensaje: '$mensaje\n\n¿No recuerdas tu usuario o tu contraseña? Recupéralos con un código a tu correo.',
+          );
+        }
+        if (navegador.mounted && navegador.canPop()) navegador.pop();
         return;
       }
       setState(() => _encontrado = respuesta);

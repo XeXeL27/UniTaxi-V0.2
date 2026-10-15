@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.dto.ActualizarDatosCuentaRequest;
+import com.taxiuap.backend.identity.dto.GuiaVistaRequest;
 import com.taxiuap.backend.identity.dto.UsuarioResponse;
 import com.taxiuap.backend.identity.service.DatosCuentaService;
 import com.taxiuap.backend.shared.response.ApiResponse;
@@ -48,10 +49,24 @@ public class DatosCuentaController {
         return ResponseEntity.ok(ApiResponse.exito("Aviso marcado como visto", null));
     }
 
-    /** Guia de inicio terminada o saltada. */
+    /**
+     * Guia terminada o saltada. Sin cuerpo o sin "guia" es la guia de inicio (apps anteriores); con
+     * "guia" la de una parte de la app.
+     */
     @PostMapping("/guia-vista")
-    public ResponseEntity<ApiResponse<Void>> guiaVista() {
-        datosCuentaService.marcarGuiaVista(UsuarioActual.idUsuario());
+    public ResponseEntity<ApiResponse<Void>> guiaVista(@Valid @RequestBody(required = false) GuiaVistaRequest request) {
+        if (request == null || request.guia() == null || request.guia().isBlank()) {
+            datosCuentaService.marcarGuiaVista(UsuarioActual.idUsuario());
+        } else {
+            datosCuentaService.marcarGuiaVista(UsuarioActual.idUsuario(), request.guia().trim());
+        }
         return ResponseEntity.ok(ApiResponse.exito("Guia marcada como vista", null));
+    }
+
+    /** Perfil > "Volver a ver las guias". */
+    @PostMapping("/guias/reiniciar")
+    public ResponseEntity<ApiResponse<Void>> reiniciarGuias() {
+        datosCuentaService.reiniciarGuias(UsuarioActual.idUsuario());
+        return ResponseEntity.ok(ApiResponse.exito("Las guias se volveran a mostrar", null));
     }
 }

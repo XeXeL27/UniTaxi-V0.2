@@ -2,6 +2,8 @@ package com.taxiuap.backend.identity.dto;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.Arrays;
+import java.util.List;
 
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
@@ -35,7 +37,9 @@ public record UsuarioResponse(
         /** Hasta cuando puede subir la foto con el carnet antes de que su cuenta se suspenda (null = sin plazo). */
         LocalDateTime plazoSelfie,
         /** "Valida hasta" de su carnet, si se leyo. */
-        LocalDate carnetVencimiento) {
+        LocalDate carnetVencimiento,
+        /** Guias de cada parte de la app que ya vio (PASAJERO_SERVICIOS, CONDUCTOR_VIAJE...). */
+        List<String> guiasVistas) {
 
     public static UsuarioResponse de(Usuario usuario) {
         Persona persona = usuario.getPersona();
@@ -53,7 +57,13 @@ public record UsuarioResponse(
                 persona.carnetObservado(),
                 carnetPendiente(persona),
                 persona.getPlazoSelfieCarnet(),
-                persona.getCarnetVencimiento());
+                persona.getCarnetVencimiento(),
+                guiasVistas(usuario.getGuiasVistas()));
+    }
+
+    public static List<String> guiasVistas(String guardadas) {
+        if (guardadas == null || guardadas.isBlank()) return List.of();
+        return Arrays.stream(guardadas.split(",")).map(String::trim).filter(g -> !g.isEmpty()).toList();
     }
 
     static String carnetPendiente(Persona persona) {

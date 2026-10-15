@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/iconos.dart';
+import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/dialogos.dart';
 import '../../../core/api_excepcion.dart';
 
@@ -567,13 +568,16 @@ class PanelViajeConductor extends StatelessWidget {
           _EsperaPasajero(viaje: viaje, flujo: flujo),
           const SizedBox(height: 12),
         ],
-        FilaCliente(
-          nombre: viaje.nombreQuienViaja,
-          detalle: viaje.tercero != null
-              ? 'Lo pidió ${enTitulo(viaje.nombrePasajero.split(' ').first)}'
-              : '${formatoBs(viaje.precioFinal)} · ${viaje.pagaConQr ? 'QR' : 'Efectivo'}',
-          telefono: viaje.tercero?.telefono ?? viaje.telefonoPasajero,
-          idViaje: viaje.id,
+        MarcaGuia(
+          id: 'conductor.cliente',
+          child: FilaCliente(
+            nombre: viaje.nombreQuienViaja,
+            detalle: viaje.tercero != null
+                ? 'Lo pidió ${enTitulo(viaje.nombrePasajero.split(' ').first)}'
+                : '${formatoBs(viaje.precioFinal)} · ${viaje.pagaConQr ? 'QR' : 'Efectivo'}',
+            telefono: viaje.tercero?.telefono ?? viaje.telefonoPasajero,
+            idViaje: viaje.id,
+          ),
         ),
         const Divider(height: 26, color: ColoresApp.borde),
         _Punto(viaje.origenDireccion),

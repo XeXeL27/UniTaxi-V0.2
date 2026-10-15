@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
+import 'core/avisos_admin.dart';
 import 'core/cliente_api.dart';
 import 'core/rutas.dart';
 import 'core/sesion.dart';
@@ -17,6 +18,7 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider.value(value: sesion),
         Provider(create: (_) => ClienteApi(sesion)),
+        ChangeNotifierProvider(create: (contexto) => AvisosAdmin(sesion, contexto.read<ClienteApi>())),
       ],
       child: AppAdmin(sesion: sesion),
     ),

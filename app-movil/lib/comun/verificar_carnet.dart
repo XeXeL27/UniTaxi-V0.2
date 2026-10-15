@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:http_parser/http_parser.dart';
@@ -11,6 +13,7 @@ import '../core/formato.dart';
 import '../core/iconos.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
+import '../modulos/login/recuperar_cuenta.dart';
 import '../widgets/boton_principal.dart';
 import '../widgets/formatos.dart';
 import 'aceptar_terminos.dart';
@@ -78,6 +81,44 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
 
   bool get _estudiante => widget.codigoEstudiante != null;
 
+  /// Registro de pasajero con Google: el ultimo carnet consultado y si ya era de alguien registrado
+  /// (entonces se ofrece recuperar la cuenta en lugar de registrarse de nuevo).
+  String? _carnetConsultado;
+  bool _carnetYaRegistrado = false;
+  Timer? _esperaCi;
+
+  bool get _revisaCarnetRegistrado => widget.codigoGoogle != null;
+
+  /// [siempre]: al enviar se vuelve a preguntar aunque ya se haya consultado ese carnet.
+  Future<bool> _revisarCarnetRegistrado({bool siempre = false}) async {
+    if (!_revisaCarnetRegistrado) return false;
+    final ci = _ci.text.trim();
+    final clave = '$ci-${_complemento.text.trim().toUpperCase()}';
+    if (!siempre && clave == _carnetConsultado) return _carnetYaRegistrado;
+    _carnetConsultado = clave;
+    final registrado = await revisarCarnetRegistrado(
+      context,
+      ci: ci,
+      complemento: _complemento.text,
+      origen: OrigenRecuperacion.pasajero,
+      alVolverAlLogin: widget.onCancelar,
+    );
+    _carnetYaRegistrado = registrado;
+    if (registrado && mounted) {
+      setState(() => _error = 'Este carnet ya está registrado en UNITAXI. Recupera tus credenciales en lugar de '
+          'registrarte de nuevo.');
+    }
+    return registrado;
+  }
+
+  /// En la web el numero se escribe: se consulta cuando la persona deja de escribir.
+  void _alEscribirCi() {
+    if (!_revisaCarnetRegistrado || _ciLeido) return;
+    _esperaCi?.cancel();
+    if (!RegExp(r'^\d{5,10}$').hasMatch(_ci.text.trim())) return;
+    _esperaCi = Timer(const Duration(milliseconds: 1500), _revisarCarnetRegistrado);
+  }
+
   /// "No, no son mis datos": se descartan las fotos y todo lo leido de ellas.
   void _reiniciar(String aviso) {
     setState(() {
@@ -92,12 +133,15 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       _apellidos.clear();
       _nacimiento = null;
       _error = aviso;
+      _carnetConsultado = null;
+      _carnetYaRegistrado = false;
     });
   }
 
   @override
   void initState() {
     super.initState();
+    _ci.addListener(_alEscribirCi);
     if (_estudiante) {
       _primerNombre = enTitulo((widget.nombreEstudiante ?? '').trim().split(' ').first);
       return;
@@ -145,6 +189,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
 
   @override
   void dispose() {
+    _esperaCi?.cancel();
     _nombres.dispose();
     _apellidos.dispose();
     _ci.dispose();
@@ -167,6 +212,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
         _apellidos.text = datos.apellidos ?? '';
       }
     });
+    if (datos?.ci != null) _revisarCarnetRegistrado();
   }
 
   Future<void> _elegirFecha() async {
@@ -203,6 +249,8 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       setState(() => _error = 'Elige tu fecha de nacimiento.');
       return;
     }
+    _esperaCi?.cancel();
+    if (await _revisarCarnetRegistrado(siempre: true) || !mounted) return;
     // La persona confirma el nombre y el numero leidos de su carnet.
     final nombre = '${_nombres.text.trim()} ${_apellidos.text.trim()}';
     final respuesta = await confirmarDatosCarnet(

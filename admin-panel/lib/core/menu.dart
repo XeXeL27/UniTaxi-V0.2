@@ -30,6 +30,7 @@ class Menu {
   static const pasajeros = ItemMenu('Pasajeros', Iconos.userCheck, '/pasajeros');
   static const conductores = ItemMenu('Conductores', Iconos.carSide, '/conductores');
   static const carnetsObservados = ItemMenu('Carnets observados', Iconos.idCardClip, '/carnets-observados');
+  static const problemasIngreso = ItemMenu('Problemas de ingreso', Iconos.ayudaIngreso, '/problemas-ingreso');
   static const eliminacionPermanente =
       ItemMenu('Eliminación permanente', Iconos.eliminarPermanente, '/eliminacion-permanente');
   static const zonas = ItemMenu('Zonas de servicio', Iconos.drawPolygon, '/zonas');
@@ -43,7 +44,7 @@ class Menu {
   static const viajes = ItemMenu('Viajes y pedidos', Iconos.route, '/viajes');
 
   static const grupos = [
-    GrupoMenu('Personas', Iconos.users, [personas, usuarios, pasajeros, conductores, carnetsObservados, eliminacionPermanente]),
+    GrupoMenu('Personas', Iconos.users, [personas, usuarios, pasajeros, conductores, carnetsObservados, problemasIngreso, eliminacionPermanente]),
     GrupoMenu('Mapa', Iconos.map, [zonas, mapa, flota]),
     GrupoMenu('Tarifas', Iconos.layerGroup, [precioViaje, descuentoEstudiante]),
     GrupoMenu('Viajes y entregas', Iconos.paquete, [viajes, entregas, reportesEntrega]),

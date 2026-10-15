@@ -250,6 +250,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       (ModalRoute.of(context)?.isCurrent ?? true);
 
   Future<void> _revisarGuia() async {
+    _revisarGuiaDelPaso();
     if (_guiaIniciada || !mounted || !_listoParaGuia) return;
     _guiaIniciada = true;
     // Deja que el mapa y los botones terminen de acomodarse.
@@ -283,11 +284,168 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         texto: 'Tus datos, cambiar la contraseña, ingreso con huella y cerrar sesión.',
       ),
     ]);
+    // Ya marcada como vista; si la piden de nuevo desde Perfil se vuelve a ofrecer.
+    _guiaIniciada = false;
+  }
+
+  /// Guia del paso en que esta el pasajero (aparte de la de inicio): "Elige tu servicio" con la hoja
+  /// abierta o el primer viaje con conductor. null si no hay ninguna que mostrar ahora.
+  String? get _guiaDelPaso {
+    final usuario = context.read<Sesion>().usuario;
+    if (usuario == null ||
+        usuario.mostrarGuia ||
+        usuario.avisoCredenciales ||
+        _avisoEnCurso ||
+        !RequiereGps.listo.value ||
+        _seccion != _seccionInicio ||
+        !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      return null;
+    }
+    if (_enPasoServicio && _hojaAbierta && marcaEnPantalla('pasajero.motoTaxi')) return Guias.pasajeroServicios;
+    if (_flujo.etapa == EtapaPasajero.enViaje && _panelAbierto && marcaEnPantalla('pasajero.conductor')) {
+      return Guias.pasajeroViaje;
+    }
+    return null;
+  }
+
+  bool _guiaPasoEnEspera = false;
+
+  Future<void> _revisarGuiaDelPaso() async {
+    if (_guiaPasoEnEspera || !mounted) return;
+    final guia = _guiaDelPaso;
+    if (guia == null || !guiaPendiente(context, guia)) return;
+    _guiaPasoEnEspera = true;
+    // Deja que el panel termine de subir y la ruta de dibujarse.
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    _guiaPasoEnEspera = false;
+    if (!mounted || _guiaDelPaso != guia || !guiaPendiente(context, guia)) return;
+    await mostrarGuiaInicio(
+      context,
+      guia == Guias.pasajeroServicios ? _pasosServicios() : _pasosViaje(),
+      guia: guia,
+    );
+  }
+
+  /// "Elige tu servicio": cada servicio y cada opcion, la primera vez que se pide algo.
+  List<PasoGuia> _pasosServicios() {
+    final esTaxi = _flujo.servicio == ServicioActivo.viaje;
+    return [
+      const PasoGuia(
+        icono: Iconos.motorcycle,
+        titulo: 'Elige tu servicio',
+        texto: 'En UNITAXI puedes pedir un moto taxi para ti o para otra persona, enviar un paquete '
+            '(encomienda) o pedir que te compren algo (compra). Te mostramos cada opción.',
+      ),
+      const PasoGuia(
+        marca: 'pasajero.motoTaxi',
+        titulo: 'Moto taxi',
+        texto: 'Un conductor te recoge en tu punto de partida y te lleva a tu destino. Ves el precio antes de '
+            'pedir; si eres estudiante UAP verificado, ya incluye tu descuento.',
+      ),
+      const PasoGuia(
+        marca: 'pasajero.entrega',
+        titulo: 'Entrega',
+        texto: 'Un repartidor lleva tu pedido: elige encomienda para enviar un paquete de un lugar a otro, o '
+            'compra para que compre lo que necesitas y te lo lleve.',
+      ),
+      PasoGuia(
+        marca: 'pasajero.paraQuien',
+        icono: esTaxi ? Iconos.userGroup : Iconos.boxOpen,
+        titulo: esTaxi ? '¿Para quién es?' : '¿Qué envías?',
+        texto: esTaxi
+            ? 'Con "Cambiar" pides el moto taxi para otra persona, por ejemplo un familiar: marcas dónde lo '
+                  'recogen y dónde lo dejan, escribes su nombre y celular y eliges quién paga.'
+            : 'Con "Cambiar" eliges si es una encomienda (un paquete de A a B) o una compra (el repartidor '
+                  'compra y te lo trae).',
+      ),
+      if (!esTaxi)
+        const PasoGuia(
+          icono: Iconos.userGroup,
+          titulo: 'Moto taxi para otra persona',
+          texto: 'En Moto taxi, con "Para mí > Cambiar" pides el viaje para otra persona: marcas dónde la '
+              'recogen y dónde la dejan, escribes su nombre y celular y eliges quién paga. Te avisamos '
+              'cuando el conductor llegue para que le avises.',
+        ),
+      const PasoGuia(
+        icono: Iconos.boxOpen,
+        titulo: 'Encomienda o compra',
+        texto: 'Encomienda: el repartidor recoge el paquete en A y lo lleva a B; al recoger y al entregar se '
+            'confirma con un código de 6 dígitos y una foto. Compra: dices qué comprar y dónde; el repartidor '
+            'te propone el comercio y el monto, tú lo confirmas y te lo lleva.',
+      ),
+      const PasoGuia(
+        marca: 'pasajero.pago',
+        titulo: '¿Cómo pagas?',
+        texto: 'En efectivo o por QR. Con QR pagas desde tu banca móvil con el QR del conductor o del '
+            'repartidor, que verás cuando acepte tu pedido.',
+      ),
+      const PasoGuia(
+        marca: 'pasajero.plegar',
+        titulo: 'Ver la ruta',
+        texto: 'Baja esta hoja para ver la ruta completa en el mapa; tócalo otra vez para subirla.',
+      ),
+      const PasoGuia(
+        marca: 'pasajero.solicitar',
+        titulo: 'Solicitar',
+        texto: 'Revisa el precio y toca aquí. Mientras buscamos quién te atienda puedes cancelar la solicitud.',
+      ),
+    ];
+  }
+
+  /// Primer viaje o pedido con conductor: que ver y que se puede hacer desde el panel.
+  List<PasoGuia> _pasosViaje() {
+    final entrega = _flujo.viaje?.datosEntrega != null;
+    final quien = entrega ? 'tu repartidor' : 'tu conductor';
+    return [
+      PasoGuia(
+        marca: 'pasajero.indicador',
+        titulo: 'Cuánto falta',
+        texto: entrega
+            ? 'Aquí ves en qué va tu pedido y cuánto falta para que llegue.'
+            : 'Aquí ves cuánto falta para que llegue $quien y, ya en camino, cuánto falta para llegar.',
+      ),
+      PasoGuia(
+        marca: 'pasajero.conductor',
+        titulo: entrega ? 'Quién lleva tu pedido' : 'Tu conductor',
+        texto: entrega
+            ? 'El nombre, la moto y la placa de quien lleva tu pedido.'
+            : 'Antes de subir revisa que el nombre, la moto y la placa coincidan.',
+      ),
+      PasoGuia(
+        marca: 'pasajero.acciones',
+        titulo: 'Llamar, mensaje, compartir y seguridad',
+        texto: 'Llama o escribe a $quien sin salir de la app. Compartir envía tu ${entrega ? 'pedido' : 'viaje'} '
+            'por WhatsApp a quien quieras y Seguridad tiene el 110 y ayuda.',
+      ),
+      if (entrega)
+        const PasoGuia(
+          marca: 'pasajero.codigos',
+          icono: Iconos.hashtag,
+          titulo: 'Códigos del pedido',
+          texto: 'Los códigos confirman la recogida y la entrega. Dalos solo en ese momento al repartidor (o '
+              'pásaselos a quien recibe el paquete).',
+        ),
+      PasoGuia(
+        icono: Iconos.bell,
+        titulo: entrega ? 'Te avisamos' : 'Cuando llegue',
+        texto: entrega
+            ? 'Te avisamos con un sonido cuando el repartidor recoja tu pedido y cuando llegue a entregarlo.'
+            : 'Te avisamos con un sonido cuando tu conductor llegue. Si no sales, te vuelve a avisar; después '
+                  'de varios avisos puede reportar que no te presentaste.',
+      ),
+      const PasoGuia(
+        icono: Iconos.moneyBill1,
+        titulo: 'Pago',
+        texto: 'Pagas al final, en efectivo o por QR. Si quieres cambiar la forma de pago, pídelo desde este '
+            'panel y el conductor lo acepta.',
+      ),
+    ];
   }
 
   void _irA(int seccion) {
     if (seccion == _seccion) return;
     setState(() => _seccion = seccion);
+    if (seccion == _seccionInicio) _revisarGuia();
     if (seccion == _seccionHistorial) _historial.currentState?.recargar();
     // En Mas se vuelve a mirar si la administracion ya aprobo su registro de conductor.
     if (seccion == _seccionMas) _cargarRegistroConductor();
@@ -805,6 +963,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) _mapa.encuadrar();
     });
+    _revisarGuiaDelPaso();
   }
 
   /// Boton "Solicitar moto taxi" / "Solicitar envío". Se pide directo, como en Uber: la hoja ya muestra
@@ -1166,7 +1325,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         ),
                       ),
                       if (etapa != EtapaPasajero.enViaje) const SizedBox(height: 8),
-                      TarjetaSeguimientoConductor(flujo: _flujo),
+                      MarcaGuia(id: 'pasajero.indicador', child: TarjetaSeguimientoConductor(flujo: _flujo)),
                       // Atajos al otro servicio en curso o para pedir otro, bajo el indicador del viaje.
                       _atajosServicios(),
                       // La brujula va la ultima: cae debajo de lo que haya arriba y no se monta sobre nada.

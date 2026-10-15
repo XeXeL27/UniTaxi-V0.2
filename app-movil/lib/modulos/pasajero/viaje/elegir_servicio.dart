@@ -4,6 +4,7 @@ import '../../../comun/modelos_viaje.dart';
 import '../../../core/formato.dart';
 import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
+import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/boton_plegar.dart';
 import 'flujo_pasajero.dart';
 import 'modo_servicio.dart';
@@ -58,7 +59,7 @@ class PanelElegirServicio extends StatelessWidget {
         ? 'Trazando la ruta...'
         : '${ruta.duracionTexto} · ${ruta.distanciaTexto}';
     final tipo = flujo.modo.tipo;
-    final boton = BotonPlegarHoja(abierta: abierta, onTap: onAlternar);
+    final boton = MarcaGuia(id: 'pasajero.plegar', child: BotonPlegarHoja(abierta: abierta, onTap: onAlternar));
 
     if (!abierta) {
       final pago = pagaQuienPide ? 'Pagas tú por QR' : MetodoPago.nombre(flujo.metodoPago);
@@ -113,32 +114,38 @@ class PanelElegirServicio extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        TarjetaServicio(
-          icono: Iconos.motorcycle,
-          titulo: 'Moto taxi',
-          detalle: detalleTaxi,
-          libres: conDestino ? taxistasLibres : null,
-          textoLibres: textoLibresCorto(taxistasLibres, ServicioActivo.viaje),
-          descuento: flujo.paraOtraPersona || cotizacion == null || !cotizacion.conDescuento
-              ? null
-              : 'Estudiante UAP: ${formatoBs(cotizacion.descuentoEstudiante)} menos',
-          precio: conDestino ? flujo.textoPrecioDe(ServicioActivo.viaje) : '',
-          precioAnterior: flujo.paraOtraPersona || cotizacion == null || !cotizacion.conDescuento
-              ? null
-              : formatoBs(cotizacion.precioNormal),
-          elegida: esTaxi,
-          onTap: onMotoTaxi,
+        MarcaGuia(
+          id: 'pasajero.motoTaxi',
+          child: TarjetaServicio(
+            icono: Iconos.motorcycle,
+            titulo: 'Moto taxi',
+            detalle: detalleTaxi,
+            libres: conDestino ? taxistasLibres : null,
+            textoLibres: textoLibresCorto(taxistasLibres, ServicioActivo.viaje),
+            descuento: flujo.paraOtraPersona || cotizacion == null || !cotizacion.conDescuento
+                ? null
+                : 'Estudiante UAP: ${formatoBs(cotizacion.descuentoEstudiante)} menos',
+            precio: conDestino ? flujo.textoPrecioDe(ServicioActivo.viaje) : '',
+            precioAnterior: flujo.paraOtraPersona || cotizacion == null || !cotizacion.conDescuento
+                ? null
+                : formatoBs(cotizacion.precioNormal),
+            elegida: esTaxi,
+            onTap: onMotoTaxi,
+          ),
         ),
         const SizedBox(height: 12),
-        TarjetaServicio(
-          icono: Iconos.boxOpen,
-          titulo: 'Entrega',
-          detalle: tipo?.nombre ?? 'Encomienda o compra',
-          libres: repartidoresLibres,
-          textoLibres: textoLibresCorto(repartidoresLibres, ServicioActivo.entrega),
-          precio: flujo.textoPrecioDe(ServicioActivo.entrega),
-          elegida: !esTaxi,
-          onTap: onEntrega,
+        MarcaGuia(
+          id: 'pasajero.entrega',
+          child: TarjetaServicio(
+            icono: Iconos.boxOpen,
+            titulo: 'Entrega',
+            detalle: tipo?.nombre ?? 'Encomienda o compra',
+            libres: repartidoresLibres,
+            textoLibres: textoLibresCorto(repartidoresLibres, ServicioActivo.entrega),
+            precio: flujo.textoPrecioDe(ServicioActivo.entrega),
+            elegida: !esTaxi,
+            onTap: onEntrega,
+          ),
         ),
         if (ruta != null && ruta.aproximada && conDestino) ...[
           const SizedBox(height: 8),
@@ -149,34 +156,43 @@ class PanelElegirServicio extends StatelessWidget {
         ],
         const SizedBox(height: 8),
         if (esTaxi)
-          FilaCambiar(
-            icono: flujo.paraOtraPersona ? Iconos.userGroup : Iconos.user,
-            texto: !flujo.paraOtraPersona
-                ? 'Para mí'
-                : tercero == null
-                ? 'Para otra persona'
-                : 'Para ${tercero.primerNombre}',
-            detalle: flujo.paraOtraPersona && tercero?.telefono != null ? 'Celular ${tercero!.telefono}' : null,
-            onTap: onParaQuien,
+          MarcaGuia(
+            id: 'pasajero.paraQuien',
+            child: FilaCambiar(
+              icono: flujo.paraOtraPersona ? Iconos.userGroup : Iconos.user,
+              texto: !flujo.paraOtraPersona
+                  ? 'Para mí'
+                  : tercero == null
+                  ? 'Para otra persona'
+                  : 'Para ${tercero.primerNombre}',
+              detalle: flujo.paraOtraPersona && tercero?.telefono != null ? 'Celular ${tercero!.telefono}' : null,
+              onTap: onParaQuien,
+            ),
           )
         else
-          FilaCambiar(
-            icono: Iconos.boxOpen,
-            texto: tipo?.nombre ?? 'Elige qué envías',
-            detalle: tipo == TipoEnvio.compraYEntrega ? 'Se entrega donde estás' : null,
-            onTap: onTipoEnvio,
+          MarcaGuia(
+            id: 'pasajero.paraQuien',
+            child: FilaCambiar(
+              icono: Iconos.boxOpen,
+              texto: tipo?.nombre ?? 'Elige qué envías',
+              detalle: tipo == TipoEnvio.compraYEntrega ? 'Se entrega donde estás' : null,
+              onTap: onTipoEnvio,
+            ),
           ),
         const Divider(height: 1, color: ColoresApp.borde),
-        FilaCambiar(
-          icono: flujo.metodoPago == MetodoPago.qr ? Iconos.qrcode : Iconos.moneyBill1,
-          colorIcono: ColoresApp.exito,
-          texto: pagaQuienPide ? 'Pagas tú por QR' : MetodoPago.nombre(flujo.metodoPago),
-          detalle: pagaQuienPide
-              ? 'Con el QR del conductor, cuando acepte'
-              : flujo.metodoPago == MetodoPago.qr
-              ? 'Con el QR del ${esTaxi ? 'conductor' : 'repartidor'}'
-              : 'Al ${esTaxi ? 'conductor' : 'repartidor'}',
-          onTap: onPago,
+        MarcaGuia(
+          id: 'pasajero.pago',
+          child: FilaCambiar(
+            icono: flujo.metodoPago == MetodoPago.qr ? Iconos.qrcode : Iconos.moneyBill1,
+            colorIcono: ColoresApp.exito,
+            texto: pagaQuienPide ? 'Pagas tú por QR' : MetodoPago.nombre(flujo.metodoPago),
+            detalle: pagaQuienPide
+                ? 'Con el QR del conductor, cuando acepte'
+                : flujo.metodoPago == MetodoPago.qr
+                ? 'Con el QR del ${esTaxi ? 'conductor' : 'repartidor'}'
+                : 'Al ${esTaxi ? 'conductor' : 'repartidor'}',
+            onTap: onPago,
+          ),
         ),
       ],
     );
@@ -210,7 +226,7 @@ class PieSolicitar extends StatelessWidget {
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(child: botonSolicitar),
+        Expanded(child: MarcaGuia(id: 'pasajero.solicitar', child: botonSolicitar)),
       ],
     );
   }

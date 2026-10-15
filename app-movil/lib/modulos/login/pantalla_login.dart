@@ -16,6 +16,7 @@ import '../../widgets/marco_acceso.dart';
 import '../registro/ingreso_google.dart';
 import '../registro/pantalla_registro.dart';
 import '../registro/registro_estudiante.dart';
+import 'recuperar_cuenta.dart';
 import 'restablecer_contrasena.dart';
 
 /// Inicio de sesion con usuario, correo o telefono y contrasena, o con Google. Desde aqui se abre
@@ -76,6 +77,19 @@ class _PantallaLoginState extends State<PantallaLogin> {
     super.initState();
     _cargarRecordadas();
     _revisarHuella();
+    usuarioRecuperado.addListener(_ponerUsuarioRecuperado);
+    _ponerUsuarioRecuperado();
+  }
+
+  /// Quien recupero su cuenta vuelve aqui con su usuario escrito para ingresar con la contrasena nueva.
+  void _ponerUsuarioRecuperado() {
+    final usuario = usuarioRecuperado.value;
+    if (usuario == null || !mounted) return;
+    usuarioRecuperado.value = null;
+    setState(() {
+      _usuario.text = usuario;
+      _password.clear();
+    });
   }
 
   Future<void> _revisarHuella() async {
@@ -96,6 +110,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
 
   @override
   void dispose() {
+    usuarioRecuperado.removeListener(_ponerUsuarioRecuperado);
     for (final espera in _esperas) {
       espera.cancel();
     }

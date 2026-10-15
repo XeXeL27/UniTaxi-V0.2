@@ -68,6 +68,13 @@ public class Usuario extends EntidadAuditable {
     private Boolean guiaVista;
 
     /**
+     * Guias de cada parte de la app ya vistas (codigos separados por coma, por ejemplo
+     * PASAJERO_SERVICIOS,PASAJERO_VIAJE). Las que no estan se muestran una vez, tambien a cuentas viejas.
+     */
+    @Column(name = "guias_vistas", length = 500)
+    private String guiasVistas;
+
+    /**
      * true cuando se le envio un correo con sus credenciales y todavia no vio el aviso en la app
      * ("Tus credenciales llegaron a tu correo"). Se apaga al mostrarlo.
      */

@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/iconos.dart';
 import 'package:go_router/go_router.dart';
+import 'package:provider/provider.dart';
+
+import '../core/avisos_admin.dart';
 
 import '../core/menu.dart';
 import '../core/tema.dart';
@@ -19,8 +22,13 @@ class MenuLateral extends StatelessWidget {
     context.go(ruta);
   }
 
+  /// Pendientes de una opcion del menu (por ahora solo Problemas de ingreso).
+  static int _contador(ItemMenu item, AvisosAdmin avisos) =>
+      item == Menu.problemasIngreso ? avisos.pendientesIngreso : 0;
+
   @override
   Widget build(BuildContext context) {
+    final avisos = context.watch<AvisosAdmin>();
     // Material y no Container con color: los ListTile de los grupos pintan sus efectos de tinta
     // sobre el Material mas cercano y un ColoredBox intermedio los tapaba.
     return Material(
@@ -57,7 +65,7 @@ class MenuLateral extends StatelessWidget {
                     activa: rutaActual == Menu.inicio.ruta,
                     alPresionar: () => _ir(context, Menu.inicio.ruta),
                   ),
-                  for (final grupo in Menu.grupos) _grupo(context, grupo),
+                  for (final grupo in Menu.grupos) _grupo(context, grupo, avisos),
                 ],
               ),
             ),
@@ -67,7 +75,8 @@ class MenuLateral extends StatelessWidget {
     );
   }
 
-  Widget _grupo(BuildContext context, GrupoMenu grupo) {
+  Widget _grupo(BuildContext context, GrupoMenu grupo, AvisosAdmin avisos) {
+    final pendientes = grupo.items.fold<int>(0, (suma, i) => suma + _contador(i, avisos));
     final contieneActiva = grupo.items.any((i) => i.ruta == rutaActual);
     return Theme(
       // Quita las lineas que ExpansionTile dibuja al abrirse.
@@ -82,9 +91,17 @@ class MenuLateral extends StatelessWidget {
           width: 22,
           child: Center(child: Icon(grupo.icono, color: Colors.white, size: 16)),
         ),
-        title: Text(
-          grupo.titulo,
-          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+        title: Row(
+          children: [
+            Flexible(
+              child: Text(
+                grupo.titulo,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (pendientes > 0) ...[const SizedBox(width: 8), _Contador(pendientes)],
+          ],
         ),
         iconColor: Colors.white,
         collapsedIconColor: Colors.white70,
@@ -96,6 +113,7 @@ class MenuLateral extends StatelessWidget {
               item: item,
               activa: item.ruta == rutaActual,
               sangria: true,
+              contador: _contador(item, avisos),
               alPresionar: () => _ir(context, item.ruta),
             ),
         ],
@@ -108,9 +126,16 @@ class _OpcionMenu extends StatelessWidget {
   final ItemMenu item;
   final bool activa;
   final bool sangria;
+  final int contador;
   final VoidCallback alPresionar;
 
-  const _OpcionMenu({required this.item, required this.activa, required this.alPresionar, this.sangria = false});
+  const _OpcionMenu({
+    required this.item,
+    required this.activa,
+    required this.alPresionar,
+    this.sangria = false,
+    this.contador = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -137,9 +162,31 @@ class _OpcionMenu extends StatelessWidget {
                   style: TextStyle(color: Colors.white, fontWeight: activa ? FontWeight.w600 : FontWeight.normal),
                 ),
               ),
+              if (contador > 0) ...[const SizedBox(width: 8), _Contador(contador)],
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Numero rojo de pendientes junto a una opcion o un grupo del menu.
+class _Contador extends StatelessWidget {
+  final int cantidad;
+
+  const _Contador(this.cantidad);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(minWidth: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(color: ColoresApp.rojo, borderRadius: BorderRadius.circular(10)),
+      child: Text(
+        cantidad > 99 ? '99+' : '$cantidad',
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
       ),
     );
   }

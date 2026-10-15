@@ -48,6 +48,9 @@ class UsuarioSesion {
   /// "Valida hasta" de su carnet, si se leyo.
   final DateTime? carnetVencimiento;
 
+  /// Guias de cada parte de la app que ya vio (codigos de [Guias] en lib/widgets/guia_inicio.dart).
+  final List<String> guiasVistas;
+
   UsuarioSesion({
     required this.idUsuario,
     required this.nombreUsuario,
@@ -63,6 +66,7 @@ class UsuarioSesion {
     this.carnetPendiente,
     this.plazoSelfie,
     this.carnetVencimiento,
+    this.guiasVistas = const [],
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -96,6 +100,7 @@ class UsuarioSesion {
     carnetPendiente: json['carnetPendiente'] as String?,
     plazoSelfie: DateTime.tryParse(json['plazoSelfie'] as String? ?? ''),
     carnetVencimiento: DateTime.tryParse(json['carnetVencimiento'] as String? ?? ''),
+    guiasVistas: [for (final g in json['guiasVistas'] as List<dynamic>? ?? const []) g as String],
   );
 
   Map<String, dynamic> aJson() => {
@@ -116,6 +121,7 @@ class UsuarioSesion {
         ? null
         : '${carnetVencimiento!.year.toString().padLeft(4, '0')}-${carnetVencimiento!.month.toString().padLeft(2, '0')}-'
               '${carnetVencimiento!.day.toString().padLeft(2, '0')}',
+    'guiasVistas': guiasVistas,
   };
 }
 
@@ -448,6 +454,43 @@ class Sesion extends ChangeNotifier {
     'confirmacion': confirmacion,
   });
 
+  /// Registro: si el carnet ya es de alguien registrado devuelve los datos para recuperar su cuenta
+  /// (registrado, recuperacion, correo a medias, puedeRecibirCodigo, bloqueadoHasta). [origen]:
+  /// REGISTRO_PASAJERO o REGISTRO_CONDUCTOR.
+  Future<Map<String, dynamic>> carnetRegistrado({required String ci, String? complemento, required String origen}) async =>
+      await _postAuth('/api/auth/recuperar/por-carnet', {
+            'ci': ci.trim(),
+            'complementoCi': (complemento ?? '').trim().toUpperCase(),
+            'origen': origen,
+          })
+          as Map<String, dynamic>;
+
+  /// "Recuperar mis credenciales": codigo de 6 digitos al correo registrado (envio N de 3, cuanto vale y
+  /// cuanto falta para pedir otro).
+  Future<Map<String, dynamic>> pedirCodigoRecuperacion(String recuperacion) async =>
+      await _postAuth('/api/auth/recuperar/codigo', {'recuperacion': recuperacion}) as Map<String, dynamic>;
+
+  Future<void> verificarCodigoRecuperacion(String recuperacion, String codigo) =>
+      _postAuth('/api/auth/recuperar/verificar', {'recuperacion': recuperacion, 'codigo': codigo.trim()});
+
+  /// Contrasena nueva tras verificar el codigo. Devuelve el nombre de usuario para el login (no entra solo).
+  Future<String> cambiarContrasenaRecuperacion(String recuperacion, {required String nueva, required String confirmacion}) async {
+    final datos = await _postAuth('/api/auth/recuperar/contrasena', {
+      'recuperacion': recuperacion,
+      'nueva': nueva,
+      'confirmacion': confirmacion,
+    }) as Map<String, dynamic>;
+    return datos['nombreUsuario'] as String? ?? '';
+  }
+
+  /// Mensaje al administrador despues de los 3 codigos: el problema y un celular.
+  Future<void> mensajeAdministrador(String recuperacion, {required String descripcion, required String celular}) =>
+      _postAuth('/api/auth/recuperar/mensaje', {
+        'recuperacion': recuperacion,
+        'descripcion': descripcion.trim(),
+        'celular': celular.trim(),
+      });
+
   /// Guarda el correo de quien entro sin tenerlo y lo deja en la sesion.
   Future<void> guardarCorreo(String correo) async {
     final http.Response respuesta;
@@ -509,6 +552,26 @@ class Sesion extends ChangeNotifier {
     final actual = _usuario;
     if (actual == null || !actual.mostrarGuia) return;
     await reemplazarUsuario({...actual.aJson(), 'mostrarGuia': false});
+  }
+
+  /// La guia de una parte de la app todavia no se vio con esta cuenta.
+  bool guiaPendiente(String guia) {
+    final actual = _usuario;
+    return actual != null && !actual.guiasVistas.contains(guia);
+  }
+
+  Future<void> marcarGuia(String guia) async {
+    final actual = _usuario;
+    if (actual == null || actual.guiasVistas.contains(guia)) return;
+    await reemplazarUsuario({...actual.aJson(), 'guiasVistas': [...actual.guiasVistas, guia]});
+  }
+
+  /// Perfil > "Volver a ver las guías" (ya avisado al servidor): la de inicio y las de cada parte se
+  /// muestran otra vez.
+  Future<void> guiasReiniciadas() async {
+    final actual = _usuario;
+    if (actual == null) return;
+    await reemplazarUsuario({...actual.aJson(), 'mostrarGuia': true, 'guiasVistas': <String>[]});
   }
 
   /// Renueva el token de acceso con el de refresco. Devuelve false si no se pudo.

@@ -213,6 +213,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     setState(() => _seccion = seccion);
     _flujo.cambiarInicioVisible(seccion == _seccionInicio);
     if (conNuevas) _flujo.verNuevas();
+    if (seccion == _seccionInicio) _revisarGuia();
     if (seccion == _seccionHistorial) _historial.currentState?.recargar();
     if (seccion == _seccionComentarios) _comentarios.currentState?.recargar();
   }
@@ -303,7 +304,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   /// La guia espera a que la cuenta este habilitada (aprobada y con sus documentos), con el GPS
   /// listo, en Inicio con la lista de solicitudes y sin otra pantalla encima.
   bool get _listoParaGuia =>
-      context.read<Sesion>().usuario?.mostrarGuia == true &&
+      _guiaInicioPendiente &&
       !(context.read<Sesion>().usuario?.avisoCredenciales ?? false) &&
       !_avisoEnCurso &&
       RequiereGps.listo.value &&
@@ -312,7 +313,13 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       !_flujo.enRevision &&
       (ModalRoute.of(context)?.isCurrent ?? true);
 
+  /// La de inicio, o la del repartidor (la reemplaza) si todavia no la vio con esta cuenta.
+  bool get _guiaInicioPendiente =>
+      context.read<Sesion>().usuario?.mostrarGuia == true ||
+      (_flujo.esRepartidor && guiaPendiente(context, Guias.repartidorInicio));
+
   Future<void> _revisarGuia() async {
+    _revisarGuiaDelViaje();
     if (_guiaIniciada || !mounted || !_listoParaGuia) return;
     _guiaIniciada = true;
     await Future<void>.delayed(const Duration(milliseconds: 900));
@@ -321,36 +328,189 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       _guiaIniciada = false;
       return;
     }
-    await mostrarGuiaInicio(context, [
-      PasoGuia(
-        clave: _guiaConectar,
-        titulo: 'En línea o desconectado',
-        texto: 'Con este botón te conectas o te desconectas: conectado apareces en el mapa de los pasajeros '
-            'y recibes solicitudes.',
-      ),
-      PasoGuia(
-        clave: _guiaSolicitudes,
-        titulo: _flujo.esRepartidor ? 'Solicitudes de entrega' : 'Solicitudes de viaje',
-        texto: 'Aquí llegan los pedidos. Cuando llega uno nuevo se abre solo con 15 segundos para '
-            'responder; también puedes tocarlo en la lista para ver la ruta y cuánto cobras.',
-      ),
-      PasoGuia(
-        clave: _guiaHistorial,
-        titulo: 'Actividad',
-        texto: 'Tus viajes completados de este mes y del anterior.',
-      ),
-      PasoGuia(
-        clave: _guiaOpiniones,
-        titulo: 'Opiniones',
-        texto: 'Tu calificación promedio y lo que dicen los pasajeros de ti.',
-      ),
-      PasoGuia(
-        clave: _guiaMas,
-        titulo: 'Perfil',
-        texto: 'Tus datos, tus documentos, tus QR de cobro, contraseña, huella y cerrar sesión.',
-      ),
-    ]);
+    if (_flujo.esRepartidor) {
+      await mostrarGuiaInicio(context, _pasosInicioRepartidor(), guia: Guias.repartidorInicio, tambienInicio: true);
+    } else {
+      await mostrarGuiaInicio(context, [
+        PasoGuia(
+          clave: _guiaConectar,
+          titulo: 'En línea o desconectado',
+          texto: 'Con este botón te conectas o te desconectas: conectado apareces en el mapa de los pasajeros '
+              'y recibes solicitudes.',
+        ),
+        PasoGuia(
+          clave: _guiaSolicitudes,
+          titulo: _flujo.esRepartidor ? 'Solicitudes de entrega' : 'Solicitudes de viaje',
+          texto: 'Aquí llegan los pedidos. Cuando llega uno nuevo se abre solo con 15 segundos para '
+              'responder; también puedes tocarlo en la lista para ver la ruta y cuánto cobras.',
+        ),
+        PasoGuia(
+          clave: _guiaHistorial,
+          titulo: 'Actividad',
+          texto: 'Tus viajes completados de este mes y del anterior.',
+        ),
+        PasoGuia(
+          clave: _guiaOpiniones,
+          titulo: 'Opiniones',
+          texto: 'Tu calificación promedio y lo que dicen los pasajeros de ti.',
+        ),
+        PasoGuia(
+          clave: _guiaMas,
+          titulo: 'Perfil',
+          texto: 'Tus datos, tus documentos, tus QR de cobro, contraseña, huella y cerrar sesión.',
+        ),
+      ]);
+    }
+    // Ya marcada como vista; si la piden de nuevo desde Perfil se vuelve a ofrecer.
+    _guiaIniciada = false;
   }
+
+  /// Inicio del repartidor: lo mismo que el del conductor con los pedidos de entrega, los 3 pedidos a la
+  /// vez y el limite de adelanto de las compras.
+  List<PasoGuia> _pasosInicioRepartidor() => [
+    PasoGuia(
+      clave: _guiaConectar,
+      titulo: 'En línea o desconectado',
+      texto: 'Conéctate para recibir pedidos de entrega y aparecer en el mapa de los clientes; desconectado no '
+          'te llega ninguno.',
+    ),
+    PasoGuia(
+      clave: _guiaSolicitudes,
+      titulo: 'Solicitudes de entrega',
+      texto: 'Aquí llegan las encomiendas (llevar un paquete de A a B) y las compras (comprar algo y llevarlo). '
+          'Cada pedido nuevo se abre solo con 15 segundos para responder; también puedes tocarlo en la lista.',
+    ),
+    const PasoGuia(
+      marca: 'conductor.arriba',
+      titulo: 'Tu día',
+      texto: 'Si estás en línea y cuántas entregas hiciste hoy.',
+    ),
+    const PasoGuia(
+      icono: Iconos.boxOpen,
+      titulo: 'Hasta 3 pedidos a la vez',
+      texto: 'Puedes llevar hasta 3 pedidos. Arriba verás una pestaña por pedido con su etapa para pasar de uno '
+          'a otro.',
+    ),
+    const PasoGuia(
+      icono: Iconos.moneyBill1,
+      titulo: 'Compras y tu límite',
+      texto: 'Solo ves las compras que entran en tu límite de adelanto (lo que puedes pagar de tu bolsillo antes '
+          'de cobrar). Puedes cambiarlo en Perfil.',
+    ),
+    PasoGuia(
+      clave: _guiaHistorial,
+      titulo: 'Actividad',
+      texto: 'Tus entregas completadas de este mes y del anterior.',
+    ),
+    PasoGuia(
+      clave: _guiaOpiniones,
+      titulo: 'Opiniones',
+      texto: 'Tu calificación promedio y lo que dicen tus clientes.',
+    ),
+    PasoGuia(
+      clave: _guiaMas,
+      titulo: 'Perfil',
+      texto: 'Tus datos, tus documentos, tus QR de cobro, tu límite de adelanto, contraseña y cerrar sesión.',
+    ),
+  ];
+
+  /// Guia del primer viaje (taxi) o del primer pedido (repartidor), con el panel abierto.
+  String? get _guiaDelViaje {
+    final usuario = context.read<Sesion>().usuario;
+    if (usuario == null ||
+        usuario.avisoCredenciales ||
+        _avisoEnCurso ||
+        !RequiereGps.listo.value ||
+        _seccion != _seccionInicio ||
+        _flujo.etapa != EtapaConductor.enViaje ||
+        _flujo.viaje == null ||
+        !_apertura.abierto ||
+        !marcaEnPantalla('conductor.arriba') ||
+        !(ModalRoute.of(context)?.isCurrent ?? true)) {
+      return null;
+    }
+    return _flujo.viaje!.datosEntrega != null ? Guias.repartidorPedido : Guias.conductorViaje;
+  }
+
+  bool _guiaViajeEnEspera = false;
+
+  Future<void> _revisarGuiaDelViaje() async {
+    if (_guiaViajeEnEspera || !mounted) return;
+    final guia = _guiaDelViaje;
+    if (guia == null || !guiaPendiente(context, guia)) return;
+    _guiaViajeEnEspera = true;
+    // Deja que el panel termine de subir y la ruta de dibujarse.
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    _guiaViajeEnEspera = false;
+    if (!mounted || _guiaDelViaje != guia || !guiaPendiente(context, guia)) return;
+    await mostrarGuiaInicio(
+      context,
+      guia == Guias.repartidorPedido ? _pasosPedido() : _pasosViaje(),
+      guia: guia,
+    );
+  }
+
+  /// Primer viaje del conductor de taxi.
+  List<PasoGuia> _pasosViaje() => const [
+    PasoGuia(
+      marca: 'conductor.arriba',
+      titulo: 'A dónde ir',
+      texto: 'Aquí ves a dónde ir ahora. "Abrir en Maps" abre Google Maps con la ruta.',
+    ),
+    PasoGuia(
+      marca: 'conductor.cliente',
+      icono: Iconos.phone,
+      titulo: 'Tu pasajero',
+      texto: 'Llámalo o escríbele desde aquí. También ves cuánto cobras y si paga en efectivo o por QR.',
+    ),
+    PasoGuia(
+      marca: 'conductor.pie',
+      titulo: 'El siguiente paso',
+      texto: 'Avanza el viaje con este botón: Voy en camino y Llegué (al pasajero le suena un aviso). Iniciar '
+          'y finalizar se hacen deslizando.',
+    ),
+    PasoGuia(
+      icono: Iconos.clock,
+      titulo: 'Esperando al pasajero',
+      texto: 'Al marcar Llegué corre un cronómetro de 1 minuto. Puedes avisarle 3 veces; si no aparece, reporta '
+          '"No se presentó" con un comentario.',
+    ),
+    PasoGuia(
+      icono: Iconos.flagCheckered,
+      titulo: 'Finalizar y cobrar',
+      texto: 'Para finalizar debes estar a 50 m o menos del destino. Cobra en efectivo o por QR lo que dice el '
+          'viaje.',
+    ),
+  ];
+
+  /// Primer pedido del repartidor: recoger en A y entregar en B, con codigo y foto.
+  List<PasoGuia> _pasosPedido() => const [
+    PasoGuia(
+      marca: 'conductor.arriba',
+      titulo: 'A dónde ir',
+      texto: 'Primero ves solo el punto de recogida (A); cuando tengas el pedido, el mapa pasa al punto de entrega '
+          '(B). "Abrir en Maps" abre Google Maps con la ruta.',
+    ),
+    PasoGuia(
+      marca: 'conductor.pie',
+      icono: Iconos.locationDot,
+      titulo: 'Llegué al punto de recogida',
+      texto: 'Tócalo al llegar a A: el cliente recibe un aviso con sonido.',
+    ),
+    PasoGuia(
+      icono: Iconos.boxOpen,
+      titulo: 'Recoger',
+      texto: 'En una encomienda pide el código de recogida y toma la foto del paquete. En una compra propón el '
+          'comercio y el monto, espera a que el cliente lo confirme y registra la compra.',
+    ),
+    PasoGuia(
+      icono: Iconos.flagCheckered,
+      titulo: 'Entregar',
+      texto: 'A 100 m o menos del punto B pide el código de entrega y toma la foto de la persona con su pedido. '
+          'Si no sale, avísale con el cronómetro; si no aparece, usa "No se pudo entregar" con el motivo y una '
+          'foto.',
+    ),
+  ];
 
   /// El pasajero pidio pagar de otra forma: se pregunta al conductor si acepta.
   Future<void> _preguntarCambioPago(Viaje viaje) async {
@@ -953,7 +1113,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                           child: Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(maxWidth: anchoControlesMapa),
-                              child: _barraSuperior(etapa),
+                              child: MarcaGuia(id: 'conductor.arriba', child: _barraSuperior(etapa)),
                             ),
                           ),
                         ),
@@ -982,7 +1142,10 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                         EtapaConductor.detalle => 0.62,
                         _ => 0.5,
                       },
-                      pie: _pieDelPanel(etapa),
+                      pie: switch (_pieDelPanel(etapa)) {
+                        final Widget pie => MarcaGuia(id: 'conductor.pie', child: pie),
+                        null => null,
+                      },
                       child: switch (etapa) {
                         EtapaConductor.cargando => PanelRecuperando(sinRed: _flujo.recuperandoSinRed),
                         EtapaConductor.lista => PanelSolicitudes(

@@ -9,6 +9,7 @@ import '../../../core/chat.dart';
 import '../../../core/formato.dart';
 import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
+import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/inicio_mapa.dart';
 import '../../../widgets/notificaciones.dart';
@@ -467,9 +468,9 @@ class PanelViaje extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 16),
-        _FilaConductor(viaje: viaje),
+        MarcaGuia(id: 'pasajero.conductor', child: _FilaConductor(viaje: viaje)),
         const SizedBox(height: 16),
-        AccionesViaje(viaje: viaje),
+        MarcaGuia(id: 'pasajero.acciones', child: AccionesViaje(viaje: viaje)),
         if (viaje.tercero != null) ...[
           const SizedBox(height: 12),
           _ViajaTercero(viaje: viaje, onAvisarPago: onAvisarPago),
@@ -483,7 +484,7 @@ class PanelViaje extends StatelessWidget {
         if (datos != null) ...[
           const SizedBox(height: 16),
           LineaTiempoHorizontal(datos: datos),
-          if (datos.codigos.isNotEmpty) ...[const SizedBox(height: 12), TarjetaCodigoEntrega(fases: datos.codigos)],
+          if (datos.codigos.isNotEmpty) ...[const SizedBox(height: 12), MarcaGuia(id: 'pasajero.codigos', child: TarjetaCodigoEntrega(fases: datos.codigos))],
           if (_resumenDeEntregaVisible(datos)) ...[
             const SizedBox(height: 12),
             _ResumenEntrega(datos: datos, precioServicio: viaje.precioFinal),

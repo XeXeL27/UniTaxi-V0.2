@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons, CupertinoSwitch;
 import 'package:provider/provider.dart';
 
 import '../core/api_excepcion.dart';
+import '../core/cliente_api.dart';
 import '../core/config.dart';
 import '../core/huella.dart';
 import '../core/preferencias_aviso.dart';
@@ -144,6 +145,19 @@ class _PantallaMasState extends State<PantallaMas> {
 
   void _abrir(Widget pantalla) => Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => pantalla));
 
+  /// La guia de inicio y las de cada parte se vuelven a mostrar (la de inicio al volver a Inicio).
+  Future<void> _reiniciarGuias() async {
+    final sesion = context.read<Sesion>();
+    try {
+      await context.read<ClienteApi>().post('/api/cuenta/guias/reiniciar', {});
+    } on ApiExcepcion catch (e) {
+      if (mounted) mostrarMensaje(context, e.mensaje, error: true);
+      return;
+    }
+    await sesion.guiasReiniciadas();
+    if (mounted) mostrarMensaje(context, 'Listo: verás las guías otra vez al usar cada parte de la app.');
+  }
+
   @override
   Widget build(BuildContext context) {
     final sesion = context.watch<Sesion>();
@@ -213,6 +227,13 @@ class _PantallaMasState extends State<PantallaMas> {
                 onTap: () => abrirConfiguracionAvisos(context),
               ),
             ),
+          ),
+          TarjetaOpcion(
+            icono: CupertinoIcons.lightbulb_fill,
+            color: ColoresApp.azul,
+            titulo: 'Volver a ver las guías',
+            detalle: 'Las explicaciones de cada parte de la app',
+            onTap: _reiniciarGuias,
           ),
           TarjetaOpcion(
             icono: CupertinoIcons.lock_shield_fill,

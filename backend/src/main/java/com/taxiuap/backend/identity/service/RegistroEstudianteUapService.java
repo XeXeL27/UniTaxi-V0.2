@@ -26,6 +26,7 @@ import com.taxiuap.backend.institution.dto.EstadoEstudianteResponse;
 import com.taxiuap.backend.institution.enums.SituacionVerificacion;
 import com.taxiuap.backend.institution.service.EstudianteUapService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.communication.enums.OrigenAyudaIngreso;
 import com.taxiuap.backend.shared.exception.ConflictoException;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
@@ -59,6 +60,7 @@ public class RegistroEstudianteUapService {
     private final CarnetService carnetService;
     private final RegistroGoogleService registroGoogleService;
     private final FotoPerfilService fotoPerfilService;
+    private final RecuperarCuentaService recuperarCuentaService;
 
     /**
      * Paso 1 del registro: el RU. Si la persona ya tiene cuenta de pasajero y sus datos coinciden con
@@ -82,13 +84,15 @@ public class RegistroEstudianteUapService {
             if (!distintos.isEmpty()) {
                 return new RegistroEstudianteUapResponse(null, nombre, sigse.carrera(), ocultar(persona.getCorreo()), true,
                         "Ya tienes una cuenta en UNITAXI con ese carnet, pero " + EstudianteUapService.enFrase(distintos)
-                                + " no coincide con la UAP. Ingresa y pide la verificación a un administrador.");
+                                + " no coincide con la UAP. Ingresa y pide la verificación a un administrador.",
+                        recuperarCuentaService.cuentaRegistrada(persona, OrigenAyudaIngreso.ESTUDIANTE_UAP, ru));
             }
             estudianteUapService.marcarEstudiante(persona, sigse, SituacionVerificacion.APROBADA);
             fotoSiNoTiene(pasajero.get(), sigse.foto());
             return new RegistroEstudianteUapResponse(null, nombre, sigse.carrera(), ocultar(persona.getCorreo()), true,
                     "Ya tenías una cuenta en UNITAXI: quedaste registrado como estudiante UAP. "
-                            + "Ingresa con tu usuario y contraseña de siempre.");
+                            + "Ingresa con tu usuario y contraseña de siempre.",
+                    recuperarCuentaService.cuentaRegistrada(persona, OrigenAyudaIngreso.ESTUDIANTE_UAP, ru));
         }
         if (existente.isEmpty()) {
             if (sigse.correo() == null) {
@@ -102,7 +106,7 @@ public class RegistroEstudianteUapService {
         }
         String correo = existente.map(Persona::getCorreo).orElse(sigse.correo());
         return new RegistroEstudianteUapResponse(temporal.guardar(sigse), nombre, sigse.carrera(), ocultar(correo),
-                false, null);
+                false, null, null);
     }
 
     /**

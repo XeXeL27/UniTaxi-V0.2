@@ -1,5 +1,6 @@
 package com.taxiuap.backend.identity.service;
 
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -48,6 +49,22 @@ public class DatosCuentaService {
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
         usuario.setGuiaVista(true);
+    }
+
+    /** Guia de una parte de la app vista (terminada o saltada): no se vuelve a mostrar. */
+    public void marcarGuiaVista(Long idUsuario, String guia) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
+        LinkedHashSet<String> vistas = new LinkedHashSet<>(UsuarioResponse.guiasVistas(usuario.getGuiasVistas()));
+        if (vistas.add(guia)) usuario.setGuiasVistas(String.join(",", vistas));
+    }
+
+    /** Perfil > "Volver a ver las guias": la de inicio y las de cada parte se muestran otra vez. */
+    public void reiniciarGuias(Long idUsuario) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
+        usuario.setGuiaVista(false);
+        usuario.setGuiasVistas(null);
     }
 
     /**

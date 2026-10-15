@@ -7,48 +7,149 @@ import '../core/cliente_api.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
 
-/// Un paso de la guia de inicio: el widget que se ilumina (por su [clave]) y lo que se explica.
+/// Guias de cada parte de la app (ademas de la de inicio). Cada una se muestra una vez por cuenta,
+/// tambien a las cuentas que ya usaban la app; Perfil > "Volver a ver las guías" las repite.
+abstract final class Guias {
+  /// "Elige tu servicio": moto taxi para mi o para otra persona, encomienda, compra y pago.
+  static const pasajeroServicios = 'PASAJERO_SERVICIOS';
+
+  /// Primer viaje o pedido aceptado del pasajero.
+  static const pasajeroViaje = 'PASAJERO_VIAJE';
+
+  /// Primer viaje aceptado del conductor de taxi.
+  static const conductorViaje = 'CONDUCTOR_VIAJE';
+
+  /// Inicio del repartidor (reemplaza a la guia de inicio del conductor).
+  static const repartidorInicio = 'REPARTIDOR_INICIO';
+
+  /// Primer pedido aceptado del repartidor.
+  static const repartidorPedido = 'REPARTIDOR_PEDIDO';
+}
+
+/// Un paso de la guia: lo que se ilumina y lo que se explica. Se ilumina el widget de [clave] o el
+/// [MarcaGuia] con el id [marca]; sin ninguno de los dos (o si no esta en pantalla y tiene [icono])
+/// el cuadro va al centro con el icono, para explicar opciones que no son un boton.
 class PasoGuia {
-  final GlobalKey clave;
+  final GlobalKey? clave;
+  final String? marca;
   final String titulo;
   final String texto;
+  final IconData? icono;
 
   /// Ilumina un circulo en vez de un rectangulo redondeado (por ejemplo el boton central).
   final bool circulo;
 
-  const PasoGuia({required this.clave, required this.titulo, required this.texto, this.circulo = false});
+  const PasoGuia({
+    this.clave,
+    this.marca,
+    required this.titulo,
+    required this.texto,
+    this.icono,
+    this.circulo = false,
+  });
 }
 
-/// Guia de la primera vez: oscurece la pantalla, ilumina un boton a la vez y al lado muestra un
-/// cuadro pequeno con la explicacion, "1 de 5", Saltar y Siguiente. Los pasos cuyo widget no esta
-/// en pantalla se omiten. Al terminarla o saltarla se marca como vista en el servidor
-/// (POST /api/cuenta/guia-vista) y en la sesion, asi no se vuelve a mostrar.
-Future<void> mostrarGuiaInicio(BuildContext context, List<PasoGuia> pasos) async {
-  final visibles = pasos.where((p) => _rectDe(p.clave) != null).toList();
-  if (visibles.isEmpty) return;
-  final sesion = context.read<Sesion>();
-  final api = context.read<ClienteApi>();
-  await Navigator.of(context).push(
-    PageRouteBuilder<void>(
-      opaque: false,
-      transitionDuration: const Duration(milliseconds: 250),
-      reverseTransitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (_, animacion, _) => FadeTransition(opacity: animacion, child: _GuiaInicio(pasos: visibles)),
-    ),
-  );
-  await sesion.guiaVista();
-  try {
-    await api.post('/api/cuenta/guia-vista', {});
-  } catch (_) {
-    // Sin conexion queda marcada en el telefono; el servidor la ofreceria en el proximo ingreso.
+/// Marca un widget para que una guia lo ilumine por su [id] (sin pasar claves por varios widgets).
+/// Si dos estan en pantalla con el mismo id vale el ultimo que se dibujo.
+class MarcaGuia extends StatefulWidget {
+  final String id;
+  final Widget child;
+
+  const MarcaGuia({super.key, required this.id, required this.child});
+
+  static final Map<String, BuildContext> _marcas = {};
+
+  @override
+  State<MarcaGuia> createState() => _MarcaGuiaState();
+}
+
+class _MarcaGuiaState extends State<MarcaGuia> {
+  @override
+  Widget build(BuildContext context) {
+    MarcaGuia._marcas[widget.id] = context;
+    return widget.child;
+  }
+
+  @override
+  void dispose() {
+    if (MarcaGuia._marcas[widget.id] == context) MarcaGuia._marcas.remove(widget.id);
+    super.dispose();
   }
 }
 
-/// Rectangulo del widget en la pantalla, o null si no esta dibujado.
-Rect? _rectDe(GlobalKey clave) {
-  final caja = clave.currentContext?.findRenderObject();
+/// Guias abiertas en este momento: un segundo pedido de la misma no la abre dos veces.
+final Set<String> _guiasEnCurso = {};
+
+/// Guia de la primera vez: oscurece la pantalla, ilumina un boton a la vez y al lado muestra un
+/// cuadro pequeno con la explicacion, "1 de 5", Saltar y Siguiente. Los pasos cuyo widget no esta
+/// en pantalla se omiten (o van al centro si tienen icono). Al terminarla o saltarla se marca como
+/// vista en el servidor (POST /api/cuenta/guia-vista) y en la sesion, asi no se vuelve a mostrar.
+/// Sin [guia] es la guia de inicio; con [guia] (uno de [Guias]) la de esa parte de la app, y con
+/// [tambienInicio] marca ademas la de inicio (la del repartidor la reemplaza).
+Future<void> mostrarGuiaInicio(
+  BuildContext context,
+  List<PasoGuia> pasos, {
+  String? guia,
+  bool tambienInicio = false,
+}) async {
+  final pantalla = Offset.zero & MediaQuery.sizeOf(context);
+  final visibles = [
+    for (final paso in pasos)
+      if (_rectDe(paso, pantalla) != null || paso.icono != null || (paso.clave == null && paso.marca == null)) paso,
+  ];
+  final id = guia ?? '';
+  if (visibles.isEmpty || !_guiasEnCurso.add(id)) return;
+  final sesion = context.read<Sesion>();
+  final api = context.read<ClienteApi>();
+  try {
+    await Navigator.of(context).push(
+      PageRouteBuilder<void>(
+        opaque: false,
+        transitionDuration: const Duration(milliseconds: 250),
+        reverseTransitionDuration: const Duration(milliseconds: 200),
+        pageBuilder: (_, animacion, _) => FadeTransition(opacity: animacion, child: _GuiaInicio(pasos: visibles)),
+      ),
+    );
+  } finally {
+    _guiasEnCurso.remove(id);
+  }
+  if (guia == null || tambienInicio) {
+    await sesion.guiaVista();
+    try {
+      await api.post('/api/cuenta/guia-vista', {});
+    } catch (_) {
+      // Sin conexion queda marcada en el telefono; el servidor la ofreceria en el proximo ingreso.
+    }
+  }
+  if (guia != null) {
+    await sesion.marcarGuia(guia);
+    try {
+      await api.post('/api/cuenta/guia-vista', {'guia': guia});
+    } catch (_) {
+      // Igual que la de inicio: queda marcada en el telefono.
+    }
+  }
+}
+
+/// El [MarcaGuia] con ese id esta dibujado.
+bool marcaEnPantalla(String id) => MarcaGuia._marcas[id]?.mounted ?? false;
+
+/// La guia [guia] falta y no esta abierta: la pantalla puede mostrarla.
+bool guiaPendiente(BuildContext context, String guia) =>
+    !_guiasEnCurso.contains(guia) && context.read<Sesion>().guiaPendiente(guia);
+
+/// Rectangulo del widget del paso en la pantalla, o null si no esta dibujado (o queda fuera de ella).
+Rect? _rectDe(PasoGuia paso, Rect pantalla) {
+  final contexto = paso.clave?.currentContext ?? (paso.marca == null ? null : MarcaGuia._marcas[paso.marca]);
+  if (contexto == null || !contexto.mounted) return null;
+  final caja = contexto.findRenderObject();
   if (caja is! RenderBox || !caja.attached || !caja.hasSize) return null;
-  return caja.localToGlobal(Offset.zero) & caja.size;
+  final rect = caja.localToGlobal(Offset.zero) & caja.size;
+  // Fuera de la pantalla (por ejemplo abajo en un panel que se desplaza) no se puede iluminar.
+  if (rect.isEmpty || !pantalla.inflate(4).contains(rect.topLeft) || !pantalla.inflate(4).contains(rect.bottomRight)) {
+    return null;
+  }
+  return rect;
 }
 
 class _GuiaInicio extends StatefulWidget {
@@ -79,13 +180,26 @@ class _GuiaInicioState extends State<_GuiaInicio> {
   Widget build(BuildContext context) {
     final pantalla = MediaQuery.sizeOf(context);
     final paso = widget.pasos[_indice];
-    final objetivo = _rectDe(paso.clave)?.inflate(6) ?? Rect.fromCenter(center: pantalla.center(Offset.zero), width: 0, height: 0);
+    final rect = _rectDe(paso, Offset.zero & pantalla);
+    final objetivo = rect?.inflate(6) ?? Rect.fromCenter(center: pantalla.center(Offset.zero), width: 0, height: 0);
 
     final ancho = math.min(_anchoCuadro, pantalla.width - 32);
+    final cuadro = _Cuadro(
+      key: ValueKey(_indice),
+      paso: paso,
+      numero: _indice + 1,
+      total: widget.pasos.length,
+      ultimo: _ultimo,
+      conFlecha: rect != null,
+      flechaArriba: objetivo.center.dy <= pantalla.height / 2,
+      flechaX: (objetivo.center.dx - (objetivo.center.dx - ancho / 2).clamp(16.0, pantalla.width - 16 - ancho))
+          .clamp(22.0, ancho - 22),
+      onSiguiente: _siguiente,
+      onSaltar: () => Navigator.of(context).pop(),
+    );
     final izquierda = (objetivo.center.dx - ancho / 2).clamp(16.0, pantalla.width - 16 - ancho);
     // El cuadro va del lado con mas espacio: arriba del objetivo si esta en la mitad de abajo.
     final arriba = objetivo.center.dy > pantalla.height / 2;
-    final flecha = (objetivo.center.dx - izquierda).clamp(22.0, ancho - 22);
 
     return Material(
       type: MaterialType.transparency,
@@ -108,26 +222,24 @@ class _GuiaInicioState extends State<_GuiaInicio> {
               ),
             ),
           ),
-          Positioned(
-            left: izquierda,
-            width: ancho,
-            top: arriba ? null : objetivo.bottom + _separacion,
-            bottom: arriba ? pantalla.height - objetivo.top + _separacion : null,
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 220),
-              child: _Cuadro(
-                key: ValueKey(_indice),
-                paso: paso,
-                numero: _indice + 1,
-                total: widget.pasos.length,
-                ultimo: _ultimo,
-                flechaArriba: !arriba,
-                flechaX: flecha,
-                onSiguiente: _siguiente,
-                onSaltar: () => Navigator.of(context).pop(),
+          if (rect == null)
+            // Paso explicativo: el cuadro al centro, sin nada iluminado.
+            Positioned.fill(
+              child: Center(
+                child: SizedBox(
+                  width: ancho,
+                  child: AnimatedSwitcher(duration: const Duration(milliseconds: 220), child: cuadro),
+                ),
               ),
+            )
+          else
+            Positioned(
+              left: izquierda,
+              width: ancho,
+              top: arriba ? null : objetivo.bottom + _separacion,
+              bottom: arriba ? pantalla.height - objetivo.top + _separacion : null,
+              child: AnimatedSwitcher(duration: const Duration(milliseconds: 220), child: cuadro),
             ),
-          ),
         ],
       ),
     );
@@ -155,6 +267,8 @@ class _Sombra extends CustomPainter {
       Path.combine(PathOperation.difference, fondo, agujero),
       Paint()..color = const Color(0xB3061425),
     );
+    // Paso explicativo (sin nada iluminado): sin borde.
+    if (hueco.shortestSide < 2) return;
     canvas.drawRRect(
       _forma,
       Paint()
@@ -174,6 +288,9 @@ class _Cuadro extends StatelessWidget {
   final int numero;
   final int total;
   final bool ultimo;
+
+  /// false en un paso explicativo (al centro): sin flecha y con el icono arriba.
+  final bool conFlecha;
   final bool flechaArriba;
   final double flechaX;
   final VoidCallback onSiguiente;
@@ -185,6 +302,7 @@ class _Cuadro extends StatelessWidget {
     required this.numero,
     required this.total,
     required this.ultimo,
+    this.conFlecha = true,
     required this.flechaArriba,
     required this.flechaX,
     required this.onSiguiente,
@@ -204,7 +322,7 @@ class _Cuadro extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (flechaArriba) flecha,
+        if (conFlecha && flechaArriba) flecha,
         Container(
           padding: const EdgeInsets.fromLTRB(18, 16, 14, 12),
           decoration: BoxDecoration(
@@ -216,6 +334,15 @@ class _Cuadro extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (!conFlecha && paso.icono != null) ...[
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: const BoxDecoration(color: ColoresApp.azulSuave, shape: BoxShape.circle),
+                  child: Icon(paso.icono, color: ColoresApp.azul, size: 20),
+                ),
+                const SizedBox(height: 10),
+              ],
               Text(
                 paso.titulo,
                 style: const TextStyle(color: ColoresApp.tinta, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: -0.3),
@@ -249,7 +376,7 @@ class _Cuadro extends StatelessWidget {
             ],
           ),
         ),
-        if (!flechaArriba) flecha,
+        if (conFlecha && !flechaArriba) flecha,
       ],
     );
   }

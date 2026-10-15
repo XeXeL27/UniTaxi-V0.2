@@ -93,5 +93,7 @@ class Iconos {
 
   // Nuevos (2026-10-02).
   static const IconData envelope = CupertinoIcons.envelope_badge;
+  static const IconData bell = CupertinoIcons.bell;
+  static const IconData ayudaIngreso = CupertinoIcons.person_crop_circle_badge_exclam;
   static const IconData eliminarPermanente = CupertinoIcons.trash_slash;
 }

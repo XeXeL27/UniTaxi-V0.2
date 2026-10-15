@@ -19,6 +19,7 @@ import '../modulos/personas/pantalla_personas.dart';
 import '../modulos/personas/pantalla_usuarios.dart';
 import '../modulos/entregas/pantalla_entregas.dart';
 import '../modulos/reportes/pantalla_reportes_entrega.dart';
+import '../modulos/ayuda_ingreso/pantalla_ayuda_ingreso.dart';
 import 'menu.dart';
 import 'sesion.dart';
 
@@ -50,6 +51,7 @@ GoRouter crearRutas(Sesion sesion) {
             path: Menu.carnetsObservados.ruta,
             pageBuilder: (_, _) => pagina(const PantallaCarnetsObservados()),
           ),
+          GoRoute(path: Menu.problemasIngreso.ruta, pageBuilder: (_, _) => pagina(const PantallaAyudaIngreso())),
           GoRoute(
             path: Menu.eliminacionPermanente.ruta,
             pageBuilder: (_, _) => pagina(const PantallaEliminacionPermanente()),
