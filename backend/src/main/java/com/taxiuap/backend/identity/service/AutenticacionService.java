@@ -314,7 +314,7 @@ public class AutenticacionService {
         String tokenRefresco = jwtService.generarRefresco(usuario.getId(), sujeto, rolCodigo);
 
         Persona persona = usuario.getPersona();
-        UsuarioResponse usuarioResponse = UsuarioResponse.de(usuario);
+        UsuarioResponse usuarioResponse = carnetService.respuesta(usuario);
 
         // La cuenta de conductor sin aprobar no se ofrece como "cambiar a modo conductor".
         List<String> rolesDisponibles = usuarioRepository.findByPersonaId(persona.getId()).stream()

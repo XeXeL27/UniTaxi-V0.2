@@ -1,5 +1,6 @@
 package com.taxiuap.backend.shared.exception;
 
+import java.io.IOException;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -14,6 +15,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
 import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
@@ -37,6 +39,9 @@ import lombok.extern.slf4j.Slf4j;
  * Las excepciones de Spring Security (autenticacion y autorizacion) se relanzan sin tocar para
  * que las resuelva la propia cadena de seguridad (ver SecurityConfig); si se atraparan aqui,
  * @PreAuthorize terminaria respondiendo 500 en vez de 403.
+ *
+ * Los 404, 409 y 422 de la API quedan en el log (INFO, con el usuario): sin eso no se sabe por que una
+ * app no avanza (por ejemplo, un pasajero que se queda "Buscando conductor").
  */
 @RestControllerAdvice
 @Slf4j
@@ -77,17 +82,21 @@ public class ManejadorGlobalExcepciones {
     }
 
     @ExceptionHandler(NegocioException.class)
-    public ResponseEntity<ApiResponse<Void>> negocio(NegocioException e) {
+    public ResponseEntity<ApiResponse<Void>> negocio(NegocioException e, HttpServletRequest peticion) {
+        registrar(422, peticion, e);
         return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.error(e.getMessage()));
     }
 
     @ExceptionHandler(RecursoNoEncontradoException.class)
-    public ResponseEntity<ApiResponse<Void>> recursoNoEncontrado(RecursoNoEncontradoException e) {
+    public ResponseEntity<ApiResponse<Void>> recursoNoEncontrado(RecursoNoEncontradoException e,
+            HttpServletRequest peticion) {
+        registrar(404, peticion, e);
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ApiResponse.error(e.getMessage()));
     }
 
     @ExceptionHandler(ConflictoException.class)
-    public ResponseEntity<ApiResponse<Void>> conflicto(ConflictoException e) {
+    public ResponseEntity<ApiResponse<Void>> conflicto(ConflictoException e, HttpServletRequest peticion) {
+        registrar(409, peticion, e);
         return ResponseEntity.status(HttpStatus.CONFLICT).body(ApiResponse.error(e.getMessage()));
     }
 
@@ -106,13 +115,45 @@ public class ManejadorGlobalExcepciones {
         return ResponseEntity.status(HttpStatus.METHOD_NOT_ALLOWED).body(ApiResponse.error("Metodo no permitido"));
     }
 
+    /**
+     * El telefono corto la conexion mientras se le respondia (cerro la app, perdio la senal o cambio de wifi a
+     * datos): no es una falla del servidor y ya no se le puede responder.
+     */
+    @ExceptionHandler(AsyncRequestNotUsableException.class)
+    public void clienteDesconectado(AsyncRequestNotUsableException e, HttpServletRequest peticion) {
+        log.debug("El cliente corto la conexion en {} {}: {}", peticion.getMethod(), peticion.getRequestURI(),
+                e.getMessage());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> fallo(Exception e, HttpServletRequest peticion) throws Exception {
         if (e instanceof AccessDeniedException || e instanceof AuthenticationException) {
             throw e;
         }
+        if (clienteDesconecto(e)) {
+            log.debug("El cliente corto la conexion en {} {}: {}", peticion.getMethod(), peticion.getRequestURI(),
+                    e.getMessage());
+            return null;
+        }
         log.error("Fallo no controlado en {} {}", peticion.getMethod(), peticion.getRequestURI(), e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Error interno procesando la peticion"));
+    }
+
+    private static void registrar(int codigo, HttpServletRequest peticion, Exception e) {
+        log.info("{} en {} {}: {}", codigo, peticion.getMethod(), peticion.getRequestURI(), e.getMessage());
+    }
+
+    /** ClientAbortException de Tomcat o "Broken pipe" / "Connection reset" en alguna causa. */
+    static boolean clienteDesconecto(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t.getClass().getSimpleName().equals("ClientAbortException")) return true;
+            if (t instanceof IOException && t.getMessage() != null
+                    && (t.getMessage().contains("Broken pipe") || t.getMessage().contains("Connection reset"))) {
+                return true;
+            }
+            if (t.getCause() == t) break;
+        }
+        return false;
     }
 }

@@ -10,6 +10,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.dto.CarnetRequest;
+import com.taxiuap.backend.identity.dto.LecturaSelfieResponse;
 import com.taxiuap.backend.identity.dto.UsuarioResponse;
 import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.shared.response.ApiResponse;
@@ -50,5 +51,15 @@ public class CarnetCuentaController {
             @RequestPart(value = "selfie", required = false) MultipartFile selfie) {
         UsuarioResponse usuario = carnetService.actualizarCuenta(UsuarioActual.idUsuario(), anverso, reverso, selfie);
         return ResponseEntity.ok(ApiResponse.exito("Foto con el carnet registrada", usuario));
+    }
+
+    /**
+     * Revisa la foto con el carnet apenas se toma, contra el anverso ya guardado (cuenta que solo debe
+     * subir esa foto). Multipart: "selfie". Si faltan las fotos del carnet en el servidor responde 422.
+     */
+    @PostMapping(value = "/carnet/revisar-selfie", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<LecturaSelfieResponse>> revisarSelfie(
+            @RequestPart(value = "selfie", required = false) MultipartFile selfie) {
+        return ResponseEntity.ok(ApiResponse.exito(carnetService.revisarSelfieCuenta(UsuarioActual.idUsuario(), selfie)));
     }
 }

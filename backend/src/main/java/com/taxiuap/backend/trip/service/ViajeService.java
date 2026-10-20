@@ -207,6 +207,8 @@ public class ViajeService {
         // Regla de negocio 6: cada cambio de situacion se registra en el historial, incluido el alta.
         historialViajeService.registrar(viaje, SituacionViaje.CONFIRMADO, pasajero.getUsuario().getId());
 
+        log.info("Viaje {} creado: solicitud {} del pasajero {} aceptada por el conductor {}", viaje.getId(),
+                solicitud.getId(), pasajero.getId(), conductor.getId());
         if (esDelivery) {
             avisarPasajero(viaje, "VIAJE_ACEPTADO", "Tu pedido fue aceptado", " va a recoger tu paquete.");
         } else if (solicitud.esParaOtraPersona()) {
@@ -526,6 +528,7 @@ public class ViajeService {
         viaje.setCanceladoPor(canceladoPor);
         viaje.getSolicitud().setSituacionSolicitud(SituacionSolicitud.CANCELADA);
         viaje = viajeRepository.save(viaje);
+        log.info("Viaje {} (solicitud {}) cancelado por el {}", viaje.getId(), viaje.getSolicitud().getId(), canceladoPor);
         if (canceladoPor == CanceladoPor.CONDUCTOR) {
             republicarSolicitud(viaje);
         }
@@ -602,6 +605,8 @@ public class ViajeService {
         nueva.setFechaSolicitud(LocalDateTime.now());
         nueva.setEstadoSolViaje(EstadoRegistro.A);
         nueva = solicitudViajeRepository.save(nueva);
+        log.info("Solicitud {} publicada de nuevo como {} (el conductor cancelo el viaje {})", anterior.getId(),
+                nueva.getId(), viaje.getId());
 
         if (anterior.getDatosEntrega() != null) {
             DatosEntrega datos = copiarDatosEntregaParaRepublicar(anterior.getDatosEntrega(), nueva);

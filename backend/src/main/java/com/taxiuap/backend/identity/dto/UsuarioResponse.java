@@ -41,7 +41,11 @@ public record UsuarioResponse(
         /** Guias de cada parte de la app que ya vio (PASAJERO_SERVICIOS, CONDUCTOR_VIAJE...). */
         List<String> guiasVistas) {
 
-    public static UsuarioResponse de(Usuario usuario) {
+    /**
+     * [fotosCarnetGuardadas]: los archivos del anverso y del reverso existen en la carpeta de archivos
+     * (CarnetService.respuesta lo revisa). Si faltan, la app vuelve a pedir las fotos del carnet.
+     */
+    public static UsuarioResponse de(Usuario usuario, boolean fotosCarnetGuardadas) {
         Persona persona = usuario.getPersona();
         return new UsuarioResponse(
                 usuario.getId(),
@@ -55,7 +59,7 @@ public record UsuarioResponse(
                 Boolean.TRUE.equals(persona.getIngresoGoogle()) && (persona.getCi() == null || persona.getCi().isBlank()),
                 Boolean.TRUE.equals(usuario.getAvisoCredenciales()),
                 persona.carnetObservado(),
-                carnetPendiente(persona),
+                carnetPendiente(persona, fotosCarnetGuardadas),
                 persona.getPlazoSelfieCarnet(),
                 persona.getCarnetVencimiento(),
                 guiasVistas(usuario.getGuiasVistas()));
@@ -66,7 +70,7 @@ public record UsuarioResponse(
         return Arrays.stream(guardadas.split(",")).map(String::trim).filter(g -> !g.isEmpty()).toList();
     }
 
-    static String carnetPendiente(Persona persona) {
+    static String carnetPendiente(Persona persona, boolean fotosCarnetGuardadas) {
         if (persona.getCi() == null || persona.getCi().isBlank()) {
             return null;
         }
@@ -76,6 +80,6 @@ public record UsuarioResponse(
         if (persona.getCarnetSelfieUrl() != null) {
             return null;
         }
-        return persona.getCarnetAnversoUrl() != null && persona.getCarnetReversoUrl() != null ? "SELFIE" : "CARNET";
+        return fotosCarnetGuardadas ? "SELFIE" : "CARNET";
     }
 }

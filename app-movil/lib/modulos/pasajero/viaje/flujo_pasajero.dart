@@ -153,14 +153,28 @@ class FlujoPasajero extends ChangeNotifier {
   Ruta? rutaAlConductor;
 
   Timer? _sondeo;
+
+  /// Lo que consulta el sondeo ahora (la solicitud o el viaje); [consultarAhora] lo adelanta.
+  Future<void> Function()? _consultaActual;
   bool _consultando = false;
   bool _cerrado = false;
   int _consultaDireccion = 0;
   ReceptorUbicacionConductor? _receptor;
+  StreamSubscription<Map<String, dynamic>>? _push;
+
+  /// Viajes que ya estaban en curso al empezar a buscar conductor: uno que aparece despues es el de esta
+  /// solicitud (solo hay una pendiente a la vez).
+  Set<int> _viajesAlBuscar = const {};
 
   FlujoPasajero({required this.api, required this.mapa, this.sesion, this.chat}) {
     mapa.alMoverseGps = _alMoverseGps;
     mapa.addListener(_revisarCotizacion);
+    // Con la app abierta el push del viaje (aceptado, llego, termino...) no se muestra: adelanta la consulta.
+    _push = Push.mensajes.listen((datos) {
+      final tipo = '${datos['tipo'] ?? ''}';
+      if (tipo.isEmpty || tipo == 'CHAT_MENSAJE' || tipo.startsWith('CUENTA_')) return;
+      unawaited(consultarAhora());
+    });
   }
 
   /// Precio de la ruta elegida (por km, con el descuento de estudiante) mientras elige destino.
@@ -922,6 +936,7 @@ class FlujoPasajero extends ChangeNotifier {
     unawaited(Notificador.iniciar());
     solicitud = nueva;
     etapa = EtapaPasajero.buscando;
+    _viajesAlBuscar = {for (final v in enCurso) v.id};
     mapa.aSigueGps = false;
     // En una compra todavia sin comercio no hay A: solo se pone B, donde esta el pasajero, que es
     // ademas hasta donde llega el tramo naranja del repartidor.
@@ -938,28 +953,16 @@ class FlujoPasajero extends ChangeNotifier {
   Future<void> _consultarSolicitud() async {
     final actual = solicitud;
     if (actual == null) return;
+    // Primero los viajes activos: si un conductor ya la acepto se entra al viaje aunque la consulta de la
+    // solicitud falle o todavia no diga ACEPTADA (antes eso dejaba "Buscando conductor" para siempre).
+    final asignado = await _intentar(() => _viajeDeLaSolicitud(actual.id));
+    if (_cerrado || etapa != EtapaPasajero.buscando) return;
+    if (asignado != null) return _entrarAceptado(asignado);
     final nueva = await api.solicitud(actual.id);
     if (_cerrado || etapa != EtapaPasajero.buscando) return;
     solicitud = nueva;
-    if (nueva.situacion == 'ACEPTADA') {
-      final asignado = await _viajeDeLaSolicitud(actual.id);
-      if (_cerrado || etapa != EtapaPasajero.buscando) return;
-      if (asignado != null) {
-        // Un conductor acepto el viaje: sonido y vibracion corta (una vez por viaje).
-        if (asignado.datosEntrega != null) {
-          final compra = asignado.datosEntrega!.tipoEnvio == TipoEnvio.compraYEntrega;
-          _avisarUnaVez(asignado.id, 1, 'Tu pedido fue aceptado',
-              '${asignado.primerNombreConductor} va a ${compra ? 'comprar tu pedido' : 'recoger tu paquete'}.');
-        } else if (asignado.tercero != null) {
-          _avisarUnaVez(asignado.id, 1, 'El taxi para ${asignado.tercero!.primerNombre} fue aceptado',
-              '${asignado.primerNombreConductor} va en camino a recogerlo.');
-        } else {
-          _avisarUnaVez(asignado.id, 1, 'Tu viaje fue aceptado',
-              '${asignado.primerNombreConductor} va en camino a recogerte.');
-        }
-        _entrarViaje(asignado);
-      }
-    } else if (!nueva.activa) {
+    // ACEPTADA sin viaje en la lista todavia: aparece en la proxima vuelta.
+    if (nueva.situacion != 'ACEPTADA' && !nueva.activa) {
       aviso = servicio == ServicioActivo.entrega
           ? 'Tu pedido de entrega ya no está activo. Puedes hacer otro.'
           : 'Tu solicitud ya no está activa. Puedes pedir otro taxi.';
@@ -967,13 +970,30 @@ class FlujoPasajero extends ChangeNotifier {
     }
   }
 
+  /// Un conductor acepto el viaje: sonido y vibracion corta (una vez por viaje) y se pasa al viaje.
+  void _entrarAceptado(Viaje asignado) {
+    if (asignado.datosEntrega != null) {
+      final compra = asignado.datosEntrega!.tipoEnvio == TipoEnvio.compraYEntrega;
+      _avisarUnaVez(asignado.id, 1, 'Tu pedido fue aceptado',
+          '${asignado.primerNombreConductor} va a ${compra ? 'comprar tu pedido' : 'recoger tu paquete'}.');
+    } else if (asignado.tercero != null) {
+      _avisarUnaVez(asignado.id, 1, 'El taxi para ${asignado.tercero!.primerNombre} fue aceptado',
+          '${asignado.primerNombreConductor} va en camino a recogerlo.');
+    } else {
+      _avisarUnaVez(asignado.id, 1, 'Tu viaje fue aceptado',
+          '${asignado.primerNombreConductor} va en camino a recogerte.');
+    }
+    _entrarViaje(asignado);
+  }
+
   /// El viaje que salio de la solicitud [idSolicitud] (con dos servicios no sirve "el viaje en curso").
+  /// Si ninguno trae ese numero, el viaje que aparecio despues de empezar a buscar: solo hay una
+  /// solicitud pendiente a la vez, asi que es el de esta.
   Future<Viaje?> _viajeDeLaSolicitud(int idSolicitud) async {
     final activos = await api.viajesActivos();
     maximoServicios = activos.maximo;
     final propio = activos.viajes.where((v) => v.idSolicitud == idSolicitud).firstOrNull;
-    // Un servidor sin idSolicitud en la respuesta: el mas nuevo es el que se acaba de aceptar.
-    return propio ?? (activos.viajes.any((v) => v.idSolicitud != null) ? null : activos.viajes.lastOrNull);
+    return propio ?? activos.viajes.where((v) => !_viajesAlBuscar.contains(v.id)).lastOrNull;
   }
 
   Future<void> cancelarSolicitud() async {
@@ -1272,22 +1292,37 @@ class FlujoPasajero extends ChangeNotifier {
 
   void _iniciarSondeo(Future<void> Function() consulta) {
     _detenerSondeo();
-    _sondeo = Timer.periodic(_intervaloSondeo, (_) async {
-      if (_consultando) return;
-      _consultando = true;
-      try {
-        await consulta();
-      } catch (_) {
-        // Un fallo de red puntual no corta el seguimiento; se reintenta en la proxima vuelta.
-      } finally {
-        _consultando = false;
-      }
-    });
+    _consultaActual = consulta;
+    _sondeo = Timer.periodic(_intervaloSondeo, (_) => consultarAhora());
+  }
+
+  /// Corre ya la consulta del sondeo (al llegar un push con la app abierta o al volver a la app) y, con
+  /// servicios de fondo, tambien la de esos servicios.
+  Future<void> consultarAhora() async {
+    final consulta = _consultaActual;
+    if (_cerrado) return;
+    if (_sondeoActivos != null && !_consultandoActivos) {
+      _consultandoActivos = true;
+      unawaited(_consultarActivos().catchError((Object e) => debugPrint('Consulta de los servicios de fondo: $e'))
+          .whenComplete(() => _consultandoActivos = false));
+    }
+    if (consulta == null || _consultando) return;
+    _consultando = true;
+    try {
+      await consulta();
+    } catch (e) {
+      // Un fallo puntual no corta el seguimiento; se reintenta en la proxima vuelta. Queda en el log del
+      // telefono (logcat) para saber por que no avanza.
+      debugPrint('Consulta del pasajero (${etapa.name}): $e');
+    } finally {
+      _consultando = false;
+    }
   }
 
   void _detenerSondeo() {
     _sondeo?.cancel();
     _sondeo = null;
+    _consultaActual = null;
   }
 
   /// Devuelve el aviso pendiente y lo borra, para mostrarlo una sola vez.
@@ -1348,6 +1383,7 @@ class FlujoPasajero extends ChangeNotifier {
   @override
   void dispose() {
     _cerrado = true;
+    unawaited(_push?.cancel());
     mapa.removeListener(_revisarCotizacion);
     unawaited(Notificador.dejarDeSeguir());
     _detenerSondeo();

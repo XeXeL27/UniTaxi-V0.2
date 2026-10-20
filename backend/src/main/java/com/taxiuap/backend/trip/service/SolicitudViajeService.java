@@ -50,11 +50,13 @@ import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 import com.taxiuap.backend.vehicle.service.DocumentoConductorService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Solicitud de viaje del pasajero: creacion, consulta, cancelacion y la lista de solicitudes
  * disponibles para que los conductores oferten.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -163,6 +165,9 @@ public class SolicitudViajeService {
             solicitud.setDatosEntrega(datosEntregaRepository.save(crearDatosEntrega(solicitud, request.datosEntrega())));
         }
         SolicitudViajeResponse creada = aResponse(solicitud);
+        log.info("Solicitud {} creada por el pasajero {} ({}, pago {}{})", solicitud.getId(), pasajero.getId(),
+                solicitud.getCategoriaServicio().getNombre(), solicitud.getMetodoPago(),
+                solicitud.esParaOtraPersona() ? ", para otra persona" : "");
         viajeEventPublisher.publicarSolicitudNueva(creada.sinNombreDestino());
         return creada;
     }
@@ -249,6 +254,7 @@ public class SolicitudViajeService {
         ofertasPendientes.forEach(oferta -> oferta.setSituacionOferta(SituacionOferta.RECHAZADA));
         ofertaViajeRepository.saveAll(ofertasPendientes);
 
+        log.info("Solicitud {} cancelada por el pasajero {}", id, pasajero.getId());
         viajeEventPublisher.publicarSolicitudCerrada(id, "Solicitud cancelada por el pasajero");
     }
 

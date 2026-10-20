@@ -33,12 +33,14 @@ import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Carnet de identidad de quien entra con Google: fotos del anverso y del reverso (en la carpeta
  * general/carnet de la persona) y los datos que la app leyo de ellas (CI, complemento y fecha de
  * nacimiento). La app solo acepta fotos en las que reconoce un carnet boliviano.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -60,6 +62,10 @@ public class CarnetService {
      * el carnet o renovo su carnet): al aprobarla no se reenvian credenciales.
      */
     public static final String PREFIJO_CUENTA_EXISTENTE = "Cuenta existente: ";
+
+    /** Las rutas del anverso o del reverso estan anotadas pero los archivos ya no estan en el servidor. */
+    public static final String MENSAJE_FALTAN_FOTOS =
+            "No encontramos las fotos de tu carnet: tómalas de nuevo (anverso y reverso) junto con tu foto con el carnet";
 
     private final UsuarioRepository usuarioRepository;
     private final GestionPersonaService gestionPersonaService;
@@ -170,7 +176,7 @@ public class CarnetService {
         actualizarDatos(persona, datos);
         guardar(persona, fotos);
         if (!revisar(persona, fotos, datos.esObservado(), datos.aceptoTerminos())) entregarCredenciales(usuario);
-        return UsuarioResponse.de(usuario);
+        return respuesta(usuario);
     }
 
     /**
@@ -207,9 +213,30 @@ public class CarnetService {
 
     /** La persona ya tiene las dos fotos de su carnet y su CI. */
     public boolean tieneCarnet(Persona persona) {
-        return persona.getCi() != null && !persona.getCi().isBlank()
-                && almacenamientoArchivos.existe(persona.getCarnetAnversoUrl())
-                && almacenamientoArchivos.existe(persona.getCarnetReversoUrl());
+        return persona.getCi() != null && !persona.getCi().isBlank() && fotosCarnetGuardadas(persona);
+    }
+
+    /**
+     * Los archivos del anverso y del reverso estan en la carpeta de archivos. Si sus rutas estan anotadas
+     * pero falta alguno (se movio la carpeta o el servidor no la ve) queda en el log; las rutas no se borran.
+     */
+    public boolean fotosCarnetGuardadas(Persona persona) {
+        boolean anverso = almacenamientoArchivos.existe(persona.getCarnetAnversoUrl());
+        boolean reverso = almacenamientoArchivos.existe(persona.getCarnetReversoUrl());
+        if ((!anverso && persona.getCarnetAnversoUrl() != null) || (!reverso && persona.getCarnetReversoUrl() != null)) {
+            log.warn("Faltan archivos del carnet de la persona {}: anverso {} ({}), reverso {} ({})", persona.getId(),
+                    persona.getCarnetAnversoUrl(), anverso ? "esta" : "no esta",
+                    persona.getCarnetReversoUrl(), reverso ? "esta" : "no esta");
+        }
+        return anverso && reverso;
+    }
+
+    /**
+     * Datos de la cuenta para la app. Lo que le falta del carnet (carnetPendiente) se decide con los
+     * archivos que de verdad estan en el servidor: si faltan, la app vuelve a pedir el anverso y el reverso.
+     */
+    public UsuarioResponse respuesta(Usuario usuario) {
+        return UsuarioResponse.de(usuario, fotosCarnetGuardadas(usuario.getPersona()));
     }
 
     /**
@@ -233,7 +260,7 @@ public class CarnetService {
         if (motivo != null) {
             observarSi(persona, PREFIJO_CUENTA_EXISTENTE + motivo);
         }
-        return UsuarioResponse.de(usuario);
+        return respuesta(usuario);
     }
 
     /** El administrador cambia una o varias fotos del carnet (y la foto con el carnet) de la persona de una cuenta. */
@@ -336,7 +363,7 @@ public class CarnetService {
         if (!conFotosCarnet && (!tieneCarnet(persona) || carnetVencido(persona))) {
             throw new NegocioException(carnetVencido(persona)
                     ? "Tu carnet venció: toma las fotos de tu carnet nuevo y tu foto con el carnet"
-                    : "Faltan las fotos de tu carnet (anverso y reverso)");
+                    : MENSAJE_FALTAN_FOTOS);
         }
         String motivo;
         if (conFotosCarnet) {
@@ -350,19 +377,10 @@ public class CarnetService {
                 motivo = "No se pudo leer hasta cuándo vale el carnet";
             }
         } else {
-            if (selfie == null || selfie.isEmpty()) {
-                throw new NegocioException("Falta tu foto con el carnet");
-            }
             byte[] guardado = leerArchivo(persona.getCarnetAnversoUrl());
-            byte[] original = bytesDe(selfie);
-            LecturaSelfieResponse lectura = lecturaDocumentoService.leerSelfie(original,
-                    selfie.getContentType() == null ? "image/jpeg" : selfie.getContentType(), guardado);
+            LecturaSelfieResponse lectura = selfieConAnversoGuardado(persona, selfie, guardado, null);
             if (lectura.disponible() && !lectura.aceptada()) {
                 throw new NegocioException(lectura.motivo());
-            }
-            if (lectura.numero() != null && !lectura.numero().equals(persona.getCi().trim())) {
-                throw new NegocioException("El carnet de tu foto no es el tuyo: debe ser el carnet N° "
-                        + persona.getCi().trim() + ".");
             }
             guardarSelfie(persona, procesarSelfie(selfie));
             if (persona.getCarnetVencimiento() == null) {
@@ -376,7 +394,47 @@ public class CarnetService {
         if (motivo != null) {
             observarSi(persona, PREFIJO_CUENTA_EXISTENTE + motivo);
         }
-        return UsuarioResponse.de(usuario);
+        return respuesta(usuario);
+    }
+
+    /**
+     * Revisa la foto con el carnet apenas se toma, comparandola con el anverso guardado (cuenta que solo
+     * debe subir esa foto). No guarda nada: la misma foto enviada despues usa esta revision.
+     */
+    @Transactional(readOnly = true)
+    public LecturaSelfieResponse revisarSelfieCuenta(Long idUsuario, MultipartFile selfie) {
+        Usuario usuario = usuarioRepository.findById(idUsuario)
+                .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
+        Persona persona = usuario.getPersona();
+        if (persona.getCi() == null || persona.getCi().isBlank()) {
+            throw new NegocioException("Primero registra tu carnet");
+        }
+        if (!tieneCarnet(persona)) {
+            throw new NegocioException(MENSAJE_FALTAN_FOTOS);
+        }
+        return selfieConAnversoGuardado(persona, selfie, leerArchivo(persona.getCarnetAnversoUrl()),
+                "usuario:" + idUsuario);
+    }
+
+    /**
+     * Revision de la foto con el carnet contra el anverso guardado; ademas el numero debe ser el CI de la
+     * persona. [limite]: clave del limite de lecturas (null = sin limite).
+     */
+    private LecturaSelfieResponse selfieConAnversoGuardado(Persona persona, MultipartFile selfie, byte[] anverso,
+            String limite) {
+        if (selfie == null || selfie.isEmpty()) {
+            throw new NegocioException("Falta tu foto con el carnet");
+        }
+        if (selfie.getSize() > AlmacenamientoArchivos.TAMANO_MAXIMO_IMAGEN * 2) {
+            throw new NegocioException("La foto supera los 10 MB");
+        }
+        LecturaSelfieResponse lectura = lecturaDocumentoService.leerSelfie(bytesDe(selfie),
+                selfie.getContentType() == null ? "image/jpeg" : selfie.getContentType(), anverso, limite);
+        if (lectura.aceptada() && lectura.numero() != null && !lectura.numero().equals(persona.getCi().trim())) {
+            return LecturaSelfieResponse.rechazada("El carnet de tu foto no es el tuyo: debe ser el carnet N° "
+                    + persona.getCi().trim() + ".");
+        }
+        return lectura;
     }
 
     /** El carnet de la persona ya vencio (se sabe solo si se leyo su "Valida hasta"). */

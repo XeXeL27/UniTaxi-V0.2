@@ -31,12 +31,18 @@ class SelectorSelfieCarnet extends StatefulWidget {
   final bool necesitaAnverso;
   final bool revisarAlTomar;
 
+  /// Otra forma de revisar la foto (por ejemplo, contra el anverso ya guardado de la cuenta). Devuelve null
+  /// si el servidor no pudo revisarla; lanza [ApiExcepcion] si la rechaza. Sin ella se usa
+  /// LectorDocumentos.leerSelfie con [anverso].
+  final Future<LecturaSelfie?> Function(Uint8List foto)? revisarCon;
+
   const SelectorSelfieCarnet({
     super.key,
     required this.onCambio,
     this.anverso,
     this.necesitaAnverso = true,
     this.revisarAlTomar = true,
+    this.revisarCon,
   });
 
   @override
@@ -133,7 +139,10 @@ class _SelectorSelfieCarnetState extends State<SelectorSelfieCarnet> {
     LecturaSelfie? lectura;
     String? fallo;
     try {
-      lectura = await LectorDocumentos.leerSelfie(bytes, anverso: widget.anverso);
+      final revisarCon = widget.revisarCon;
+      lectura = revisarCon != null
+          ? await revisarCon(bytes)
+          : await LectorDocumentos.leerSelfie(bytes, anverso: widget.anverso);
     } on ApiExcepcion catch (e) {
       fallo = e.mensaje;
     }

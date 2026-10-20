@@ -161,10 +161,18 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _cargarRegistroConductor();
     _cargarConductores();
     _sondeoConductores = Timer.periodic(const Duration(seconds: 5), (_) => _cargarConductores());
+    // Al volver a la app (Android la congela minimizada) se consulta enseguida la solicitud o el viaje.
+    _alVolver = AppLifecycleListener(onResume: () {
+      unawaited(_flujo.consultarAhora());
+      _cargarConductores();
+    });
   }
+
+  AppLifecycleListener? _alVolver;
 
   @override
   void dispose() {
+    _alVolver?.dispose();
     _sondeoConductores?.cancel();
     _sondeoRegistro?.cancel();
     RequiereGps.listo.removeListener(_revisarGuia);

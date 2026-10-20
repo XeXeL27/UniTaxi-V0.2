@@ -1,5 +1,6 @@
 package com.taxiuap.backend.controller.conductor;
 
+import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -12,6 +13,7 @@ import com.taxiuap.backend.location.service.UbicacionService;
 import com.taxiuap.backend.shared.exception.NegocioException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Ingesta de la posicion que reporta el conductor por STOMP.
@@ -20,6 +22,7 @@ import lombok.RequiredArgsConstructor;
  * admin, y ese se entera por el topic /topic/admin/conductores, que publica el servicio al
  * guardar. Asi el mismo dato no viaja dos veces de vuelta al conductor.
  */
+@Slf4j
 @Controller
 @RequiredArgsConstructor
 public class ConductorUbicacionController {
@@ -30,6 +33,16 @@ public class ConductorUbicacionController {
     public void registrar(@Payload UbicacionConductorRequest request, SimpMessageHeaderAccessor acc) {
         JwtUser usuario = usuarioDe(acc);
         ubicacionService.registrarPorUsuario(usuario.idUsuario(), usuario.rol(), request);
+    }
+
+    /**
+     * Un reporte rechazado (conductor no aprobado, de baja...) no llega a nadie: queda en el log, porque si
+     * no el conductor nunca aparece "en linea" y no se sabe por que.
+     */
+    @MessageExceptionHandler(NegocioException.class)
+    public void reporteRechazado(NegocioException e, SimpMessageHeaderAccessor acc) {
+        log.warn("Posicion del conductor rechazada ({}): {}", acc.getUser() == null ? "sin usuario" : acc.getUser().getName(),
+                e.getMessage());
     }
 
     /**

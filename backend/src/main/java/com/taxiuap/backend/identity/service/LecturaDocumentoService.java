@@ -219,14 +219,23 @@ public class LecturaDocumentoService {
         return revisarSelfie(bytesDe(foto), tipoDe(foto), bytesAnverso, bytesAnverso == null ? null : tipoDe(anverso));
     }
 
-    /** Igual que leerSelfie, con el anverso ya guardado en el servidor (cuentas de antes). */
-    public LecturaSelfieResponse leerSelfie(byte[] foto, String tipo, byte[] anverso) {
+    /**
+     * Igual que leerSelfie, con el anverso ya guardado en el servidor (cuentas de antes). [limite]: clave
+     * del limite de lecturas por hora (por ejemplo "usuario:12"); null = sin limite (al enviar la foto).
+     */
+    public LecturaSelfieResponse leerSelfie(byte[] foto, String tipo, byte[] anverso, String limite) {
         if (!lector.configurado()) {
             return LecturaSelfieResponse.noDisponible();
         }
         String clave = claveSelfie(huella(foto), anverso == null ? null : huella(anverso));
         SelfieGuardada previa = selfieVigente(clave);
-        return previa != null ? previa.lectura() : revisarSelfie(foto, tipo, anverso, "image/jpeg");
+        if (previa != null) {
+            return previa.lectura();
+        }
+        if (limite != null) {
+            controlarLimite(limite);
+        }
+        return revisarSelfie(foto, tipo, anverso, "image/jpeg");
     }
 
     private LecturaSelfieResponse revisarSelfie(byte[] foto, String tipo, byte[] anverso, String tipoAnverso) {

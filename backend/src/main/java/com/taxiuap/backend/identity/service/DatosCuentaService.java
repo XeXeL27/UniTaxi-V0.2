@@ -37,11 +37,12 @@ public class DatosCuentaService {
     private final GestionPersonaService gestionPersonaService;
     private final CredencialesCorreoService credencialesCorreoService;
     private final CuentaUsuarioService cuentaUsuarioService;
+    private final CarnetService carnetService;
 
     /** Datos de la cuenta con que se inicio sesion (la app lo consulta mientras su carnet esta observado). */
     @Transactional(readOnly = true)
     public UsuarioResponse actual(Long idUsuario) {
-        return UsuarioResponse.de(buscar(idUsuario));
+        return carnetService.respuesta(buscar(idUsuario));
     }
 
     /** La persona termino o salto la guia de inicio de la app: no se vuelve a mostrar. */
@@ -106,7 +107,7 @@ public class DatosCuentaService {
         if (correoAnterior != null && !correoAnterior.equalsIgnoreCase(correo)) {
             credencialesCorreoService.avisoCorreoCambiado(persona, correoAnterior);
         }
-        return UsuarioResponse.de(usuario);
+        return carnetService.respuesta(usuario);
     }
 
     /** La persona ya vio el aviso de que sus credenciales llegaron a su correo. */

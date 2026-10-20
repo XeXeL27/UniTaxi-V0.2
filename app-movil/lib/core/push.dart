@@ -26,6 +26,11 @@ class Push {
 
   static bool _firebaseListo = false;
   static StreamSubscription<String>? _cambios;
+  static final _mensajes = StreamController<Map<String, dynamic>>.broadcast();
+
+  /// Datos de cada push que llega con la app abierta (no se muestra: lo avisa la app). Los flujos lo
+  /// usan para consultar enseguida en vez de esperar la proxima vuelta del sondeo.
+  static Stream<Map<String, dynamic>> get mensajes => _mensajes.stream;
 
   /// En main, antes de runApp: prepara Firebase y el manejador de los mensajes que llegan con la app
   /// en segundo plano o cerrada. Sin google-services.json la app sigue sin push.
@@ -34,6 +39,7 @@ class Push {
     try {
       await Firebase.initializeApp();
       FirebaseMessaging.onBackgroundMessage(mensajeEnSegundoPlano);
+      FirebaseMessaging.onMessage.listen((mensaje) => _mensajes.add(mensaje.data));
       _firebaseListo = true;
     } catch (e) {
       debugPrint('Firebase no disponible: $e');
