@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../core/cliente_api.dart';
-import '../../core/tema.dart';
+import '../../core/relieve.dart';
 import '../../widgets/flujos_crud.dart';
 import '../../widgets/listado_remoto.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import 'formulario_zona.dart';
 import 'mapa_api.dart';
@@ -26,10 +29,16 @@ class PantallaZonas extends StatelessWidget {
       columnas: [
         ColumnaTabla(titulo: 'Zona', valor: (z) => z.nombre, ancho: 160, proporcion: 2),
         ColumnaTabla(titulo: 'Vértices', tipo: TipoColumna.numero, valor: (z) => z.puntos.length, ancho: 100),
-        ColumnaTabla(titulo: 'Centro', ancho: 210, valor: (z) {
-          final centro = z.centro;
-          return centro == null ? 'Sin polígono' : '${centro.latitude.toStringAsFixed(5)}, ${centro.longitude.toStringAsFixed(5)}';
-        }),
+        ColumnaTabla(
+          titulo: 'Centro',
+          ancho: 210,
+          valor: (z) {
+            final centro = z.centro;
+            return centro == null
+                ? 'Sin polígono'
+                : '${centro.latitude.toStringAsFixed(5)}, ${centro.longitude.toStringAsFixed(5)}';
+          },
+        ),
       ],
       acciones: (recargar) => [
         FilledButton.icon(
@@ -44,27 +53,29 @@ class PantallaZonas extends StatelessWidget {
         ),
       ],
       accionesFila: (zona, recargar) => [
-        IconButton(
-          tooltip: 'Editar',
-          onPressed: () => flujoEditar(
+        AccionRegistro(
+          texto: 'Editar',
+          icono: Iconos.penToSquare,
+          tono: TonoBoton.azul,
+          alPresionar: () => flujoEditar(
             context,
             descripcion: 'la zona ${zona.nombre}',
             formulario: FormularioZona(api: api, zona: zona),
             mensajeExito: 'Se actualizaron los datos de ${zona.nombre}.',
             alTerminar: recargar,
           ),
-          icon: const Icon(Iconos.penToSquare, size: 16, color: ColoresApp.azul),
         ),
-        IconButton(
-          tooltip: 'Eliminar',
-          onPressed: () => flujoEliminar(
+        AccionRegistro(
+          texto: 'Eliminar',
+          icono: Iconos.trashCan,
+          tono: TonoBoton.rojo,
+          alPresionar: () => flujoEliminar(
             context,
             descripcion: 'la zona ${zona.nombre}',
             eliminar: () => api.eliminarZona(zona.idZona),
             mensajeEliminado: 'Se eliminó la zona ${zona.nombre}.',
             alTerminar: recargar,
           ),
-          icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
         ),
       ],
     );

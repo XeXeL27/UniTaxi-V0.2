@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
@@ -11,6 +13,7 @@ import '../../core/cliente_api.dart';
 import '../../core/config.dart';
 import '../../core/sesion.dart';
 import '../../core/stomp/cliente_stomp.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import 'flota_api.dart';
 import 'modelos.dart';
@@ -59,7 +62,10 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
   final Map<int, ConductorFlota> _conductores = {};
 
   /// Posicion que se dibuja de cada conductor: se desliza hasta la ultima reportada.
-  late final PosicionesAnimadas _posiciones = PosicionesAnimadas(vsync: this, duracion: const Duration(milliseconds: 2600))..addListener(_seguirConCamara);
+  late final PosicionesAnimadas _posiciones = PosicionesAnimadas(
+    vsync: this,
+    duracion: const Duration(milliseconds: 2600),
+  )..addListener(_seguirConCamara);
   FiltroFlota _filtro = FiltroFlota.todos;
 
   /// Llego la posicion de un conductor que no estaba en la lista (por ejemplo, recien aprobado).
@@ -141,11 +147,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
     _suscripcionEstado?.cancel();
     _ws?.dispose();
 
-    final ws = ClienteStomp(
-      url: '${Config.wsUrl}/ws',
-      token: token,
-      destino: '/topic/admin/conductores',
-    );
+    final ws = ClienteStomp(url: '${Config.wsUrl}/ws', token: token, destino: '/topic/admin/conductores');
     _ws = ws;
     _suscripcionMensajes = ws.mensajes.stream.listen(_alMensaje);
     _suscripcionEstado = ws.estados.listen(_alCambiarEstado);
@@ -287,15 +289,15 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
             shape: BoxShape.circle,
             border: Border.all(color: ColoresApp.superficie, width: siguiendo ? 4 : 3),
             boxShadow: [
-              BoxShadow(color: color.withValues(alpha: 0.45), blurRadius: siguiendo ? 14 : 8, spreadRadius: siguiendo ? 2 : 1),
+              BoxShadow(
+                color: color.withValues(alpha: 0.45),
+                blurRadius: siguiendo ? 14 : 8,
+                spreadRadius: siguiendo ? 2 : 1,
+              ),
             ],
           ),
           child: Center(
-            child: Icon(
-              siguiendo ? Iconos.crosshairs : Iconos.motorcycle,
-              size: 17,
-              color: ColoresApp.superficie,
-            ),
+            child: Icon(siguiendo ? Iconos.crosshairs : Iconos.motorcycle, size: 17, color: ColoresApp.superficie),
           ),
         ),
       ),
@@ -330,10 +332,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
     return Container(
       margin: const EdgeInsets.all(12),
       padding: const EdgeInsets.fromLTRB(20, 10, 20, 22),
-      decoration: BoxDecoration(
-        color: ColoresApp.superficie,
-        borderRadius: BorderRadius.circular(RadiosApp.tarjeta),
-      ),
+      decoration: BoxDecoration(color: ColoresApp.superficie, borderRadius: BorderRadius.circular(RadiosApp.tarjeta)),
       child: SafeArea(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -352,10 +351,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
                 Container(
                   width: 44,
                   height: 44,
-                  decoration: BoxDecoration(
-                    color: _colorDe(conductor).withValues(alpha: 0.14),
-                    shape: BoxShape.circle,
-                  ),
+                  decoration: BoxDecoration(color: _colorDe(conductor).withValues(alpha: 0.14), shape: BoxShape.circle),
                   child: Center(child: Icon(Iconos.motorcycle, color: _colorDe(conductor), size: 20)),
                 ),
                 const SizedBox(width: 12),
@@ -392,21 +388,12 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
                         Navigator.of(context).pop();
                         _alternarSeguimiento(conductor);
                       },
-                      style: FilledButton.styleFrom(
-                        backgroundColor: _siguiendoId == conductor.idConductor
-                            ? ColoresApp.azulClaro
-                            : ColoresApp.azul,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(RadiosApp.campo),
-                        ),
+                      style: estiloRelieve(
+                        _siguiendoId == conductor.idConductor ? TonoBoton.naranja : TonoBoton.azul,
+                        tamano: TamanoBoton.grande,
                       ),
-                      icon: Icon(
-                        _siguiendoId == conductor.idConductor
-                            ? Iconos.xmark
-                            : Iconos.crosshairs,
-                        size: 15,
-                      ),                      label: Text(_siguiendoId == conductor.idConductor ? 'Dejar de seguir' : 'Seguir'),
+                      icon: Icon(_siguiendoId == conductor.idConductor ? Iconos.xmark : Iconos.crosshairs, size: 15),
+                      label: Text(_siguiendoId == conductor.idConductor ? 'Dejar de seguir' : 'Seguir'),
                     )
                   : const SizedBox.shrink(),
             ),
@@ -504,7 +491,11 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
             children: [
               const Icon(Iconos.triangleExclamation, color: ColoresApp.rojo, size: 28),
               const SizedBox(height: 12),
-              Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.texto)),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: ColoresApp.texto),
+              ),
               const SizedBox(height: 16),
               FilledButton.icon(
                 onPressed: _cargar,
@@ -575,7 +566,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with SingleTickerProvider
   }
 
   Widget _barraEstado() {
-    final(color, texto, icono) = switch (_estadoWs) {
+    final (color, texto, icono) = switch (_estadoWs) {
       EstadoWs.conectado => (ColoresApp.exito, 'En vivo', Iconos.circle),
       EstadoWs.conectando => (ColoresApp.textoSuave, 'Conectando', Iconos.arrowsRotate),
       EstadoWs.reconectando => (ColoresApp.rojo, 'Reconectando', Iconos.arrowsRotate),
@@ -758,10 +749,7 @@ class _Credito extends StatelessWidget {
         color: ColoresApp.superficie.withValues(alpha: 0.85),
         borderRadius: BorderRadius.circular(5),
       ),
-      child: const Text(
-        'OpenStreetMap',
-        style: TextStyle(fontSize: 10, color: ColoresApp.textoSuave),
-      ),
+      child: const Text('OpenStreetMap', style: TextStyle(fontSize: 10, color: ColoresApp.textoSuave)),
     );
   }
 }

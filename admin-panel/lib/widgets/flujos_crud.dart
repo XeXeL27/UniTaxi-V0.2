@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_excepcion.dart';
+import '../core/relieve.dart';
 import 'dialogos.dart';
 import 'modal_formulario.dart';
 
@@ -35,7 +36,12 @@ Future<void> flujoEditar(
   required String mensajeExito,
   required VoidCallback alTerminar,
 }) async {
-  final confirmado = await confirmarAccion(context, mensaje: 'Va a editar $descripcion.', textoConfirmar: 'Sí, editar');
+  final confirmado = await confirmarAccion(
+    context,
+    mensaje: 'Va a editar $descripcion.',
+    textoConfirmar: 'Sí, editar',
+    tono: TonoBoton.azul,
+  );
   if (!confirmado || !context.mounted) return;
   final resultado = await abrirModal(context, formulario);
   if (resultado == null || !context.mounted) return;
@@ -54,6 +60,7 @@ Future<void> flujoEliminar(
     context,
     mensaje: 'Va a eliminar $descripcion. El registro dejará de aparecer en las listas.',
     textoConfirmar: 'Sí, eliminar',
+    tono: TonoBoton.rojo,
   );
   if (!confirmado || !context.mounted) return;
   try {
@@ -73,12 +80,18 @@ Future<void> flujoAccion(
   BuildContext context, {
   required String mensajeConfirmacion,
   required String textoConfirmar,
+  TonoBoton tono = TonoBoton.naranja,
   required Future<void> Function() accion,
   required String tituloExito,
   required String mensajeExito,
   required VoidCallback alTerminar,
 }) async {
-  final confirmado = await confirmarAccion(context, mensaje: mensajeConfirmacion, textoConfirmar: textoConfirmar);
+  final confirmado = await confirmarAccion(
+    context,
+    mensaje: mensajeConfirmacion,
+    textoConfirmar: textoConfirmar,
+    tono: tono,
+  );
   if (!confirmado || !context.mounted) return;
   try {
     await accion();

@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
 import '../../core/formato.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/archivos_web.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/flujos_crud.dart';
 import '../../widgets/insignia_estado.dart';
 import '../../widgets/listado_remoto.dart';
-import '../../widgets/modal_formulario.dart';
+import '../../widgets/modal_registro.dart';
+import '../../widgets/ventana.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../../widgets/visor_pdf.dart';
 import '../expediente/expediente_api.dart';
@@ -21,6 +25,7 @@ import 'acciones_cuenta.dart';
 import 'formulario_habilitar_usuario.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
+import '../../widgets/dialogo_animado.dart';
 
 const _situaciones = ['PENDIENTE', 'APROBADO', 'RECHAZADO', 'SUSPENDIDO'];
 
@@ -34,7 +39,7 @@ class PantallaConductores extends StatelessWidget {
     final expedienteApi = ExpedienteApi(context.read<ClienteApi>());
 
     void verDocumentos(ConductorAdmin conductor) {
-      showDialog<void>(
+      mostrarDialogo<void>(
         context: context,
         builder: (_) => DialogoDocumentos(api: api, conductor: conductor),
       );
@@ -69,20 +74,47 @@ class PantallaConductores extends StatelessWidget {
             child: TextButton.icon(
               onPressed: c.cantidadDocumentos == 0 ? null : () => verDocumentos(c),
               style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 6)),
-              icon: Icon(
-                Iconos.filePdf,
-                size: 16,
-                color: c.cantidadDocumentos == 0 ? Colors.black26 : ColoresApp.rojo,
-              ),
+              icon: Icon(Iconos.filePdf, size: 16, color: c.cantidadDocumentos == 0 ? Colors.black26 : ColoresApp.rojo),
               label: Text(c.cantidadDocumentos == 0 ? 'Sin PDF' : 'Ver (${c.cantidadDocumentos})'),
             ),
           ),
         ),
       ],
-      alVer: (conductor, recargar) => abrirExpediente(
-        context,
-        ExpedienteConductor(api: expedienteApi, personasApi: api, conductor: conductor, alCambiar: recargar),
-      ),
+      alAbrir: (conductor, recargar) {
+        final cierre = CierreModal();
+        void hecho() {
+          recargar();
+          cierre.cerrar();
+        }
+
+        abrirExpediente(
+          context,
+          ExpedienteConductor(
+            api: expedienteApi,
+            personasApi: api,
+            conductor: conductor,
+            alCambiar: recargar,
+            cierre: cierre,
+            acciones: [
+              AccionRegistro(
+                texto: 'Documentos PDF',
+                icono: Iconos.filePdf,
+                tono: TonoBoton.turquesa,
+                motivo: 'No tiene documentos PDF',
+                alPresionar: conductor.cantidadDocumentos == 0 ? null : () => verDocumentos(conductor),
+              ),
+              if (conductor.idUsuario != null)
+                accionEliminarCuenta(
+                  context,
+                  api: api,
+                  idUsuario: conductor.idUsuario!,
+                  cuenta: 'la cuenta de conductor de ${conductor.nombreCompleto}',
+                  hecho: hecho,
+                ),
+            ],
+          ),
+        );
+      },
       acciones: (recargar) => [
         FilledButton.icon(
           onPressed: () => flujoCrear(
@@ -98,92 +130,6 @@ class PantallaConductores extends StatelessWidget {
           ),
           icon: const Icon(Iconos.motorcycle, size: 14),
           label: const Text('Agregar conductor'),
-        ),
-      ],
-      accionesFila: (conductor, recargar) => [
-        IconButton(
-          tooltip: 'Cambiar situación',
-          onPressed: () => flujoEditar(
-            context,
-            descripcion: 'la situación de ${conductor.nombreCompleto}',
-            formulario: FormularioSituacionConductor(api: api, conductor: conductor),
-            mensajeExito: 'Se actualizó la situación de ${conductor.nombreCompleto}.',
-            alTerminar: recargar,
-          ),
-          icon: const Icon(Iconos.userCheck, size: 16, color: Color(0xFF198754)),
-        ),
-        // La suspension del conductor es su situacion (arriba); eliminar da de baja su cuenta.
-        if (conductor.idUsuario != null)
-          botonEliminarCuenta(
-            context,
-            api: api,
-            idUsuario: conductor.idUsuario!,
-            cuenta: 'la cuenta de conductor de ${conductor.nombreCompleto}',
-            recargar: recargar,
-          ),
-      ],
-    );
-  }
-}
-
-class FormularioSituacionConductor extends StatefulWidget {
-  final PersonasApi api;
-  final ConductorAdmin conductor;
-
-  const FormularioSituacionConductor({super.key, required this.api, required this.conductor});
-
-  @override
-  State<FormularioSituacionConductor> createState() => _FormularioSituacionConductorState();
-}
-
-class _FormularioSituacionConductorState extends State<FormularioSituacionConductor> {
-  final _claveFormulario = GlobalKey<FormState>();
-  final _motivo = TextEditingController();
-  late String _situacion = widget.conductor.situacionAprobacion;
-
-  @override
-  void dispose() {
-    _motivo.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final c = widget.conductor;
-    return ModalFormulario(
-      titulo: 'Situación del conductor',
-      icono: Iconos.userCheck,
-      claveFormulario: _claveFormulario,
-      textoGuardar: 'Realizar cambios',
-      alGuardar: () async {
-        await widget.api.cambiarSituacionConductor(c.idConductor, _situacion, _motivo.text.trim());
-        return true;
-      },
-      campos: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(
-                c.nombreCompleto,
-                style: const TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.azul),
-              ),
-            ),
-            InsigniaEstado(c.situacionAprobacion),
-          ],
-        ),
-        DropdownButtonFormField<String>(
-          initialValue: _situacion,
-          decoration: const InputDecoration(labelText: 'Nueva situación *'),
-          items: [for (final s in _situaciones) DropdownMenuItem(value: s, child: Text(Formato.enumTexto(s)))],
-          onChanged: (valor) => setState(() => _situacion = valor ?? _situacion),
-        ),
-        TextFormField(
-          controller: _motivo,
-          maxLines: 3,
-          decoration: const InputDecoration(labelText: 'Motivo', hintText: 'Obligatorio si se rechaza o suspende'),
-          validator: (v) => (_situacion == 'RECHAZADO' || _situacion == 'SUSPENDIDO') && (v == null || v.trim().isEmpty)
-              ? 'Indique el motivo'
-              : null,
         ),
       ],
     );
@@ -241,28 +187,10 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Iconos.folderOpen, color: ColoresApp.azul, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Documentos de ${widget.conductor.nombreCompleto}',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ColoresApp.azul),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Cerrar',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Iconos.xmark, size: 18),
-              ),
-            ],
-          ),
+        CabeceraVentana(
+          icono: Iconos.folderOpen,
+          titulo: 'Documentos de ${widget.conductor.nombreCompleto}',
+          alCerrar: () => Navigator.of(context).pop(),
         ),
         Flexible(
           child: FutureBuilder<List<DocumentoConductor>>(

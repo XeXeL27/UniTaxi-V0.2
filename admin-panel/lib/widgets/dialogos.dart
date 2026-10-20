@@ -3,6 +3,10 @@ import 'dart:ui' show PathMetric;
 
 import 'package:flutter/material.dart';
 
+import '../core/relieve.dart';
+import 'boton_relieve.dart';
+import 'dialogo_animado.dart';
+
 /// Modales de resultado y confirmacion del panel: tarjeta blanca que entra con escala sobre un
 /// fondo oscuro, con el icono dibujado con animacion (primero el circulo y luego el simbolo).
 /// Se usan en todas las pantallas:
@@ -13,11 +17,8 @@ import 'package:flutter/material.dart';
 enum TipoDialogo { exito, confirmacion, eliminado, error }
 
 const _verde = Color(0xFF198754);
-const _verdeOscuro = Color(0xFF157347);
 const _rojo = Color(0xFFDC3545);
-const _rojoOscuro = Color(0xFFBB2D3B);
 const _naranja = Color(0xFFFD7E14);
-const _naranjaOscuro = Color(0xFFE56B0B);
 
 /// Tiempos de la animacion del icono.
 const _duracionCirculo = Duration(milliseconds: 400);
@@ -44,12 +45,14 @@ Future<void> mostrarErrorDialogo(
   return _mostrar(context, TipoDialogo.error, titulo, mensaje);
 }
 
-/// Modal naranja con Cancelar / confirmar. Devuelve true si el usuario confirma.
+/// Modal naranja con Cancelar / confirmar. Devuelve true si el usuario confirma. [tono] es el color del
+/// boton de confirmar segun la accion (rojo para eliminar, azul para editar...).
 Future<bool> confirmarAccion(
   BuildContext context, {
   String titulo = '¿Está seguro?',
   required String mensaje,
   String textoConfirmar = 'Sí, continuar',
+  TonoBoton tono = TonoBoton.naranja,
 }) async {
   final confirmado = await _abrir<bool>(
     context,
@@ -59,6 +62,7 @@ Future<bool> confirmarAccion(
       titulo: titulo,
       mensaje: mensaje,
       textoBoton: textoConfirmar,
+      tonoBoton: tono,
       conCancelar: true,
     ),
   );
@@ -73,25 +77,21 @@ Future<void> _mostrar(BuildContext context, TipoDialogo tipo, String titulo, Str
   );
 }
 
-/// Fondo oscuro que aparece en 0,3 s y tarjeta que entra con escala 0,8 -> 1 con rebote.
+/// Fondo oscuro y desenfocado; la tarjeta sube y crece con un pequeno rebote ([TransicionDialogo]).
 Future<R?> _abrir<R>(BuildContext context, {required bool barreraCierra, required Widget tarjeta}) {
   return showGeneralDialog<R>(
     context: context,
     barrierDismissible: barreraCierra,
     barrierLabel: 'Cerrar',
-    barrierColor: const Color(0x66000000),
-    transitionDuration: const Duration(milliseconds: 300),
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 380),
     pageBuilder: (_, _, _) => Center(child: tarjeta),
-    transitionBuilder: (context, animacion, _, hijo) {
-      final escala = Tween<double>(
-        begin: 0.8,
-        end: 1,
-      ).animate(CurvedAnimation(parent: animacion, curve: const Cubic(0.175, 0.885, 0.32, 1.275)));
-      return FadeTransition(
-        opacity: animacion,
-        child: ScaleTransition(scale: escala, child: hijo),
-      );
-    },
+    transitionBuilder: (context, animacion, _, hijo) => TransicionDialogo(
+      animacion: animacion,
+      colorFondo: const Color(0x801F2733),
+      cierraAlTocar: barreraCierra,
+      child: hijo,
+    ),
   );
 }
 
@@ -100,6 +100,7 @@ class _TarjetaAlerta extends StatelessWidget {
   final String titulo;
   final String mensaje;
   final String textoBoton;
+  final TonoBoton? tonoBoton;
   final bool conCancelar;
 
   const _TarjetaAlerta({
@@ -107,32 +108,46 @@ class _TarjetaAlerta extends StatelessWidget {
     required this.titulo,
     required this.mensaje,
     required this.textoBoton,
+    this.tonoBoton,
     this.conCancelar = false,
   });
 
-  (Color, Color) get _colores => switch (tipo) {
-    TipoDialogo.exito => (_verde, _verdeOscuro),
-    TipoDialogo.confirmacion => (_naranja, _naranjaOscuro),
-    TipoDialogo.eliminado || TipoDialogo.error => (_rojo, _rojoOscuro),
+  Color get _color => switch (tipo) {
+    TipoDialogo.exito => _verde,
+    TipoDialogo.confirmacion => _naranja,
+    TipoDialogo.eliminado || TipoDialogo.error => _rojo,
   };
+
+  TonoBoton get _tono =>
+      tonoBoton ??
+      switch (tipo) {
+        TipoDialogo.exito => TonoBoton.verde,
+        TipoDialogo.confirmacion => TonoBoton.naranja,
+        TipoDialogo.eliminado || TipoDialogo.error => TonoBoton.rojo,
+      };
 
   @override
   Widget build(BuildContext context) {
-    final (color, colorHover) = _colores;
+    final color = _color;
     return Padding(
       padding: const EdgeInsets.all(16),
       child: Material(
-        color: Colors.white,
+        color: Colors.transparent,
         elevation: 0,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(16),
         shadowColor: Colors.transparent,
         child: Container(
-          width: 320,
-          padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
+          width: 340,
+          padding: const EdgeInsets.fromLTRB(24, 36, 24, 28),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 30, offset: Offset(0, 15))],
-            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Relieve.linea),
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFFFFFFFF), Relieve.superficie],
+            ),
+            boxShadow: Relieve.sombraVentana,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -152,7 +167,7 @@ class _TarjetaAlerta extends StatelessWidget {
               Text(
                 mensaje,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontSize: 14.5, color: Color(0xFF6C757D), height: 1.4),
+                style: const TextStyle(fontSize: 14.5, color: Relieve.tenue, height: 1.45),
               ),
               const SizedBox(height: 25),
               Wrap(
@@ -161,30 +176,17 @@ class _TarjetaAlerta extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   if (conCancelar)
-                    OutlinedButton(
-                      onPressed: () => Navigator.of(context).pop(false),
-                      style: OutlinedButton.styleFrom(
-                        backgroundColor: const Color(0xFFF8F9FA),
-                        foregroundColor: const Color(0xFF212529),
-                        side: const BorderSide(color: Color(0xFFDEE2E6)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                      ),
-                      child: const Text('Cancelar'),
+                    BotonRelieve(
+                      texto: 'Cancelar',
+                      tamano: TamanoBoton.grande,
+                      alPresionar: () => Navigator.of(context).pop(false),
                     ),
-                  FilledButton(
+                  BotonRelieve(
+                    texto: textoBoton,
+                    tono: _tono,
+                    tamano: TamanoBoton.grande,
                     autofocus: true,
-                    onPressed: () => Navigator.of(context).pop(true),
-                    style: ButtonStyle(
-                      backgroundColor: WidgetStateProperty.resolveWith(
-                        (estados) => estados.contains(WidgetState.hovered) ? colorHover : color,
-                      ),
-                      foregroundColor: const WidgetStatePropertyAll(Colors.white),
-                      padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 30, vertical: 12)),
-                      shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                      textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
-                    ),
-                    child: Text(textoBoton),
+                    alPresionar: () => Navigator.of(context).pop(true),
                   ),
                 ],
               ),

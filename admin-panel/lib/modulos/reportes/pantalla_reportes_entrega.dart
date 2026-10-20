@@ -6,15 +6,18 @@ import 'package:provider/provider.dart';
 import '../../core/cliente_api.dart';
 import '../../core/formato.dart';
 import '../../core/iconos.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/flujos_crud.dart';
 import '../../widgets/listado_remoto.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/modal_formulario.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../expediente/vista_expediente.dart';
 import '../personas/personas_api.dart';
 import 'modelos.dart';
 import 'reportes_api.dart';
+import '../../widgets/dialogo_animado.dart';
 
 const _situaciones = ['PENDIENTE', 'EN_REVISION', 'RESUELTO', 'CERRADO'];
 const _resoluciones = [
@@ -53,26 +56,32 @@ class PantallaReportesEntrega extends StatelessWidget {
           celda: (r) => Text(r.fotoFallaUrl == null ? 'Sin foto' : 'Ver foto'),
         ),
       ],
-      alVer: (reporte, recargar) => _verReporte(context, api, reporte, recargar),
       accionesFila: (reporte, recargar) => [
+        AccionRegistro(
+          texto: 'Ver reporte completo',
+          icono: Iconos.eye,
+          tono: TonoBoton.turquesa,
+          alPresionar: () => _verReporte(context, api, reporte, recargar),
+        ),
         if (reporte.situacion == 'PENDIENTE' || reporte.situacion == 'EN_REVISION')
-          IconButton(
-            tooltip: 'Resolver reporte',
-            onPressed: () => flujoEditar(
+          AccionRegistro(
+            texto: 'Resolver',
+            icono: Iconos.clipboardCheck,
+            tono: TonoBoton.verde,
+            alPresionar: () => flujoEditar(
               context,
               descripcion: 'el reporte #${reporte.id}',
               formulario: _FormularioResolucion(api: api, reporte: reporte),
               mensajeExito: 'Se registró la resolución sin mover dinero.',
               alTerminar: recargar,
             ),
-            icon: const Icon(Iconos.clipboardCheck, size: 16, color: ColoresApp.exito),
           ),
       ],
     );
   }
 
   Future<void> _verReporte(BuildContext context, ReportesApi api, ReporteEntrega reporte, VoidCallback recargar) {
-    return showDialog<void>(
+    return mostrarDialogo<void>(
       context: context,
       builder: (_) => _DetalleReporte(api: api, reporte: reporte, recargar: recargar),
     );
@@ -100,7 +109,19 @@ class _DetalleReporteState extends State<_DetalleReporte> {
       shrinkWrap: true,
       padding: const EdgeInsets.all(20),
       children: [
-        Row(children: [const Icon(Iconos.triangleExclamation, color: ColoresApp.rojo), const SizedBox(width: 10), Expanded(child: Text('Reporte #${r.id}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ColoresApp.azul))), IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Iconos.xmark))]),
+        Row(
+          children: [
+            const Icon(Iconos.triangleExclamation, color: ColoresApp.rojo),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Reporte #${r.id}',
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: ColoresApp.azul),
+              ),
+            ),
+            IconButton(onPressed: () => Navigator.pop(context), icon: const Icon(Iconos.xmark)),
+          ],
+        ),
         const Divider(),
         DatosEnGrilla([
           ('Viaje', '#${r.idViaje}'),
@@ -117,7 +138,10 @@ class _DetalleReporteState extends State<_DetalleReporte> {
         Text(r.descripcion, style: const TextStyle(fontWeight: FontWeight.w600)),
         if (r.esPasajeroAusente) ...[
           const SizedBox(height: 14),
-          const Text('Pasajero reportado', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+          const Text(
+            'Pasajero reportado',
+            style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+          ),
           const SizedBox(height: 6),
           DatosEnGrilla([
             ('Pasajero', r.nombrePasajero),
@@ -133,11 +157,13 @@ class _DetalleReporteState extends State<_DetalleReporte> {
                 style: OutlinedButton.styleFrom(foregroundColor: ColoresApp.rojo),
                 onPressed: () => flujoAccion(
                   context,
-                  mensajeConfirmacion: 'Va a suspender la cuenta de pasajero de ${r.nombrePasajero ?? 'esta persona'}. '
+                  mensajeConfirmacion:
+                      'Va a suspender la cuenta de pasajero de ${r.nombrePasajero ?? 'esta persona'}. '
                       'No podrá ingresar y, si tiene la sesión abierta, se cerrará.',
                   textoConfirmar: 'Sí, suspender',
-                  accion: () => PersonasApi(context.read<ClienteApi>())
-                      .cambiarEstadoUsuario(r.idUsuarioPasajero!, suspender: true),
+                  accion: () =>
+                      PersonasApi(context.read<ClienteApi>())
+                          .cambiarEstadoUsuario(r.idUsuarioPasajero!, suspender: true),
                   tituloExito: '¡Cuenta suspendida!',
                   mensajeExito: 'Se suspendió la cuenta de pasajero. Registra la resolución del reporte.',
                   alTerminar: () {
@@ -151,13 +177,25 @@ class _DetalleReporteState extends State<_DetalleReporte> {
             ),
           ],
         ],
-        if (r.motivoFalla != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Motivo registrado: ${r.motivoFalla}')),
-        if (r.observacionCompra != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text('Observación de compra: ${r.observacionCompra}')),
+        if (r.motivoFalla != null)
+          Padding(padding: const EdgeInsets.only(top: 8), child: Text('Motivo registrado: ${r.motivoFalla}')),
+        if (r.observacionCompra != null)
+          Padding(padding: const EdgeInsets.only(top: 8), child: Text('Observación de compra: ${r.observacionCompra}')),
         if (_foto != null) ...[
           const SizedBox(height: 16),
-          const Text('Evidencia de incidente', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+          const Text(
+            'Evidencia de incidente',
+            style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+          ),
           const SizedBox(height: 8),
-          FutureBuilder<Uint8List>(future: _foto, builder: (_, estado) => estado.hasError ? const Text('No se pudo cargar la evidencia') : estado.data == null ? const LinearProgressIndicator() : Image.memory(estado.data!, height: 260, fit: BoxFit.contain)),
+          FutureBuilder<Uint8List>(
+            future: _foto,
+            builder: (_, estado) => estado.hasError
+                ? const Text('No se pudo cargar la evidencia')
+                : estado.data == null
+                ? const LinearProgressIndicator()
+                : Image.memory(estado.data!, height: 260, fit: BoxFit.contain),
+          ),
         ],
         if (r.tipoResolucion != null) ...[
           const SizedBox(height: 14),
@@ -167,7 +205,9 @@ class _DetalleReporteState extends State<_DetalleReporte> {
         ],
       ],
     );
-    return Dialog(child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720, maxHeight: 680), child: contenido));
+    return Dialog(
+      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 720, maxHeight: 680), child: contenido),
+    );
   }
 }
 
@@ -188,7 +228,10 @@ class _FormularioResolucionState extends State<_FormularioResolucion> {
   final _observacion = TextEditingController();
 
   @override
-  void dispose() { _observacion.dispose(); super.dispose(); }
+  void dispose() {
+    _observacion.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) => ModalFormulario(
@@ -197,7 +240,12 @@ class _FormularioResolucionState extends State<_FormularioResolucion> {
     claveFormulario: _clave,
     textoGuardar: 'Registrar resolución',
     alGuardar: () async {
-      await widget.api.resolver(widget.reporte.id, tipoResolucion: _tipo, situacion: 'RESUELTO', observacion: _observacion.text.trim());
+      await widget.api.resolver(
+        widget.reporte.id,
+        tipoResolucion: _tipo,
+        situacion: 'RESUELTO',
+        observacion: _observacion.text.trim(),
+      );
       return true;
     },
     campos: [
@@ -207,8 +255,21 @@ class _FormularioResolucionState extends State<_FormularioResolucion> {
             : 'La resolución solo registra la gestión administrativa. No genera devolución, cobro ni compensación automática.',
         style: const TextStyle(color: ColoresApp.textoSuave),
       ),
-      DropdownButtonFormField<String>(initialValue: _tipo, decoration: const InputDecoration(labelText: 'Tipo de resolución *'), items: [for (final tipo in _opciones) DropdownMenuItem(value: tipo, child: Text(Formato.enumTexto(tipo)))], onChanged: (v) => setState(() => _tipo = v ?? _tipo)),
-      TextFormField(controller: _observacion, maxLines: 4, maxLength: 1000, decoration: const InputDecoration(labelText: 'Observación del administrador *'), validator: (v) => (v == null || v.trim().isEmpty) ? 'Describa la gestión realizada' : null),
+      DropdownButtonFormField<String>(
+        borderRadius: BorderRadius.circular(14),
+        dropdownColor: Colors.white,
+        initialValue: _tipo,
+        decoration: const InputDecoration(labelText: 'Tipo de resolución *'),
+        items: [for (final tipo in _opciones) DropdownMenuItem(value: tipo, child: Text(Formato.enumTexto(tipo)))],
+        onChanged: (v) => setState(() => _tipo = v ?? _tipo),
+      ),
+      TextFormField(
+        controller: _observacion,
+        maxLines: 4,
+        maxLength: 1000,
+        decoration: const InputDecoration(labelText: 'Observación del administrador *'),
+        validator: (v) => (v == null || v.trim().isEmpty) ? 'Describa la gestión realizada' : null,
+      ),
     ],
   );
 }

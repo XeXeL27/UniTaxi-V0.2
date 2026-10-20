@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
+import '../../widgets/boton_relieve.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/listado_remoto.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../expediente/expediente_api.dart';
 import '../expediente/expediente_pasajero.dart';
@@ -14,6 +19,7 @@ import '../expediente/vista_expediente.dart';
 import 'acciones_cuenta.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
+import '../../widgets/dialogo_animado.dart';
 
 /// Pasajeros: consulta, suspender o habilitar y eliminar su cuenta (se registran desde Personas o
 /// Usuarios, o desde la app).
@@ -29,8 +35,39 @@ class PantallaPasajeros extends StatelessWidget {
       icono: Iconos.userCheck,
       nombreArchivo: 'pasajeros',
       cargar: api.listarPasajeros,
-      alVer: (pasajero, recargar) =>
-          abrirExpediente(context, ExpedientePasajero(api: expedienteApi, pasajero: pasajero, alCambiar: recargar)),
+      alAbrir: (pasajero, recargar) {
+        final cierre = CierreModal();
+        void hecho() {
+          recargar();
+          cierre.cerrar();
+        }
+
+        abrirExpediente(
+          context,
+          ExpedientePasajero(
+            api: expedienteApi,
+            personasApi: api,
+            pasajero: pasajero,
+            alCambiar: recargar,
+            cierre: cierre,
+            acciones: [
+              AccionRegistro(
+                texto: 'Verificar con SIGSE',
+                icono: Iconos.idBadge,
+                tono: TonoBoton.morado,
+                alPresionar: () => verificarEstudianteUap(context, api: api, pasajero: pasajero, recargar: hecho),
+              ),
+              accionEliminarCuenta(
+                context,
+                api: api,
+                idUsuario: pasajero.idUsuario,
+                cuenta: 'la cuenta de pasajero de ${pasajero.nombreCompleto}',
+                hecho: hecho,
+              ),
+            ],
+          ),
+        );
+      },
       columnas: [
         ColumnaTabla(titulo: 'Usuario', valor: (p) => p.nombreUsuario),
         ColumnaTabla(titulo: 'Nombre', valor: (p) => '${p.nombres} ${p.apellidos}', ancho: 150, proporcion: 2.5),
@@ -53,28 +90,6 @@ class PantallaPasajeros extends StatelessWidget {
         ColumnaTabla(titulo: 'RU', valor: (p) => p.ru, ancho: 90),
         ColumnaTabla(titulo: 'Registrado', tipo: TipoColumna.fechaHora, valor: (p) => p.fechaRegistro),
       ],
-      accionesFila: (pasajero, recargar) => [
-        IconButton(
-          tooltip: 'Verificar con SIGSE (estudiante UAP)',
-          onPressed: () => verificarEstudianteUap(context, api: api, pasajero: pasajero, recargar: recargar),
-          icon: const Icon(Iconos.idBadge, size: 16, color: ColoresApp.azulClaro),
-        ),
-        botonSuspenderCuenta(
-          context,
-          api: api,
-          idUsuario: pasajero.idUsuario,
-          suspendida: pasajero.suspendida,
-          cuenta: 'la cuenta de pasajero de ${pasajero.nombreCompleto}',
-          recargar: recargar,
-        ),
-        botonEliminarCuenta(
-          context,
-          api: api,
-          idUsuario: pasajero.idUsuario,
-          cuenta: 'la cuenta de pasajero de ${pasajero.nombreCompleto}',
-          recargar: recargar,
-        ),
-      ],
     );
   }
 }
@@ -89,9 +104,10 @@ Future<void> verificarEstudianteUap(
 }) async {
   final previo = pasajero.ru != null && RegExp(r'^\d+$').hasMatch(pasajero.ru!) ? pasajero.ru! : '';
   final campo = TextEditingController(text: previo);
-  final ru = await showDialog<String>(
+  final ru = await mostrarDialogo<String>(
     context: context,
     builder: (contexto) => AlertDialog(
+      icon: const Icon(Iconos.idBadge, color: Color(0xFF7C3AED)),
       title: const Text('Verificar con SIGSE'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
@@ -113,8 +129,13 @@ Future<void> verificarEstudianteUap(
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(contexto).pop(), child: const Text('Cancelar')),
-        FilledButton(onPressed: () => Navigator.of(contexto).pop(campo.text.trim()), child: const Text('Verificar')),
+        BotonRelieve(texto: 'Cancelar', alPresionar: () => Navigator.of(contexto).pop()),
+        BotonRelieve(
+          texto: 'Verificar',
+          icono: Iconos.idBadge,
+          tono: TonoBoton.morado,
+          alPresionar: () => Navigator.of(contexto).pop(campo.text.trim()),
+        ),
       ],
     ),
   );
@@ -123,7 +144,11 @@ Future<void> verificarEstudianteUap(
   try {
     await api.verificarEstudianteUap(pasajero.idPasajero, ru);
     if (!context.mounted) return;
-    await mostrarExito(context, titulo: '¡Estudiante verificado!', mensaje: '${pasajero.nombreCompleto} quedó como estudiante UAP.');
+    await mostrarExito(
+      context,
+      titulo: '¡Estudiante verificado!',
+      mensaje: '${pasajero.nombreCompleto} quedó como estudiante UAP.',
+    );
     recargar();
   } on ApiExcepcion catch (e) {
     if (context.mounted) await mostrarErrorDialogo(context, titulo: 'No se pudo verificar', mensaje: e.mensaje);

@@ -2,11 +2,17 @@ import 'dart:js_interop';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+
 import '../core/iconos.dart';
+
 import 'package:web/web.dart' as web;
 
+import '../core/relieve.dart';
 import '../core/tema.dart';
+import 'boton_relieve.dart';
+import 'ventana.dart';
 import 'archivos_web.dart';
+import 'dialogo_animado.dart';
 
 /// Muestra un PDF dentro de un modal (visor del navegador en un iframe), con botones para
 /// descargarlo o abrirlo en otra pestana.
@@ -16,7 +22,7 @@ Future<void> mostrarPdf(
   required Future<Uint8List> Function() cargar,
   required String nombreDescarga,
 }) {
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
     builder: (_) => _VisorPdf(titulo: titulo, cargar: cargar, nombreDescarga: nombreDescarga),
   );
@@ -78,43 +84,33 @@ class _VisorPdfState extends State<_VisorPdf> {
         height: tamano.height * 0.88,
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
-              child: Row(
-                children: [
-                  const Icon(Iconos.filePdf, color: ColoresApp.rojo, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      widget.titulo,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: ColoresApp.azul),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Descargar',
-                    onPressed: _bytes == null
-                        ? null
-                        : () => descargarArchivo(_bytes!, widget.nombreDescarga, 'application/pdf'),
-                    icon: const Icon(Iconos.download, size: 16),
-                  ),
-                  IconButton(
-                    tooltip: 'Abrir en otra pestaña',
-                    onPressed: _bytes == null ? null : () => abrirPdf(_bytes!),
-                    icon: const Icon(Iconos.upRightFromSquare, size: 16),
-                  ),
-                  IconButton(
-                    tooltip: 'Cerrar',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: const Icon(Iconos.xmark, size: 18),
-                  ),
-                ],
-              ),
+            CabeceraVentana(
+              icono: Iconos.filePdf,
+              titulo: widget.titulo,
+              alCerrar: () => Navigator.of(context).pop(),
+              botones: [
+                BotonRelieve(
+                  texto: 'Descargar',
+                  icono: Iconos.download,
+                  tono: TonoBoton.celeste,
+                  tamano: TamanoBoton.pequeno,
+                  alPresionar: _bytes == null
+                      ? null
+                      : () => descargarArchivo(_bytes!, widget.nombreDescarga, 'application/pdf'),
+                ),
+                BotonRelieve(
+                  texto: 'Abrir en otra pestaña',
+                  icono: Iconos.upRightFromSquare,
+                  tamano: TamanoBoton.pequeno,
+                  alPresionar: _bytes == null ? null : () => abrirPdf(_bytes!),
+                ),
+              ],
             ),
             Expanded(
               child: _error != null
-                  ? Center(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojo)))
+                  ? Center(
+                      child: Text(_error!, style: const TextStyle(color: ColoresApp.rojo)),
+                    )
                   : url == null
                   ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
                   : HtmlElementView.fromTagName(

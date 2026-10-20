@@ -75,6 +75,22 @@ flutter:
   assets:
     - assets/fuentes/
 
+  # Plus Jakarta Sans (licencia SIL Open Font License 1.1), la fuente del estilo relieve. Pesos fijos
+  # generados de la fuente variable del paquete relieve-ui.
+  fonts:
+    - family: PlusJakarta
+      fonts:
+        - asset: assets/tipografia/PlusJakartaSans-400.ttf
+          weight: 400
+        - asset: assets/tipografia/PlusJakartaSans-500.ttf
+          weight: 500
+        - asset: assets/tipografia/PlusJakartaSans-600.ttf
+          weight: 600
+        - asset: assets/tipografia/PlusJakartaSans-700.ttf
+          weight: 700
+        - asset: assets/tipografia/PlusJakartaSans-800.ttf
+          weight: 800
+
   # To add assets to your application, add an assets section, like this:
   # assets:
   #   - images/a_dot_burr.jpeg

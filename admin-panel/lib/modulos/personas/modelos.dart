@@ -51,6 +51,29 @@ class Persona {
     this.nombreUsuario,
   });
 
+  /// Copia con los datos personales cambiados (despues de editarla en el panel).
+  Persona con({
+    String? ci,
+    String? complementoCi,
+    required String nombres,
+    required String apellidos,
+    DateTime? fechaNacimiento,
+    String? correo,
+    String? telefono,
+  }) => Persona(
+    idPersona: idPersona,
+    ci: ci,
+    complementoCi: complementoCi,
+    nombres: nombres,
+    apellidos: apellidos,
+    fechaNacimiento: fechaNacimiento,
+    correo: correo,
+    telefono: telefono,
+    creadoEn: creadoEn,
+    tiposUsuario: tiposUsuario,
+    nombreUsuario: nombreUsuario,
+  );
+
   String get nombreCompleto => '$nombres $apellidos';
 
   /// "1234567-1B" o "1234567".

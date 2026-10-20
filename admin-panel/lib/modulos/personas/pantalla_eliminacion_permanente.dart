@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
 import '../../core/iconos.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/listado_remoto.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/modal_formulario.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import 'modelos.dart';
@@ -43,16 +45,22 @@ class PantallaEliminacionPermanente extends StatelessWidget {
         ColumnaTabla(titulo: 'Registrado', tipo: TipoColumna.fechaHora, valor: (p) => p.registrado),
       ],
       accionesFila: (persona, recargar) => [
-        IconButton(
-          tooltip: 'Eliminar de forma permanente',
-          onPressed: () => _eliminar(context, api, persona, recargar),
-          icon: const Icon(Iconos.eliminarPermanente, size: 17, color: ColoresApp.rojo),
+        AccionRegistro(
+          texto: 'Eliminar de forma permanente',
+          icono: Iconos.eliminarPermanente,
+          tono: TonoBoton.rojo,
+          alPresionar: () => _eliminar(context, api, persona, recargar),
         ),
       ],
     );
   }
 
-  Future<void> _eliminar(BuildContext context, PersonasApi api, PersonaEliminable persona, VoidCallback recargar) async {
+  Future<void> _eliminar(
+    BuildContext context,
+    PersonasApi api,
+    PersonaEliminable persona,
+    VoidCallback recargar,
+  ) async {
     final ResumenEliminacion resumen;
     try {
       resumen = await api.resumenEliminacion(persona.idPersona);
@@ -68,7 +76,8 @@ class PantallaEliminacionPermanente extends StatelessWidget {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Está seguro de eliminar este registro?',
-      mensaje: 'Se eliminarán de manera PERMANENTE todos los registros de ${resumen.nombreCompleto}: sus cuentas, '
+      mensaje:
+          'Se eliminarán de manera PERMANENTE todos los registros de ${resumen.nombreCompleto}: sus cuentas, '
           'credenciales, datos, fotos y documentos. No se puede deshacer.',
       textoConfirmar: 'Sí, continuar',
     );
@@ -135,7 +144,12 @@ class _FormularioEliminacionState extends State<_FormularioEliminacion> {
                 child: Text(
                   'Esta eliminación es permanente: los registros se borran de la base de datos y sus archivos del '
                   'servidor. No se puede deshacer. La persona podrá registrarse de nuevo con su CI y su correo.',
-                  style: TextStyle(fontSize: 13, height: 1.4, color: ColoresApp.rojoOscuro, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    fontSize: 13,
+                    height: 1.4,
+                    color: ColoresApp.rojoOscuro,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -144,7 +158,10 @@ class _FormularioEliminacionState extends State<_FormularioEliminacion> {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text('Se elimina:', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+            const Text(
+              'Se elimina:',
+              style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+            ),
             const SizedBox(height: 4),
             if (r.seElimina.isEmpty)
               const Text('- Solo el registro de la persona.', style: estiloLinea)
@@ -153,7 +170,10 @@ class _FormularioEliminacionState extends State<_FormularioEliminacion> {
             const Text('- Su carpeta de archivos (fotos del carnet, licencia, PDF y QR).', style: estiloLinea),
             if (r.viajesConservados > 0 || r.calificacionesConservadas > 0) ...[
               const SizedBox(height: 10),
-              const Text('Se conserva:', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+              const Text(
+                'Se conserva:',
+                style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+              ),
               const SizedBox(height: 4),
               Text(
                 '- ${r.viajesConservados} viaje(s) y ${r.calificacionesConservadas} calificación(es) con otras personas: '
@@ -165,10 +185,7 @@ class _FormularioEliminacionState extends State<_FormularioEliminacion> {
         ),
         TextFormField(
           controller: _confirmacion,
-          decoration: InputDecoration(
-            labelText: 'Para confirmar escriba: ${r.confirmacion}',
-            hintText: r.confirmacion,
-          ),
+          decoration: InputDecoration(labelText: 'Para confirmar escriba: ${r.confirmacion}', hintText: r.confirmacion),
           validator: (v) => (v?.trim().toLowerCase() ?? '') == r.confirmacion.toLowerCase()
               ? null
               : 'Escriba exactamente ${r.confirmacion}',

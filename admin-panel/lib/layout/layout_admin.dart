@@ -18,12 +18,26 @@ class LayoutAdmin extends StatefulWidget {
   State<LayoutAdmin> createState() => _LayoutAdminState();
 }
 
-class _LayoutAdminState extends State<LayoutAdmin> {
+class _LayoutAdminState extends State<LayoutAdmin> with SingleTickerProviderStateMixin {
   static const _claveMenuVisible = 'taxiuap_menu_visible';
   static const _anchoMenu = 260.0;
 
   final _claveScaffold = GlobalKey<ScaffoldState>();
   bool _menuVisible = true;
+
+  /// 1 = menu a la vista, 0 = escondido. El menu se desliza; el contenido se mueve con el sin volver
+  /// a medirse en cada cuadro (la tabla es pesada): su ancho cambia solo al empezar a mostrarse o al
+  /// terminar de esconderse.
+  late final AnimationController _menu = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+    value: 1,
+  )..addStatusListener((_) => setState(() {}));
+  late final Animation<double> _curva = CurvedAnimation(
+    parent: _menu,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeInCubic,
+  );
 
   @override
   void initState() {
@@ -31,11 +45,20 @@ class _LayoutAdminState extends State<LayoutAdmin> {
     _cargarPreferencia();
   }
 
+  @override
+  void dispose() {
+    _menu.dispose();
+    super.dispose();
+  }
+
   Future<void> _cargarPreferencia() async {
     try {
       final prefs = await SharedPreferences.getInstance();
       final visible = prefs.getBool(_claveMenuVisible);
-      if (visible != null && mounted) setState(() => _menuVisible = visible);
+      if (visible != null && mounted) {
+        setState(() => _menuVisible = visible);
+        _menu.value = visible ? 1 : 0;
+      }
     } catch (_) {
       // Sin almacenamiento del navegador el menu arranca visible.
     }
@@ -47,6 +70,7 @@ class _LayoutAdminState extends State<LayoutAdmin> {
       return;
     }
     setState(() => _menuVisible = !_menuVisible);
+    _menuVisible ? _menu.forward() : _menu.reverse();
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_claveMenuVisible, _menuVisible);
@@ -83,17 +107,44 @@ class _LayoutAdminState extends State<LayoutAdmin> {
               child: MenuLateral(rutaActual: widget.rutaActual, enDrawer: true),
             ),
       body: escritorio
-          ? Row(
-              children: [
-                // Sin animacion de ancho: animarlo obligaba a volver a medir la tabla en cada cuadro y
-                // el cambio se sentia lento.
-                if (_menuVisible)
-                  SizedBox(
-                    width: _anchoMenu,
-                    child: MenuLateral(rutaActual: widget.rutaActual),
-                  ),
-                Expanded(child: contenido),
-              ],
+          ? Builder(
+              builder: (context) {
+                final reservado = _menu.status == AnimationStatus.dismissed ? 0.0 : _anchoMenu;
+                return Stack(
+                  children: [
+                    Positioned(
+                      left: reservado,
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: AnimatedBuilder(
+                        animation: _curva,
+                        builder: (context, hijo) =>
+                            Transform.translate(offset: Offset(-reservado * (1 - _curva.value), 0), child: hijo),
+                        child: RepaintBoundary(child: contenido),
+                      ),
+                    ),
+                    if (reservado > 0)
+                      Positioned(
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: _anchoMenu,
+                        child: AnimatedBuilder(
+                          animation: _curva,
+                          builder: (context, hijo) =>
+                              Transform.translate(offset: Offset(-_anchoMenu * (1 - _curva.value), 0), child: hijo),
+                          child: DecoratedBox(
+                            decoration: const BoxDecoration(
+                              boxShadow: [BoxShadow(color: Color(0x401F2733), offset: Offset(4, 0), blurRadius: 18)],
+                            ),
+                            child: MenuLateral(rutaActual: widget.rutaActual),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             )
           : contenido,
     );

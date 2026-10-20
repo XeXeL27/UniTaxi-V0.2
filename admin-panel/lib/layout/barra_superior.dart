@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../core/iconos.dart';
+
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 
@@ -7,7 +9,9 @@ import '../core/avisos_admin.dart';
 
 import '../core/menu.dart';
 import '../core/sesion.dart';
+import '../core/relieve.dart';
 import '../core/tema.dart';
+import '../widgets/boton_relieve.dart';
 
 /// Barra superior fija: boton para mostrar/esconder el menu, titulo de la pantalla, datos del
 /// administrador y cierre de sesion.
@@ -29,8 +33,16 @@ class BarraSuperior extends StatelessWidget {
       height: movil ? 60 : 70,
       padding: EdgeInsets.symmetric(horizontal: movil ? 8 : 28),
       decoration: const BoxDecoration(
-        color: Colors.white,
-        border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFFFDFDFE), Color(0xFFE8EBEF)],
+        ),
+        border: Border(bottom: BorderSide(color: Relieve.linea)),
+        boxShadow: [
+          BoxShadow(color: Relieve.sombra, offset: Offset(0, 1), blurRadius: 2),
+          BoxShadow(color: Relieve.sombra, offset: Offset(0, 4), blurRadius: 8, spreadRadius: -2),
+        ],
       ),
       child: Row(
         children: [
@@ -62,10 +74,14 @@ class BarraSuperior extends StatelessWidget {
               width: 40,
               height: 40,
               alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: ColoresApp.azul,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF2A4C85), ColoresApp.azul],
+                ),
                 shape: BoxShape.circle,
-                border: Border.all(color: ColoresApp.azul, width: 2),
+                boxShadow: Relieve.sombraLevantado,
               ),
               child: Text(
                 usuario?.iniciales ?? '',
@@ -80,13 +96,12 @@ class BarraSuperior extends StatelessWidget {
                   onPressed: sesion.cerrar,
                   icon: const Icon(Iconos.powerOff, color: ColoresApp.rojo, size: 18),
                 )
-              : TextButton.icon(
-                  onPressed: sesion.cerrar,
-                  icon: const Icon(Iconos.powerOff, color: ColoresApp.rojo, size: 16),
-                  label: const Text(
-                    'Cerrar sesión',
-                    style: TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.bold),
-                  ),
+              : BotonRelieve(
+                  texto: 'Cerrar sesión',
+                  icono: Iconos.powerOff,
+                  tono: TonoBoton.rojo,
+                  tamano: TamanoBoton.pequeno,
+                  alPresionar: sesion.cerrar,
                 ),
         ],
       ),
@@ -148,9 +163,7 @@ class _CampanaAvisosState extends State<_CampanaAvisos> {
   Widget build(BuildContext context) {
     final pendientes = _avisos.pendientesIngreso;
     return IconButton(
-      tooltip: pendientes == 0
-          ? 'Sin mensajes de ingreso pendientes'
-          : 'Problemas de ingreso: $pendientes sin atender',
+      tooltip: pendientes == 0 ? 'Sin mensajes de ingreso pendientes' : 'Problemas de ingreso: $pendientes sin atender',
       onPressed: () => context.go(Menu.problemasIngreso.ruta),
       icon: Badge(
         isLabelVisible: pendientes > 0,

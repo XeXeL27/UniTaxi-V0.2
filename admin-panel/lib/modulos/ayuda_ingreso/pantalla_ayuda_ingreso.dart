@@ -4,9 +4,11 @@ import 'package:provider/provider.dart';
 import '../../core/avisos_admin.dart';
 import '../../core/cliente_api.dart';
 import '../../core/iconos.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/flujos_crud.dart';
 import '../../widgets/listado_remoto.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/modal_formulario.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../personas/personas_api.dart';
@@ -52,13 +54,17 @@ class PantallaAyudaIngreso extends StatelessWidget {
       ],
       accionesFila: (ayuda, recargar) => [
         if (ayuda.pendiente && ayuda.idUsuario != null && ayuda.correo != null)
-          IconButton(
-            tooltip: 'Enviar credenciales al correo registrado',
-            onPressed: () => flujoAccion(
+          AccionRegistro(
+            texto: 'Enviar credenciales',
+            icono: Iconos.envelope,
+            tono: TonoBoton.celeste,
+            alPresionar: () => flujoAccion(
               context,
-              mensajeConfirmacion: 'Se generará una contraseña nueva para ${ayuda.nombreCompleto} y se enviará con '
+              mensajeConfirmacion:
+                  'Se generará una contraseña nueva para ${ayuda.nombreCompleto} y se enviará con '
                   'su usuario a ${ayuda.correo}. El mensaje quedará como atendido.',
               textoConfirmar: 'Sí, enviar',
+              tono: TonoBoton.celeste,
               accion: () async {
                 await PersonasApi(context.read<ClienteApi>()).reenviarCredenciales(ayuda.idUsuario!);
                 await api.atender(
@@ -74,12 +80,13 @@ class PantallaAyudaIngreso extends StatelessWidget {
                 avisos.actualizar();
               },
             ),
-            icon: const Icon(Iconos.envelope, size: 16, color: ColoresApp.azul),
           ),
         if (ayuda.pendiente)
-          IconButton(
-            tooltip: 'Marcar como atendido o descartado',
-            onPressed: () => flujoEditar(
+          AccionRegistro(
+            texto: 'Atender o descartar',
+            icono: Iconos.clipboardCheck,
+            tono: TonoBoton.verde,
+            alPresionar: () => flujoEditar(
               context,
               descripcion: 'el mensaje de ${ayuda.nombreCompleto}',
               formulario: _FormularioAtender(api: api, ayuda: ayuda),
@@ -89,7 +96,6 @@ class PantallaAyudaIngreso extends StatelessWidget {
                 avisos.actualizar();
               },
             ),
-            icon: const Icon(Iconos.clipboardCheck, size: 16, color: ColoresApp.exito),
           ),
       ],
     );
@@ -133,6 +139,8 @@ class _FormularioAtenderState extends State<_FormularioAtender> {
         style: const TextStyle(color: ColoresApp.textoSuave),
       ),
       DropdownButtonFormField<String>(
+        borderRadius: BorderRadius.circular(14),
+        dropdownColor: Colors.white,
         initialValue: _situacion,
         decoration: const InputDecoration(labelText: 'Resultado *'),
         items: const [

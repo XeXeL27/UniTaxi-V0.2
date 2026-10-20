@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/cliente_api.dart';
 import '../../core/menu.dart';
 import '../../core/sesion.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../personas/personas_api.dart';
 
@@ -78,46 +79,63 @@ class _TarjetaTotal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(8),
-      elevation: 1,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: () => context.go(item.ruta),
-        child: Container(
-          padding: const EdgeInsets.all(20),
-          decoration: const BoxDecoration(
-            border: Border(left: BorderSide(color: ColoresApp.rojo, width: 4)),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                alignment: Alignment.center,
-                decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(8)),
-                child: Icon(item.icono, color: Colors.white, size: 20),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(item.titulo, style: const TextStyle(color: Colors.black54)),
-                    const SizedBox(height: 4),
-                    error
-                        ? const Text('Sin datos', style: TextStyle(color: ColoresApp.rojo))
-                        : total == null
-                        ? const SizedBox(width: 60, child: LinearProgressIndicator())
-                        : Text(
-                            '$total',
-                            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ColoresApp.azul),
-                          ),
-                  ],
+    return Container(
+      decoration: Relieve.tarjeta(),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(14),
+          onTap: () => context.go(item.ruta),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Row(
+              children: [
+                Container(
+                  width: 48,
+                  height: 48,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFF2A4C85), ColoresApp.azul],
+                    ),
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: const [
+                      BoxShadow(color: Color(0x660F2A56), offset: Offset(0, 4), blurRadius: 10, spreadRadius: -3),
+                    ],
+                  ),
+                  child: Icon(item.icono, color: Colors.white, size: 20),
                 ),
-              ),
-            ],
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.titulo.toUpperCase(),
+                        style: const TextStyle(
+                          color: Relieve.tenue,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 0.6,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      error
+                          ? const Text('Sin datos', style: TextStyle(color: ColoresApp.rojo))
+                          : total == null
+                          ? const SizedBox(width: 60, child: LinearProgressIndicator())
+                          : Text(
+                              '$total',
+                              style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ColoresApp.azul),
+                            ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

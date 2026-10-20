@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/api_excepcion.dart';
+import 'modal_registro.dart';
 import 'tabla/columna_tabla.dart';
 import 'tabla/tabla_datos.dart';
 
@@ -15,11 +16,12 @@ class ListadoRemoto<T> extends StatefulWidget {
   /// Botones de la cabecera; reciben la funcion para recargar la tabla.
   final List<Widget> Function(VoidCallback recargar)? acciones;
 
-  /// Botones por fila; reciben la fila y la funcion para recargar la tabla.
-  final List<Widget> Function(T fila, VoidCallback recargar)? accionesFila;
+  /// Acciones de cada registro, arriba en el modal que abre la fila (ver [TablaDatos.accionesFila]).
+  /// [hecho] recarga la tabla y cierra el modal.
+  final List<AccionRegistro> Function(T fila, VoidCallback hecho)? accionesFila;
 
-  /// Vista propia del ojo de cada fila; recibe la fila y la funcion para recargar la tabla.
-  final void Function(T fila, VoidCallback recargar)? alVer;
+  /// Vista propia al tocar la fila; recibe la fila y la funcion para recargar la tabla.
+  final void Function(T fila, VoidCallback recargar)? alAbrir;
 
   const ListadoRemoto({
     super.key,
@@ -30,7 +32,7 @@ class ListadoRemoto<T> extends StatefulWidget {
     required this.columnas,
     this.acciones,
     this.accionesFila,
-    this.alVer,
+    this.alAbrir,
   });
 
   @override
@@ -67,7 +69,6 @@ class _ListadoRemotoState<T> extends State<ListadoRemoto<T>> {
 
   @override
   Widget build(BuildContext context) {
-    final accionesFila = widget.accionesFila;
     return TablaDatos<T>(
       titulo: widget.titulo,
       icono: widget.icono,
@@ -78,8 +79,8 @@ class _ListadoRemotoState<T> extends State<ListadoRemoto<T>> {
       error: _error,
       alRecargar: _recargar,
       acciones: widget.acciones?.call(_recargar) ?? const [],
-      accionesFila: accionesFila == null ? null : (fila) => accionesFila(fila, _recargar),
-      alVer: widget.alVer == null ? null : (fila) => widget.alVer!(fila, _recargar),
+      accionesFila: widget.accionesFila,
+      alAbrir: widget.alAbrir == null ? null : (fila) => widget.alAbrir!(fila, _recargar),
     );
   }
 }

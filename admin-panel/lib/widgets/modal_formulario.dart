@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import '../core/iconos.dart';
 
 import '../core/api_excepcion.dart';
-import '../core/tema.dart';
+import '../core/iconos.dart';
+import '../core/relieve.dart';
+import 'boton_relieve.dart';
+import 'ventana.dart';
+import 'dialogo_animado.dart';
 
 /// Estructura comun de los formularios en modal: cabecera, campos con scroll, errores del
 /// backend y botones Cancelar / Guardar. En celular ocupa toda la pantalla.
@@ -60,107 +63,57 @@ class _ModalFormularioState extends State<ModalFormulario> {
 
   @override
   Widget build(BuildContext context) {
-    final movil = Pantalla.esMovil(context);
     final contenido = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
-          decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
-          ),
-          child: Row(
-            children: [
-              Icon(widget.icono, color: ColoresApp.azul, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  widget.titulo,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ColoresApp.azul),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Cerrar',
-                onPressed: _guardando ? null : () => Navigator.of(context).pop(false),
-                icon: const Icon(Iconos.xmark, size: 18),
-              ),
-            ],
-          ),
+        CabeceraVentana(
+          icono: widget.icono,
+          titulo: widget.titulo,
+          alCerrar: _guardando ? null : () => Navigator.of(context).pop(false),
         ),
         Flexible(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: widget.claveFormulario,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  if (_error != null) _alertaError(),
-                  for (final campo in widget.campos) Padding(padding: const EdgeInsets.only(bottom: 14), child: campo),
-                ],
+          child: ColoredBox(
+            color: Colors.white,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: Form(
+                key: widget.claveFormulario,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_error != null) _alertaError(),
+                    for (final campo in widget.campos)
+                      Padding(padding: const EdgeInsets.only(bottom: 14), child: campo),
+                  ],
+                ),
               ),
             ),
           ),
         ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(
-            border: Border(top: BorderSide(color: ColoresApp.borde)),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _guardando ? null : () => Navigator.of(context).pop(false),
-                child: const Text('Cancelar'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton.icon(
-                onPressed: _guardando ? null : _guardar,
-                icon: _guardando
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                      )
-                    : const Icon(Iconos.floppyDisk, size: 14),
-                label: Text(widget.textoGuardar),
-              ),
-            ],
-          ),
+        PieVentana(
+          children: [
+            BotonRelieve(texto: 'Cancelar', alPresionar: _guardando ? null : () => Navigator.of(context).pop(false)),
+            BotonRelieve(
+              texto: widget.textoGuardar,
+              icono: Iconos.floppyDisk,
+              tono: TonoBoton.verde,
+              cargando: _guardando,
+              alPresionar: _guardar,
+            ),
+          ],
         ),
       ],
     );
-
-    if (movil) {
-      return Dialog.fullscreen(
-        backgroundColor: Colors.white,
-        child: SafeArea(child: contenido),
-      );
-    }
-    return Dialog(
-      insetPadding: const EdgeInsets.all(24),
-      clipBehavior: Clip.antiAlias,
-      child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: contenido),
-    );
+    return MarcoVentana(child: contenido);
   }
 
   Widget _alertaError() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(color: const Color(0xFFF8D7DA), borderRadius: BorderRadius.circular(6)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            _error!,
-            style: const TextStyle(color: Color(0xFF842029), fontWeight: FontWeight.w600),
-          ),
-          for (final e in _erroresCampos.entries)
-            Text('${e.key}: ${e.value}', style: const TextStyle(color: Color(0xFF842029))),
-        ],
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: AlertaRelieve.error(
+        titulo: _error!,
+        texto: _erroresCampos.entries.map((e) => '${e.key}: ${e.value}').join('\n'),
       ),
     );
   }
@@ -168,6 +121,10 @@ class _ModalFormularioState extends State<ModalFormulario> {
 
 /// Abre un formulario en modal. Devuelve el resultado del guardado, o null si se cancelo.
 Future<Object?> abrirModal(BuildContext context, Widget formulario) async {
-  final resultado = await showDialog<Object?>(context: context, barrierDismissible: false, builder: (_) => formulario);
+  final resultado = await mostrarDialogo<Object?>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => formulario,
+  );
   return resultado == false ? null : resultado;
 }

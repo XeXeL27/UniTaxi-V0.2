@@ -1,18 +1,26 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+
 import '../../core/iconos.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
 import '../../core/tema.dart';
+import '../../widgets/ventana.dart';
 import '../../widgets/archivos_web.dart';
 import '../../widgets/dialogos.dart';
 import 'expediente_api.dart';
+import '../../widgets/dialogo_animado.dart';
 
 /// Fotos del carnet (anverso y reverso) y la foto de la persona sosteniendolo, en un solo modal. Las sube
 /// la persona desde la app; solo el administrador puede verlas y cambiarlas.
-Future<void> mostrarCarnet(BuildContext context, {required ExpedienteApi api, required int idUsuario, required String nombre}) {
+Future<void> mostrarCarnet(
+  BuildContext context, {
+  required ExpedienteApi api,
+  required int idUsuario,
+  required String nombre,
+}) {
   return mostrarFotosDocumento(
     context,
     titulo: 'Carnet de $nombre',
@@ -40,10 +48,16 @@ Future<void> mostrarFotosDocumento(
   required Future<Uint8List> Function(String lado) cargar,
   Future<void> Function(String lado, ArchivoSubida archivo)? cambiar,
 }) {
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
-    builder: (_) =>
-        _ModalCarnet(titulo: titulo, icono: icono, documento: documento, lados: lados, cargar: cargar, cambiar: cambiar),
+    builder: (_) => _ModalCarnet(
+      titulo: titulo,
+      icono: icono,
+      documento: documento,
+      lados: lados,
+      cargar: cargar,
+      cambiar: cambiar,
+    ),
   );
 }
 
@@ -105,28 +119,7 @@ class _ModalCarnet extends StatelessWidget {
     ];
     final contenido = Column(
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 10, 8, 10),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
-          child: Row(
-            children: [
-              Icon(icono, color: ColoresApp.rojo, size: 18),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  titulo,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: ColoresApp.azul),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Cerrar',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Iconos.xmark, size: 18),
-              ),
-            ],
-          ),
-        ),
+        CabeceraVentana(icono: icono, titulo: titulo, alCerrar: () => Navigator.of(context).pop()),
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -169,7 +162,13 @@ class _Lado extends StatefulWidget {
   final String nombreDescarga;
   final Future<void> Function(ArchivoSubida archivo)? cambiar;
 
-  const _Lado({required this.titulo, required this.documento, required this.cargar, required this.nombreDescarga, this.cambiar});
+  const _Lado({
+    required this.titulo,
+    required this.documento,
+    required this.cargar,
+    required this.nombreDescarga,
+    this.cambiar,
+  });
 
   @override
   State<_Lado> createState() => _LadoState();
@@ -231,7 +230,10 @@ class _LadoState extends State<_Lado> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(widget.titulo, style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+                    child: Text(
+                      widget.titulo,
+                      style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+                    ),
                   ),
                   if (widget.cambiar != null)
                     TextButton.icon(
@@ -243,7 +245,9 @@ class _LadoState extends State<_Lado> {
                     ),
                   IconButton(
                     tooltip: 'Descargar',
-                    onPressed: bytes == null ? null : () => descargarArchivo(bytes, widget.nombreDescarga, 'image/jpeg'),
+                    onPressed: bytes == null
+                        ? null
+                        : () => descargarArchivo(bytes, widget.nombreDescarga, 'image/jpeg'),
                     icon: const Icon(Iconos.download, size: 16, color: ColoresApp.azul),
                   ),
                 ],

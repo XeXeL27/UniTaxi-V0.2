@@ -1,34 +1,75 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+
 import '../../core/iconos.dart';
 
 import '../../core/formato.dart';
 import '../../core/tema.dart';
 import '../../widgets/foto_usuario.dart';
+import '../../widgets/campos_ficha.dart';
+import '../../widgets/insignia_estado.dart';
+import '../../widgets/modal_registro.dart';
+import '../personas/ficha_usuario.dart';
 import '../personas/modelos.dart';
+import '../personas/personas_api.dart';
 import 'expediente_api.dart';
-import 'modal_carnet.dart';
 import 'modelos.dart';
 import 'vista_expediente.dart';
 
 /// Expediente del pasajero: todo lo que el ve en su app (datos, foto, favoritos, viajes y las
-/// calificaciones que dio), con la moderacion de sus comentarios.
-class ExpedientePasajero extends StatelessWidget {
+/// calificaciones que dio), con la moderacion de sus comentarios. Arriba van sus acciones y Editar,
+/// que vuelve editables sus datos en la primera pestana.
+class ExpedientePasajero extends StatefulWidget {
   final ExpedienteApi api;
+  final PersonasApi personasApi;
   final PasajeroAdmin pasajero;
   final VoidCallback alCambiar;
+  final List<AccionRegistro> acciones;
+  final CierreModal? cierre;
 
-  const ExpedientePasajero({super.key, required this.api, required this.pasajero, required this.alCambiar});
+  const ExpedientePasajero({
+    super.key,
+    required this.api,
+    required this.personasApi,
+    required this.pasajero,
+    required this.alCambiar,
+    this.acciones = const [],
+    this.cierre,
+  });
+
+  @override
+  State<ExpedientePasajero> createState() => _ExpedientePasajeroState();
+}
+
+class _ExpedientePasajeroState extends State<ExpedientePasajero> {
+  final _edicion = ControlEdicion();
+
+  @override
+  void dispose() {
+    _edicion.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
+    final pasajero = widget.pasajero;
+    final api = widget.api;
     final id = pasajero.idPasajero;
     return Carga<PerfilExpediente>(
       cargar: () => api.perfilPasajero(id),
-      builder: (perfil, _) => MarcoExpediente(
-        foto: FotoUsuario(nombre: perfil.nombreCompleto, radio: 30, color: ColoresApp.rojo, cargar: () => api.foto(perfil.idUsuario)),
+      builder: (perfil, recargarPerfil) => MarcoExpediente(
+        foto: FotoUsuario(
+          nombre: perfil.nombreCompleto,
+          radio: 30,
+          color: ColoresApp.rojo,
+          cargar: () => api.foto(perfil.idUsuario),
+        ),
         titulo: perfil.nombreCompleto,
         subtitulo: 'Pasajero  |  usuario ${pasajero.nombreUsuario}',
+        situacion: pasajero.situacion,
+        edicion: _edicion,
+        acciones: widget.acciones,
+        cierre: widget.cierre,
         pestanas: const [
           (Iconos.idCard, 'Datos'),
           (Iconos.solidStar, 'Favoritos'),
@@ -36,27 +77,41 @@ class ExpedientePasajero extends StatelessWidget {
           (Iconos.solidComments, 'Calificaciones dadas'),
         ],
         vistas: [
-          ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              SeccionExpediente(
-                titulo: 'Datos personales',
-                icono: Iconos.user,
-                accion: BotonVerCarnet(api: api, idUsuario: perfil.idUsuario, nombre: perfil.nombreCompleto),
-                child: DatosEnGrilla([
-                  ('Nombres', perfil.nombres),
-                  ('Apellidos', perfil.apellidos),
-                  ('Carnet de identidad', perfil.ciCompleto),
-                  ('Fecha de nacimiento', Formato.fecha(perfil.fechaNacimiento)),
-                  ('Correo', perfil.correo),
-                  ('Teléfono', perfil.telefono),
-                  ('Usuario', pasajero.nombreUsuario),
-                  ('Registrado', Formato.fechaHora(pasajero.fechaRegistro)),
-                  ('Foto de perfil', perfil.tieneFoto ? 'Subida' : 'Sin foto'),
-                  ('Calificación como pasajero', perfil.calificacionPromedio?.toStringAsFixed(2).replaceAll('.', ',')),
-                ]),
+          ListenableBuilder(
+            listenable: _edicion,
+            builder: (context, _) => SingleChildScrollView(
+              padding: const EdgeInsets.all(20),
+              child: FichaUsuario(
+                api: widget.personasApi,
+                expedienteApi: api,
+                idUsuario: pasajero.idUsuario,
+                control: _edicion,
+                editando: _edicion.editando,
+                cuentaSuspendida: pasajero.suspendida,
+                alGuardar: () {
+                  recargarPerfil();
+                  widget.alCambiar();
+                },
+                extras: [
+                  SeccionRegistro(
+                    titulo: 'Pasajero',
+                    icono: Iconos.userCheck,
+                    child: GrillaFicha(
+                      children: [
+                        DatoFicha.widget('Estudiante UAP', contenido: InsigniaEstado(pasajero.estudianteTexto)),
+                        DatoFicha('RU', pasajero.ru),
+                        DatoFicha('Registrado', Formato.fechaHora(pasajero.fechaRegistro)),
+                        DatoFicha('Foto de perfil', perfil.tieneFoto ? 'Subida' : 'Sin foto'),
+                        DatoFicha(
+                          'Calificación como pasajero',
+                          perfil.calificacionPromedio?.toStringAsFixed(2).replaceAll('.', ','),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
           Carga<List<FavoritoExpediente>>(
             cargar: () => api.favoritos(id),
@@ -77,7 +132,7 @@ class ExpedientePasajero extends StatelessWidget {
                   mostrarEmisor: false,
                   recargar: () {
                     recargar();
-                    alCambiar();
+                    widget.alCambiar();
                   },
                 ),
               ],
@@ -122,7 +177,10 @@ class _Favoritos extends StatelessWidget {
                 initialZoom: 15,
               ),
               children: [
-                TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'taxiuap.admin'),
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'taxiuap.admin',
+                ),
                 MarkerLayer(
                   markers: [
                     for (final f in conPosicion)
@@ -165,7 +223,10 @@ class _Favoritos extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(f.nombre, style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+                      Text(
+                        f.nombre,
+                        style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+                      ),
                       Text(f.direccion, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
                     ],
                   ),

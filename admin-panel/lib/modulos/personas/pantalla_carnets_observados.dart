@@ -1,16 +1,20 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
 import '../../core/formato.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/campo_fecha.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/listado_remoto.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/modal_formulario.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../expediente/expediente_api.dart';
@@ -45,22 +49,29 @@ class PantallaCarnetsObservados extends StatelessWidget {
         ColumnaTabla(titulo: 'Enviado', tipo: TipoColumna.fechaHora, valor: (c) => c.fechaObservacion),
       ],
       accionesFila: (carnet, recargar) => [
-        IconButton(
-          tooltip: 'Revisar y aprobar',
-          onPressed: () => _revisar(context, api, expedienteApi, carnet, recargar),
-          icon: const Icon(Iconos.userCheck, size: 16, color: ColoresApp.exito),
+        AccionRegistro(
+          texto: 'Revisar y aprobar',
+          icono: Iconos.userCheck,
+          tono: TonoBoton.verde,
+          alPresionar: () => _revisar(context, api, expedienteApi, carnet, recargar),
         ),
-        IconButton(
-          tooltip: 'Rechazar',
-          onPressed: () => _rechazar(context, api, carnet, recargar),
-          icon: const Icon(Iconos.userXmark, size: 16, color: ColoresApp.rojo),
+        AccionRegistro(
+          texto: 'Rechazar',
+          icono: Iconos.userXmark,
+          tono: TonoBoton.rojo,
+          alPresionar: () => _rechazar(context, api, carnet, recargar),
         ),
       ],
     );
   }
 
-  Future<void> _revisar(BuildContext context, PersonasApi api, ExpedienteApi expedienteApi, CarnetObservado carnet,
-      VoidCallback recargar) async {
+  Future<void> _revisar(
+    BuildContext context,
+    PersonasApi api,
+    ExpedienteApi expedienteApi,
+    CarnetObservado carnet,
+    VoidCallback recargar,
+  ) async {
     final resultado = await abrirModal(
       context,
       FormularioRevisionCarnet(api: api, expedienteApi: expedienteApi, carnet: carnet),
@@ -80,7 +91,8 @@ class PantallaCarnetsObservados extends StatelessWidget {
   Future<void> _rechazar(BuildContext context, PersonasApi api, CarnetObservado carnet, VoidCallback recargar) async {
     final confirmado = await confirmarAccion(
       context,
-      mensaje: 'Va a rechazar los datos de ${carnet.nombreCompleto}. Le llegará el motivo a su correo y su registro '
+      mensaje:
+          'Va a rechazar los datos de ${carnet.nombreCompleto}. Le llegará el motivo a su correo y su registro '
           'se eliminará: podrá registrarse de nuevo con fotos claras de su carnet.',
       textoConfirmar: 'Sí, rechazar',
     );
@@ -176,7 +188,11 @@ class _FormularioRevisionCarnetState extends State<FormularioRevisionCarnet> {
                 'Licencia N.º ${carnet.numeroLicencia ?? '-'}',
                 style: const TextStyle(color: ColoresApp.textoSuave),
               ),
-              BotonVerLicencia(api: widget.expedienteApi, idConductor: carnet.idConductor!, nombre: carnet.nombreCompleto),
+              BotonVerLicencia(
+                api: widget.expedienteApi,
+                idConductor: carnet.idConductor!,
+                nombre: carnet.nombreCompleto,
+              ),
             ],
           ),
         Row(
@@ -483,17 +499,16 @@ class _DatosUapState extends State<_DatosUap> {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ColoresApp.azulNeblina,
-        borderRadius: BorderRadius.circular(RadiosApp.control),
-      ),
+      decoration: BoxDecoration(color: ColoresApp.azulNeblina, borderRadius: BorderRadius.circular(RadiosApp.control)),
       child: FutureBuilder<Map<String, dynamic>>(
         future: _datos,
         builder: (context, instantanea) {
           final d = instantanea.data;
           if (instantanea.hasError) {
-            return Text('RU ${widget.ru}: no se pudo consultar el SIGSE (${instantanea.error}).',
-                style: const TextStyle(color: ColoresApp.rojo));
+            return Text(
+              'RU ${widget.ru}: no se pudo consultar el SIGSE (${instantanea.error}).',
+              style: const TextStyle(color: ColoresApp.rojo),
+            );
           }
           if (d == null) return const LinearProgressIndicator();
           final fecha = Formato.leerFecha(d['fechaNacimiento']);
@@ -501,13 +516,17 @@ class _DatosUapState extends State<_DatosUap> {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Datos de la UAP (RU ${widget.ru})',
-                  style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+              Text(
+                'Datos de la UAP (RU ${widget.ru})',
+                style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+              ),
               const SizedBox(height: 6),
               Text('${texto('nombres')} ${texto('apellidos')}', style: const TextStyle(fontWeight: FontWeight.w600)),
               Text('CI ${texto('ci')}  |  Nacimiento ${Formato.fecha(fecha)}'),
-              Text('${texto('carrera')}  |  ${texto('periodo')}  |  '
-                  '${d['matriculado'] == true ? 'Matriculado' : 'NO matriculado'}'),
+              Text(
+                '${texto('carrera')}  |  ${texto('periodo')}  |  '
+                '${d['matriculado'] == true ? 'Matriculado' : 'NO matriculado'}',
+              ),
               Text('Correo de la UAP: ${texto('correo')}', style: const TextStyle(color: ColoresApp.textoSuave)),
             ],
           );

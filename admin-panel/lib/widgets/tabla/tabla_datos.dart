@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 
 import '../../core/formato.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
+import '../boton_relieve.dart';
+import '../campos_ficha.dart';
 import '../insignia_estado.dart';
+import '../modal_registro.dart';
 import '../notificaciones.dart';
 import 'columna_tabla.dart';
 import 'exportador.dart';
@@ -16,9 +20,9 @@ import 'iconos_tabla.dart';
 /// Las filas van numeradas (N° 1..N sobre la lista filtrada y ordenada) y se ordenan con el menu
 /// "Ordenar" (A-Z / Z-A, mas reciente / mas antiguo, menor / mayor) o con clic en el encabezado.
 ///
-/// Es responsive: las columnas se reparten el ancho disponible y, si no entran todas, se ocultan las
-/// de la derecha. El ojo de la columna Acciones abre un modal con todos los datos del registro. La
-/// columna de acciones siempre queda visible.
+/// Es responsive y nunca se desplaza de costado: las columnas se reparten el ancho disponible y, si no
+/// entran todas, se ocultan las de la derecha. No hay columna de acciones: la fila entera se levanta al
+/// pasar el mouse y un clic (o toque) abre el registro con todos sus datos y sus acciones arriba.
 class TablaDatos<T> extends StatefulWidget {
   final String titulo;
   final IconData icono;
@@ -31,12 +35,14 @@ class TablaDatos<T> extends StatefulWidget {
   /// Botones de la cabecera de la tarjeta (por ejemplo "Agregar").
   final List<Widget> acciones;
 
-  /// Botones por fila (editar, eliminar, etc.). Si es null no hay columna de acciones.
-  final List<Widget> Function(T fila)? accionesFila;
+  /// Acciones de cada registro (editar, eliminar, etc.): van arriba, en la cabecera del modal que se
+  /// abre al tocar la fila. [hecho] recarga la tabla y cierra ese modal; se llama cuando la accion se
+  /// realizo.
+  final List<AccionRegistro> Function(T fila, VoidCallback hecho)? accionesFila;
 
-  /// Si se indica, el ojo de la columna Acciones abre esta vista (por ejemplo el expediente de un
-  /// conductor) en lugar del modal generico con los datos de la fila.
-  final void Function(T fila)? alVer;
+  /// Si se indica, tocar la fila abre esta vista (el registro con edicion, el expediente de un
+  /// conductor...) en lugar del modal generico con los datos de la fila.
+  final void Function(T fila)? alAbrir;
 
   /// Nombre base de los archivos exportados (sin extension).
   final String nombreArchivo;
@@ -53,7 +59,7 @@ class TablaDatos<T> extends StatefulWidget {
     this.alRecargar,
     this.acciones = const [],
     this.accionesFila,
-    this.alVer,
+    this.alAbrir,
   });
 
   @override
@@ -62,12 +68,6 @@ class TablaDatos<T> extends StatefulWidget {
 
 class _TablaDatosState<T> extends State<TablaDatos<T>> {
   static const _opcionesPorPagina = [10, 25, 50, 100];
-
-  /// Ancho de cada boton de accion por fila (IconButton) mas margen.
-  static const _anchoPorAccion = 42.0;
-
-  /// En tablas angostas (celular) los botones de acciones son compactos.
-  static const _anchoPorAccionCompacta = 34.0;
 
   /// Bajo este ancho la tabla usa celdas y botones compactos.
   static const _anchoCompacta = 560.0;
@@ -184,19 +184,6 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     }
   }
 
-  /// Ancho de la columna de acciones: el ojo mas los botones de la primera fila.
-  double _anchoAcciones(List<T> filas, {required bool compacta}) {
-    final accionesFila = widget.accionesFila;
-    final cantidad = 1 + (accionesFila == null || filas.isEmpty ? 0 : accionesFila(filas.first).length);
-    // Nunca mas angosta que el titulo "Acciones".
-    if (compacta) {
-      final ancho = cantidad * _anchoPorAccionCompacta + 8;
-      return ancho < 90 ? 90 : ancho;
-    }
-    final ancho = cantidad * _anchoPorAccion + 24;
-    return ancho < 100 ? 100 : ancho;
-  }
-
   /// Texto de cada sentido de orden segun el tipo de dato de la columna.
   static (String, String) _textosOrden(TipoColumna tipo) => switch (tipo) {
     TipoColumna.fecha || TipoColumna.fechaHora => ('Más antiguo primero', 'Más reciente primero'),
@@ -214,12 +201,8 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     final movil = Pantalla.esMovil(context);
 
     return Container(
-      padding: EdgeInsets.all(movil ? 14 : 24),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
-        boxShadow: const [BoxShadow(color: Color(0x0D000000), blurRadius: 10, offset: Offset(0, 2))],
-      ),
+      padding: EdgeInsets.all(movil ? 14 : 22),
+      decoration: Relieve.tarjeta(radio: 16),
       child: LayoutBuilder(
         builder: (context, restricciones) {
           final compacta = restricciones.maxWidth < _anchoCompacta;
@@ -227,7 +210,6 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
             columnas: widget.columnas,
             // Se descuenta el borde exterior de la tabla (1 px por lado).
             anchoDisponible: restricciones.maxWidth - 2,
-            anchoAcciones: _anchoAcciones(widget.filas, compacta: compacta),
             compacta: compacta,
           );
 
@@ -237,9 +219,39 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
               _cabecera(),
               const SizedBox(height: 16),
               _barraHerramientas(visibles, movil),
-              if (_mostrarFiltros) ...[const SizedBox(height: 12), _panelFiltros(movil)],
+              // El panel de filtros se despliega y se recoge con animacion.
+              AnimatedSize(
+                duration: const Duration(milliseconds: 320),
+                curve: Curves.easeOutCubic,
+                alignment: Alignment.topCenter,
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 260),
+                  transitionBuilder: (hijo, animacion) => FadeTransition(
+                    opacity: animacion,
+                    child: SlideTransition(
+                      position: animacion.drive(Tween(begin: const Offset(0, -0.06), end: Offset.zero)),
+                      child: hijo,
+                    ),
+                  ),
+                  child: _mostrarFiltros
+                      ? Padding(
+                          key: const ValueKey('filtros'),
+                          padding: const EdgeInsets.only(top: 12),
+                          child: _panelFiltros(movil),
+                        )
+                      : const SizedBox(key: ValueKey('sin-filtros'), width: double.infinity),
+                ),
+              ),
               const SizedBox(height: 12),
-              if (widget.cargando) const LinearProgressIndicator(color: ColoresApp.rojo, minHeight: 3),
+              if (widget.cargando)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 6),
+                  child: LinearProgressIndicator(
+                    color: ColoresApp.rojo,
+                    minHeight: 3,
+                    borderRadius: BorderRadius.all(Radius.circular(2)),
+                  ),
+                ),
               if (widget.error != null)
                 _mensajeError(widget.error!)
               else if (filasPagina.isEmpty)
@@ -265,11 +277,22 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(widget.icono, color: ColoresApp.azul, size: 20),
-            const SizedBox(width: 10),
+            Container(
+              width: 38,
+              height: 38,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                gradient: Relieve.levantado,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Relieve.linea),
+                boxShadow: Relieve.sombraLevantado,
+              ),
+              child: Icon(widget.icono, color: ColoresApp.azul, size: 18),
+            ),
+            const SizedBox(width: 12),
             Text(
               widget.titulo,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: ColoresApp.azul),
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: ColoresApp.azul),
             ),
           ],
         ),
@@ -317,10 +340,10 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
         ),
         _menuOrden(),
         if (widget.alRecargar != null)
-          IconButton(
-            tooltip: 'Recargar',
-            onPressed: widget.cargando ? null : widget.alRecargar,
-            icon: IconosTabla.recargar,
+          BotonRelieve(
+            icono: IconosTabla.recargar.icon,
+            ayuda: 'Recargar',
+            alPresionar: widget.cargando ? null : widget.alRecargar,
           ),
         _grupoExportar(visibles),
       ],
@@ -338,6 +361,12 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
 
     return PopupMenuButton<(int, bool)?>(
       tooltip: 'Ordenar los registros',
+      popUpAnimationStyle: const AnimationStyle(
+        curve: Curves.easeOutBack,
+        duration: Duration(milliseconds: 380),
+        reverseCurve: Curves.easeIn,
+        reverseDuration: Duration(milliseconds: 160),
+      ),
       onSelected: (opcion) => setState(() {
         if (opcion == null) {
           _columnaOrden = null;
@@ -381,39 +410,27 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     );
   }
 
-  /// Botones de exportacion agrupados (Excel | CSV | PDF), fondo azul marino y texto blanco.
+  /// Botones de exportacion: Excel en verde, CSV en turquesa y PDF en rojo (el color de cada formato).
   Widget _grupoExportar(List<T> visibles) {
-    Widget boton(String texto, Widget icono, FormatoExportacion formato, BorderRadius radio) {
-      return Tooltip(
-        message: 'Exportar lo que se ve en la tabla a $texto',
-        child: FilledButton.icon(
-          onPressed: _exportando ? null : () => _exportar(formato, visibles),
-          style: FilledButton.styleFrom(
-            backgroundColor: ColoresApp.azul,
-            foregroundColor: Colors.white,
-            disabledBackgroundColor: ColoresApp.azul.withValues(alpha: 0.5),
-            disabledForegroundColor: Colors.white70,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: radio),
-          ),
-          icon: icono,
-          label: Text(texto),
-        ),
-      );
-    }
+    Widget boton(String texto, IconData? icono, FormatoExportacion formato, TonoBoton tono) => BotonRelieve(
+      texto: texto,
+      icono: icono,
+      tono: tono,
+      ayuda: 'Exportar lo que se ve en la tabla a $texto',
+      alPresionar: _exportando ? null : () => _exportar(formato, visibles),
+    );
 
-    const radio = Radius.circular(6);
-    return Row(
-      mainAxisSize: MainAxisSize.min,
+    return Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      crossAxisAlignment: WrapCrossAlignment.center,
       children: [
-        boton('Excel', IconosTabla.excel, FormatoExportacion.excel, const BorderRadius.horizontal(left: radio)),
-        Container(width: 1, height: 36, color: Colors.white),
-        boton('CSV', IconosTabla.csv, FormatoExportacion.csv, BorderRadius.zero),
-        Container(width: 1, height: 36, color: Colors.white),
-        boton('PDF', IconosTabla.pdf, FormatoExportacion.pdf, const BorderRadius.horizontal(right: radio)),
+        boton('Excel', IconosTabla.excel.icon, FormatoExportacion.excel, TonoBoton.excel),
+        boton('CSV', IconosTabla.csv.icon, FormatoExportacion.csv, TonoBoton.turquesa),
+        boton('PDF', IconosTabla.pdf.icon, FormatoExportacion.pdf, TonoBoton.pdf),
         if (_exportando)
           const Padding(
-            padding: EdgeInsets.only(left: 8),
+            padding: EdgeInsets.only(left: 4, top: 12),
             child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
           ),
       ],
@@ -424,11 +441,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     return Container(
       key: ValueKey(_generacionFiltros),
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: ColoresApp.fondo,
-        borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: ColoresApp.borde),
-      ),
+      decoration: Relieve.panelHundido(radio: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -509,6 +522,8 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
             columna.opciones ??
             (widget.filas.map((f) => columna.valor(f)?.toString()).whereType<String>().toSet().toList()..sort());
         return DropdownButtonFormField<String?>(
+          borderRadius: BorderRadius.circular(14),
+          dropdownColor: Colors.white,
           initialValue: actual is FiltroEstado ? actual.seleccionado : null,
           isExpanded: true,
           decoration: InputDecoration(labelText: columna.titulo),
@@ -579,15 +594,19 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 32),
       alignment: Alignment.center,
-      decoration: BoxDecoration(
-        border: Border.all(color: ColoresApp.borde),
-        borderRadius: BorderRadius.circular(6),
+      decoration: Relieve.panelHundido(radio: 12),
+      child: Text(
+        widget.cargando
+            ? 'Cargando...'
+            : (_busqueda.isNotEmpty || _filtrosActivos > 0
+                  ? 'Ningún registro coincide con la búsqueda o los filtros'
+                  : 'No hay registros'),
+        style: const TextStyle(color: Relieve.tenue),
       ),
-      child: Text(widget.cargando ? 'Cargando...' : 'No hay registros', style: const TextStyle(color: Colors.black54)),
     );
   }
 
-  /// Tabla con bordes entre celdas: N°, columnas visibles y acciones (con el ojo para ver el detalle).
+  /// Tabla con bordes entre celdas: N° y las columnas visibles. Cada fila se puede tocar.
   ///
   /// Rendimiento: las filas no se miden con IntrinsicHeight; las lineas verticales del cuerpo se
   /// dibujan una sola vez encima de todas las filas.
@@ -599,11 +618,18 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
       x += ancho;
       separadores.add(x);
     }
+    // Sin linea despues de la ultima columna: llega hasta el borde derecho.
+    if (separadores.isNotEmpty) separadores.removeLast();
     return Container(
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
-        border: Border.all(color: ColoresApp.borde),
-        borderRadius: BorderRadius.circular(6),
+        color: Colors.white,
+        border: Border.all(color: Relieve.linea),
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: const [
+          BoxShadow(color: Relieve.sombraSuave, offset: Offset(0, 1), blurRadius: 2),
+          BoxShadow(color: Relieve.sombra, offset: Offset(0, 10), blurRadius: 24, spreadRadius: -14),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -614,7 +640,15 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  for (var f = 0; f < filasPagina.length; f++) _filaDatos(filasPagina[f], inicio + f + 1, f, diseno),
+                  for (var f = 0; f < filasPagina.length; f++)
+                    _FilaTabla(
+                      // Clave por pagina: al cambiar de pagina las filas vuelven a entrar.
+                      key: ValueKey('${inicio + f}'),
+                      indice: f,
+                      alterna: f.isOdd,
+                      alTocar: () => _abrir(filasPagina[f], inicio + f + 1),
+                      child: _filaDatos(filasPagina[f], inicio + f + 1, diseno),
+                    ),
                 ],
               ),
               for (final posicion in separadores)
@@ -638,7 +672,13 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     const borde = Color(0x33FFFFFF);
     const estilo = TextStyle(color: Colors.white, fontWeight: FontWeight.w700);
     return Container(
-      color: ColoresApp.azul,
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [Color(0xFF213F72), ColoresApp.azul],
+        ),
+      ),
       child: IntrinsicHeight(
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -654,17 +694,11 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
             for (var v = 0; v < diseno.visibles.length; v++)
               _contenedorCelda(
                 ancho: diseno.anchos[v],
-                bordeDerecho: true,
+                bordeDerecho: v < diseno.visibles.length - 1,
                 colorBorde: borde,
                 compacta: diseno.compacta,
                 child: _encabezado(diseno.visibles[v], columnas[diseno.visibles[v]]),
               ),
-            _contenedorCelda(
-              ancho: diseno.anchoAcciones,
-              bordeDerecho: false,
-              compacta: diseno.compacta,
-              child: const Text('Acciones', style: estilo, maxLines: 1, overflow: TextOverflow.ellipsis),
-            ),
           ],
         ),
       ),
@@ -699,170 +733,68 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
     );
   }
 
-  Widget _filaDatos(T fila, int numero, int posicion, _DisenoTabla diseno) {
-    final accionesFila = widget.accionesFila;
-    return Container(
-      decoration: BoxDecoration(
-        color: posicion.isOdd ? ColoresApp.filaAlterna : Colors.white,
-        border: const Border(top: BorderSide(color: ColoresApp.borde)),
-      ),
-      child: Row(
-        children: [
-          _contenedorCelda(
-            ancho: diseno.anchoNumero,
-            bordeDerecho: false,
-            alineacion: Alignment.center,
-            compacta: diseno.compacta,
-            child: Text(
-              '$numero',
-              maxLines: 1,
-              style: const TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.azul),
-            ),
-          ),
-          for (var v = 0; v < diseno.visibles.length; v++)
-            _contenedorCelda(
-              ancho: diseno.anchos[v],
-              bordeDerecho: false,
-              compacta: diseno.compacta,
-              child: _celda(widget.columnas[diseno.visibles[v]], fila, unaLinea: true),
-            ),
-          _contenedorCelda(
-            ancho: diseno.anchoAcciones,
-            bordeDerecho: false,
-            relleno: const EdgeInsets.symmetric(horizontal: 4),
-            child: _botonesAcciones(fila, numero, accionesFila, compacta: diseno.compacta),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// El ojo y las acciones de la fila en una sola linea: en tablas angostas los botones son
-  /// compactos, y si aun asi no entran se achican en vez de pasar a otra linea.
-  Widget _botonesAcciones(
-    T fila,
-    int numero,
-    List<Widget> Function(T fila)? accionesFila, {
-    required bool compacta,
-  }) {
-    final botones = Row(
-      mainAxisSize: MainAxisSize.min,
+  Widget _filaDatos(T fila, int numero, _DisenoTabla diseno) {
+    return Row(
       children: [
-        IconButton(
-          tooltip: widget.alVer == null ? 'Ver todos los datos' : 'Ver más',
-          onPressed: () => widget.alVer == null ? _mostrarDetalle(fila, numero) : widget.alVer!(fila),
-          icon: IconosTabla.ojo,
+        _contenedorCelda(
+          ancho: diseno.anchoNumero,
+          bordeDerecho: false,
+          alineacion: Alignment.center,
+          compacta: diseno.compacta,
+          child: Text(
+            '$numero',
+            maxLines: 1,
+            style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+          ),
         ),
-        if (accionesFila != null) ...accionesFila(fila),
+        for (var v = 0; v < diseno.visibles.length; v++)
+          _contenedorCelda(
+            ancho: diseno.anchos[v],
+            bordeDerecho: false,
+            compacta: diseno.compacta,
+            child: _celda(widget.columnas[diseno.visibles[v]], fila, unaLinea: true),
+          ),
       ],
     );
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerLeft,
-      child: compacta
-          ? IconButtonTheme(
-              data: IconButtonThemeData(
-                style: IconButton.styleFrom(
-                  padding: EdgeInsets.zero,
-                  minimumSize: const Size(_anchoPorAccionCompacta, _anchoPorAccionCompacta),
-                  fixedSize: const Size(_anchoPorAccionCompacta, _anchoPorAccionCompacta),
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  visualDensity: VisualDensity.compact,
-                ),
-              ),
-              child: botones,
-            )
-          : botones,
-    );
   }
 
-  /// Modal con todos los datos del registro (el ojo de la columna Acciones).
+  void _abrir(T fila, int numero) {
+    final alAbrir = widget.alAbrir;
+    if (alAbrir != null) {
+      alAbrir(fila);
+    } else {
+      _mostrarDetalle(fila, numero);
+    }
+  }
+
+  /// Modal con todos los datos del registro y, arriba, sus acciones.
   Future<void> _mostrarDetalle(T fila, int numero) {
-    return showDialog<void>(
-      context: context,
-      builder: (context) {
-        final movil = Pantalla.esMovil(context);
-        final contenido = Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Container(
-              padding: const EdgeInsets.fromLTRB(20, 16, 8, 16),
-              decoration: const BoxDecoration(
-                border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(widget.icono, color: ColoresApp.azul, size: 18),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      '${widget.titulo} - registro N° $numero',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600, color: ColoresApp.azul),
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: 'Cerrar',
-                    onPressed: () => Navigator.of(context).pop(),
-                    icon: IconosTabla.limpiar,
-                  ),
-                ],
-              ),
-            ),
-            Flexible(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    for (var i = 0; i < widget.columnas.length; i++)
-                      Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        decoration: BoxDecoration(
-                          border: i == 0 ? null : const Border(top: BorderSide(color: ColoresApp.borde)),
-                        ),
-                        child: Row(
-                          children: [
-                            SizedBox(
-                              width: movil ? 110 : 150,
-                              child: Text(
-                                widget.columnas[i].titulo,
-                                style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
-                              ),
-                            ),
-                            Expanded(child: _celda(widget.columnas[i], fila, vacio: '-')),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: const BoxDecoration(
-                border: Border(top: BorderSide(color: ColoresApp.borde)),
-              ),
-              alignment: Alignment.centerRight,
-              child: FilledButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: FilledButton.styleFrom(backgroundColor: ColoresApp.azul),
-                child: const Text('Cerrar'),
-              ),
-            ),
-          ],
-        );
-        if (movil) {
-          return Dialog.fullscreen(
-            backgroundColor: Colors.white,
-            child: SafeArea(child: contenido),
+    final cierre = CierreModal();
+    void hecho() {
+      widget.alRecargar?.call();
+      cierre.cerrar();
+    }
+
+    return abrirRegistro(
+      context,
+      ModalRegistro(
+        icono: widget.icono,
+        titulo: widget.titulo,
+        subtitulo: 'Registro N° $numero',
+        acciones: widget.accionesFila?.call(fila, hecho) ?? const [],
+        cierre: cierre,
+        contenido: (contexto, _) {
+          return GrillaFicha(
+            children: [
+              for (final columna in widget.columnas)
+                columna.celda != null || columna.tipo == TipoColumna.estado
+                    ? DatoFicha.widget(columna.titulo, contenido: _celda(columna, fila, vacio: 'Sin dato'))
+                    : DatoFicha(columna.titulo, columna.texto(fila)),
+            ],
           );
-        }
-        return Dialog(
-          clipBehavior: Clip.antiAlias,
-          child: ConstrainedBox(constraints: const BoxConstraints(maxWidth: 560), child: contenido),
-        );
-      },
+        },
+      ),
+      anchoMaximo: 720,
     );
   }
 
@@ -877,7 +809,8 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
   }) {
     return Container(
       width: ancho,
-      padding: relleno ??
+      padding:
+          relleno ??
           (compacta
               ? const EdgeInsets.symmetric(horizontal: 8, vertical: 11)
               : const EdgeInsets.symmetric(horizontal: 12, vertical: 12)),
@@ -898,9 +831,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
       final valor = columna.valor(fila)?.toString();
       if (valor == null) return Text(vacio);
       final insignia = Align(alignment: Alignment.centerLeft, child: InsigniaEstado(valor));
-      return unaLinea
-          ? FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: insignia)
-          : insignia;
+      return unaLinea ? FittedBox(fit: BoxFit.scaleDown, alignment: Alignment.centerLeft, child: insignia) : insignia;
     }
     final texto = columna.texto(fila);
     if (!unaLinea || texto.isEmpty) return Text(texto.isEmpty ? vacio : texto);
@@ -989,13 +920,121 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
   }
 }
 
+/// Fila de datos que se puede tocar: con el mouse encima se levanta (sube 1 px, toma el degradado de
+/// lo levantado, una barra azul a la izquierda y su sombra) y el cursor pasa a ser la mano.
+class _FilaTabla extends StatefulWidget {
+  final int indice;
+  final bool alterna;
+  final VoidCallback alTocar;
+  final Widget child;
+
+  const _FilaTabla({
+    super.key,
+    required this.indice,
+    required this.alterna,
+    required this.alTocar,
+    required this.child,
+  });
+
+  @override
+  State<_FilaTabla> createState() => _FilaTablaState();
+}
+
+class _FilaTablaState extends State<_FilaTabla> with SingleTickerProviderStateMixin {
+  bool _encima = false;
+  bool _presionada = false;
+
+  /// Entrada de la fila: aparece subiendo 8 px, cada una 30 ms despues de la anterior.
+  late final AnimationController _entrada = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 320),
+  );
+
+  @override
+  void initState() {
+    super.initState();
+    Future.delayed(Duration(milliseconds: 30 * widget.indice), () {
+      if (mounted) _entrada.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _entrada.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final levantada = _encima && !_presionada;
+    final entrada = CurvedAnimation(parent: _entrada, curve: Curves.easeOutCubic);
+    return FadeTransition(
+      opacity: entrada,
+      child: SlideTransition(
+        position: entrada.drive(Tween(begin: const Offset(0, 0.18), end: Offset.zero)),
+        child: _fila(levantada),
+      ),
+    );
+  }
+
+  Widget _fila(bool levantada) {
+    return Semantics(
+      button: true,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _encima = true),
+        onExit: (_) => setState(() {
+          _encima = false;
+          _presionada = false;
+        }),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTapDown: (_) => setState(() => _presionada = true),
+          onTapCancel: () => setState(() => _presionada = false),
+          onTapUp: (_) => setState(() => _presionada = false),
+          onTap: widget.alTocar,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
+            transform: Matrix4.translationValues(0, levantada ? -1 : 0, 0),
+            decoration: BoxDecoration(
+              gradient: levantada
+                  ? const LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [Color(0xFFFFFFFF), Color(0xFFEAF0FB)],
+                    )
+                  : null,
+              color: levantada
+                  ? null
+                  : _presionada
+                  ? const Color(0xFFE3E9F4)
+                  : (widget.alterna ? ColoresApp.filaAlterna : Colors.white),
+              border: Border(
+                top: BorderSide(color: levantada ? Colors.white : Relieve.lineaSuave),
+                left: BorderSide(color: levantada ? TonoBoton.azul.color! : Colors.transparent, width: 3),
+              ),
+              boxShadow: levantada
+                  ? const [
+                      BoxShadow(color: Relieve.sombra, offset: Offset(0, 3), blurRadius: 8, spreadRadius: -2),
+                      BoxShadow(color: Relieve.sombraSuave, offset: Offset(0, -1), blurRadius: 3),
+                    ]
+                  : const [],
+            ),
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Que columnas entran en pantalla y con que ancho. Si no entran todas se ocultan las de la
-/// derecha (la primera siempre queda). La columna N° y la de acciones tienen ancho fijo.
+/// derecha (la primera siempre queda). La columna N° tiene ancho fijo.
 class _DisenoTabla {
   final List<int> visibles;
   final List<int> ocultas;
   final List<double> anchos;
-  final double anchoAcciones;
 
   /// Ancho de la columna N°: mas angosta en tablas compactas (celular).
   final double anchoNumero;
@@ -1003,16 +1042,15 @@ class _DisenoTabla {
   /// Tabla angosta: celdas con menos relleno y botones de acciones compactos.
   final bool compacta;
 
-  const _DisenoTabla(this.visibles, this.ocultas, this.anchos, this.anchoAcciones, this.anchoNumero, this.compacta);
+  const _DisenoTabla(this.visibles, this.ocultas, this.anchos, this.anchoNumero, this.compacta);
 
   static _DisenoTabla calcular<T>({
     required List<ColumnaTabla<T>> columnas,
     required double anchoDisponible,
-    required double anchoAcciones,
     required bool compacta,
   }) {
     final anchoNumero = compacta ? 42.0 : 56.0;
-    final fijo = anchoNumero + anchoAcciones;
+    final fijo = anchoNumero;
     final visibles = <int>[];
     var usado = fijo;
     for (var i = 0; i < columnas.length; i++) {
@@ -1038,6 +1076,6 @@ class _DisenoTabla {
     if (sumaAnchos > anchoDisponible && anchos.isNotEmpty) {
       anchos[0] = (anchos[0] - (sumaAnchos - anchoDisponible)).clamp(60.0, double.infinity);
     }
-    return _DisenoTabla(visibles, ocultas, anchos, anchoAcciones, anchoNumero, compacta);
+    return _DisenoTabla(visibles, ocultas, anchos, anchoNumero, compacta);
   }
 }

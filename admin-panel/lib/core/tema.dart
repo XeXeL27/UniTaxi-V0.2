@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'relieve.dart';
+
 /// Colores institucionales del panel: azul tinta para la estructura y rojo vivo como acento.
 class ColoresApp {
   static const Color azul = Color(0xFF0F2A56);
@@ -7,13 +9,13 @@ class ColoresApp {
   static const Color azulNeblina = Color(0xFFE8EEF7);
   static const Color rojo = Color(0xFFD92D4E);
   static const Color rojoOscuro = Color(0xFFB4123A);
-  static const Color fondo = Color(0xFFF5F7FA);
+  static const Color fondo = Relieve.fondo;
   static const Color superficie = Color(0xFFFFFFFF);
-  static const Color entrada = Color(0xFFF8FAFC);
+  static const Color entrada = Color(0xFFEEF1F5);
   static const Color texto = Color(0xFF16202E);
-  static const Color textoSuave = Color(0xFF5A6B80);
-  static const Color borde = Color(0xFFE2E8F1);
-  static const Color filaAlterna = Color(0xFFFAFBFD);
+  static const Color textoSuave = Relieve.tenue;
+  static const Color borde = Relieve.lineaSuave;
+  static const Color filaAlterna = Relieve.superficie;
   static const Color exito = Color(0xFF12805C);
 }
 
@@ -55,7 +57,7 @@ ThemeData crearTema() {
     surface: ColoresApp.superficie,
   ).copyWith(error: ColoresApp.rojo, onError: Colors.white);
 
-  final base = ThemeData(useMaterial3: true, colorScheme: esquema);
+  final base = ThemeData(useMaterial3: true, colorScheme: esquema, fontFamily: 'PlusJakarta');
 
   return base.copyWith(
     scaffoldBackgroundColor: ColoresApp.fondo,
@@ -63,41 +65,31 @@ ThemeData crearTema() {
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
       fillColor: ColoresApp.entrada,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
       hintStyle: const TextStyle(color: ColoresApp.textoSuave),
       labelStyle: const TextStyle(color: ColoresApp.textoSuave, fontWeight: FontWeight.w500),
-      border: _bordeCampo(ColoresApp.borde),
-      enabledBorder: _bordeCampo(ColoresApp.borde),
-      focusedBorder: _bordeCampo(ColoresApp.azulClaro, 1.6),
+      border: _bordeCampo(Relieve.linea),
+      enabledBorder: _bordeCampo(Relieve.linea),
+      focusedBorder: _bordeCampo(TonoBoton.azul.color!, 1.6),
       errorBorder: _bordeCampo(ColoresApp.rojo),
       focusedErrorBorder: _bordeCampo(ColoresApp.rojo, 1.6),
     ),
-    filledButtonTheme: FilledButtonThemeData(
-      style: FilledButton.styleFrom(
-        backgroundColor: ColoresApp.rojo,
-        foregroundColor: Colors.white,
-        disabledBackgroundColor: ColoresApp.rojo.withValues(alpha: 0.45),
-        elevation: 4,
-        shadowColor: ColoresApp.rojo.withValues(alpha: 0.35),
-        minimumSize: const Size(0, 50),
-        textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.2),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(RadiosApp.campo)),
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
-      ),
-    ),
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
+    // Todos los botones del panel con el estilo relieve: FilledButton es la accion principal (azul
+    // UNITAXI) y OutlinedButton la secundaria (neutra). Para otro color: BotonRelieve o estiloRelieve.
+    filledButtonTheme: FilledButtonThemeData(style: estiloRelieve(TonoBoton.marino)),
+    outlinedButtonTheme: OutlinedButtonThemeData(style: estiloRelieve(TonoBoton.neutro)),
+    textButtonTheme: TextButtonThemeData(
+      style: TextButton.styleFrom(
         foregroundColor: ColoresApp.azul,
-        side: const BorderSide(color: ColoresApp.borde),
+        textStyle: const TextStyle(fontWeight: FontWeight.w600),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(RadiosApp.campo)),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       ),
     ),
     dialogTheme: DialogThemeData(
-      backgroundColor: ColoresApp.superficie,
+      backgroundColor: const Color(0xFFF8F9FB),
       surfaceTintColor: Colors.transparent,
-      elevation: 10,
-      shadowColor: ColoresApp.azul.withValues(alpha: 0.18),
+      elevation: 12,
+      shadowColor: Relieve.sombra,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(RadiosApp.tarjeta)),
     ),
     cardTheme: CardThemeData(
@@ -111,10 +103,26 @@ ThemeData crearTema() {
       behavior: SnackBarBehavior.floating,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(RadiosApp.control)),
     ),
-    popupMenuTheme: const PopupMenuThemeData(
-      color: ColoresApp.superficie,
+    // Menus desplegables (Ordenar, listas de opciones) levantados: blancos, con borde y sombra marcada.
+    popupMenuTheme: PopupMenuThemeData(
+      color: Colors.white,
       surfaceTintColor: Colors.transparent,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(RadiosApp.control))),
+      elevation: 14,
+      shadowColor: const Color(0x661F2733),
+      menuPadding: const EdgeInsets.symmetric(vertical: 6),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Relieve.linea),
+      ),
+    ),
+    tooltipTheme: TooltipThemeData(
+      decoration: BoxDecoration(
+        color: const Color(0xF21F2733),
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: const [BoxShadow(color: Color(0x401F2733), offset: Offset(0, 4), blurRadius: 10)],
+      ),
+      textStyle: const TextStyle(color: Colors.white, fontSize: 12.5, fontWeight: FontWeight.w500),
+      waitDuration: const Duration(milliseconds: 350),
     ),
     datePickerTheme: const DatePickerThemeData(
       backgroundColor: ColoresApp.superficie,

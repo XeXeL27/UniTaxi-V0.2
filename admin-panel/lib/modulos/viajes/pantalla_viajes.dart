@@ -5,8 +5,10 @@ import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
 import '../../core/formato.dart';
 import '../../core/iconos.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/listado_remoto.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import '../entregas/detalle_entrega.dart';
 import '../expediente/modelos.dart';
@@ -14,14 +16,7 @@ import '../expediente/vista_expediente.dart';
 import 'modelos.dart';
 import 'viajes_api.dart';
 
-const _situaciones = [
-  'CONFIRMADO',
-  'CONDUCTOR_EN_CAMINO',
-  'CONDUCTOR_LLEGO',
-  'EN_CURSO',
-  'COMPLETADO',
-  'CANCELADO',
-];
+const _situaciones = ['CONFIRMADO', 'CONDUCTOR_EN_CAMINO', 'CONDUCTOR_LLEGO', 'EN_CURSO', 'COMPLETADO', 'CANCELADO'];
 
 /// Todos los viajes de taxi y pedidos de delivery, con filtros que se aplican en el servidor: servicio,
 /// tipo de usuario (pasajero: lo que pidio; conductor de taxi: los viajes que hizo; repartidor: los
@@ -132,7 +127,11 @@ class _PantallaViajesState extends State<PantallaViajes> {
                   ),
                   columnas: [
                     ColumnaTabla(titulo: 'Viaje', tipo: TipoColumna.numero, valor: (v) => v.id),
-                    ColumnaTabla(titulo: 'Pedido', tipo: TipoColumna.fechaHora, valor: (v) => v.fechaSolicitud ?? v.fecha),
+                    ColumnaTabla(
+                      titulo: 'Pedido',
+                      tipo: TipoColumna.fechaHora,
+                      valor: (v) => v.fechaSolicitud ?? v.fecha,
+                    ),
                     ColumnaTabla(
                       titulo: 'Servicio',
                       tipo: TipoColumna.estado,
@@ -142,7 +141,8 @@ class _PantallaViajesState extends State<PantallaViajes> {
                     ColumnaTabla(
                       titulo: 'Pasajero / cliente',
                       proporcion: 1.6,
-                      valor: (v) => v.nombreTercero == null ? v.nombrePasajero : '${v.nombrePasajero} (para ${v.nombreTercero})',
+                      valor: (v) =>
+                          v.nombreTercero == null ? v.nombrePasajero : '${v.nombrePasajero} (para ${v.nombreTercero})',
                     ),
                     ColumnaTabla(titulo: 'Conductor / repartidor', proporcion: 1.6, valor: (v) => v.nombreConductor),
                     ColumnaTabla(
@@ -160,15 +160,20 @@ class _PantallaViajesState extends State<PantallaViajes> {
                   ],
                   accionesFila: (viaje, _) => [
                     if (viaje.entrega != null)
-                      IconButton(
-                        tooltip: 'Ver entrega (confirmaciones y fotos)',
-                        onPressed: () => mostrarEntrega(context, viaje),
-                        icon: const Icon(Iconos.paquete, size: 16, color: ColoresApp.azul),
+                      AccionRegistro(
+                        texto: 'Ver entrega',
+                        icono: Iconos.paquete,
+                        tono: TonoBoton.turquesa,
+                        alPresionar: () => mostrarEntrega(context, viaje),
                       ),
-                    IconButton(
-                      tooltip: 'Ver ruta',
-                      onPressed: viaje.origen == null || viaje.destino == null ? null : () => mostrarRutaViaje(context, viaje),
-                      icon: const Icon(Iconos.route, size: 16, color: ColoresApp.azul),
+                    AccionRegistro(
+                      texto: 'Ver ruta',
+                      icono: Iconos.route,
+                      tono: TonoBoton.azul,
+                      motivo: 'El viaje no tiene los dos puntos',
+                      alPresionar: viaje.origen == null || viaje.destino == null
+                          ? null
+                          : () => mostrarRutaViaje(context, viaje),
                     ),
                   ],
                 ),
@@ -197,13 +202,18 @@ class _PantallaViajesState extends State<PantallaViajes> {
               SizedBox(
                 width: ancho,
                 child: DropdownButtonFormField<TipoUsuarioViajes>(
+                  borderRadius: BorderRadius.circular(14),
+                  dropdownColor: Colors.white,
                   key: ValueKey('tipo$_version'),
                   initialValue: _tipo,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Tipo de usuario', isDense: true),
                   items: [
                     for (final t in TipoUsuarioViajes.values)
-                      DropdownMenuItem(value: t, child: Text(t.texto, overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(
+                        value: t,
+                        child: Text(t.texto, overflow: TextOverflow.ellipsis),
+                      ),
                   ],
                   onChanged: (t) => t == null ? null : _cambiarTipo(t),
                 ),
@@ -211,14 +221,14 @@ class _PantallaViajesState extends State<PantallaViajes> {
               SizedBox(
                 width: ancho,
                 child: DropdownButtonFormField<ServicioViajes>(
+                  borderRadius: BorderRadius.circular(14),
+                  dropdownColor: Colors.white,
                   // Conductor de taxi y repartidor fijan el servicio.
                   key: ValueKey('servicio$_version${_tipo.codigo}'),
                   initialValue: _servicio,
                   isExpanded: true,
                   decoration: const InputDecoration(labelText: 'Servicio', isDense: true),
-                  items: [
-                    for (final s in ServicioViajes.values) DropdownMenuItem(value: s, child: Text(s.texto)),
-                  ],
+                  items: [for (final s in ServicioViajes.values) DropdownMenuItem(value: s, child: Text(s.texto))],
                   onChanged: _servicioFijo ? null : (s) => setState(() => _servicio = s ?? _servicio),
                 ),
               ),

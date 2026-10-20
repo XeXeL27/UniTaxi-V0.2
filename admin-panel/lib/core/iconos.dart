@@ -20,6 +20,7 @@ class Iconos {
   static const IconData camera = CupertinoIcons.camera;
   static const IconData paquete = CupertinoIcons.cube_box;
   static const IconData check = CupertinoIcons.checkmark;
+  static const IconData chevronDown = CupertinoIcons.chevron_down;
   static const IconData chevronLeft = CupertinoIcons.chevron_left;
   static const IconData chevronRight = CupertinoIcons.chevron_right;
   static const IconData circle = CupertinoIcons.circle_fill;

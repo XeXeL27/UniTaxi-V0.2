@@ -13,6 +13,7 @@ import '../expediente/modelos.dart';
 import '../expediente/vista_expediente.dart';
 import 'entregas_api.dart';
 import 'pantalla_entregas.dart';
+import '../../widgets/dialogo_animado.dart';
 
 /// Detalle de un pedido DELIVERY: datos, cada confirmacion del repartidor con su hora y GPS, y las
 /// fotos que confirman la recogida y la entrega. Bajo 600 px ocupa toda la pantalla.
@@ -20,7 +21,7 @@ Future<void> mostrarEntrega(BuildContext context, ViajeExpediente viaje) {
   final api = EntregasApi(context.read<ClienteApi>());
   final tamano = MediaQuery.sizeOf(context);
   final detalle = _DetalleEntrega(api: api, viaje: viaje);
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
     builder: (_) => tamano.width < 600
         ? Dialog.fullscreen(child: detalle)
@@ -159,9 +160,12 @@ class _Titulo extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 8),
-        child: Text(texto, style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul, fontSize: 15)),
-      );
+    padding: const EdgeInsets.only(bottom: 8),
+    child: Text(
+      texto,
+      style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul, fontSize: 15),
+    ),
+  );
 }
 
 /// Una confirmacion: hecha (con su hora y el GPS donde se confirmo) o pendiente.
@@ -192,7 +196,10 @@ class _Paso extends StatelessWidget {
           Expanded(
             child: Text(
               texto,
-              style: TextStyle(color: hecho ? ColoresApp.texto : ColoresApp.textoSuave, fontWeight: hecho ? FontWeight.w600 : FontWeight.normal),
+              style: TextStyle(
+                color: hecho ? ColoresApp.texto : ColoresApp.textoSuave,
+                fontWeight: hecho ? FontWeight.w600 : FontWeight.normal,
+              ),
             ),
           ),
           if (gps != null && hecho)
@@ -200,7 +207,10 @@ class _Paso extends StatelessWidget {
               padding: const EdgeInsets.only(right: 14),
               child: Text(gps, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
             ),
-          Text(hecho ? Formato.fechaHora(fecha) : 'Pendiente', style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
+          Text(
+            hecho ? Formato.fechaHora(fecha) : 'Pendiente',
+            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+          ),
         ],
       ),
     );
@@ -222,7 +232,7 @@ class _TarjetaFotoState extends State<_TarjetaFoto> {
   late final Future<Uint8List> _foto = widget.cargar();
 
   void _ampliar(Uint8List foto) {
-    showDialog<void>(
+    mostrarDialogo<void>(
       context: context,
       builder: (contexto) => Dialog(
         backgroundColor: Colors.black,
@@ -247,30 +257,30 @@ class _TarjetaFotoState extends State<_TarjetaFoto> {
 
   @override
   Widget build(BuildContext context) => SizedBox(
-        width: 250,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(widget.titulo, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
-            const SizedBox(height: 6),
-            FutureBuilder<Uint8List>(
-              future: _foto,
-              builder: (_, estado) {
-                if (estado.hasError) {
-                  return const SizedBox(height: 200, child: Center(child: Text('No se pudo cargar la foto')));
-                }
-                final foto = estado.data;
-                if (foto == null) return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
-                return InkWell(
-                  onTap: () => _ampliar(foto),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(RadiosApp.control),
-                    child: Image.memory(foto, height: 200, width: 250, fit: BoxFit.cover),
-                  ),
-                );
-              },
-            ),
-          ],
+    width: 250,
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(widget.titulo, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13)),
+        const SizedBox(height: 6),
+        FutureBuilder<Uint8List>(
+          future: _foto,
+          builder: (_, estado) {
+            if (estado.hasError) {
+              return const SizedBox(height: 200, child: Center(child: Text('No se pudo cargar la foto')));
+            }
+            final foto = estado.data;
+            if (foto == null) return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+            return InkWell(
+              onTap: () => _ampliar(foto),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(RadiosApp.control),
+                child: Image.memory(foto, height: 200, width: 250, fit: BoxFit.cover),
+              ),
+            );
+          },
         ),
-      );
+      ],
+    ),
+  );
 }

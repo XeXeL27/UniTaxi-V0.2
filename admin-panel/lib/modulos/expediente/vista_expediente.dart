@@ -2,37 +2,56 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/formato.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/insignia_estado.dart';
+import '../../widgets/modal_registro.dart';
+import '../../widgets/ventana.dart';
 import '../entregas/detalle_entrega.dart';
 import 'expediente_api.dart';
 import 'modelos.dart';
+import '../../widgets/dialogo_animado.dart';
 
 /// Abre un expediente (conductor o pasajero) en un modal grande; en pantallas angostas ocupa todo.
+/// Con la edicion abierta no se cierra al tocar fuera (se cierra con la X, que avisa si hay cambios).
 Future<void> abrirExpediente(BuildContext context, Widget expediente) {
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
+    barrierDismissible: false,
+    barrierColor: const Color(0x661F2733),
     builder: (context) {
       if (Pantalla.esMovil(context)) return Dialog.fullscreen(child: expediente);
       final tamano = MediaQuery.sizeOf(context);
       return Dialog(
         insetPadding: const EdgeInsets.all(24),
         clipBehavior: Clip.antiAlias,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(RadiosApp.tarjeta)),
-        child: SizedBox(width: tamano.width > 1180 ? 1100 : tamano.width - 48, height: tamano.height * 0.88, child: expediente),
+        backgroundColor: Relieve.superficie,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: const BorderSide(color: Relieve.linea),
+        ),
+        child: SizedBox(
+          width: tamano.width > 1180 ? 1100 : tamano.width - 48,
+          height: tamano.height * 0.9,
+          child: expediente,
+        ),
       );
     },
   );
 }
 
-/// Cabecera con la foto y el nombre, y las pestanas del expediente.
+/// Cabecera con la foto, el nombre, las acciones (arriba, como en el modal de cada registro) y las
+/// pestanas del expediente. Con [edicion], el boton Editar pasa a la primera pestana (los datos) y
+/// los vuelve editables ahi mismo.
 class MarcoExpediente extends StatelessWidget {
   final Widget foto;
   final String titulo;
@@ -40,6 +59,9 @@ class MarcoExpediente extends StatelessWidget {
   final String? situacion;
   final List<(IconData, String)> pestanas;
   final List<Widget> vistas;
+  final ControlEdicion? edicion;
+  final List<AccionRegistro> acciones;
+  final CierreModal? cierre;
 
   const MarcoExpediente({
     super.key,
@@ -49,74 +71,153 @@ class MarcoExpediente extends StatelessWidget {
     this.situacion,
     required this.pestanas,
     required this.vistas,
+    this.edicion,
+    this.acciones = const [],
+    this.cierre,
   });
+
+  Future<void> _cerrar(BuildContext context) async {
+    if (await puedeCerrarEdicion(context, edicion) && context.mounted) Navigator.of(context).pop();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
+    cierre?.recordar(context);
+    final movil = Pantalla.esMovil(context);
+    final conBotones = edicion != null || acciones.isNotEmpty;
+    final marco = DefaultTabController(
       length: pestanas.length,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            color: ColoresApp.azul,
-            padding: const EdgeInsets.fromLTRB(20, 16, 8, 0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Row(
-                  children: [
-                    foto,
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            titulo,
-                            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(subtitulo, style: TextStyle(color: Colors.white.withValues(alpha: 0.8))),
-                        ],
-                      ),
-                    ),
-                    if (situacion != null) InsigniaEstado(situacion!),
-                    IconButton(
-                      tooltip: 'Cerrar',
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Iconos.xmark, color: Colors.white, size: 18),
-                    ),
-                  ],
+      child: Builder(
+        builder: (context) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF203E70), ColoresApp.azul],
                 ),
-                const SizedBox(height: 10),
-                TabBar(
-                  isScrollable: true,
-                  tabAlignment: TabAlignment.start,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white70,
-                  indicatorColor: ColoresApp.rojo,
-                  indicatorWeight: 3,
-                  dividerColor: Colors.transparent,
-                  tabs: [
-                    for (final (icono, texto) in pestanas)
-                      Tab(
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [Icon(icono, size: 14, color: Colors.white70), const SizedBox(width: 8), Text(texto)],
+                boxShadow: [BoxShadow(color: Relieve.sombra, offset: Offset(0, 3), blurRadius: 8)],
+              ),
+              padding: EdgeInsets.fromLTRB(movil ? 14 : 20, 14, 8, 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Row(
+                    children: [
+                      foto,
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              titulo,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w700),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              subtitulo,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: Colors.white.withValues(alpha: 0.8)),
+                            ),
+                          ],
                         ),
                       ),
+                      if (situacion != null && !movil) InsigniaEstado(situacion!),
+                      IconButton(
+                        tooltip: 'Cerrar',
+                        onPressed: () => _cerrar(context),
+                        icon: const Icon(Iconos.xmark, color: Colors.white, size: 18),
+                      ),
+                    ],
+                  ),
+                  if (conBotones) ...[
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: BotonesRegistro(
+                        edicion: edicion,
+                        acciones: acciones,
+                        antesDeEditar: () => DefaultTabController.of(context).animateTo(0),
+                      ),
+                    ),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  TabBar(
+                    isScrollable: true,
+                    tabAlignment: TabAlignment.start,
+                    labelColor: Colors.white,
+                    unselectedLabelColor: Colors.white70,
+                    indicatorColor: ColoresApp.rojo,
+                    indicatorWeight: 3,
+                    dividerColor: Colors.transparent,
+                    tabs: [
+                      for (final (icono, texto) in pestanas)
+                        Tab(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icono, size: 14, color: Colors.white70),
+                              const SizedBox(width: 8),
+                              Text(texto),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
             ),
-          ),
-          Expanded(
-            child: ColoredBox(color: ColoresApp.fondo, child: TabBarView(children: vistas)),
-          ),
-        ],
+            Expanded(
+              child: ColoredBox(
+                color: ColoresApp.fondo,
+                // Cada pestana se conserva al cambiar de pestana: no vuelve a cargar y no se pierde lo que
+                // se estaba editando en los datos.
+                child: TabBarView(children: [for (final vista in vistas) _MantenerVivo(child: vista)]),
+              ),
+            ),
+          ],
+        ),
       ),
     );
+    final control = edicion;
+    if (control == null) return marco;
+    return ListenableBuilder(
+      listenable: control,
+      builder: (context, hijo) => PopScope(
+        canPop: !control.hayCambios && !control.guardando,
+        onPopInvokedWithResult: (cerrado, _) {
+          if (!cerrado) _cerrar(context);
+        },
+        child: hijo!,
+      ),
+      child: marco,
+    );
+  }
+}
+
+class _MantenerVivo extends StatefulWidget {
+  final Widget child;
+
+  const _MantenerVivo({required this.child});
+
+  @override
+  State<_MantenerVivo> createState() => _MantenerVivoState();
+}
+
+class _MantenerVivoState extends State<_MantenerVivo> with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    return widget.child;
   }
 }
 
@@ -175,11 +276,7 @@ class SeccionExpediente extends StatelessWidget {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: ColoresApp.superficie,
-        borderRadius: BorderRadius.circular(RadiosApp.tarjeta),
-        border: Border.all(color: ColoresApp.borde),
-      ),
+      decoration: Relieve.tarjeta(),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -188,7 +285,15 @@ class SeccionExpediente extends StatelessWidget {
               Icon(icono, size: 15, color: ColoresApp.rojo),
               const SizedBox(width: 10),
               Expanded(
-                child: Text(titulo, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+                child: Text(
+                  titulo.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.7,
+                    color: Relieve.tenue,
+                  ),
+                ),
               ),
               ?accion,
             ],
@@ -211,7 +316,11 @@ class DatosEnGrilla extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, restricciones) {
-        final columnas = restricciones.maxWidth > 700 ? 3 : restricciones.maxWidth > 420 ? 2 : 1;
+        final columnas = restricciones.maxWidth > 700
+            ? 3
+            : restricciones.maxWidth > 420
+            ? 2
+            : 1;
         final ancho = (restricciones.maxWidth - (columnas - 1) * 16) / columnas;
         return Wrap(
           spacing: 16,
@@ -223,7 +332,10 @@ class DatosEnGrilla extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(etiqueta, style: const TextStyle(fontSize: 12, color: ColoresApp.textoSuave, fontWeight: FontWeight.w600)),
+                    Text(
+                      etiqueta,
+                      style: const TextStyle(fontSize: 12, color: ColoresApp.textoSuave, fontWeight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 2),
                     Text(
                       valor == null || valor.isEmpty ? 'Sin dato' : valor,
@@ -252,7 +364,9 @@ class Vacio extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 30),
-      child: Center(child: Text(texto, style: const TextStyle(color: ColoresApp.textoSuave))),
+      child: Center(
+        child: Text(texto, style: const TextStyle(color: ColoresApp.textoSuave)),
+      ),
     );
   }
 }
@@ -311,12 +425,12 @@ class ListaViajes extends StatelessWidget {
                           ),
                           const SizedBox(width: 10),
                           InsigniaEstado(viaje.situacion),
-                          if (viaje.entrega != null) ...[
-                            const SizedBox(width: 6),
-                            const _EtiquetaEntrega(),
-                          ],
+                          if (viaje.entrega != null) ...[const SizedBox(width: 6), const _EtiquetaEntrega()],
                           const Spacer(),
-                          Text(Formato.fechaHora(viaje.fecha), style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
+                          Text(
+                            Formato.fechaHora(viaje.fecha),
+                            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                          ),
                         ],
                       ),
                       const SizedBox(height: 8),
@@ -331,7 +445,8 @@ class ListaViajes extends StatelessWidget {
                           if (viaje.nombreTercero != null)
                             'Para ${viaje.nombreTercero}${viaje.telefonoTercero == null ? '' : ' (${viaje.telefonoTercero})'}, '
                                 '${viaje.pagaSolicitante ? 'pagó quien lo pidió' : 'pagó quien viajó'}',
-                          if (viaje.canceladoPor != null) 'Cancelado por ${Formato.enumTexto(viaje.canceladoPor).toLowerCase()}',
+                          if (viaje.canceladoPor != null)
+                            'Cancelado por ${Formato.enumTexto(viaje.canceladoPor).toLowerCase()}',
                         ].join('   |   '),
                         style: const TextStyle(fontSize: 13, color: ColoresApp.texto),
                       ),
@@ -344,7 +459,9 @@ class ListaViajes extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     OutlinedButton.icon(
-                      onPressed: viaje.origen == null || viaje.destino == null ? null : () => mostrarRutaViaje(context, viaje),
+                      onPressed: viaje.origen == null || viaje.destino == null
+                          ? null
+                          : () => mostrarRutaViaje(context, viaje),
                       icon: const Icon(Iconos.route, size: 14),
                       label: const Text('Ver ruta'),
                     ),
@@ -372,10 +489,13 @@ class _EtiquetaEntrega extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(6)),
-        child: const Text('Entrega', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(6)),
+    child: const Text(
+      'Entrega',
+      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+    ),
+  );
 }
 
 class _Lugar extends StatelessWidget {
@@ -391,10 +511,19 @@ class _Lugar extends StatelessWidget {
       padding: const EdgeInsets.only(top: 3),
       child: Row(
         children: [
-          Container(width: 10, height: 10, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
           const SizedBox(width: 8),
-          SizedBox(width: 44, child: Text(etiqueta, style: const TextStyle(fontSize: 12.5, color: ColoresApp.textoSuave))),
-          Expanded(child: Text(texto, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5))),
+          SizedBox(
+            width: 44,
+            child: Text(etiqueta, style: const TextStyle(fontSize: 12.5, color: ColoresApp.textoSuave)),
+          ),
+          Expanded(
+            child: Text(texto, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 13.5)),
+          ),
         ],
       ),
     );
@@ -404,13 +533,17 @@ class _Lugar extends StatelessWidget {
 /// Mapa del viaje: punto de partida (azul), destino (rojo) y la ruta por calles (OSRM); si el
 /// servicio de rutas no responde se dibuja la linea recta punteada.
 Future<void> mostrarRutaViaje(BuildContext context, ViajeExpediente viaje) {
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
     builder: (context) => Dialog(
       insetPadding: const EdgeInsets.all(24),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(RadiosApp.tarjeta)),
-      child: SizedBox(width: 820, height: MediaQuery.sizeOf(context).height * 0.8, child: _MapaViaje(viaje: viaje)),
+      child: SizedBox(
+        width: 820,
+        height: MediaQuery.sizeOf(context).height * 0.8,
+        child: _MapaViaje(viaje: viaje),
+      ),
     ),
   );
 }
@@ -440,13 +573,19 @@ class _MapaViajeState extends State<_MapaViaje> {
     final b = widget.viaje.destino!;
     try {
       final respuesta = await http
-          .get(Uri.parse('https://router.project-osrm.org/route/v1/driving/'
-              '${a.longitude},${a.latitude};${b.longitude},${b.latitude}?overview=full&geometries=geojson'))
+          .get(
+            Uri.parse(
+              'https://router.project-osrm.org/route/v1/driving/'
+              '${a.longitude},${a.latitude};${b.longitude},${b.latitude}?overview=full&geometries=geojson',
+            ),
+          )
           .timeout(const Duration(seconds: 10));
       final json = jsonDecode(respuesta.body) as Map<String, dynamic>;
       final coordenadas = ((json['routes'] as List).first['geometry']['coordinates'] as List);
       if (mounted) {
-        setState(() => _ruta = [for (final c in coordenadas) LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())]);
+        setState(
+          () => _ruta = [for (final c in coordenadas) LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())],
+        );
         // Con la ruta cargada se encuadra el recorrido completo, no solo A y B.
         _mapa.fitCamera(CameraFit.coordinates(coordinates: [..._ruta!, a, b], padding: const EdgeInsets.all(50)));
       }
@@ -468,26 +607,10 @@ class _MapaViajeState extends State<_MapaViaje> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Container(
-          padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
-          decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
-          child: Row(
-            children: [
-              const Icon(Iconos.route, color: ColoresApp.azul, size: 16),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  'Ruta del viaje #${v.id}${_aproximada ? ' (aproximada)' : ''}',
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: ColoresApp.azul),
-                ),
-              ),
-              IconButton(
-                tooltip: 'Cerrar',
-                onPressed: () => Navigator.of(context).pop(),
-                icon: const Icon(Iconos.xmark, size: 18),
-              ),
-            ],
-          ),
+        CabeceraVentana(
+          icono: Iconos.route,
+          titulo: 'Ruta del viaje #${v.id}${_aproximada ? ' (aproximada)' : ''}',
+          alCerrar: () => Navigator.of(context).pop(),
         ),
         Expanded(
           child: FlutterMap(
@@ -497,7 +620,10 @@ class _MapaViajeState extends State<_MapaViaje> {
               interactionOptions: const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
             ),
             children: [
-              TileLayer(urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', userAgentPackageName: 'taxiuap.admin'),
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'taxiuap.admin',
+              ),
               if (_ruta != null)
                 PolylineLayer(
                   polylines: [
@@ -505,14 +631,26 @@ class _MapaViajeState extends State<_MapaViaje> {
                       points: _ruta!,
                       strokeWidth: 5,
                       color: const Color(0xFF1A73E8),
-                      pattern: _aproximada ? StrokePattern.dashed(segments: const [12, 8]) : const StrokePattern.solid(),
+                      pattern: _aproximada
+                          ? StrokePattern.dashed(segments: const [12, 8])
+                          : const StrokePattern.solid(),
                     ),
                   ],
                 ),
               MarkerLayer(
                 markers: [
-                  Marker(point: a, width: 30, height: 30, child: const _Punto(letra: 'A', color: ColoresApp.azul)),
-                  Marker(point: b, width: 30, height: 30, child: const _Punto(letra: 'B', color: ColoresApp.rojo)),
+                  Marker(
+                    point: a,
+                    width: 30,
+                    height: 30,
+                    child: const _Punto(letra: 'A', color: ColoresApp.azul),
+                  ),
+                  Marker(
+                    point: b,
+                    width: 30,
+                    height: 30,
+                    child: const _Punto(letra: 'B', color: ColoresApp.rojo),
+                  ),
                 ],
               ),
             ],
@@ -542,8 +680,15 @@ class _Punto extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       alignment: Alignment.center,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 3)),
-      child: Text(letra, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 3),
+      ),
+      child: Text(
+        letra,
+        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
     );
   }
 }
@@ -566,7 +711,11 @@ class Estrellas extends StatelessWidget {
           Padding(
             padding: const EdgeInsets.only(right: 2),
             child: Icon(
-              valor >= i ? Iconos.solidStar : valor >= i - 0.5 ? Iconos.starHalfStroke : Iconos.star,
+              valor >= i
+                  ? Iconos.solidStar
+                  : valor >= i - 0.5
+                  ? Iconos.starHalfStroke
+                  : Iconos.star,
               color: const Color(0xFFF5A623),
               size: tamano,
             ),
@@ -604,7 +753,9 @@ class ListaCalificaciones extends StatelessWidget {
     try {
       await api.quitarComentario(c.id);
       recargar();
-      if (context.mounted) await mostrarEliminado(context, titulo: 'Comentario eliminado', mensaje: 'El comentario ya no se muestra.');
+      if (context.mounted) {
+        await mostrarEliminado(context, titulo: 'Comentario eliminado', mensaje: 'El comentario ya no se muestra.');
+      }
     } on ApiExcepcion catch (e) {
       if (context.mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
@@ -613,7 +764,8 @@ class ListaCalificaciones extends StatelessWidget {
   Future<void> _eliminar(BuildContext context, CalificacionExpediente c) async {
     final confirmado = await confirmarAccion(
       context,
-      mensaje: 'Va a eliminar la calificación de ${c.puntuacion} estrellas de ${c.nombreEmisor}. '
+      mensaje:
+          'Va a eliminar la calificación de ${c.puntuacion} estrellas de ${c.nombreEmisor}. '
           'El promedio del conductor se recalculará.',
       textoConfirmar: 'Sí, eliminar',
     );
@@ -621,7 +773,9 @@ class ListaCalificaciones extends StatelessWidget {
     try {
       await api.eliminarCalificacion(c.id);
       recargar();
-      if (context.mounted) await mostrarEliminado(context, titulo: 'Calificación eliminada', mensaje: 'La calificación ya no cuenta.');
+      if (context.mounted) {
+        await mostrarEliminado(context, titulo: 'Calificación eliminada', mensaje: 'La calificación ya no cuenta.');
+      }
     } on ApiExcepcion catch (e) {
       if (context.mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }

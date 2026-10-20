@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../core/api_excepcion.dart';
@@ -7,6 +9,7 @@ import '../../core/cliente_api.dart';
 import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 import 'sistema_api.dart';
+import '../../widgets/dialogo_animado.dart';
 
 /// Carpeta raiz donde se guardan los archivos subidos (PDF de conductores y fotos de perfil).
 /// Cada persona tiene su carpeta dentro (personas/&lt;id&gt;_&lt;ci&gt;, con general/ y conductor/).
@@ -23,14 +26,15 @@ class _PantallaCarpetaState extends State<PantallaCarpeta> {
   bool _moviendo = false;
 
   Future<void> _cambiar(CarpetaArchivos actual) async {
-    final elegida = await showDialog<String>(
+    final elegida = await mostrarDialogo<String>(
       context: context,
       builder: (_) => _ExploradorCarpetas(api: _api, inicial: actual.ruta),
     );
     if (elegida == null || elegida == actual.ruta || !mounted) return;
     final confirmado = await confirmarAccion(
       context,
-      mensaje: 'Va a usar "$elegida" como carpeta de archivos. Se moverán ahí los ${actual.cantidadArchivos} '
+      mensaje:
+          'Va a usar "$elegida" como carpeta de archivos. Se moverán ahí los ${actual.cantidadArchivos} '
           'archivos (${actual.tamanoLegible}) que hoy están en "${actual.ruta}".',
       textoConfirmar: 'Sí, mover',
     );
@@ -107,7 +111,11 @@ class _PantallaCarpetaState extends State<PantallaCarpeta> {
                             children: [
                               SelectableText(
                                 carpeta.ruta,
-                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: ColoresApp.texto),
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                  color: ColoresApp.texto,
+                                ),
                               ),
                               const SizedBox(height: 6),
                               Text(
@@ -186,7 +194,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
     final actual = _listado;
     if (actual == null) return;
     final nombre = TextEditingController();
-    final creado = await showDialog<String>(
+    final creado = await mostrarDialogo<String>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Nueva carpeta'),
@@ -221,7 +229,9 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
           children: [
             Container(
               padding: const EdgeInsets.fromLTRB(20, 14, 8, 14),
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3))),
+              decoration: const BoxDecoration(
+                border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
+              ),
               child: Row(
                 children: [
                   const Icon(Iconos.folderTree, color: ColoresApp.azul, size: 18),
@@ -274,7 +284,9 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
               child: listado == null
                   ? const SizedBox.shrink()
                   : listado.carpetas.isEmpty
-                  ? const Center(child: Text('Esta carpeta no tiene subcarpetas.', style: TextStyle(color: ColoresApp.textoSuave)))
+                  ? const Center(
+                      child: Text('Esta carpeta no tiene subcarpetas.', style: TextStyle(color: ColoresApp.textoSuave)),
+                    )
                   : ListView(
                       children: [
                         for (final (nombre, ruta) in listado.carpetas)
@@ -288,7 +300,9 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
             ),
             Container(
               padding: const EdgeInsets.all(14),
-              decoration: const BoxDecoration(border: Border(top: BorderSide(color: ColoresApp.borde))),
+              decoration: const BoxDecoration(
+                border: Border(top: BorderSide(color: ColoresApp.borde)),
+              ),
               child: Row(
                 children: [
                   Expanded(

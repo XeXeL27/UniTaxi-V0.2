@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
+
 import '../../core/iconos.dart';
+
 import 'package:provider/provider.dart';
 
 import '../../core/cliente_api.dart';
 import '../../core/formato.dart';
-import '../../core/tema.dart';
+import '../../core/relieve.dart';
 import '../../widgets/campo_fecha.dart';
+import '../../widgets/campos_ficha.dart';
+import '../../widgets/dialogos.dart';
 import '../../widgets/flujos_crud.dart';
 import '../../widgets/insignia_estado.dart';
 import '../../widgets/listado_remoto.dart';
 import '../../widgets/modal_formulario.dart';
+import '../../widgets/modal_registro.dart';
+import '../../widgets/notificaciones.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import 'formulario_habilitar_usuario.dart';
 import 'modelos.dart';
@@ -56,43 +62,271 @@ class PantallaPersonas extends StatelessWidget {
           label: const Text('Agregar persona'),
         ),
       ],
-      accionesFila: (persona, recargar) => [
-        IconButton(
-          tooltip: 'Habilitar usuario',
-          onPressed: TipoRegistro.disponiblesPara(persona).isEmpty
-              ? null
-              : () => flujoCrear(
-                  context,
-                  formulario: FormularioHabilitarUsuario(api: api, persona: persona),
-                  tituloExito: '¡Usuario habilitado!',
-                  mensajeExito: (resultado) => (resultado as UsuarioHabilitado).mensaje,
-                  alTerminar: recargar,
+      alAbrir: (persona, recargar) => _abrir(context, api, persona, recargar),
+    );
+  }
+
+  /// Modal de la persona: sus datos se editan ahi mismo (Editar) y arriba van sus acciones.
+  Future<void> _abrir(BuildContext context, PersonasApi api, Persona persona, VoidCallback recargar) {
+    final edicion = ControlEdicion();
+    final cierre = CierreModal();
+    void hecho() {
+      recargar();
+      cierre.cerrar();
+    }
+
+    return abrirRegistro(
+      context,
+      ModalRegistro(
+        icono: Iconos.idCard,
+        titulo: persona.nombreCompleto,
+        subtitulo: persona.ciCompleto.isEmpty ? 'Persona' : 'Persona  |  CI ${persona.ciCompleto}',
+        edicion: edicion,
+        cierre: cierre,
+        acciones: [
+          AccionRegistro(
+            texto: 'Habilitar usuario',
+            icono: Iconos.userGear,
+            tono: TonoBoton.verde,
+            motivo: 'Ya tiene todas las cuentas que se pueden crear',
+            alPresionar: TipoRegistro.disponiblesPara(persona).isEmpty
+                ? null
+                : () => flujoCrear(
+                    context,
+                    formulario: FormularioHabilitarUsuario(api: api, persona: persona),
+                    tituloExito: '¡Usuario habilitado!',
+                    mensajeExito: (resultado) => (resultado as UsuarioHabilitado).mensaje,
+                    alTerminar: hecho,
+                  ),
+          ),
+          AccionRegistro(
+            texto: 'Eliminar',
+            icono: Iconos.trashCan,
+            tono: TonoBoton.rojo,
+            alPresionar: () => flujoEliminar(
+              context,
+              descripcion: 'a ${persona.nombreCompleto} y todos sus usuarios',
+              eliminar: () => api.eliminarPersona(persona.idPersona),
+              mensajeEliminado: 'Se eliminó el registro de ${persona.nombreCompleto}.',
+              alTerminar: hecho,
+            ),
+          ),
+        ],
+        contenido: (_, editando) =>
+            FichaPersona(api: api, persona: persona, control: edicion, editando: editando, alGuardar: recargar),
+      ),
+      anchoMaximo: 760,
+    );
+  }
+}
+
+/// Datos de una persona editables en el mismo lugar (los de sus cuentas se ven en Usuarios).
+class FichaPersona extends StatefulWidget {
+  final PersonasApi api;
+  final Persona persona;
+  final ControlEdicion control;
+  final bool editando;
+  final VoidCallback alGuardar;
+
+  const FichaPersona({
+    super.key,
+    required this.api,
+    required this.persona,
+    required this.control,
+    required this.editando,
+    required this.alGuardar,
+  });
+
+  @override
+  State<FichaPersona> createState() => _FichaPersonaState();
+}
+
+class _FichaPersonaState extends State<FichaPersona> {
+  final _formulario = GlobalKey<FormState>();
+  final _ci = TextEditingController();
+  final _complemento = TextEditingController();
+  final _nombres = TextEditingController();
+  final _apellidos = TextEditingController();
+  final _correo = TextEditingController();
+  final _telefono = TextEditingController();
+  late Persona _p = widget.persona;
+  DateTime? _nacimiento;
+
+  List<TextEditingController> get _controles => [_ci, _complemento, _nombres, _apellidos, _correo, _telefono];
+
+  @override
+  void initState() {
+    super.initState();
+    _llenar();
+    widget.control.vincular(guardar: _guardar, descartar: () => setState(_llenar), hayCambios: () => _cambios);
+  }
+
+  @override
+  void dispose() {
+    widget.control.desvincular();
+    for (final control in _controles) {
+      control.dispose();
+    }
+    super.dispose();
+  }
+
+  void _llenar() {
+    _ci.text = _p.ci ?? '';
+    _complemento.text = _p.complementoCi ?? '';
+    _nombres.text = _p.nombres.toUpperCase();
+    _apellidos.text = _p.apellidos.toUpperCase();
+    _correo.text = _p.correo ?? '';
+    _telefono.text = _p.telefono ?? '';
+    _nacimiento = _p.fechaNacimiento;
+  }
+
+  static String _t(String? texto) => texto?.trim() ?? '';
+
+  bool get _cambios =>
+      _t(_ci.text) != _t(_p.ci) ||
+      _t(_complemento.text) != _t(_p.complementoCi) ||
+      _t(_nombres.text) != _p.nombres.toUpperCase() ||
+      _t(_apellidos.text) != _p.apellidos.toUpperCase() ||
+      _t(_correo.text) != _t(_p.correo) ||
+      _t(_telefono.text) != _t(_p.telefono) ||
+      _nacimiento != _p.fechaNacimiento;
+
+  Future<bool> _guardar() async {
+    if (!(_formulario.currentState?.validate() ?? false)) {
+      mostrarMensaje(context, 'Revise los campos marcados en rojo', error: true);
+      return false;
+    }
+    if (!_cambios) {
+      mostrarMensaje(context, 'No hay cambios para guardar');
+      return true;
+    }
+    final confirmado = await confirmarAccion(
+      context,
+      mensaje: 'Va a guardar los cambios de ${_p.nombreCompleto}.',
+      textoConfirmar: 'Sí, guardar',
+      tono: TonoBoton.verde,
+    );
+    if (!confirmado || !mounted) return false;
+    await widget.api.actualizarPersona(_p.idPersona, {
+      'ci': _t(_ci.text),
+      'complementoCi': _t(_complemento.text),
+      'nombres': _t(_nombres.text),
+      'apellidos': _t(_apellidos.text),
+      'fechaNacimiento': Formato.fechaIso(_nacimiento),
+      'correo': _t(_correo.text),
+      'telefono': _t(_telefono.text),
+    });
+    if (!mounted) return true;
+    setState(() {
+      _p = _p.con(
+        ci: _t(_ci.text),
+        complementoCi: _t(_complemento.text),
+        nombres: _t(_nombres.text),
+        apellidos: _t(_apellidos.text),
+        fechaNacimiento: _nacimiento,
+        correo: _t(_correo.text),
+        telefono: _t(_telefono.text),
+      );
+      _llenar();
+    });
+    widget.alGuardar();
+    await mostrarExito(
+      context,
+      titulo: '¡Cambios guardados!',
+      mensaje: 'Se actualizaron los datos de ${_p.nombreCompleto}.',
+    );
+    return true;
+  }
+
+  static String? _requerido(String? valor) => (valor == null || valor.trim().isEmpty) ? 'Campo obligatorio' : null;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.editando;
+    final hoy = DateTime.now();
+    return Form(
+      key: _formulario,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          SeccionRegistro(
+            titulo: 'Datos personales',
+            icono: Iconos.user,
+            child: GrillaFicha(
+              children: [
+                CampoTextoFicha(
+                  etiqueta: 'Nombres',
+                  controlador: _nombres,
+                  editando: e,
+                  largoMaximo: 100,
+                  formatos: [MayusculasFormatter()],
+                  validar: _requerido,
                 ),
-          icon: const Icon(Iconos.userGear, size: 16, color: Color(0xFF198754)),
-        ),
-        IconButton(
-          tooltip: 'Editar',
-          onPressed: () => flujoEditar(
-            context,
-            descripcion: 'los datos de ${persona.nombreCompleto}',
-            formulario: FormularioPersona(api: api, persona: persona),
-            mensajeExito: 'Se actualizaron los datos de ${persona.nombreCompleto}.',
-            alTerminar: recargar,
+                CampoTextoFicha(
+                  etiqueta: 'Apellidos',
+                  controlador: _apellidos,
+                  editando: e,
+                  largoMaximo: 100,
+                  formatos: [MayusculasFormatter()],
+                  validar: _requerido,
+                ),
+                CampoTextoFicha(etiqueta: 'CI', controlador: _ci, editando: e, largoMaximo: 30),
+                CampoTextoFicha(etiqueta: 'Complemento', controlador: _complemento, editando: e, largoMaximo: 10),
+                CampoFechaFicha(
+                  etiqueta: 'Fecha de nacimiento',
+                  valor: _nacimiento,
+                  editando: e,
+                  ultima: DateTime(hoy.year, hoy.month, hoy.day).subtract(const Duration(days: 1)),
+                  alCambiar: (fecha) => setState(() => _nacimiento = fecha),
+                ),
+                CampoTextoFicha(
+                  etiqueta: 'Correo',
+                  controlador: _correo,
+                  editando: e,
+                  largoMaximo: 150,
+                  teclado: TextInputType.emailAddress,
+                  validar: (v) {
+                    final texto = v?.trim() ?? '';
+                    if (texto.isNotEmpty && !RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(texto)) {
+                      return 'Correo no válido';
+                    }
+                    return null;
+                  },
+                ),
+                CampoTextoFicha(
+                  etiqueta: 'Teléfono',
+                  controlador: _telefono,
+                  editando: e,
+                  largoMaximo: 20,
+                  teclado: TextInputType.phone,
+                ),
+              ],
+            ),
           ),
-          icon: const Icon(Iconos.penToSquare, size: 16, color: ColoresApp.azul),
-        ),
-        IconButton(
-          tooltip: 'Eliminar',
-          onPressed: () => flujoEliminar(
-            context,
-            descripcion: 'a ${persona.nombreCompleto} y todos sus usuarios',
-            eliminar: () => api.eliminarPersona(persona.idPersona),
-            mensajeEliminado: 'Se eliminó el registro de ${persona.nombreCompleto}.',
-            alTerminar: recargar,
+          SeccionRegistro(
+            titulo: 'Registro',
+            icono: Iconos.clock,
+            child: GrillaFicha(
+              children: [
+                DatoFicha('Registrado', Formato.fechaHora(_p.creadoEn)),
+                DatoFicha.widget(
+                  'Usuarios',
+                  contenido: _p.tiposUsuario.isEmpty
+                      ? const Text('Sin usuario', style: TextStyle(color: Relieve.tenue))
+                      : Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final tipo in _p.tiposUsuario) InsigniaEstado(tipo, texto: nombreTipoUsuario(tipo)),
+                          ],
+                        ),
+                ),
+                if (_p.nombreUsuario != null) DatoFicha('Nombre de usuario', _p.nombreUsuario),
+              ],
+            ),
           ),
-          icon: const Icon(Iconos.trashCan, size: 16, color: ColoresApp.rojo),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

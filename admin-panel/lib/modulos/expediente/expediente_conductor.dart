@@ -1,37 +1,45 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+
 import '../../core/iconos.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/formato.dart';
+import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../../widgets/archivos_web.dart';
+import '../../widgets/boton_relieve.dart';
+import '../../widgets/campos_ficha.dart';
 import '../../widgets/campo_fecha.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/flujos_crud.dart';
 import '../../widgets/foto_usuario.dart';
 import '../../widgets/insignia_estado.dart';
 import '../../widgets/modal_formulario.dart';
+import '../../widgets/modal_registro.dart';
 import '../../widgets/visor_pdf.dart';
+import '../personas/ficha_usuario.dart';
 import '../personas/modelos.dart';
 import '../personas/personas_api.dart';
 import 'expediente_api.dart';
-import 'modal_carnet.dart';
 import 'modelos.dart';
 import 'vista_expediente.dart';
 
 const _tiposDocumento = ['CI', 'LICENCIA', 'SOAT', 'RUAT', 'INSPECCION_TECNICA', 'ANTECEDENTES'];
 
 /// Expediente completo del conductor: lo que el ve en su app (datos, moto, documentos, viajes,
-/// comentarios) mas lo que solo hace el administrador (moderar, editar PDF, dar permisos).
-class ExpedienteConductor extends StatelessWidget {
+/// comentarios) mas lo que solo hace el administrador (moderar, editar PDF, dar permisos). Arriba van
+/// sus acciones y Editar, que vuelve editables sus datos, su licencia y su situacion en la primera
+/// pestana.
+class ExpedienteConductor extends StatefulWidget {
   final ExpedienteApi api;
   final PersonasApi personasApi;
   final ConductorAdmin conductor;
 
   /// Se llama si algo cambio (para recargar la tabla de conductores al cerrar).
   final VoidCallback alCambiar;
+  final List<AccionRegistro> acciones;
+  final CierreModal? cierre;
 
   const ExpedienteConductor({
     super.key,
@@ -39,18 +47,45 @@ class ExpedienteConductor extends StatelessWidget {
     required this.personasApi,
     required this.conductor,
     required this.alCambiar,
+    this.acciones = const [],
+    this.cierre,
   });
 
   @override
+  State<ExpedienteConductor> createState() => _ExpedienteConductorState();
+}
+
+class _ExpedienteConductorState extends State<ExpedienteConductor> {
+  final _edicion = ControlEdicion();
+
+  @override
+  void dispose() {
+    _edicion.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final api = widget.api;
+    final personasApi = widget.personasApi;
+    final conductor = widget.conductor;
+    final alCambiar = widget.alCambiar;
     final id = conductor.idConductor;
     return Carga<PerfilExpediente>(
       cargar: () => api.perfilConductor(id),
       builder: (perfil, recargar) => MarcoExpediente(
-        foto: FotoUsuario(nombre: perfil.nombreCompleto, radio: 30, color: ColoresApp.rojo, cargar: () => api.foto(perfil.idUsuario)),
+        foto: FotoUsuario(
+          nombre: perfil.nombreCompleto,
+          radio: 30,
+          color: ColoresApp.rojo,
+          cargar: () => api.foto(perfil.idUsuario),
+        ),
         titulo: perfil.nombreCompleto,
         subtitulo: 'Conductor  |  usuario ${conductor.nombreUsuario}',
         situacion: perfil.situacionAprobacion,
+        edicion: _edicion,
+        acciones: widget.acciones,
+        cierre: widget.cierre,
         pestanas: const [
           (Iconos.idCard, 'Datos'),
           (Iconos.filePdf, 'Documentos'),
@@ -60,7 +95,20 @@ class ExpedienteConductor extends StatelessWidget {
           (Iconos.userPen, 'Permisos'),
         ],
         vistas: [
-          _Datos(api: api, perfil: perfil, idConductor: id, nombreUsuario: conductor.nombreUsuario, alCambiar: recargar),
+          ListenableBuilder(
+            listenable: _edicion,
+            builder: (context, _) => _Datos(
+              api: api,
+              personasApi: personasApi,
+              perfil: perfil,
+              idConductor: id,
+              edicion: _edicion,
+              alGuardar: () {
+                recargar();
+                alCambiar();
+              },
+            ),
+          ),
           _Documentos(api: api, personasApi: personasApi, conductor: conductor, alCambiar: alCambiar),
           _QrCobro(api: api, conductor: conductor),
           Carga<List<ViajeExpediente>>(
@@ -75,7 +123,10 @@ class ExpedienteConductor extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(18),
                   margin: const EdgeInsets.only(bottom: 14),
-                  decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(RadiosApp.tarjeta)),
+                  decoration: BoxDecoration(
+                    color: ColoresApp.azul,
+                    borderRadius: BorderRadius.circular(RadiosApp.tarjeta),
+                  ),
                   child: Row(
                     children: [
                       Text(
@@ -174,7 +225,13 @@ class _TarjetaQr extends StatefulWidget {
   final String nombreDescarga;
   final VoidCallback onEliminar;
 
-  const _TarjetaQr({super.key, required this.qr, required this.cargar, required this.nombreDescarga, required this.onEliminar});
+  const _TarjetaQr({
+    super.key,
+    required this.qr,
+    required this.cargar,
+    required this.nombreDescarga,
+    required this.onEliminar,
+  });
 
   @override
   State<_TarjetaQr> createState() => _TarjetaQrState();
@@ -229,7 +286,9 @@ class _TarjetaQrState extends State<_TarjetaQr> {
               SizedBox(
                 height: 230,
                 child: instantanea.hasError
-                    ? const Center(child: Text('No se pudo cargar la imagen', style: TextStyle(color: ColoresApp.rojo)))
+                    ? const Center(
+                        child: Text('No se pudo cargar la imagen', style: TextStyle(color: ColoresApp.rojo)),
+                      )
                     : bytes == null
                     ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
                     : Image.memory(bytes, fit: BoxFit.contain),
@@ -246,27 +305,20 @@ class _TarjetaQrState extends State<_TarjetaQr> {
 
 class _Datos extends StatelessWidget {
   final ExpedienteApi api;
+  final PersonasApi personasApi;
   final PerfilExpediente perfil;
   final int idConductor;
-  final String nombreUsuario;
-
-  final VoidCallback alCambiar;
+  final ControlEdicion edicion;
+  final VoidCallback alGuardar;
 
   const _Datos({
     required this.api,
+    required this.personasApi,
     required this.perfil,
     required this.idConductor,
-    required this.nombreUsuario,
-    required this.alCambiar,
+    required this.edicion,
+    required this.alGuardar,
   });
-
-  Future<void> _editarLicencia(BuildContext context) => flujoEditar(
-    context,
-    descripcion: 'la licencia de ${perfil.nombreCompleto}',
-    formulario: _FormularioLicencia(api: api, idConductor: idConductor, perfil: perfil),
-    mensajeExito: 'Los datos de la licencia se actualizaron.',
-    alTerminar: alCambiar,
-  );
 
   /// Corrige la categoria de servicio de un vehiculo. El boton va en el propio vehiculo, no en el
   /// encabezado de la seccion, para que con mas de una moto quede claro cual se esta cambiando; el
@@ -282,91 +334,72 @@ class _Datos extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ListView(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
-      children: [
-        SeccionExpediente(
-          titulo: 'Datos personales',
-          icono: Iconos.user,
-          accion: BotonVerCarnet(api: api, idUsuario: perfil.idUsuario, nombre: perfil.nombreCompleto),
-          child: DatosEnGrilla([
-            ('Nombres', perfil.nombres),
-            ('Apellidos', perfil.apellidos),
-            ('Carnet de identidad', perfil.ciCompleto),
-            ('Fecha de nacimiento', Formato.fecha(perfil.fechaNacimiento)),
-            ('Correo', perfil.correo),
-            ('Teléfono', perfil.telefono),
-            ('Usuario', nombreUsuario),
-            ('Foto de perfil', perfil.tieneFoto ? 'Subida' : 'Sin foto'),
-          ]),
-        ),
-        SeccionExpediente(
-          titulo: 'Conductor',
-          icono: Iconos.idBadge,
-          accion: Wrap(
-            children: [
-              BotonVerLicencia(api: api, idConductor: idConductor, nombre: perfil.nombreCompleto),
-              TextButton.icon(
-                onPressed: () => _editarLicencia(context),
-                style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
-                icon: const Icon(Iconos.penToSquare, size: 14),
-                label: const Text('Editar licencia', style: TextStyle(fontWeight: FontWeight.w600)),
-              ),
-            ],
+      child: FichaUsuario(
+        api: personasApi,
+        expedienteApi: api,
+        idUsuario: perfil.idUsuario,
+        control: edicion,
+        editando: edicion.editando,
+        situacionConductor: perfil.situacionAprobacion,
+        idConductor: idConductor,
+        alGuardar: alGuardar,
+        extras: [
+          SeccionRegistro(
+            titulo: 'Actividad del conductor',
+            icono: Iconos.solidStar,
+            child: GrillaFicha(
+              children: [
+                DatoFicha('Aprobado el', Formato.fechaHora(perfil.fechaAprobacion)),
+                DatoFicha('Calificación', perfil.calificacionPromedio?.toStringAsFixed(2).replaceAll('.', ',')),
+                DatoFicha('Calificaciones recibidas', '${perfil.totalCalificaciones ?? 0}'),
+                DatoFicha('Saldo de billetera', monedaBs(perfil.saldoBilletera)),
+                DatoFicha('Límite de adelanto para compras', monedaBs(perfil.limiteAdelantoCompra)),
+                DatoFicha('Foto de perfil', perfil.tieneFoto ? 'Subida' : 'Sin foto'),
+              ],
+            ),
           ),
-          child: DatosEnGrilla([
-            ('Número de licencia', perfil.numeroLicencia),
-            ('Categoría de licencia', perfil.categoriaLicencia),
-            ('Licencia vence', Formato.fecha(perfil.licenciaVencimiento)),
-            ('Situación', Formato.enumTexto(perfil.situacionAprobacion)),
-            ('Aprobado el', Formato.fechaHora(perfil.fechaAprobacion)),
-            ('Calificación', perfil.calificacionPromedio?.toStringAsFixed(2).replaceAll('.', ',')),
-            ('Calificaciones recibidas', '${perfil.totalCalificaciones ?? 0}'),
-            ('Saldo de billetera', monedaBs(perfil.saldoBilletera)),
-            ('Límite de adelanto para compras', monedaBs(perfil.limiteAdelantoCompra)),
-          ]),
-        ),
-        SeccionExpediente(
-          titulo: 'Vehículo',
-          icono: Iconos.motorcycle,
-          child: Carga<List<VehiculoExpediente>>(
-            cargar: () => api.vehiculos(idConductor),
-            builder: (vehiculos, recargar) => vehiculos.isEmpty
-                ? const Text('Sin vehículo registrado', style: TextStyle(color: ColoresApp.textoSuave))
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      for (final v in vehiculos)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            DatosEnGrilla([
-                              ('Placa', v.placa),
-                              ('Marca y modelo', [v.marca, v.modelo].whereType<String>().join(' ')),
-                              ('Color', v.color),
-                              ('Año', v.anio?.toString()),
-                              ('Tipo', v.tipo),
-                              ('Categoría de servicio', v.categoria),
-                            ]),
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: TextButton.icon(
-                                onPressed: () => _editarCategoria(context, v, recargar),
-                                style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
-                                icon: const Icon(Iconos.penToSquare, size: 14),
-                                label: const Text(
-                                  'Cambiar categoría de servicio',
-                                  style: TextStyle(fontWeight: FontWeight.w600),
-                                ),
-                              ),
+          SeccionRegistro(
+            titulo: 'Vehículo',
+            icono: Iconos.motorcycle,
+            child: Carga<List<VehiculoExpediente>>(
+              cargar: () => api.vehiculos(idConductor),
+              builder: (vehiculos, recargar) => vehiculos.isEmpty
+                  ? const Text('Sin vehículo registrado', style: TextStyle(color: ColoresApp.textoSuave))
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final v in vehiculos) ...[
+                          GrillaFicha(
+                            children: [
+                              DatoFicha('Placa', v.placa),
+                              DatoFicha('Marca y modelo', [v.marca, v.modelo].whereType<String>().join(' ')),
+                              DatoFicha('Color', v.color),
+                              DatoFicha('Año', v.anio?.toString()),
+                              DatoFicha('Tipo', v.tipo),
+                              DatoFicha('Categoría de servicio', v.categoria),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: BotonRelieve(
+                              texto: 'Cambiar categoría de servicio',
+                              icono: Iconos.penToSquare,
+                              tono: TonoBoton.azul,
+                              tamano: TamanoBoton.pequeno,
+                              alPresionar: () => _editarCategoria(context, v, recargar),
                             ),
-                          ],
-                        ),
-                    ],
-                  ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                      ],
+                    ),
+            ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -388,14 +421,17 @@ class _Documentos extends StatelessWidget {
     if (archivo == null || !context.mounted) return;
     final confirmado = await confirmarAccion(
       context,
-      mensaje: 'Va a reemplazar el PDF de ${_nombre(d)} por "${archivo.nombre}". El anterior se conserva en la carpeta del conductor.',
+      mensaje:
+          'Va a reemplazar el PDF de ${_nombre(d)} por "${archivo.nombre}". El anterior se conserva en la carpeta del conductor.',
       textoConfirmar: 'Sí, reemplazar',
     );
     if (!confirmado || !context.mounted) return;
     try {
       await api.reemplazarPdf(d.id, archivo);
       recargar();
-      if (context.mounted) await mostrarExito(context, titulo: '¡PDF reemplazado!', mensaje: 'Se guardó el nuevo PDF de ${_nombre(d)}.');
+      if (context.mounted) {
+        await mostrarExito(context, titulo: '¡PDF reemplazado!', mensaje: 'Se guardó el nuevo PDF de ${_nombre(d)}.');
+      }
     } on ApiExcepcion catch (e) {
       if (context.mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
@@ -437,9 +473,14 @@ class _Documentos extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(_nombre(d), style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
                           Text(
-                            d.fechaVencimiento == null ? 'Sin vencimiento' : 'Vence el ${Formato.fecha(d.fechaVencimiento)}',
+                            _nombre(d),
+                            style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
+                          ),
+                          Text(
+                            d.fechaVencimiento == null
+                                ? 'Sin vencimiento'
+                                : 'Vence el ${Formato.fecha(d.fechaVencimiento)}',
                             style: const TextStyle(fontSize: 13, color: ColoresApp.textoSuave),
                           ),
                         ],
@@ -533,6 +574,8 @@ class _FormularioDocumentoState extends State<_FormularioDocumento> {
       },
       campos: [
         DropdownButtonFormField<String>(
+          borderRadius: BorderRadius.circular(14),
+          dropdownColor: Colors.white,
           initialValue: _tipo,
           decoration: const InputDecoration(labelText: 'Tipo de documento *'),
           items: [for (final t in _tiposDocumento) DropdownMenuItem(value: t, child: Text(nombreDocumento(t)))],
@@ -576,6 +619,8 @@ class _FormularioRevisionState extends State<_FormularioRevision> {
       },
       campos: [
         DropdownButtonFormField<String>(
+          borderRadius: BorderRadius.circular(14),
+          dropdownColor: Colors.white,
           initialValue: _situacion,
           decoration: const InputDecoration(labelText: 'Situación *'),
           items: [
@@ -620,11 +665,13 @@ class _PermisosState extends State<_Permisos> {
       if (_datos) 'sus datos personales y de licencia',
       if (_carnet) 'las fotos de su carnet',
       if (_licencia) 'las fotos de su licencia',
-      for (final d in documentos.where((d) => _documentos.contains(d.id))) 'el PDF de ${nombreDocumento(d.tipoDocumento)}',
+      for (final d in documentos.where((d) => _documentos.contains(d.id)))
+        'el PDF de ${nombreDocumento(d.tipoDocumento)}',
     ];
     final confirmado = await confirmarAccion(
       context,
-      mensaje: 'Va a permitir que ${widget.conductor.nombreCompleto} actualice ${partes.join(', ')}. '
+      mensaje:
+          'Va a permitir que ${widget.conductor.nombreCompleto} actualice ${partes.join(', ')}. '
           'El permiso se cierra al hacer el cambio o en una hora.',
       textoConfirmar: 'Sí, dar permiso',
     );
@@ -646,7 +693,11 @@ class _PermisosState extends State<_Permisos> {
         _version++;
       });
       if (mounted) {
-        await mostrarExito(context, titulo: '¡Permiso otorgado!', mensaje: 'El conductor ya puede hacer esos cambios desde su app durante una hora.');
+        await mostrarExito(
+          context,
+          titulo: '¡Permiso otorgado!',
+          mensaje: 'El conductor ya puede hacer esos cambios desde su app durante una hora.',
+        );
       }
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
@@ -665,7 +716,9 @@ class _PermisosState extends State<_Permisos> {
     try {
       await widget.api.revocarPermisos(_id);
       setState(() => _version++);
-      if (mounted) await mostrarEliminado(context, titulo: 'Permisos quitados', mensaje: 'El conductor ya no puede editar.');
+      if (mounted) {
+        await mostrarEliminado(context, titulo: 'Permisos quitados', mensaje: 'El conductor ya no puede editar.');
+      }
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, mensaje: e.mensaje);
     }
@@ -704,16 +757,17 @@ class _PermisosState extends State<_Permisos> {
                               const Icon(Iconos.circleCheck, size: 14, color: ColoresApp.exito),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: Text(
-                                  switch (p.tipo) {
-                                    'DATOS' => 'Actualizar sus datos personales y de licencia',
-                                    'CARNET' => 'Volver a tomar las fotos de su carnet',
-                                    'LICENCIA' => 'Volver a tomar las fotos de su licencia',
-                                    _ => 'Reemplazar el PDF de ${nombreDocumento(p.tipoDocumento)}',
-                                  },
-                                ),
+                                child: Text(switch (p.tipo) {
+                                  'DATOS' => 'Actualizar sus datos personales y de licencia',
+                                  'CARNET' => 'Volver a tomar las fotos de su carnet',
+                                  'LICENCIA' => 'Volver a tomar las fotos de su licencia',
+                                  _ => 'Reemplazar el PDF de ${nombreDocumento(p.tipoDocumento)}',
+                                }),
                               ),
-                              Text(_restante(p.venceEn), style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
+                              Text(
+                                _restante(p.venceEn),
+                                style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                              ),
                             ],
                           ),
                         ),
@@ -790,98 +844,14 @@ class _PermisosState extends State<_Permisos> {
   }
 }
 
-// ---------------------------------------------------------------------------- licencia
+// ---------------------------------------------------------------------------- vehiculo
 
-/// Datos de la licencia que corrige el administrador: numero, categoria (P, M, A, B o C) y
-/// vencimiento. Las fotos se cambian en "Ver licencia".
-class _FormularioLicencia extends StatefulWidget {
-  final ExpedienteApi api;
-  final int idConductor;
-  final PerfilExpediente perfil;
-
-  const _FormularioLicencia({required this.api, required this.idConductor, required this.perfil});
-
-  @override
-  State<_FormularioLicencia> createState() => _FormularioLicenciaState();
-}
-
-class _FormularioLicenciaState extends State<_FormularioLicencia> {
-  final _clave = GlobalKey<FormState>();
-  late final _numero = TextEditingController(text: widget.perfil.numeroLicencia ?? '');
-  late String? _categoria = const ['P', 'M', 'A', 'B', 'C'].contains(widget.perfil.categoriaLicencia)
-      ? widget.perfil.categoriaLicencia
-      : null;
-  late DateTime? _vence = widget.perfil.licenciaVencimiento;
-
-  @override
-  void dispose() {
-    _numero.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return ModalFormulario(
-      titulo: 'Editar licencia',
-      icono: Iconos.solidIdBadge,
-      claveFormulario: _clave,
-      campos: [
-        TextFormField(
-          controller: _numero,
-          keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-          decoration: const InputDecoration(labelText: 'Número de licencia *'),
-          validator: (v) => (v ?? '').trim().isEmpty ? 'Obligatorio' : null,
-        ),
-        DropdownButtonFormField<String>(
-          initialValue: _categoria,
-          decoration: const InputDecoration(labelText: 'Categoría *'),
-          items: const [
-            DropdownMenuItem(value: 'P', child: Text('P - Particular')),
-            DropdownMenuItem(value: 'M', child: Text('M - Motociclista')),
-            DropdownMenuItem(value: 'A', child: Text('A - Profesional')),
-            DropdownMenuItem(value: 'B', child: Text('B - Profesional')),
-            DropdownMenuItem(value: 'C', child: Text('C - Profesional')),
-          ],
-          onChanged: (v) => setState(() => _categoria = v),
-          validator: (v) => v == null ? 'Elija la categoría' : null,
-        ),
-        CampoFecha(
-          etiqueta: 'Vence',
-          initialValue: _vence,
-          alCambiar: (v) => _vence = v,
-          primeraFecha: DateTime(2000),
-          ultimaFecha: DateTime(DateTime.now().year + 20),
-        ),
-      ],
-      alGuardar: () async {
-        await widget.api.actualizarLicencia(
-          widget.idConductor,
-          numero: _numero.text.trim(),
-          categoria: _categoria,
-          vencimiento: _vence,
-        );
-        return true;
-      },
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------- categoria del vehiculo
-
-/// Corrige la categoria de servicio de un vehiculo (por ejemplo de reparto a taxi). Muestra la
-/// actual antes de elegir y ofrece solo las categorias de su tipo, deduplicadas por nombre.
-/// El catalogo se pide al abrir el formulario, no al abrir el expediente.
 class _FormularioCategoriaVehiculo extends StatefulWidget {
   final ExpedienteApi api;
   final int idConductor;
   final VehiculoExpediente vehiculo;
 
-  const _FormularioCategoriaVehiculo({
-    required this.api,
-    required this.idConductor,
-    required this.vehiculo,
-  });
+  const _FormularioCategoriaVehiculo({required this.api, required this.idConductor, required this.vehiculo});
 
   @override
   State<_FormularioCategoriaVehiculo> createState() => _FormularioCategoriaVehiculoState();
@@ -899,11 +869,7 @@ class _FormularioCategoriaVehiculoState extends State<_FormularioCategoriaVehicu
       claveFormulario: _clave,
       textoGuardar: 'Guardar cambios',
       alGuardar: () async {
-        await widget.api.cambiarCategoriaVehiculo(
-          widget.idConductor,
-          _categoria!,
-          idVehiculo: widget.vehiculo.id,
-        );
+        await widget.api.cambiarCategoriaVehiculo(widget.idConductor, _categoria!, idVehiculo: widget.vehiculo.id);
         return true;
       },
       campos: [
@@ -917,6 +883,8 @@ class _FormularioCategoriaVehiculoState extends State<_FormularioCategoriaVehicu
           builder: (catalogo, _) {
             final opciones = categoriasDeVehiculo(catalogo, widget.vehiculo);
             return DropdownButtonFormField<int>(
+              borderRadius: BorderRadius.circular(14),
+              dropdownColor: Colors.white,
               initialValue: _categoria,
               decoration: const InputDecoration(labelText: 'Categoría de servicio *'),
               items: [for (final c in opciones) DropdownMenuItem(value: c.id, child: Text(c.nombre))],
