@@ -3,6 +3,9 @@ package com.taxiuap.backend.identity.service;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 import org.springframework.core.io.Resource;
@@ -11,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.RolSistema;
+import com.taxiuap.backend.identity.dto.ActualizarCarnetCuentaRequest;
 import com.taxiuap.backend.identity.dto.ReglasRegistro;
 import com.taxiuap.backend.identity.dto.CarnetRequest;
 import com.taxiuap.backend.identity.dto.LecturaDocumentoResponse;
@@ -345,14 +349,25 @@ public class CarnetService {
         persona.setPlazoSelfieCarnet(null);
     }
 
-    /**
-     * Cuenta que ya usaba la app: sube su foto con el carnet (cuentas de antes) o, si su carnet vencio o
-     * no tiene sus fotos, el anverso, el reverso y la foto con el carnet. Los datos leidos deben ser los
-     * que ya tiene registrados (no se cambian aqui). Si el servidor no pudo revisar la foto con el carnet,
-     * la cara no se parece o no se sabe hasta cuando vale el carnet, queda OBSERVADA para el administrador.
-     */
+    /** Igual que la de abajo sin la parte "datos" (apps anteriores): no se actualiza ningun dato. */
     public UsuarioResponse actualizarCuenta(Long idUsuario, MultipartFile anverso, MultipartFile reverso,
             MultipartFile selfie) {
+        return actualizarCuenta(idUsuario, null, anverso, reverso, selfie);
+    }
+
+    /**
+     * Cuenta que ya usaba la app: sube su foto con el carnet (cuentas de antes) o, si su carnet vencio o
+     * no tiene sus fotos, el anverso, el reverso y la foto con el carnet.
+     *
+     * Con las fotos del carnet manda lo que el servidor leyo de ellas: si la persona confirmo sus datos
+     * (datos.confirmaDatos), el nombre, la fecha de nacimiento y el complemento de su cuenta se actualizan con
+     * los del carnet (un dato mal escrito, un nombre incompleto o un campo vacio). El numero de carnet no se
+     * cambia: si es otro, se rechaza, salvo que la persona lo envie a revision (datos.observado). Si el
+     * servidor no pudo revisar la foto con el carnet, la cara no se parece, no se sabe hasta cuando vale el
+     * carnet o se envio a revision, queda OBSERVADA para el administrador.
+     */
+    public UsuarioResponse actualizarCuenta(Long idUsuario, ActualizarCarnetCuentaRequest datos, MultipartFile anverso,
+            MultipartFile reverso, MultipartFile selfie) {
         Usuario usuario = usuarioRepository.findById(idUsuario)
                 .orElseThrow(() -> new CredencialesInvalidasException("Credenciales invalidas"));
         Persona persona = usuario.getPersona();
@@ -368,11 +383,15 @@ public class CarnetService {
         String motivo;
         if (conFotosCarnet) {
             FotosCarnet fotos = validar(anverso, reverso, selfie);
-            lecturaDocumentoService.verificarCarnet(fotos.huellaAnverso(), fotos.huellaReverso(), persona.getCi(),
-                    persona.getComplementoCi(), persona.getFechaNacimiento(), persona.getNombres(), persona.getApellidos());
-            verificarSelfie(fotos, persona.getCi());
+            boolean aRevision = datos != null && datos.esObservado();
+            String revision = compararConCuenta(persona,
+                    lecturaDocumentoService.carnetLeido(fotos.huellaAnverso(), fotos.huellaReverso()),
+                    datos != null && datos.confirma(), aRevision);
+            if (!aRevision) {
+                verificarSelfie(fotos, persona.getCi());
+            }
             guardar(persona, fotos);
-            motivo = observacionSelfie(fotos);
+            motivo = revision != null ? revision : observacionSelfie(fotos);
             if (motivo == null && persona.getCarnetVencimiento() == null) {
                 motivo = "No se pudo leer hasta cuándo vale el carnet";
             }
@@ -436,6 +455,99 @@ public class CarnetService {
         }
         return lectura;
     }
+
+    /** Un dato de la cuenta que no es el del carnet: el de la cuenta y el leido de las fotos. */
+    record Diferencia(String campo, String enCuenta, String enCarnet) {
+
+        String texto() {
+            return campo + ": el carnet dice " + enCarnet + " y la cuenta tenía "
+                    + (enCuenta == null || enCuenta.isBlank() ? "el campo vacío" : enCuenta);
+        }
+    }
+
+    /**
+     * Compara lo leido del carnet con la cuenta. El numero de carnet debe ser el mismo (si no, se rechaza o,
+     * enviado a revision, queda para el administrador). Lo demas manda el carnet: confirmado por la persona,
+     * se actualiza en la cuenta; sin confirmar (apps anteriores) se rechaza. Devuelve el motivo para dejar la
+     * cuenta OBSERVADA, o null.
+     */
+    String compararConCuenta(Persona persona, LecturaDocumentoService.CarnetLeido leido, boolean confirma,
+            boolean aRevision) {
+        if (leido == null) {
+            return aRevision ? MOTIVO_PEDIDO : null;
+        }
+        String ci = persona.getCi().trim();
+        if (leido.numero() != null && !leido.numero().equals(ci)) {
+            if (!aRevision) {
+                throw new NegocioException("El carnet de tus fotos es el N° " + leido.numero() + " y tu cuenta es del N° "
+                        + ci + ". Si tus fotos están bien, envíalas para que las revise un administrador.");
+            }
+            return "el carnet de las fotos es el N° " + leido.numero() + " y la cuenta es del N° " + ci;
+        }
+        List<Diferencia> diferencias = diferencias(persona, leido);
+        boolean nombreSinSeparar = leido.nombres() == null && leido.nombreCompleto() != null
+                && !LecturaDocumentoService.sinTildes(leido.nombreCompleto()).equals(
+                        LecturaDocumentoService.sinTildes(nombreCompleto(persona)));
+        if (diferencias.isEmpty() && !nombreSinSeparar) {
+            return aRevision ? MOTIVO_PEDIDO : null;
+        }
+        String detalle = String.join("; ", diferencias.stream().map(Diferencia::texto).toList());
+        if (nombreSinSeparar) {
+            detalle = (detalle.isEmpty() ? "" : detalle + "; ") + "nombre: el carnet dice " + leido.nombreCompleto()
+                    + " y la cuenta tenía " + nombreCompleto(persona);
+        }
+        if (aRevision) {
+            return "la persona envió sus fotos a revisión (" + detalle + ")";
+        }
+        if (!confirma) {
+            throw new NegocioException("Los datos de tu carnet no coinciden con los de tu cuenta (" + detalle
+                    + "). Actualiza UNITAXI para confirmarlos o envía tus fotos a revisión.");
+        }
+        for (Diferencia d : diferencias) {
+            switch (d.campo()) {
+                case "nombre" -> {
+                    persona.setNombres(leido.nombres());
+                    persona.setApellidos(leido.apellidos());
+                }
+                case "fecha de nacimiento" -> persona.setFechaNacimiento(leido.fechaNacimiento());
+                case "complemento" -> persona.setComplementoCi(leido.complemento());
+                default -> throw new IllegalStateException("Campo desconocido: " + d.campo());
+            }
+        }
+        if (!diferencias.isEmpty()) {
+            log.info("Datos de la persona {} actualizados con su carnet: {}", persona.getId(), detalle);
+        }
+        // El nombre leido sin saber cuales son nombres y cuales apellidos no se puede copiar: lo corrige el admin.
+        return nombreSinSeparar ? "el nombre del carnet (" + leido.nombreCompleto() + ") no es el de la cuenta ("
+                + nombreCompleto(persona) + ")" : null;
+    }
+
+    private static List<Diferencia> diferencias(Persona persona, LecturaDocumentoService.CarnetLeido leido) {
+        List<Diferencia> lista = new ArrayList<>();
+        if (leido.nombres() != null && leido.apellidos() != null
+                && (!LecturaDocumentoService.sinTildes(leido.nombres()).equals(LecturaDocumentoService.sinTildes(persona.getNombres()))
+                        || !LecturaDocumentoService.sinTildes(leido.apellidos())
+                                .equals(LecturaDocumentoService.sinTildes(persona.getApellidos())))) {
+            lista.add(new Diferencia("nombre", nombreCompleto(persona), leido.nombres() + " " + leido.apellidos()));
+        }
+        if (leido.fechaNacimiento() != null && !leido.fechaNacimiento().equals(persona.getFechaNacimiento())) {
+            lista.add(new Diferencia("fecha de nacimiento",
+                    persona.getFechaNacimiento() == null ? null : FECHA.format(persona.getFechaNacimiento()),
+                    FECHA.format(leido.fechaNacimiento())));
+        }
+        String complemento = persona.getComplementoCi() == null ? "" : persona.getComplementoCi().trim();
+        if (leido.complemento() != null && !leido.complemento().equalsIgnoreCase(complemento)) {
+            lista.add(new Diferencia("complemento", complemento, leido.complemento()));
+        }
+        return lista;
+    }
+
+    private static String nombreCompleto(Persona persona) {
+        return ((persona.getNombres() == null ? "" : persona.getNombres().trim()) + " "
+                + (persona.getApellidos() == null ? "" : persona.getApellidos().trim())).trim();
+    }
+
+    private static final DateTimeFormatter FECHA = DateTimeFormatter.ofPattern("dd/MM/yyyy");
 
     /** El carnet de la persona ya vencio (se sabe solo si se leyo su "Valida hasta"). */
     public static boolean carnetVencido(Persona persona) {

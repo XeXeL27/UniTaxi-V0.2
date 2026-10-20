@@ -205,7 +205,9 @@ DatosCarnet datosCarnetDeLecturas(LecturaFoto anverso, LecturaFoto reverso) {
   return DatosCarnet(
     ci: anverso.numero ?? reverso.numero,
     complemento: anverso.complemento,
-    fechaNacimiento: reverso.fechaNacimiento ?? anverso.fechaNacimiento,
+    // La fecha impresa con su etiqueta en el anverso (dd/mm/aaaa) es la mas segura: en la MRZ del reverso
+    // (AAMMDD) la IA a veces invierte el mes y el dia. El carnet antiguo la trae solo en el reverso.
+    fechaNacimiento: anverso.fechaNacimiento ?? reverso.fechaNacimiento,
     nombres: nombres,
     apellidos: apellidos,
     nombreSeguro: seguro,

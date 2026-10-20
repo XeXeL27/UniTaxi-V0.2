@@ -44,6 +44,12 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
   /// La pantalla empezo pidiendo solo la foto con el carnet y el servidor ya no tenia las fotos del carnet.
   bool _fotosPerdidas = false;
 
+  /// El servidor rechazo los datos del carnet: se ofrece "Mis fotos estan bien, enviar a revision".
+  bool _ofrecerRevision = false;
+
+  /// Cambia para vaciar las fotos del carnet (la persona dijo que los datos leidos no son los suyos).
+  int _versionCarnet = 0;
+
   /// Vuelve a consultar la cuenta tras un error: si el servidor ya no tiene las fotos del carnet,
   /// carnetPendiente pasa de SELFIE a CARNET y la pantalla muestra el anverso y el reverso.
   Future<void> _actualizarCuenta() async {
@@ -81,7 +87,10 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
     return datos['disponible'] == true ? LecturaSelfie.json(datos) : null;
   }
 
-  Future<void> _enviar(UsuarioSesion usuario) async {
+  /// Envia las fotos. Con las fotos del carnet la persona confirma antes los datos leidos: si su cuenta
+  /// tiene otro dato o le falta uno, el servidor lo actualiza con el del carnet. [aRevision]: "Mis fotos estan
+  /// bien, enviar a revision" (no se cambia nada y lo revisa un administrador).
+  Future<void> _enviar(UsuarioSesion usuario, {bool aRevision = false}) async {
     final conCarnet = usuario.carnetPendiente != 'SELFIE';
     if (conCarnet && !_carnet.completa) {
       setState(() => _error = 'Agrega la foto del anverso y del reverso de tu carnet.');
@@ -91,38 +100,92 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
       setState(() => _error = 'Tómate la foto sosteniendo tu carnet junto a tu cara.');
       return;
     }
+    var confirma = false;
+    final leidos = _carnet.datos;
+    if (conCarnet && !aRevision && leidos?.ci != null) {
+      final respuesta = await confirmarDatosCarnet(
+        context,
+        nombre: leidos!.nombreCompleto.isEmpty ? 'No se pudo leer' : leidos.nombreCompleto,
+        ci: leidos.ci!,
+        complemento: leidos.complemento,
+        fechaNacimiento: leidos.fechaNacimiento,
+        fotos: _carnet,
+        aviso: 'Si tu cuenta tiene otro dato o le falta alguno, lo actualizaremos con el de tu carnet.',
+        mensajeObservado:
+            'Un administrador revisará tus fotos y corregirá tus datos. Mientras tanto no podrás pedir viajes ni '
+            'recibir solicitudes; te avisaremos cuando esté listo.',
+      );
+      if (!mounted) return;
+      if (respuesta == RespuestaCarnet.repetir) {
+        setState(() {
+          _carnet = const SeleccionCarnet();
+          _versionCarnet++;
+          _ofrecerRevision = false;
+          _error = 'Vuelve a tomar las fotos del anverso y del reverso de tu carnet.';
+        });
+        return;
+      }
+      aRevision = respuesta == RespuestaCarnet.observado;
+      confirma = respuesta == RespuestaCarnet.confirma;
+    }
     setState(() {
       _enviando = true;
       _error = null;
     });
     final sesion = context.read<Sesion>();
     try {
-      final json = await context.read<ClienteApi>().enviarFormulario('/api/cuenta/carnet/actualizar', const {}, [
-        if (conCarnet) ...[
-          (campo: 'anverso', bytes: _carnet.anverso!, nombre: 'carnet_anverso.jpg', tipo: MediaType('image', 'jpeg')),
-          (campo: 'reverso', bytes: _carnet.reverso!, nombre: 'carnet_reverso.jpg', tipo: MediaType('image', 'jpeg')),
+      final json = await context.read<ClienteApi>().enviarFormulario(
+        '/api/cuenta/carnet/actualizar',
+        {'confirmaDatos': confirma, 'observado': aRevision},
+        [
+          if (conCarnet) ...[
+            (campo: 'anverso', bytes: _carnet.anverso!, nombre: 'carnet_anverso.jpg', tipo: MediaType('image', 'jpeg')),
+            (campo: 'reverso', bytes: _carnet.reverso!, nombre: 'carnet_reverso.jpg', tipo: MediaType('image', 'jpeg')),
+          ],
+          (campo: 'selfie', bytes: _selfie.foto!, nombre: 'carnet_selfie.jpg', tipo: MediaType('image', 'jpeg')),
         ],
-        (campo: 'selfie', bytes: _selfie.foto!, nombre: 'carnet_selfie.jpg', tipo: MediaType('image', 'jpeg')),
-      ]) as Map<String, dynamic>;
+      ) as Map<String, dynamic>;
       if (!mounted) return;
       final enRevision = json['carnetObservado'] == true;
+      final datosCambiados = json['nombres'] != usuario.nombres || json['apellidos'] != usuario.apellidos;
       await mostrarExito(
         context,
         titulo: '¡Gracias!',
         mensaje: enRevision
-            ? 'Recibimos tu foto. Un administrador la revisará; te avisaremos cuando puedas seguir usando UNITAXI.'
+            ? 'Recibimos tus fotos. Un administrador las revisará; te avisaremos cuando puedas seguir usando UNITAXI.'
             : json['carnetPendiente'] == 'VENCIDO'
             ? 'Recibimos tu foto, pero tu carnet está vencido: ahora toma las fotos de tu carnet nuevo.'
+            : datosCambiados
+            ? 'Recibimos tus fotos y actualizamos tu cuenta con los datos de tu carnet.'
             : 'Recibimos tu foto con el carnet.',
       );
       // La app pasa sola a la pantalla que corresponde (inicio, revision o carnet vencido).
       await sesion.reemplazarUsuario(json);
     } on ApiExcepcion catch (e) {
-      if (mounted) setState(() => _error = e.mensaje);
+      if (mounted) {
+        setState(() {
+          _error = e.mensaje;
+          // Un dato que no coincide (por ejemplo, otro numero de carnet): lo puede revisar un administrador.
+          _ofrecerRevision = conCarnet && !aRevision && e.codigo == 422;
+        });
+      }
       if (mounted && e.codigo != null) await _actualizarCuenta();
     } finally {
       if (mounted) setState(() => _enviando = false);
     }
+  }
+
+  Future<void> _enviarARevision(UsuarioSesion usuario) async {
+    final envia = await confirmarAccion(
+      context,
+      titulo: '¿Enviar tus fotos a revisión?',
+      mensaje:
+          'Un administrador comparará tus fotos con los datos de tu cuenta y los corregirá. Mientras tanto no '
+          'podrás pedir viajes ni recibir solicitudes; te avisaremos cuando esté listo.',
+      textoConfirmar: 'Sí, enviar a revisión',
+      textoCancelar: 'Volver',
+    );
+    if (envia && mounted) await _enviar(usuario, aRevision: true);
   }
 
   @override
@@ -220,10 +283,14 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
                     ],
                     const SizedBox(height: 20),
                     if (conCarnet) ...[
-                      SelectorCarnet(onCambio: (carnet) => setState(() {
-                        _carnet = carnet;
-                        _error = null;
-                      })),
+                      SelectorCarnet(
+                        key: ValueKey(_versionCarnet),
+                        onCambio: (carnet) => setState(() {
+                          _carnet = carnet;
+                          _error = null;
+                          _ofrecerRevision = false;
+                        }),
+                      ),
                       const SizedBox(height: 12),
                     ],
                     SelectorSelfieCarnet(
@@ -252,6 +319,21 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
                           ],
                         ),
                       ),
+                      if (_ofrecerRevision) ...[
+                        const SizedBox(height: 10),
+                        OutlinedButton(
+                          onPressed: _enviando ? null : () => _enviarARevision(usuario),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: ColoresApp.tinta,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text(
+                            'Mis fotos están bien, enviar para que lo revise un administrador',
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ],
                     ],
                     const SizedBox(height: 22),
                     BotonPrincipal(

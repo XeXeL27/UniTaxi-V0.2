@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
+import com.taxiuap.backend.identity.dto.ActualizarCarnetCuentaRequest;
 import com.taxiuap.backend.identity.dto.CarnetRequest;
 import com.taxiuap.backend.identity.dto.LecturaSelfieResponse;
 import com.taxiuap.backend.identity.dto.UsuarioResponse;
@@ -46,10 +47,12 @@ public class CarnetCuentaController {
      */
     @PostMapping(value = "/carnet/actualizar", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<ApiResponse<UsuarioResponse>> actualizar(
+            @RequestPart(value = "datos", required = false) ActualizarCarnetCuentaRequest datos,
             @RequestPart(value = "anverso", required = false) MultipartFile anverso,
             @RequestPart(value = "reverso", required = false) MultipartFile reverso,
             @RequestPart(value = "selfie", required = false) MultipartFile selfie) {
-        UsuarioResponse usuario = carnetService.actualizarCuenta(UsuarioActual.idUsuario(), anverso, reverso, selfie);
+        UsuarioResponse usuario = carnetService.actualizarCuenta(UsuarioActual.idUsuario(), datos, anverso, reverso,
+                selfie);
         return ResponseEntity.ok(ApiResponse.exito("Foto con el carnet registrada", usuario));
     }
 

@@ -468,9 +468,13 @@ Future<RespuestaCarnet> confirmarDatosCarnet(
   String? complemento,
   SeleccionCarnet? fotos,
   bool conObservado = true,
+  DateTime? fechaNacimiento,
+  String? aviso,
+  String? mensajeObservado,
 }) async {
   final numero = (complemento ?? '').trim().isEmpty ? ci : '$ci-${complemento!.trim().toUpperCase()}';
   const etiqueta = TextStyle(color: ColoresApp.textoSuave);
+  final fecha = fechaNacimiento;
   final contenido = Column(
     mainAxisSize: MainAxisSize.min,
     children: [
@@ -489,6 +493,20 @@ Future<RespuestaCarnet> confirmarDatosCarnet(
         textAlign: TextAlign.center,
         style: const TextStyle(color: ColoresApp.tinta, fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 0.5),
       ),
+      if (fecha != null) ...[
+        const SizedBox(height: 14),
+        const Text('Tu fecha de nacimiento es:', textAlign: TextAlign.center, style: etiqueta),
+        const SizedBox(height: 6),
+        Text(
+          '${fecha.day.toString().padLeft(2, '0')}/${fecha.month.toString().padLeft(2, '0')}/${fecha.year}',
+          textAlign: TextAlign.center,
+          style: const TextStyle(color: ColoresApp.tinta, fontSize: 19, fontWeight: FontWeight.w800),
+        ),
+      ],
+      if (aviso != null) ...[
+        const SizedBox(height: 14),
+        Text(aviso, textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13)),
+      ],
       if (fotos != null && fotos.completa) _FotosLeidas(seleccion: fotos, documento: 'carnet'),
     ],
   );
@@ -520,11 +538,12 @@ Future<RespuestaCarnet> confirmarDatosCarnet(
       context,
       titulo: '¿Enviar tus datos a revisión?',
       mensaje:
+          mensajeObservado ??
           'Observado significa que un administrador verificará los datos que llenó el sistema (la IA o '
-          'el lector del teléfono) comparándolos con las fotos de tu carnet. Solo el administrador puede '
-          'modificarlos y corregirlos; tú no podrás cambiarlos.\n\n'
-          'Cuando los apruebe te llegarán una notificación y tu usuario y contraseña a tu correo. Mientras '
-          'tanto no podrás usar la app.',
+              'el lector del teléfono) comparándolos con las fotos de tu carnet. Solo el administrador puede '
+              'modificarlos y corregirlos; tú no podrás cambiarlos.\n\n'
+              'Cuando los apruebe te llegarán una notificación y tu usuario y contraseña a tu correo. Mientras '
+              'tanto no podrás usar la app.',
       textoConfirmar: 'Sí, enviar a revisión',
       textoCancelar: 'Volver',
     );

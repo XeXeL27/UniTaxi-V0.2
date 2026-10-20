@@ -13,6 +13,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.LocalDate;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -131,6 +132,106 @@ class CarnetServiceTest {
 
         assertFalse(lectura.aceptada());
         assertTrue(lectura.motivo().contains("1234567"));
+    }
+
+    // ---------------------------------------------------------------- el carnet manda sobre la cuenta
+
+    private static LecturaDocumentoService.CarnetLeido leido(String numero, String complemento, LocalDate fecha,
+            String nombres, String apellidos) {
+        return new LecturaDocumentoService.CarnetLeido(numero, complemento, fecha, nombres, apellidos,
+                nombres == null ? null : nombres + " " + apellidos);
+    }
+
+    private void cuentaConDatosIncompletos() {
+        persona.setNombres("CRISTIAN");
+        persona.setApellidos("GARCIA");
+        persona.setFechaNacimiento(LocalDate.of(1999, 4, 8));
+    }
+
+    @Test
+    void confirmadoActualizaLaCuentaConLosDatosDelCarnet() {
+        cuentaConDatosIncompletos();
+
+        String motivo = servicio.compararConCuenta(persona,
+                leido("1234567", null, LocalDate.of(1999, 8, 4), "CRISTIAN DIEGO", "GARCIA QUISPE"), true, false);
+
+        assertNull(motivo);
+        assertEquals("CRISTIAN DIEGO", persona.getNombres());
+        assertEquals("GARCIA QUISPE", persona.getApellidos());
+        assertEquals(LocalDate.of(1999, 8, 4), persona.getFechaNacimiento());
+    }
+
+    @Test
+    void completaLosCamposVaciosConElCarnet() {
+        persona.setNombres("CRISTIAN DIEGO");
+        persona.setApellidos("GARCIA QUISPE");
+
+        servicio.compararConCuenta(persona,
+                leido("1234567", "1B", LocalDate.of(1999, 8, 4), "CRISTIAN DIEGO", "GARCIA QUISPE"), true, false);
+
+        assertEquals(LocalDate.of(1999, 8, 4), persona.getFechaNacimiento());
+        assertEquals("1B", persona.getComplementoCi());
+    }
+
+    @Test
+    void sinConfirmarNoCambiaNadaYDiceQueDatoNoCoincide() {
+        cuentaConDatosIncompletos();
+
+        NegocioException error = assertThrows(NegocioException.class, () -> servicio.compararConCuenta(persona,
+                leido("1234567", null, LocalDate.of(1999, 8, 4), "CRISTIAN DIEGO", "GARCIA QUISPE"), false, false));
+
+        assertTrue(error.getMessage().contains("el carnet dice 04/08/1999 y la cuenta tenía 08/04/1999"));
+        assertEquals("CRISTIAN", persona.getNombres());
+    }
+
+    @Test
+    void otroNumeroDeCarnetNuncaSeCambiaSolo() {
+        cuentaConDatosIncompletos();
+
+        NegocioException error = assertThrows(NegocioException.class, () -> servicio.compararConCuenta(persona,
+                leido("7654321", null, LocalDate.of(1999, 8, 4), "CRISTIAN DIEGO", "GARCIA QUISPE"), true, false));
+
+        assertTrue(error.getMessage().contains("N° 7654321"));
+        assertEquals("1234567", persona.getCi());
+        assertEquals("CRISTIAN", persona.getNombres());
+    }
+
+    @Test
+    void enviadoARevisionNoCambiaNadaYExplicaAlAdministrador() {
+        cuentaConDatosIncompletos();
+
+        String otroNumero = servicio.compararConCuenta(persona,
+                leido("7654321", null, null, null, null), false, true);
+        String otrosDatos = servicio.compararConCuenta(persona,
+                leido("1234567", null, LocalDate.of(1999, 8, 4), "CRISTIAN DIEGO", "GARCIA QUISPE"), false, true);
+
+        assertTrue(otroNumero.contains("N° 7654321") && otroNumero.contains("N° 1234567"));
+        assertTrue(otrosDatos.contains("revisión") && otrosDatos.contains("04/08/1999"));
+        assertEquals("CRISTIAN", persona.getNombres());
+        assertEquals(LocalDate.of(1999, 4, 8), persona.getFechaNacimiento());
+    }
+
+    @Test
+    void nombreDistintoSinSaberCualesSonApellidosQuedaParaElAdministrador() {
+        cuentaConDatosIncompletos();
+        LecturaDocumentoService.CarnetLeido antiguo = new LecturaDocumentoService.CarnetLeido("1234567", null,
+                LocalDate.of(1999, 4, 8), null, null, "CRISTIAN DIEGO GARCIA QUISPE");
+
+        String motivo = servicio.compararConCuenta(persona, antiguo, true, false);
+
+        assertTrue(motivo.contains("CRISTIAN DIEGO GARCIA QUISPE"));
+        assertEquals("CRISTIAN", persona.getNombres());
+    }
+
+    @Test
+    void conLosMismosDatosNoHayNadaQueCambiar() {
+        persona.setNombres("CRISTIÁN DIEGO");
+        persona.setApellidos("GARCIA QUISPE");
+        persona.setFechaNacimiento(LocalDate.of(1999, 8, 4));
+
+        assertNull(servicio.compararConCuenta(persona,
+                leido("1234567", null, LocalDate.of(1999, 8, 4), "CRISTIAN DIEGO", "GARCIA QUISPE"), false, false));
+        assertNull(servicio.compararConCuenta(persona, null, false, false));
     }
 
     @Test

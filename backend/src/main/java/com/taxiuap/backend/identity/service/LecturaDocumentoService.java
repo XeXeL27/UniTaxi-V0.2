@@ -477,8 +477,7 @@ public class LecturaDocumentoService {
         if (complementoLeido != null && !complementoLeido.equalsIgnoreCase(complemento == null ? "" : complemento.trim())) {
             throw noCoincide("el complemento");
         }
-        LocalDate fecha = reverso != null && reverso.fechaNacimiento() != null ? reverso.fechaNacimiento()
-                : anverso == null ? null : anverso.fechaNacimiento();
+        LocalDate fecha = fechaNacimiento(anverso, reverso);
         if (fecha != null && !fecha.equals(fechaNacimiento)) {
             throw noCoincide("la fecha de nacimiento");
         }
@@ -497,6 +496,37 @@ public class LecturaDocumentoService {
         } else if (reverso != null && reverso.nombreCompleto() != null && !escrito.equals(sinTildes(reverso.nombreCompleto()))) {
             throw noCoincide("tu nombre");
         }
+    }
+
+    /**
+     * Lo que el servidor leyo de las dos fotos del carnet. nombres y apellidos solo vienen si se sabe cual es
+     * cual (etiquetas del carnet nuevo, MRZ completa o el corte del carnet antiguo); si no, quedan null.
+     */
+    public record CarnetLeido(String numero, String complemento, LocalDate fechaNacimiento, String nombres,
+            String apellidos, String nombreCompleto) {
+    }
+
+    /** Datos leidos de las fotos del carnet (por la huella de cada una), o null si el servidor no las leyo. */
+    public CarnetLeido carnetLeido(String huellaAnverso, String huellaReverso) {
+        LecturaDocumentoResponse anverso = lectura(huellaAnverso, DocumentoIdentidad.CARNET, LadoDocumento.ANVERSO);
+        LecturaDocumentoResponse reverso = lectura(huellaReverso, DocumentoIdentidad.CARNET, LadoDocumento.REVERSO);
+        if (anverso == null && reverso == null) {
+            return null;
+        }
+        String numero = primero(anverso == null ? null : anverso.numero(), reverso == null ? null : reverso.numero());
+        LocalDate fecha = fechaNacimiento(anverso, reverso);
+        String nombres = null;
+        String apellidos = null;
+        if (anverso != null && anverso.nombres() != null && anverso.apellidos() != null) {
+            nombres = anverso.nombres();
+            apellidos = anverso.apellidos();
+        } else if (reverso != null && !reverso.nombreCortado() && reverso.nombres() != null && reverso.apellidos() != null) {
+            nombres = reverso.nombres();
+            apellidos = reverso.apellidos();
+        }
+        String completo = primero(anverso == null ? null : anverso.nombreCompleto(),
+                reverso == null ? null : reverso.nombreCompleto());
+        return new CarnetLeido(numero, anverso == null ? null : anverso.complemento(), fecha, nombres, apellidos, completo);
     }
 
     /** Los datos de la licencia del registro deben ser los leidos de sus fotos (si el servidor las leyo). */
@@ -552,6 +582,15 @@ public class LecturaDocumentoService {
     private static NegocioException noCoincideLicencia(String dato) {
         return new NegocioException("Los datos no coinciden con las fotos de tu licencia (" + dato
                 + "). Vuelve a tomar las fotos.");
+    }
+
+    /**
+     * La fecha impresa con su etiqueta en el anverso (dd/mm/aaaa) es la mas segura: en la MRZ del reverso
+     * (AAMMDD) la IA a veces invierte el mes y el dia. El carnet antiguo la trae solo en el reverso.
+     */
+    static LocalDate fechaNacimiento(LecturaDocumentoResponse anverso, LecturaDocumentoResponse reverso) {
+        LocalDate delAnverso = anverso == null ? null : anverso.fechaNacimiento();
+        return delAnverso != null ? delAnverso : reverso == null ? null : reverso.fechaNacimiento();
     }
 
     private static String primero(String a, String b) {

@@ -13,7 +13,8 @@ Documentos que existen (cualquier otra cosa es documento OTRO):
    huella "PULGAR DER" y abajo la zona MRZ de tres lineas:
    "I<BOL1234567<1<<<<" (el numero despues de BOL es el CI; lo que va despues del primer < seguido de
    un digito de control NO es complemento), "AAMMDD..." (la segunda linea empieza con la fecha de
-   nacimiento AAMMDD) y "APELLIDO1<APELLIDO2<<NOMBRE1<NOMBRE2" (antes de << van los apellidos, despues
+   nacimiento AAMMDD: ano, mes y dia en ese orden; por ejemplo "900315..." es 1990-03-15 y "011207..." es
+   2001-12-07; nunca inviertas el mes y el dia) y "APELLIDO1<APELLIDO2<<NOMBRE1<NOMBRE2" (antes de << van los apellidos, despues
    los nombres; < separa palabras).
 3. CARNET_ANVERSO, formato antiguo (fondo crema): "ESTADO PLURINACIONAL DE BOLIVIA", "CEDULA DE
    IDENTIDAD", foto, serie, seccion, "No 1234567" (numero en rojo, a veces con "-1B" de complemento),
