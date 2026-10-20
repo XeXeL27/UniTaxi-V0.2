@@ -1,6 +1,8 @@
 package com.taxiuap.backend.identity.service;
 
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -225,6 +227,30 @@ public class CredencialesCorreoService {
                 + enlace("PASAJERO")
                 + FIRMA;
         correoService.enviar(persona.getCorreo(), "Recuperaste tu cuenta de UNITAXI", cuerpo);
+    }
+
+    /** Codigo de Perfil > Cambiar contrasena (la persona no recuerda la actual). */
+    public void codigoCambioContrasena(Persona persona, String codigo, long minutos) {
+        String cuerpo = saludo(persona)
+                + "Tu código para cambiar la contraseña de UNITAXI es:\n\n"
+                + "    " + codigo + "\n\n"
+                + "Vence en " + minutos + " minutos. Si no lo pediste, puedes ignorar este correo: tu contraseña "
+                + "no cambia mientras no uses el código."
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Código para cambiar tu contraseña", cuerpo);
+    }
+
+    /** Aviso de que la contrasena se cambio desde el perfil. Nunca lleva la contrasena. */
+    public void contrasenaActualizada(Persona persona, LocalDateTime cuando) {
+        String cuerpo = saludo(persona)
+                + "La contraseña de tu cuenta de UNITAXI se actualizó el "
+                + cuando.format(DateTimeFormatter.ofPattern("dd/MM/yyyy")) + " a las "
+                + cuando.format(DateTimeFormatter.ofPattern("HH:mm")) + ".\n\n"
+                + "Desde ahora ingresa con tu nueva contraseña.\n\n"
+                + "Si no fuiste tú, comunícate cuanto antes con la administración."
+                + enlace("PASAJERO")
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Tu contraseña de UNITAXI se actualizó", cuerpo);
     }
 
     /** Aviso al correo anterior de que la cuenta ya usa otro correo. */
