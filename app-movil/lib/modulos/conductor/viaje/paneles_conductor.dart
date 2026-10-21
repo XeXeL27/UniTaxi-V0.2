@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/iconos.dart';
 import '../../../widgets/guia_inicio.dart';
@@ -9,6 +10,7 @@ import '../../../core/api_excepcion.dart';
 
 
 import '../../../core/formato.dart';
+import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_plegar.dart';
 import '../../../widgets/boton_principal.dart';
@@ -18,6 +20,7 @@ import 'espera_cronometro.dart';
 import 'flujo_conductor.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/vista_chat.dart';
+import '../../login/ayuda_ingreso.dart';
 import 'panel_delivery_conductor.dart';
 import 'tarjetas_conductor.dart';
 
@@ -824,12 +827,13 @@ class _EnRevision extends StatelessWidget {
       ),
       'RECHAZADO' => (
         'Registro rechazado',
-        'La administración rechazó tu registro. Revisa tus documentos en Perfil > Mis documentos o comunícate con UNITAXI.',
+        'La administración rechazó tu registro. Revisa tus documentos en Perfil > Mis documentos o envía un mensaje al '
+            'administrador.',
         ColoresApp.rojo,
       ),
       'SUSPENDIDO' => (
         'Cuenta suspendida',
-        'Tu cuenta de conductor está suspendida. Comunícate con la administración de UNITAXI.',
+        'Tu cuenta de conductor está suspendida. Envía un mensaje al administrador para que revise tu caso.',
         ColoresApp.rojo,
       ),
       _ => (
@@ -878,6 +882,30 @@ class _EnRevision extends StatelessWidget {
             icon: const Icon(Iconos.fileArrowUp, size: 15),
             label: const Text('Subir mis documentos', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
+        ] else if (situacion == 'SUSPENDIDO' || situacion == 'RECHAZADO') ...[
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: () => abrirAyudaIngreso(
+              context,
+              identificador: context.read<Sesion>().usuario?.nombreUsuario ?? '',
+            ),
+            style: FilledButton.styleFrom(
+              backgroundColor: ColoresApp.rojo,
+              minimumSize: const Size.fromHeight(46),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            icon: const Icon(Iconos.commentDots, size: 15),
+            label: const Text('Enviar mensaje al administrador', style: TextStyle(fontWeight: FontWeight.w700)),
+          ),
+          if (onRevisar != null)
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onRevisar,
+                icon: const Icon(Iconos.arrowsRotate, size: 14),
+                label: const Text('Ver si ya me aprobaron'),
+              ),
+            ),
         ] else if (onRevisar != null) ...[
           const SizedBox(height: 12),
           Align(

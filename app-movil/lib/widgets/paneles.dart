@@ -92,11 +92,11 @@ class FilaLugar extends StatelessWidget {
     this.accion,
   });
 
-  const FilaLugar.partida({super.key, required this.texto, this.etiqueta = 'Punto de partida (A)', this.accion})
+  const FilaLugar.partida({super.key, required this.texto, this.etiqueta = 'Punto de partida', this.accion})
     : color = ColoresApp.azul,
       colorSuave = ColoresApp.azulSuave;
 
-  const FilaLugar.destino({super.key, required this.texto, this.etiqueta = 'Destino (B)', this.accion})
+  const FilaLugar.destino({super.key, required this.texto, this.etiqueta = 'Destino', this.accion})
     : color = ColoresApp.rojo,
       colorSuave = ColoresApp.rojoSuave;
 

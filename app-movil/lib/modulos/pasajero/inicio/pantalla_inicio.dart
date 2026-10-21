@@ -400,7 +400,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         texto: esTaxi
             ? 'Con "Cambiar" pides el moto taxi para otra persona, por ejemplo un familiar: marcas dónde lo '
                   'recogen y dónde lo dejan, escribes su nombre y celular y eliges quién paga.'
-            : 'Con "Cambiar" eliges si es una encomienda (un paquete de A a B) o una compra (el repartidor '
+            : 'Con "Cambiar" eliges si es una encomienda (un paquete de un lugar a otro) o una compra (el repartidor '
                   'compra y te lo trae).',
       ),
       if (!esTaxi)
@@ -414,7 +414,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       const PasoGuia(
         icono: Iconos.boxOpen,
         titulo: 'Encomienda o compra',
-        texto: 'Encomienda: el repartidor recoge el paquete en A y lo lleva a B; al recoger y al entregar se '
+        texto: 'Encomienda: el repartidor recoge el paquete en el punto de partida y lo lleva al destino; al recoger y al entregar se '
             'confirma con un código de 6 dígitos y una foto. Compra: dices qué comprar y dónde; el repartidor '
             'te propone el comercio y el monto, tú lo confirmas y te lo lleva.',
       ),
@@ -1384,7 +1384,6 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               child: MapaBase(
                 controlador: _mapa,
                 onTap: eligiendo ? _tocarMapa : null,
-                puntosSinLetra: true,
                 // Con la partida ya marcada, sus lugares guardados aparecen para elegirlos de un toque.
                 marcadoresExtra: [
                   if (eligiendo && _mapa.a != null && !_flujo.guardandoLugar)

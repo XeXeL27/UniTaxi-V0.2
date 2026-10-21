@@ -81,6 +81,13 @@ public class ManejadorGlobalExcepciones {
                 .body(ApiResponse.error("El archivo supera el tamano maximo permitido (5 MB por archivo)"));
     }
 
+    @ExceptionHandler(CuentaSuspendidaException.class)
+    public ResponseEntity<ApiResponse<Void>> cuentaSuspendida(CuentaSuspendidaException e, HttpServletRequest peticion) {
+        registrar(422, peticion, e);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT)
+                .body(ApiResponse.error(e.getMessage(), Map.of("cuenta", "SUSPENDIDA")));
+    }
+
     @ExceptionHandler(NegocioException.class)
     public ResponseEntity<ApiResponse<Void>> negocio(NegocioException e, HttpServletRequest peticion) {
         registrar(422, peticion, e);

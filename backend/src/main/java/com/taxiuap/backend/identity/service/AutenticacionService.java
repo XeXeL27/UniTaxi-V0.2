@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.CredencialesInvalidasException;
+import com.taxiuap.backend.shared.exception.CuentaSuspendidaException;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.vehicle.enums.TipoDocumento;
 import com.taxiuap.backend.vehicle.service.RegistroMotoConductorService;
@@ -47,10 +49,10 @@ public class AutenticacionService {
 
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales invalidas";
     public static final String MENSAJE_CUENTA_SUSPENDIDA =
-            "Tu cuenta esta suspendida. Comunicate con la administracion de UNITAXI";
+            "Tu cuenta está suspendida. Envía un mensaje al administrador para que revise tu caso.";
 
-    public static final String MENSAJE_SUSPENDIDA_SIN_SELFIE = "Tu cuenta esta suspendida porque no subiste tu "
-            + "foto con el carnet a tiempo. Comunicate con la administracion de UNITAXI para habilitarla";
+    public static final String MENSAJE_SUSPENDIDA_SIN_SELFIE = "Tu cuenta está suspendida porque no subiste tu "
+            + "foto con el carnet a tiempo. Envía un mensaje al administrador para que la habilite.";
 
     /** Aviso para una cuenta suspendida: dice si fue por no subir la foto con el carnet. */
     public static String mensajeSuspendida(Persona persona) {
@@ -186,7 +188,7 @@ public class AutenticacionService {
     private static List<Usuario> sinSuspendidas(List<Usuario> cuentas) {
         List<Usuario> activas = cuentas.stream().filter(u -> u.getEstadoUsuario() == EstadoRegistro.A).toList();
         if (activas.isEmpty() && !cuentas.isEmpty()) {
-            throw new NegocioException(mensajeSuspendida(cuentas.get(0).getPersona()));
+            throw new CuentaSuspendidaException(mensajeSuspendida(cuentas.get(0).getPersona()));
         }
         return activas;
     }
@@ -232,7 +234,7 @@ public class AutenticacionService {
                     .orElseThrow(() -> new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS));
 
             if (usuario.getEstadoUsuario() == EstadoRegistro.S) {
-                throw new NegocioException(mensajeSuspendida(usuario.getPersona()));
+                throw new CuentaSuspendidaException(mensajeSuspendida(usuario.getPersona()));
             }
             if (usuario.getEstadoUsuario() != EstadoRegistro.A
                     || usuario.getPersona().getEstadoPersona() != EstadoRegistro.A) {
@@ -243,6 +245,38 @@ public class AutenticacionService {
         } catch (JwtException e) {
             throw new CredencialesInvalidasException(MENSAJE_CREDENCIALES_INVALIDAS);
         }
+    }
+
+    /**
+     * Quien escribe al administrador desde el login. suspendidaVerificada: la contrasena que escribio
+     * coincide con una de sus cuentas suspendidas.
+     */
+    public record PersonaAyuda(Persona persona, boolean suspendidaVerificada) {
+    }
+
+    /**
+     * Persona con cuenta de la app (pasajero o conductor, no eliminada) por su usuario, correo, celular o
+     * carnet. Si [password] coincide con una de sus cuentas, se prefiere esa persona.
+     */
+    public Optional<PersonaAyuda> personaParaAyuda(String identificador, String password) {
+        String id = identificador == null ? "" : identificador.trim();
+        if (id.isEmpty()) return Optional.empty();
+        List<Usuario> cuentas = new ArrayList<>(buscarCandidatos(id));
+        personaRepository.findByCiAndEstadoPersona(id, EstadoRegistro.A)
+                .forEach(p -> usuarioRepository.findByPersonaId(p.getId()).forEach(cuentas::add));
+        List<Usuario> deApp = cuentas.stream()
+                .filter(CredencialesCorreoService::esCuentaDeApp)
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
+                .filter(u -> u.getPersona().getEstadoPersona() == EstadoRegistro.A)
+                .toList();
+        if (deApp.isEmpty()) return Optional.empty();
+        boolean conPassword = password != null && !password.isEmpty();
+        Optional<Usuario> verificada = conPassword
+                ? deApp.stream().filter(u -> passwordEncoder.matches(password, u.getPasswordHash())).findFirst()
+                : Optional.empty();
+        Usuario cuenta = verificada.orElse(deApp.get(0));
+        boolean suspendida = verificada.map(u -> u.getEstadoUsuario() == EstadoRegistro.S).orElse(false);
+        return Optional.of(new PersonaAyuda(cuenta.getPersona(), suspendida));
     }
 
     private List<Usuario> buscarCandidatos(String identificador) {

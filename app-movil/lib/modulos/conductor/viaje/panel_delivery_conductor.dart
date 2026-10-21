@@ -22,16 +22,16 @@ import 'flujo_conductor.dart';
 (String, Color, String, Color) estadoEntregaConductor(Viaje viaje) {
   final datos = viaje.datosEntrega!;
   if (datos.esperandoEnEntrega) {
-    return ('Esperando a quien recibe en B', const Color(0xFFE67E22), '', ColoresApp.azul);
+    return ('Esperando a quien recibe en el punto de entrega', const Color(0xFFE67E22), '', ColoresApp.azul);
   }
   if (datos.estadoEntrega == EstadoEntrega.enMano) {
-    return ('Lleva el paquete al destino (B)', ColoresApp.exito, '', ColoresApp.azul);
+    return ('Lleva el paquete al punto de entrega', ColoresApp.exito, '', ColoresApp.azul);
   }
   final irARecoger =
       datos.tipoEnvio == TipoEnvio.encomienda &&
       (viaje.situacion == SituacionViaje.confirmado || viaje.situacion == SituacionViaje.enCamino);
   if (irARecoger) {
-    return ('Ve a recoger el paquete (A)', ColoresApp.azul, 'Llegué al punto de recogida', ColoresApp.azul);
+    return ('Ve a recoger el paquete', ColoresApp.azul, 'Llegué al punto de recogida', ColoresApp.azul);
   }
   final texto = datos.tipoEnvio == TipoEnvio.compraYEntrega ? 'Compra el pedido' : 'Recoge el paquete';
   return (texto, ColoresApp.azul, '', ColoresApp.azul);
@@ -112,10 +112,10 @@ class ResumenEntregaConductor extends StatelessWidget {
         const SizedBox(height: 12),
         if (!esCompra || viaje.partida != null)
           FilaLugar.partida(
-            etiqueta: esCompra ? 'Comercio (A)' : 'Recoger en (A)',
+            etiqueta: esCompra ? 'Comercio' : 'Recoger en',
             texto: esCompra ? viaje.partida!.texto : viaje.origenDireccion,
           ),
-        FilaLugar.destino(etiqueta: 'Entregar en (B)', texto: viaje.destinoDireccion),
+        FilaLugar.destino(etiqueta: 'Entregar en', texto: viaje.destinoDireccion),
         const SizedBox(height: 12),
         RecuadroPrecio(
           etiqueta: esCompra ? 'Total a cobrar' : MetodoPago.frase('Cobra', viaje.metodoPago),
@@ -540,7 +540,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
               'Código de entrega',
               style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
             ),
-            const Text('Pide el código al receptor en el punto B.', style: TextStyle(color: ColoresApp.textoSuave)),
+            const Text('Pide el código al receptor en el punto de entrega.', style: TextStyle(color: ColoresApp.textoSuave)),
             const SizedBox(height: 12),
             _campoCodigo(),
           ] else ...[

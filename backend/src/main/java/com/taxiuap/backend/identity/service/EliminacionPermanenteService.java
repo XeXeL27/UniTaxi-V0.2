@@ -5,6 +5,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -20,19 +21,22 @@ import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * Personas > Eliminacion permanente (pedido del usuario, 2026-10-02; excepcion a la regla 11 de
  * borrado logico). Borra de la BD, sin vuelta atras, la persona, sus cuentas (con sus credenciales)
  * y todo lo que es solo suyo: dispositivos, notificaciones, favoritos, contactos, moto, documentos,
  * QR, permisos, billetera, ubicacion, datos de estudiante, solicitudes sin viaje, ofertas, mensajes,
- * reportes y alertas; y su carpeta de archivos.
+ * reportes, alertas, datos de entrega de sus pedidos sin viaje y sus mensajes de "Problemas de
+ * ingreso"; y su carpeta de archivos.
  *
  * Los viajes que hizo con otra persona y sus calificaciones NO se borran: son tambien del otro (su
  * historial y su promedio). Pasan al registro fijo "USUARIO ELIMINADO" (persona, usuario, pasajero y
  * conductor con id 0, en X: no aparece en listados ni puede ingresar). Su moto queda solo si esos
  * viajes la usan. Al terminar las secuencias vuelven al ultimo id (el siguiente registro es el correlativo).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -86,6 +90,8 @@ public class EliminacionPermanenteService {
                 select (select count(*) from reporte where id_usuario_reporta in (:usuarios))
                      + (select count(*) from reporte_comentario where id_usuario_reporta in (:usuarios))
                      + (select count(*) from alerta_sos where id_usuario in (:usuarios))""", ids));
+        agregar(elementos, "Mensajes de problemas de ingreso", contar(
+                "select count(*) from solicitud_ayuda_ingreso where id_persona = :persona", ids));
         agregar(elementos, "Documentos PDF del conductor", contar("select count(*) from documento_conductor where id_conductor in (:conductores)", ids));
         agregar(elementos, "QR de cobro", contar("select count(*) from qr_pago_conductor where id_conductor in (:conductores)", ids));
         agregar(elementos, "Motos", contar("select count(*) from vehiculo where id_conductor in (:conductores)", ids));
@@ -126,7 +132,18 @@ public class EliminacionPermanenteService {
         }
         // Se calcula antes de borrar: la carpeta se busca por el id y el CI de la persona.
         almacenamientoArchivos.borrarCarpetaPersonaAlConfirmar(persona);
+        try {
+            borrar(ids);
+        } catch (DataIntegrityViolationException e) {
+            // Una tabla nueva que apunta a la persona y que este borrado no conoce: se deshace todo.
+            log.error("Eliminacion permanente de la persona {} bloqueada por datos relacionados", idPersona, e);
+            throw new NegocioException("No se pudo eliminar: la persona tiene datos relacionados que el sistema "
+                    + "todavia no sabe borrar. Revise logs/taxiuap-errores.log");
+        }
+        secuenciasInitializer.ajustar();
+    }
 
+    private void borrar(Ids ids) {
         boolean conViajes = contar("select count(*) from viaje where id_pasajero in (:pasajeros) or id_conductor in (:conductores)", ids) > 0
                 || contar("select count(*) from calificacion where id_usuario_emisor in (:usuarios) or id_usuario_receptor in (:usuarios)", ids) > 0;
         if (conViajes) {
@@ -157,6 +174,9 @@ public class EliminacionPermanenteService {
         ejecutar("""
                 delete from oferta_viaje where id_sol_viaje in (select id_sol_viaje from solicitud_viaje
                 where id_pasajero in (:pasajeros))""", ids);
+        ejecutar("""
+                delete from datos_entrega where id_sol_viaje in (select id_sol_viaje from solicitud_viaje
+                where id_pasajero in (:pasajeros))""", ids);
         ejecutar("delete from solicitud_viaje where id_pasajero in (:pasajeros)", ids);
         ejecutar("delete from mensaje where id_usuario_emisor in (:usuarios)", ids);
         ejecutar("delete from notificacion where id_usuario in (:usuarios)", ids);
@@ -166,6 +186,7 @@ public class EliminacionPermanenteService {
         ejecutar("delete from reporte where id_usuario_reporta in (:usuarios)", ids);
         ejecutar("delete from reporte_comentario where id_usuario_reporta in (:usuarios)", ids);
         ejecutar("delete from direccion_guardada where id_pasajero in (:pasajeros)", ids);
+        ejecutar("delete from solicitud_ayuda_ingreso where id_persona = :persona", ids);
         ejecutar("delete from permiso_edicion_conductor where id_conductor in (:conductores)", ids);
         ejecutar("delete from documento_conductor where id_conductor in (:conductores)", ids);
         ejecutar("delete from qr_pago_conductor where id_conductor in (:conductores)", ids);
@@ -189,8 +210,6 @@ public class EliminacionPermanenteService {
         ejecutar("delete from conductor where id_conductor in (:conductores)", ids);
         ejecutar("delete from usuario where id_usuario in (:usuarios)", ids);
         ejecutar("delete from persona where id_persona = :persona", ids);
-
-        secuenciasInitializer.ajustar();
     }
 
     // ------------------------------------------------------------------ apoyo

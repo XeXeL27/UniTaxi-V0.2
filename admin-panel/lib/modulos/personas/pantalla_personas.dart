@@ -18,6 +18,7 @@ import '../../widgets/modal_registro.dart';
 import '../../widgets/notificaciones.dart';
 import '../../widgets/tabla/columna_tabla.dart';
 import 'formulario_habilitar_usuario.dart';
+import 'formulario_registrar_persona.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
 
@@ -51,15 +52,28 @@ class PantallaPersonas extends StatelessWidget {
         ),
       ],
       acciones: (recargar) => [
+        // Persona con su cuenta de pasajero (externa o estudiante U.A.P.) y credenciales al correo.
         FilledButton.icon(
+          onPressed: () => flujoCrear(
+            context,
+            formulario: FormularioRegistrarPersona(api: api),
+            tituloExito: '¡Persona registrada!',
+            mensajeExito: (resultado) => (resultado as PersonaRegistrada).mensaje,
+            alTerminar: recargar,
+          ),
+          icon: const Icon(Iconos.userPlus, size: 14),
+          label: const Text('Registrar persona'),
+        ),
+        // Solo los datos, sin cuenta (despues se le habilitan usuarios).
+        OutlinedButton.icon(
           onPressed: () => flujoCrear(
             context,
             formulario: FormularioPersona(api: api),
             mensajeExito: (resultado) => 'Se registró a ${(resultado as Persona).nombreCompleto}.',
             alTerminar: recargar,
           ),
-          icon: const Icon(Iconos.userPlus, size: 14),
-          label: const Text('Agregar persona'),
+          icon: const Icon(Iconos.idCard, size: 14),
+          label: const Text('Solo datos'),
         ),
       ],
       alAbrir: (persona, recargar) => _abrir(context, api, persona, recargar),

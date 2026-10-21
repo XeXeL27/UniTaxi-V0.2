@@ -1,11 +1,13 @@
 package com.taxiuap.backend.communication.repository;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import com.taxiuap.backend.communication.entity.SolicitudAyudaIngreso;
+import com.taxiuap.backend.communication.enums.OrigenAyudaIngreso;
 import com.taxiuap.backend.communication.enums.SituacionAyudaIngreso;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 
@@ -17,5 +19,6 @@ public interface SolicitudAyudaIngresoRepository extends JpaRepository<Solicitud
     long countBySituacionAndEstadoSolAyudaIng(SituacionAyudaIngreso situacion, EstadoRegistro estado);
 
     /** El ultimo mensaje de la persona, para saber si sigue en las 24 horas de espera. */
-    Optional<SolicitudAyudaIngreso> findFirstByPersonaIdAndEstadoSolAyudaIngOrderByFechaDesc(Long idPersona, EstadoRegistro estado);
+    Optional<SolicitudAyudaIngreso> findFirstByPersonaIdAndOrigenInAndEstadoSolAyudaIngOrderByFechaDesc(Long idPersona,
+            Collection<OrigenAyudaIngreso> origenes, EstadoRegistro estado);
 }

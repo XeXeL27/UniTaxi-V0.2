@@ -225,7 +225,7 @@ class DatosEntrega {
           if (_hay(codigoRecogida))
             (
               titulo: 'Código de recogida',
-              donde: 'en el punto A',
+              donde: 'en el punto de recogida',
               codigo: codigoRecogida!.trim(),
               nombre: _sinVacio(nombreRemitente),
               telefono: telefonoRemitente,
@@ -234,7 +234,7 @@ class DatosEntrega {
           if (_hay(codigoEntrega))
             (
               titulo: 'Código de entrega',
-              donde: 'al llegar al punto B',
+              donde: 'al llegar al punto de entrega',
               codigo: codigoEntrega!.trim(),
               nombre: _sinVacio(nombreReceptor),
               telefono: telefonoReceptor,

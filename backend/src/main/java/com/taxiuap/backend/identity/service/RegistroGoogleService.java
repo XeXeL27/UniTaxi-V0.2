@@ -26,6 +26,7 @@ import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.pricing.service.QrPagoConductorService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.ConflictoException;
+import com.taxiuap.backend.shared.exception.CuentaSuspendidaException;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.vehicle.enums.TipoDocumento;
 import com.taxiuap.backend.vehicle.service.RegistroMotoConductorService;
@@ -296,7 +297,7 @@ public class RegistroGoogleService {
         boolean suspendida = usuarioRepository.findByPersonaId(persona.getId()).stream()
                 .anyMatch(u -> u.getEstadoUsuario() == EstadoRegistro.S && rol.getCodigo().equals(u.getRol().getCodigo()));
         if (suspendida) {
-            throw new NegocioException(AutenticacionService.mensajeSuspendida(persona));
+            throw new CuentaSuspendidaException(AutenticacionService.mensajeSuspendida(persona));
         }
         return cuentasActivas(persona).stream().filter(u -> rol.getCodigo().equals(u.getRol().getCodigo())).findFirst();
     }
@@ -317,24 +318,10 @@ public class RegistroGoogleService {
             return new CuentaNueva(usuario, null);
         }
         String contrasena = CredencialesCorreoService.contrasenaLegible();
-        Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol, nombreUsuarioLibre(persona.getCorreo()),
+        Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol,
+                cuentaUsuarioService.nombreUsuarioLibre(persona.getCorreo()),
                 cuentaUsuarioService.codificar(contrasena));
         return new CuentaNueva(usuario, contrasena);
-    }
-
-    /**
-     * Nombre de usuario a partir del correo (lo de antes de la @, con las reglas de NombreUsuario);
-     * si ya existe se le agrega un numero.
-     */
-    private String nombreUsuarioLibre(String correo) {
-        String base = correo.split("@")[0].toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", ".");
-        if (base.length() < 3) base = base + "usuario";
-        if (base.length() > 40) base = base.substring(0, 40);
-        String candidato = base;
-        for (int i = 2; !usuarioRepository.findByNombreUsuario(candidato).isEmpty(); i++) {
-            candidato = base + i;
-        }
-        return candidato;
     }
 
     /** La persona ya existia (por ejemplo, pasajero de Google sin CI): se completa lo que falte. */

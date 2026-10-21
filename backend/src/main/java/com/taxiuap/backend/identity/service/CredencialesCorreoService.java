@@ -271,6 +271,62 @@ public class CredencialesCorreoService {
     }
 
     /** En el celular con la app instalada la abre; si no, abre la web (/app o /admin). */
+    /**
+     * Cuenta de pasajero creada por el administrador desde el panel, con sus credenciales. [carnetPendiente]:
+     * lo que la app le pedira al ingresar (CARNET: las fotos del carnet y la foto con el carnet; SELFIE: solo
+     * la foto con el carnet; null: nada).
+     */
+    public void registradoPorAdmin(Usuario usuario, String contrasena, boolean estudiante, String carnetPendiente) {
+        Persona persona = usuario.getPersona();
+        marcarAviso(persona);
+        String cuerpo = saludo(persona)
+                + "Un administrador de UNITAXI registró tu cuenta de pasajero"
+                + (estudiante ? " como estudiante de la U.A.P. (con descuento en tus viajes)" : "") + ". "
+                + "Estos son tus datos de ingreso:\n\n"
+                + "Usuario: " + usuario.getNombreUsuario() + "\n"
+                + "Contraseña: " + contrasena + "\n\n"
+                + (carnetPendiente == null ? ""
+                        : "SELFIE".equals(carnetPendiente)
+                        ? "Al ingresar por primera vez te pediremos una foto tuya sosteniendo tu carnet de identidad.\n\n"
+                        : "Al ingresar por primera vez te pediremos confirmar tus datos con las fotos de tu carnet de "
+                                + "identidad y una foto tuya sosteniéndolo.\n\n")
+                + CAMBIAR
+                + enlace("PASAJERO")
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Bienvenido a UNITAXI", cuerpo);
+    }
+
+    /** Problemas de ingreso: el administrador reviso el mensaje y habilito la cuenta suspendida. */
+    public void cuentaHabilitada(Persona persona, String nombreUsuario) {
+        if (persona.getCorreo() == null || persona.getCorreo().isBlank()) return;
+        String cuerpo = saludo(persona)
+                + "Revisamos el mensaje que enviaste y habilitamos tu cuenta de UNITAXI. Ya puedes ingresar con tu "
+                + "usuario y tu contraseña de siempre.\n\n"
+                + "Usuario: " + nombreUsuario
+                + enlace("PASAJERO")
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Tu cuenta de UNITAXI fue habilitada", cuerpo);
+    }
+
+    /** Problemas de ingreso: el administrador reviso el mensaje y la cuenta sigue suspendida. */
+    public void cuentaSigueSuspendida(Persona persona, String motivo) {
+        if (persona.getCorreo() == null || persona.getCorreo().isBlank()) return;
+        String cuerpo = saludo(persona)
+                + "Revisamos el mensaje que enviaste. Por ahora tu cuenta de UNITAXI sigue suspendida.\n\n"
+                + "Motivo: " + motivo
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Tu cuenta de UNITAXI sigue suspendida", cuerpo);
+    }
+
+    /** Problemas de ingreso: respuesta escrita por el administrador. */
+    public void respuestaAdministrador(Persona persona, String mensaje) {
+        String cuerpo = saludo(persona)
+                + "Te escribimos por el mensaje que enviaste porque no podías ingresar a UNITAXI.\n\n"
+                + mensaje
+                + FIRMA;
+        correoService.enviar(persona.getCorreo(), "Respuesta a tu mensaje en UNITAXI", cuerpo);
+    }
+
     private String enlace(String rol) {
         String base = urlPublica.endsWith("/") ? urlPublica.substring(0, urlPublica.length() - 1) : urlPublica;
         return "\n\nIniciar sesión: " + base + "/ingresar?rol=" + rol;

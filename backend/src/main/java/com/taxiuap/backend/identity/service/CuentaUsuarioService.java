@@ -51,6 +51,22 @@ public class CuentaUsuarioService {
         return nombreUsuario == null ? null : nombreUsuario.trim().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Nombre de usuario a partir del correo (lo de antes de la @, con las reglas de NombreUsuario);
+     * si ya existe se le agrega un numero.
+     */
+    @Transactional(readOnly = true)
+    public String nombreUsuarioLibre(String correo) {
+        String base = correo.split("@")[0].toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9._-]", ".");
+        if (base.length() < 3) base = base + "usuario";
+        if (base.length() > 40) base = base.substring(0, 40);
+        String candidato = base;
+        for (int i = 2; !usuarioRepository.findByNombreUsuario(candidato).isEmpty(); i++) {
+            candidato = base + i;
+        }
+        return candidato;
+    }
+
     /** Falla si el nombre de usuario ya pertenece a otra persona (idPersona null = persona nueva). */
     @Transactional(readOnly = true)
     public void validarNombreUsuarioDisponible(String nombreUsuario, Long idPersona) {

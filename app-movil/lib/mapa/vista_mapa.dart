@@ -13,7 +13,7 @@ import 'controlador_mapa.dart';
 import 'pin_mapa.dart';
 
 /// Mapa a pantalla completa: tiles de OpenStreetMap, ruta azul entre A y B, tramo naranja de
-/// acercamiento, punto azul del GPS y los pines A y B.
+/// acercamiento, punto azul del GPS y la partida y el destino como circulos sin letra (azul y rojo).
 class MapaBase extends StatelessWidget {
   final ControladorMapa controlador;
 
@@ -27,16 +27,12 @@ class MapaBase extends StatelessWidget {
   /// de A, B y el GPS.
   final List<Widget> capasAnimadas;
 
-  /// Partida y destino como circulos sin letra (azul y rojo) en vez de pines con A y B.
-  final bool puntosSinLetra;
-
   const MapaBase({
     super.key,
     required this.controlador,
     this.onTap,
     this.marcadoresExtra = const [],
     this.capasAnimadas = const [],
-    this.puntosSinLetra = false,
   });
 
   @override
@@ -128,8 +124,8 @@ class MapaBase extends StatelessWidget {
                 rotate: true,
                 markers: [
                   ...marcadoresExtra,
-                  if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
-                  if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
+                  if (a != null) _punto(a.posicion, ColoresApp.azul),
+                  if (b != null) _punto(b.posicion, ColoresApp.rojo),
                   // El GPS va encima de los pines: es lo que se mueve en vivo.
                   // El conductor en un viaje se ve como la moto, no como el punto azul.
                   if (gps != null && !c.ocultarMiUbicacion)
@@ -147,20 +143,12 @@ class MapaBase extends StatelessWidget {
     );
   }
 
-  Marker _punto(LatLng posicion, Color color, String letra) => puntosSinLetra
-      ? Marker(
-          point: posicion,
-          width: CirculoMapa.lado,
-          height: CirculoMapa.lado,
-          child: CirculoMapa(color: color),
-        )
-      : Marker(
-          point: posicion,
-          width: PinMapa.ancho,
-          height: PinMapa.alto,
-          alignment: Alignment.topCenter,
-          child: PinMapa(color: color, letra: letra),
-        );
+  Marker _punto(LatLng posicion, Color color) => Marker(
+        point: posicion,
+        width: CirculoMapa.lado,
+        height: CirculoMapa.lado,
+        child: CirculoMapa(color: color),
+      );
 
   Marker _moto(LatLng posicion, double? rumbo) => Marker(
         point: posicion,

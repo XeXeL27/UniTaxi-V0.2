@@ -22,9 +22,12 @@ import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.identity.dto.HabilitarUsuarioRequest;
 import com.taxiuap.backend.identity.dto.PersonaAdminResponse;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
+import com.taxiuap.backend.identity.dto.RegistroPersonaAdminRequest;
+import com.taxiuap.backend.identity.dto.RegistroPersonaAdminResponse;
 import com.taxiuap.backend.identity.dto.UsuarioAdminResponse;
 import com.taxiuap.backend.identity.service.GestionPersonaService;
 import com.taxiuap.backend.identity.service.GestionUsuarioService;
+import com.taxiuap.backend.identity.service.RegistroPersonaAdminService;
 import com.taxiuap.backend.shared.response.ApiResponse;
 
 import jakarta.validation.Valid;
@@ -38,6 +41,7 @@ public class PersonaAdminController {
 
     private final GestionPersonaService gestionPersonaService;
     private final GestionUsuarioService gestionUsuarioService;
+    private final RegistroPersonaAdminService registroPersonaAdminService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<PersonaAdminResponse>>> listar() {
@@ -53,6 +57,21 @@ public class PersonaAdminController {
     public ResponseEntity<ApiResponse<PersonaAdminResponse>> crear(@Valid @RequestBody PersonaRequest datos) {
         PersonaAdminResponse creada = gestionPersonaService.crear(datos);
         return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Persona registrada", creada));
+    }
+
+    /**
+     * Persona externa o estudiante U.A.P. con su cuenta de pasajero (credenciales al correo). Multipart:
+     * datos + carnetAnverso, carnetReverso y carnetSelfie opcionales.
+     */
+    @PostMapping(value = "/registro", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<RegistroPersonaAdminResponse>> registrar(
+            @Valid @RequestPart("datos") RegistroPersonaAdminRequest datos,
+            @RequestPart(value = "carnetAnverso", required = false) MultipartFile carnetAnverso,
+            @RequestPart(value = "carnetReverso", required = false) MultipartFile carnetReverso,
+            @RequestPart(value = "carnetSelfie", required = false) MultipartFile carnetSelfie) {
+        RegistroPersonaAdminResponse registrada = registroPersonaAdminService.registrar(datos, carnetAnverso,
+                carnetReverso, carnetSelfie);
+        return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.exito("Persona registrada", registrada));
     }
 
     @PutMapping("/{id}")

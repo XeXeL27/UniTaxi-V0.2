@@ -32,3 +32,17 @@ git pull
 
 El usuario necesita permiso para Docker (grupo `docker`) o usar `sudo`; el contenedor corre igual con el usuario
 duenio del repositorio.
+
+## Hora de Bolivia
+
+El backend ya trabaja con la hora de Bolivia aunque la maquina este en UTC (el contenedor lleva
+`TZ=America/La_Paz` y Java `-Duser.timezone=America/La_Paz`; la conexion a la BD usa esa zona). Para que tambien
+la maquina (comando `date`, cron, logs del sistema) muestre la hora de Bolivia, una sola vez:
+
+```bash
+sudo timedatectl set-timezone America/La_Paz
+timedatectl            # debe decir "Time zone: America/La_Paz (-04, -0400)"
+```
+
+No hace falta reiniciar el servicio. Si la BD externa tambien debe mostrar esa hora en sus consultas sueltas:
+`ALTER DATABASE taxiuap SET timezone TO 'America/La_Paz';` (como superusuario de PostgreSQL).

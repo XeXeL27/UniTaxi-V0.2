@@ -51,6 +51,7 @@ class Iconos {
   static const IconData house = CupertinoIcons.house_fill;
   static const IconData idBadge = CupertinoIcons.person_crop_rectangle;
   static const IconData idCard = CupertinoIcons.person_crop_rectangle;
+  static const IconData graduationCap = CupertinoIcons.book;
   static const IconData idCardClip = CupertinoIcons.doc_person;
   static const IconData layerGroup = CupertinoIcons.square_stack_3d_up;
   static const IconData locationDot = CupertinoIcons.location_solid;

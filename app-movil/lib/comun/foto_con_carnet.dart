@@ -188,6 +188,23 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
     if (envia && mounted) await _enviar(usuario, aRevision: true);
   }
 
+  /// "Mas tarde". Con 3 dias o menos de plazo ([plazoUrgente]) antes avisa en rojo que la cuenta se
+  /// suspendera.
+  Future<void> _masTarde(DateTime? plazoUrgente, {required bool conCarnet}) async {
+    final sesion = context.read<Sesion>();
+    if (plazoUrgente != null) {
+      await mostrarErrorDialogo(
+        context,
+        titulo: 'Tu cuenta se suspenderá',
+        mensaje: '${textoTiempoRestante(plazoUrgente)} para confirmar tus datos con '
+            '${conCarnet ? 'las fotos de tu carnet' : 'tu foto con el carnet'}. Si no '
+            '${conCarnet ? 'las subes' : 'la subes'} antes del ${formatoFecha(plazoUrgente)} a las ${_hora(plazoUrgente)}, '
+            'tu cuenta se suspenderá hasta que la administración la habilite.',
+      );
+    }
+    sesion.postergarFotoCarnet();
+  }
+
   @override
   Widget build(BuildContext context) {
     final usuario = context.watch<Sesion>().usuario!;
@@ -195,6 +212,8 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
     final vencido = pendiente == 'VENCIDO';
     final conCarnet = pendiente != 'SELFIE';
     final plazo = usuario.plazoSelfie;
+    // Con 3 dias o menos el aviso pasa a rojo y "Mas tarde" vuelve a advertir de la suspension.
+    final urgente = !vencido && plazo != null && plazo.difference(DateTime.now()) <= const Duration(days: 3);
     final nombre = usuario.primerNombre;
     final String titulo;
     final String texto;
@@ -234,7 +253,10 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
                     ),
                     const SizedBox(height: 8),
                     Text(texto, style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 14.5, height: 1.45)),
-                    if (!vencido && plazo != null) ...[
+                    if (!vencido && plazo != null && urgente) ...[
+                      const SizedBox(height: 14),
+                      _AvisoPlazoUrgente(plazo: plazo, conCarnet: conCarnet),
+                    ] else if (!vencido && plazo != null) ...[
                       const SizedBox(height: 14),
                       Container(
                         padding: const EdgeInsets.all(12),
@@ -248,8 +270,7 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
                             const SizedBox(width: 10),
                             Expanded(
                               child: Text(
-                                'Tienes hasta el ${formatoFecha(plazo)} a las '
-                                '${plazo.hour.toString().padLeft(2, '0')}:${plazo.minute.toString().padLeft(2, '0')}. '
+                                'Tienes hasta el ${formatoFecha(plazo)} a las ${_hora(plazo)}. '
                                 'Si no la subes, tu cuenta se suspenderá hasta que la administración la habilite.',
                                 style: const TextStyle(color: ColoresApp.rutaSecundariaBorde, fontSize: 13.5),
                               ),
@@ -346,7 +367,7 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
                     // Con el carnet vencido tambien entra (por ejemplo, para terminar un viaje en curso), pero el
                     // servidor no le deja pedir viajes ni recibir solicitudes.
                     TextButton(
-                      onPressed: _enviando ? null : context.read<Sesion>().postergarFotoCarnet,
+                      onPressed: _enviando ? null : () => _masTarde(urgente ? plazo : null, conCarnet: conCarnet),
                       child: const Text('Más tarde', style: TextStyle(color: ColoresApp.grisTexto)),
                     ),
                   ],
@@ -355,6 +376,65 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+String _hora(DateTime fecha) => '${fecha.hour.toString().padLeft(2, '0')}:${fecha.minute.toString().padLeft(2, '0')}';
+
+/// "Te quedan 3 días", "Te queda 1 día" o "Te quedan menos de 24 horas" hasta [plazo].
+String textoTiempoRestante(DateTime plazo, {DateTime? ahora}) {
+  final falta = plazo.difference(ahora ?? DateTime.now());
+  if (falta.inHours < 24) return 'Te quedan menos de 24 horas';
+  final dias = falta.inDays;
+  return dias == 1 ? 'Te queda 1 día' : 'Te quedan $dias días';
+}
+
+/// Aviso rojo del plazo cuando quedan 3 dias o menos.
+class _AvisoPlazoUrgente extends StatelessWidget {
+  final DateTime plazo;
+
+  /// Faltan tambien las fotos del carnet (no solo la foto con el carnet).
+  final bool conCarnet;
+
+  const _AvisoPlazoUrgente({required this.plazo, required this.conCarnet});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ColoresApp.rojoSuave,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: ColoresApp.rojo.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(top: 1),
+            child: Icon(Iconos.triangleExclamation, color: ColoresApp.rojo, size: 18),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${textoTiempoRestante(plazo)}: confirma tus datos con ${conCarnet ? 'las fotos' : 'tu foto'}',
+                  style: const TextStyle(color: ColoresApp.rojoOscuro, fontSize: 14.5, fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${conCarnet ? 'Súbelas' : 'Súbela'} antes del ${formatoFecha(plazo)} a las ${_hora(plazo)} o tu cuenta '
+                  'se suspenderá hasta que la administración la habilite.',
+                  style: const TextStyle(color: ColoresApp.rojoOscuro, fontSize: 13.5, height: 1.35),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

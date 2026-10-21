@@ -491,6 +491,23 @@ class Sesion extends ChangeNotifier {
         'celular': celular.trim(),
       });
 
+  /// Mensaje al administrador desde el login (Problemas de ingreso): con que se registro, la contrasena
+  /// que escribio (si la escribio), los problemas marcados, el motivo si marco "Otro" y un celular.
+  Future<void> enviarAyudaIngreso({
+    required String identificador,
+    String? password,
+    required List<String> problemas,
+    String? descripcion,
+    required String celular,
+  }) =>
+      _postAuth('/api/auth/ayuda-ingreso', {
+        'identificador': identificador.trim(),
+        if (password != null && password.isNotEmpty) 'password': password,
+        'problemas': problemas,
+        if (descripcion != null && descripcion.isNotEmpty) 'descripcion': descripcion,
+        'celular': celular.trim(),
+      });
+
   /// Guarda el correo de quien entro sin tenerlo y lo deja en la sesion.
   Future<void> guardarCorreo(String correo) async {
     final http.Response respuesta;
@@ -668,7 +685,14 @@ class Sesion extends ChangeNotifier {
     }
     final json = _decodificar(respuesta);
     if (respuesta.statusCode >= 400 || json['ok'] != true) {
-      throw ApiExcepcion(json['mensaje'] as String? ?? 'Error ${respuesta.statusCode}', codigo: respuesta.statusCode);
+      final errores =
+          (json['errores'] as Map<String, dynamic>?)?.map((clave, valor) => MapEntry(clave, valor.toString())) ??
+          const <String, String>{};
+      throw ApiExcepcion(
+        json['mensaje'] as String? ?? 'Error ${respuesta.statusCode}',
+        codigo: respuesta.statusCode,
+        errores: errores,
+      );
     }
     return json['datos'];
   }

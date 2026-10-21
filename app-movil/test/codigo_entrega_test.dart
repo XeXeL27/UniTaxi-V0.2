@@ -95,7 +95,7 @@ void main() {
     test('el texto del mensaje lleva el nombre de la persona y el codigo', () {
       expect(
         textoWhatsappCodigo(_fase(codigo: '481703', nombre: 'ANA', telefono: '70111222')),
-        'Hola ANA. Tu pedido en UNITAXI. Tu código de recogida es 481703. Muéstraselo al repartidor en el punto A.',
+        'Hola ANA. Tu pedido en UNITAXI. Tu código de recogida es 481703. Muéstraselo al repartidor en el punto de recogida.',
       );
     });
 
@@ -121,7 +121,7 @@ void main() {
       expect(find.text('Código de recogida'), findsOneWidget);
       expect(find.text('481703'), findsOneWidget);
       expect(find.textContaining('ANA'), findsOneWidget);
-      expect(find.textContaining('punto A'), findsOneWidget);
+      expect(find.textContaining('punto de recogida'), findsOneWidget);
     });
 
     testWidgets('muestra tambien el codigo del punto B para mandarlo al receptor', (tester) async {
@@ -130,7 +130,7 @@ void main() {
       expect(find.text('Código de entrega'), findsOneWidget);
       expect(find.text('354208'), findsOneWidget);
       expect(find.textContaining('MARIA'), findsOneWidget);
-      expect(find.textContaining('punto B'), findsOneWidget);
+      expect(find.textContaining('punto de entrega'), findsOneWidget);
     });
 
     testWidgets('con el pedido en mano solo se pinta el codigo de B', (tester) async {
@@ -217,7 +217,7 @@ List<String> _espiarPortapapeles() {
 
 FaseCodigoEntrega _fase({
   String titulo = 'Código de recogida',
-  String donde = 'en el punto A',
+  String donde = 'en el punto de recogida',
   String codigo = '481703',
   String? nombre = 'ANA',
   String? telefono = '70111222',

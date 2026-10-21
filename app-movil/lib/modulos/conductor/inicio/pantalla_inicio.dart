@@ -381,7 +381,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     PasoGuia(
       clave: _guiaSolicitudes,
       titulo: 'Solicitudes de entrega',
-      texto: 'Aquí llegan las encomiendas (llevar un paquete de A a B) y las compras (comprar algo y llevarlo). '
+      texto: 'Aquí llegan las encomiendas (llevar un paquete de un lugar a otro) y las compras (comprar algo y llevarlo). '
           'Cada pedido nuevo se abre solo con 15 segundos para responder; también puedes tocarlo en la lista.',
     ),
     const PasoGuia(
@@ -492,14 +492,14 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     PasoGuia(
       marca: 'conductor.arriba',
       titulo: 'A dónde ir',
-      texto: 'Primero ves solo el punto de recogida (A); cuando tengas el pedido, el mapa pasa al punto de entrega '
-          '(B). "Abrir en Maps" abre Google Maps con la ruta.',
+      texto: 'Primero ves solo el punto de recogida (azul); cuando tengas el pedido, el mapa pasa al punto de entrega '
+          '(rojo). "Abrir en Maps" abre Google Maps con la ruta.',
     ),
     PasoGuia(
       marca: 'conductor.pie',
       icono: Iconos.locationDot,
       titulo: 'Llegué al punto de recogida',
-      texto: 'Tócalo al llegar a A: el cliente recibe un aviso con sonido.',
+      texto: 'Tócalo al llegar al punto de recogida: el cliente recibe un aviso con sonido.',
     ),
     PasoGuia(
       icono: Iconos.boxOpen,
@@ -510,7 +510,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     PasoGuia(
       icono: Iconos.flagCheckered,
       titulo: 'Entregar',
-      texto: 'A 100 m o menos del punto B pide el código de entrega y toma la foto de la persona con su pedido. '
+      texto: 'A 100 m o menos del punto de entrega pide el código de entrega y toma la foto de la persona con su pedido. '
           'Si no sale, avísale con el cronómetro; si no aparece, usa "No se pudo entregar" con el motivo y una '
           'foto.',
     ),

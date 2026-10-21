@@ -56,6 +56,10 @@ public class SolicitudAyudaIngreso extends EntidadAuditable {
     @Column(name = "celular", length = 20)
     private String celular;
 
+    /** Codigos de ProblemaIngreso separados por coma (mensajes desde el login). */
+    @Column(name = "problemas", length = 300)
+    private String problemas;
+
     @Column(name = "descripcion", columnDefinition = "text")
     private String descripcion;
 

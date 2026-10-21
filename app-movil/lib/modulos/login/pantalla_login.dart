@@ -16,6 +16,7 @@ import '../../widgets/marco_acceso.dart';
 import '../registro/ingreso_google.dart';
 import '../registro/pantalla_registro.dart';
 import '../registro/registro_estudiante.dart';
+import 'ayuda_ingreso.dart';
 import 'recuperar_cuenta.dart';
 import 'restablecer_contrasena.dart';
 
@@ -39,6 +40,11 @@ class _PantallaLoginState extends State<PantallaLogin> {
   bool _recordar = false;
   bool _cargando = false;
   late String? _error = widget.errorInicial;
+
+  /// El error es de una cuenta suspendida: debajo se ofrece escribirle al administrador.
+  late bool _suspendida = _esSuspendida(widget.errorInicial);
+
+  static bool _esSuspendida(String? texto) => texto != null && texto.toLowerCase().contains('suspendida');
 
   /// La huella esta activada en este telefono (solo el APK de Android).
   bool _huellaActiva = false;
@@ -130,6 +136,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
     setState(() {
       _cargando = true;
       _error = null;
+      _suspendida = false;
     });
     _empezarEspera();
     try {
@@ -153,7 +160,12 @@ class _PantallaLoginState extends State<PantallaLogin> {
         await Credenciales.olvidar();
       }
     } on ApiExcepcion catch (e) {
-      if (mounted) setState(() => _error = e.mensaje);
+      if (mounted) {
+        setState(() {
+          _error = e.mensaje;
+          _suspendida = e.errores['cuenta'] == 'SUSPENDIDA' || _esSuspendida(e.mensaje);
+        });
+      }
     } finally {
       _terminarEspera();
       if (mounted) setState(() => _cargando = false);
@@ -246,6 +258,23 @@ class _PantallaLoginState extends State<PantallaLogin> {
     await _ingresar();
   }
 
+  /// Mensaje al administrador (Problemas de ingreso). Con la cuenta suspendida lleva la contrasena que
+  /// escribio, asi el caso queda como "Cuenta suspendida".
+  Future<void> _escribirAlAdministrador() async {
+    final enviado = await abrirAyudaIngreso(
+      context,
+      identificador: _usuario.text.trim(),
+      password: _suspendida ? _password.text : null,
+      suspendida: _suspendida,
+    );
+    if (enviado && mounted) {
+      setState(() {
+        _error = null;
+        _suspendida = false;
+      });
+    }
+  }
+
   /// Codigo por correo y contrasena nueva; al terminar deja el correo escrito para ingresar.
   Future<void> _olvideContrasena() async {
     final correo = await abrirRestablecerContrasena(context, correoInicial: _usuario.text.trim());
@@ -310,6 +339,20 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   ],
                 ),
               ),
+              if (_suspendida) ...[
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  onPressed: _cargando ? null : _escribirAlAdministrador,
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    backgroundColor: ColoresApp.rojo,
+                    foregroundColor: ColoresApp.blanco,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  icon: const Icon(Iconos.commentDots, size: 17),
+                  label: const Text('Enviar mensaje al administrador', style: TextStyle(fontWeight: FontWeight.w600)),
+                ),
+              ],
               const SizedBox(height: 16),
             ],
             TextFormField(
@@ -431,6 +474,15 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   child: const Text('Regístrate', style: TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w700)),
                 ),
               ],
+            ),
+            TextButton.icon(
+              onPressed: _cargando ? null : _escribirAlAdministrador,
+              icon: const Icon(Iconos.commentDots, size: 15, color: ColoresApp.textoSuave),
+              label: const Text(
+                '¿Problemas para ingresar? Escríbele al administrador',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5, fontWeight: FontWeight.w600),
+              ),
             ),
           ],
         ),

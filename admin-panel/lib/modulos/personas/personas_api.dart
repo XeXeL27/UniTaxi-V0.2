@@ -13,6 +13,12 @@ class PersonasApi {
 
   Future<void> crearPersona(Map<String, dynamic> datos) => _api.post('/api/admin/personas', datos);
 
+  /// Registrar persona (externa o estudiante U.A.P.) con su cuenta de pasajero. [fotos]: partes
+  /// carnetAnverso, carnetReverso y carnetSelfie (opcionales). Devuelve el resultado del registro.
+  Future<Map<String, dynamic>> registrarPersona(Map<String, dynamic> datos, Map<String, ArchivoSubida> fotos) async =>
+      await _api.enviarMultipart('POST', '/api/admin/personas/registro', datos: datos, archivos: fotos)
+          as Map<String, dynamic>;
+
   Future<void> actualizarPersona(int id, Map<String, dynamic> datos) => _api.put('/api/admin/personas/$id', datos);
 
   Future<void> eliminarPersona(int id) => _api.delete('/api/admin/personas/$id');

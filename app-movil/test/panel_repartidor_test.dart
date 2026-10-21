@@ -81,12 +81,12 @@ void main() {
         ),
       );
 
-      expect(find.text('Entregar en (B)'), findsOneWidget);
-      expect(find.text('Recoger en (A)'), findsNothing);
-      expect(find.text('Comercio (A)'), findsNothing);
+      expect(find.text('Entregar en'), findsOneWidget);
+      expect(find.text('Recoger en'), findsNothing);
+      expect(find.text('Comercio'), findsNothing);
     });
 
-    testWidgets('en una compra ya registrada muestra el comercio como A', (tester) async {
+    testWidgets('en una compra ya registrada muestra el comercio como partida', (tester) async {
       await tester.pumpWidget(
         _envolver(
           ResumenEntregaConductor(
@@ -104,10 +104,10 @@ void main() {
         ),
       );
 
-      expect(find.text('Comercio (A)'), findsOneWidget);
+      expect(find.text('Comercio'), findsOneWidget);
       expect(find.text('Comercio: Farmacia Central'), findsOneWidget);
-      expect(find.text('Entregar en (B)'), findsOneWidget);
-      expect(find.text('Recoger en (A)'), findsNothing);
+      expect(find.text('Entregar en'), findsOneWidget);
+      expect(find.text('Recoger en'), findsNothing);
     });
 
     testWidgets('mientras se puede cancelar deja el boton de cancelar el pedido', (tester) async {
