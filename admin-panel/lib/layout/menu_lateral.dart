@@ -17,10 +17,17 @@ class MenuLateral extends StatelessWidget {
   /// Dentro del drawer (pantallas angostas) se cierra al elegir una opcion.
   final bool enDrawer;
 
-  const MenuLateral({super.key, required this.rutaActual, this.enDrawer = false});
+  /// Grupo que empieza abierto ademas del de la opcion activa (el que se toco en el menu compacto).
+  final String? grupoAbierto;
+
+  /// Se llama al elegir una opcion (el menu que se abrio con el mouse se esconde).
+  final VoidCallback? alElegir;
+
+  const MenuLateral({super.key, required this.rutaActual, this.enDrawer = false, this.grupoAbierto, this.alElegir});
 
   void _ir(BuildContext context, String ruta) {
     if (enDrawer) Navigator.of(context).pop();
+    alElegir?.call();
     context.go(ruta);
   }
 
@@ -91,6 +98,7 @@ class MenuLateral extends StatelessWidget {
                     _GrupoMenu(
                       grupo: grupo,
                       rutaActual: rutaActual,
+                      abiertoAlInicio: grupo.titulo == grupoAbierto,
                       pendientes: grupo.items.fold<int>(0, (suma, i) => suma + _contador(i, avisos)),
                       opcion: (item) => _OpcionMenu(
                         item: item,
@@ -116,8 +124,15 @@ class _GrupoMenu extends StatefulWidget {
   final String rutaActual;
   final int pendientes;
   final Widget Function(ItemMenu item) opcion;
+  final bool abiertoAlInicio;
 
-  const _GrupoMenu({required this.grupo, required this.rutaActual, required this.pendientes, required this.opcion});
+  const _GrupoMenu({
+    required this.grupo,
+    required this.rutaActual,
+    required this.pendientes,
+    required this.opcion,
+    this.abiertoAlInicio = false,
+  });
 
   @override
   State<_GrupoMenu> createState() => _GrupoMenuState();
@@ -133,6 +148,13 @@ class _GrupoMenuState extends State<_GrupoMenu> with SingleTickerProviderStateMi
 
   bool get _contieneActiva => widget.grupo.items.any((i) => i.ruta == widget.rutaActual);
   bool get _abierto => _apertura.status == AnimationStatus.forward || _apertura.status == AnimationStatus.completed;
+
+  @override
+  void initState() {
+    super.initState();
+    // El grupo tocado en el menu compacto se abre con su animacion al desplegarse el menu.
+    if (widget.abiertoAlInicio && !_contieneActiva) _apertura.forward();
+  }
 
   @override
   void didUpdateWidget(_GrupoMenu anterior) {
@@ -398,6 +420,159 @@ class _Contador extends StatelessWidget {
         cantidad > 99 ? '99+' : '$cantidad',
         textAlign: TextAlign.center,
         style: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+/// Menu compacto (solo iconos) del escritorio: el icono de la marca, Inicio y un icono por seccion. La
+/// seccion de la pantalla actual es una pildora blanca levantada con su icono en rojo; con el mouse encima
+/// los iconos se iluminan y crecen un poco. Los pendientes (Problemas de ingreso) van en un numero rojo
+/// sobre el icono de su seccion. El menu completo se despliega encima al acercar el mouse (LayoutAdmin).
+class MenuCompacto extends StatelessWidget {
+  static const ancho = 76.0;
+
+  final String rutaActual;
+
+  /// Se toco el icono de una seccion: se despliega el menu completo con ella abierta.
+  final ValueChanged<GrupoMenu> alTocarGrupo;
+
+  const MenuCompacto({super.key, required this.rutaActual, required this.alTocarGrupo});
+
+  @override
+  Widget build(BuildContext context) {
+    final avisos = context.watch<AvisosAdmin>();
+    return Material(
+      color: ColoresApp.azul,
+      child: Container(
+        width: ancho,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF15346A), ColoresApp.azul, Color(0xFF0A1F42)],
+            stops: [0, 0.45, 1],
+          ),
+        ),
+        child: Column(
+          children: [
+            Container(
+              height: 70,
+              alignment: Alignment.center,
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xFF1F4280), Color(0xFF12305F)],
+                ),
+                border: Border(bottom: BorderSide(color: ColoresApp.rojo, width: 3)),
+                boxShadow: [BoxShadow(color: Color(0x59000000), offset: Offset(0, 3), blurRadius: 8)],
+              ),
+              child: const Icon(Iconos.taxi, color: Colors.white, size: 22),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                children: [
+                  _IconoSeccion(
+                    icono: Menu.inicio.icono,
+                    titulo: Menu.inicio.titulo,
+                    activa: rutaActual == Menu.inicio.ruta,
+                    alPresionar: () => context.go(Menu.inicio.ruta),
+                  ),
+                  for (final grupo in Menu.grupos)
+                    _IconoSeccion(
+                      icono: grupo.icono,
+                      titulo: grupo.titulo,
+                      activa: grupo.items.any((i) => i.ruta == rutaActual),
+                      pendientes: grupo.items.fold<int>(0, (suma, i) => suma + MenuLateral._contador(i, avisos)),
+                      alPresionar: () => alTocarGrupo(grupo),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _IconoSeccion extends StatefulWidget {
+  final IconData icono;
+  final String titulo;
+  final bool activa;
+  final int pendientes;
+  final VoidCallback alPresionar;
+
+  const _IconoSeccion({
+    required this.icono,
+    required this.titulo,
+    required this.activa,
+    required this.alPresionar,
+    this.pendientes = 0,
+  });
+
+  @override
+  State<_IconoSeccion> createState() => _IconoSeccionState();
+}
+
+class _IconoSeccionState extends State<_IconoSeccion> {
+  bool _encima = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final activa = widget.activa;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _encima = true),
+        onExit: (_) => setState(() => _encima = false),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: widget.alPresionar,
+          child: Semantics(
+            button: true,
+            selected: activa,
+            label: widget.titulo,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 220),
+                  curve: Curves.easeOutCubic,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(13),
+                    gradient: activa
+                        ? Relieve.levantado
+                        : LinearGradient(
+                            colors: _encima
+                                ? const [Color(0x2EFFFFFF), Color(0x0DFFFFFF)]
+                                : const [Color(0x00FFFFFF), Color(0x00FFFFFF)],
+                          ),
+                    border: Border(left: BorderSide(color: activa ? ColoresApp.rojo : Colors.transparent, width: 3)),
+                    boxShadow: activa
+                        ? const [
+                            BoxShadow(color: Color(0x4D000000), offset: Offset(0, 2), blurRadius: 4),
+                            BoxShadow(color: Color(0x40000000), offset: Offset(0, 8), blurRadius: 14, spreadRadius: -4),
+                          ]
+                        : const [],
+                  ),
+                  alignment: Alignment.center,
+                  child: AnimatedScale(
+                    scale: _encima && !activa ? 1.15 : 1,
+                    duration: const Duration(milliseconds: 200),
+                    curve: Curves.easeOutBack,
+                    child: Icon(widget.icono, size: 19, color: activa ? ColoresApp.rojo : Colors.white),
+                  ),
+                ),
+                if (widget.pendientes > 0) Positioned(top: -5, right: -6, child: _Contador(widget.pendientes)),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

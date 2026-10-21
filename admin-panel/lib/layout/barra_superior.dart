@@ -47,7 +47,7 @@ class BarraSuperior extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            tooltip: menuVisible ? 'Ocultar menú' : 'Mostrar menú',
+            tooltip: menuVisible ? 'Menú compacto' : 'Fijar el menú completo',
             onPressed: alAlternarMenu,
             icon: const Icon(Iconos.bars, color: ColoresApp.azul, size: 20),
           ),
