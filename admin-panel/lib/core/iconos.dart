@@ -19,6 +19,7 @@ class Iconos {
   static const IconData calendar = CupertinoIcons.calendar;
   static const IconData camera = CupertinoIcons.camera;
   static const IconData paquete = CupertinoIcons.cube_box;
+  static const IconData moneda = CupertinoIcons.creditcard;
   static const IconData check = CupertinoIcons.checkmark;
   static const IconData chevronDown = CupertinoIcons.chevron_down;
   static const IconData chevronLeft = CupertinoIcons.chevron_left;

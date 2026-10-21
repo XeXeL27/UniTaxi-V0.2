@@ -12,6 +12,7 @@ import '../../core/api_excepcion.dart';
 import '../../core/formato.dart';
 import '../../core/relieve.dart';
 import '../../core/tema.dart';
+import '../../widgets/boton_relieve.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/insignia_estado.dart';
 import '../../widgets/modal_registro.dart';
@@ -379,7 +380,8 @@ String monedaBs(double? monto) {
 
 // ---------------------------------------------------------------------------- viajes
 
-/// Historial de viajes con su ruta en el mapa.
+/// Historial de viajes con su ruta en el mapa: una tarjeta en relieve por viaje (numero, estado, fecha,
+/// partida y destino, datos en pastillas) con "Ver ruta" y "Ver entrega". Bajo 640 px los botones van abajo.
 class ListaViajes extends StatelessWidget {
   final List<ViajeExpediente> viajes;
 
@@ -397,103 +399,192 @@ class ListaViajes extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(20),
       children: [
-        Text(
-          '${viajes.length} viajes, ${completados.length} completados, ${monedaBs(total)} en viajes completados',
-          style: const TextStyle(color: ColoresApp.textoSuave),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _Resumen(icono: Iconos.route, texto: '${viajes.length} viajes'),
+            _Resumen(icono: Iconos.circleCheck, texto: '${completados.length} completados'),
+            _Resumen(icono: Iconos.moneda, texto: '${monedaBs(total)} en viajes completados'),
+          ],
         ),
-        const SizedBox(height: 12),
-        for (final viaje in ordenados)
-          Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: ColoresApp.superficie,
-              borderRadius: BorderRadius.circular(RadiosApp.control),
-              border: Border.all(color: ColoresApp.borde),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Viaje #${viaje.id}',
-                            style: const TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul),
-                          ),
-                          const SizedBox(width: 10),
-                          InsigniaEstado(viaje.situacion),
-                          if (viaje.entrega != null) ...[const SizedBox(width: 6), const _EtiquetaEntrega()],
-                          const Spacer(),
-                          Text(
-                            Formato.fechaHora(viaje.fecha),
-                            style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      _Lugar(color: ColoresApp.azul, etiqueta: 'Desde', texto: viaje.origenDireccion),
-                      _Lugar(color: ColoresApp.rojo, etiqueta: 'Hasta', texto: viaje.destinoDireccion),
-                      const SizedBox(height: 6),
-                      Text(
-                        [
-                          mostrarPasajero ? 'Pasajero: ${viaje.nombrePasajero}' : 'Conductor: ${viaje.nombreConductor}',
-                          if (!mostrarPasajero && viaje.placa != null) 'Placa ${viaje.placa}',
-                          'Precio ${monedaBs(viaje.precioFinal)}',
-                          if (viaje.nombreTercero != null)
-                            'Para ${viaje.nombreTercero}${viaje.telefonoTercero == null ? '' : ' (${viaje.telefonoTercero})'}, '
-                                '${viaje.pagaSolicitante ? 'pagó quien lo pidió' : 'pagó quien viajó'}',
-                          if (viaje.canceladoPor != null)
-                            'Cancelado por ${Formato.enumTexto(viaje.canceladoPor).toLowerCase()}',
-                        ].join('   |   '),
-                        style: const TextStyle(fontSize: 13, color: ColoresApp.texto),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: viaje.origen == null || viaje.destino == null
-                          ? null
-                          : () => mostrarRutaViaje(context, viaje),
-                      icon: const Icon(Iconos.route, size: 14),
-                      label: const Text('Ver ruta'),
-                    ),
-                    if (viaje.entrega != null) ...[
-                      const SizedBox(height: 6),
-                      OutlinedButton.icon(
-                        onPressed: () => mostrarEntrega(context, viaje),
-                        icon: const Icon(Iconos.paquete, size: 14),
-                        label: const Text('Ver entrega'),
-                      ),
-                    ],
-                  ],
-                ),
-              ],
-            ),
-          ),
+        const SizedBox(height: 16),
+        for (final viaje in ordenados) _TarjetaViaje(viaje: viaje, mostrarPasajero: mostrarPasajero),
       ],
     );
   }
 }
 
-/// Marca de los viajes DELIVERY en la lista del expediente.
-class _EtiquetaEntrega extends StatelessWidget {
-  const _EtiquetaEntrega();
+/// Pastilla del resumen de arriba (total de viajes, completados, monto).
+class _Resumen extends StatelessWidget {
+  final IconData icono;
+  final String texto;
+
+  const _Resumen({required this.icono, required this.texto});
 
   @override
   Widget build(BuildContext context) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-    decoration: BoxDecoration(color: ColoresApp.azul, borderRadius: BorderRadius.circular(6)),
-    child: const Text(
-      'Entrega',
-      style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+    decoration: Relieve.panelHundido(radio: 999),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icono, size: 14, color: ColoresApp.azul),
+        const SizedBox(width: 6),
+        Text(
+          texto,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ColoresApp.azul),
+        ),
+      ],
+    ),
+  );
+}
+
+class _TarjetaViaje extends StatelessWidget {
+  final ViajeExpediente viaje;
+  final bool mostrarPasajero;
+
+  const _TarjetaViaje({required this.viaje, required this.mostrarPasajero});
+
+  @override
+  Widget build(BuildContext context) {
+    final datos = <(String, String)>[
+      mostrarPasajero ? ('Pasajero', viaje.nombrePasajero) : ('Conductor', viaje.nombreConductor),
+      if (!mostrarPasajero && viaje.placa != null) ('Placa', viaje.placa!),
+      ('Precio', monedaBs(viaje.precioFinal)),
+      if (viaje.nombreTercero != null)
+        ('Para', '${viaje.nombreTercero}${viaje.telefonoTercero == null ? '' : ' (${viaje.telefonoTercero})'}'),
+      if (viaje.nombreTercero != null) ('Pagó', viaje.pagaSolicitante ? 'Quien lo pidió' : 'Quien viajó'),
+      if (viaje.canceladoPor != null) ('Cancelado por', Formato.enumTexto(viaje.canceladoPor)),
+    ];
+    final botones = [
+      BotonRelieve(
+        texto: 'Ver ruta',
+        icono: Iconos.route,
+        tono: TonoBoton.azul,
+        tamano: TamanoBoton.pequeno,
+        ayuda: viaje.origen == null || viaje.destino == null ? 'El viaje no tiene los puntos guardados' : null,
+        alPresionar: viaje.origen == null || viaje.destino == null ? null : () => mostrarRutaViaje(context, viaje),
+      ),
+      if (viaje.entrega != null)
+        BotonRelieve(
+          texto: 'Ver entrega',
+          icono: Iconos.paquete,
+          tono: TonoBoton.turquesa,
+          tamano: TamanoBoton.pequeno,
+          alPresionar: () => mostrarEntrega(context, viaje),
+        ),
+    ];
+    final contenido = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            Text(
+              'Viaje #${viaje.id}',
+              style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: ColoresApp.azul),
+            ),
+            InsigniaEstado(viaje.situacion),
+            if (viaje.entrega != null) const InsigniaEstado('ENTREGA', texto: 'Entrega'),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Iconos.clock, size: 13, color: Relieve.tenue),
+                const SizedBox(width: 4),
+                Text(Formato.fechaHora(viaje.fecha), style: const TextStyle(color: Relieve.tenue, fontSize: 13)),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: Relieve.panelHundido(radio: 12),
+          child: Column(
+            children: [
+              _Lugar(color: ColoresApp.azul, etiqueta: 'Desde', texto: viaje.origenDireccion),
+              _Lugar(color: ColoresApp.rojo, etiqueta: 'Hasta', texto: viaje.destinoDireccion),
+            ],
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 8,
+          runSpacing: 6,
+          children: [for (final (etiqueta, valor) in datos) _Dato(etiqueta: etiqueta, valor: valor)],
+        ),
+      ],
+    );
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: Relieve.tarjeta(),
+      child: LayoutBuilder(
+        builder: (context, restricciones) {
+          if (restricciones.maxWidth < 640) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                contenido,
+                const SizedBox(height: 12),
+                Wrap(spacing: 8, runSpacing: 8, children: botones),
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: contenido),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 150,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final (i, boton) in botones.indexed) ...[if (i > 0) const SizedBox(height: 8), boton],
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Dato del viaje como pastilla: etiqueta en gris y valor en negrita.
+class _Dato extends StatelessWidget {
+  final String etiqueta;
+  final String valor;
+
+  const _Dato({required this.etiqueta, required this.valor});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(8),
+      border: Border.all(color: Relieve.lineaSuave),
+    ),
+    child: Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$etiqueta: ',
+            style: const TextStyle(color: Relieve.tenue),
+          ),
+          TextSpan(
+            text: valor,
+            style: const TextStyle(fontWeight: FontWeight.w600, color: ColoresApp.texto),
+          ),
+        ],
+      ),
+      style: const TextStyle(fontSize: 13),
     ),
   );
 }
@@ -518,7 +609,7 @@ class _Lugar extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           SizedBox(
-            width: 44,
+            width: 52,
             child: Text(etiqueta, style: const TextStyle(fontSize: 12.5, color: ColoresApp.textoSuave)),
           ),
           Expanded(
