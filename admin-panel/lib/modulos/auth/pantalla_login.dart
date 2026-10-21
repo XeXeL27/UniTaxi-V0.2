@@ -24,7 +24,9 @@ class _PantallaLoginState extends State<PantallaLogin> {
   final _password = TextEditingController();
   bool _ocultarPassword = true;
   bool _cargando = false;
-  String? _error;
+
+  /// Si la sesion se cerro sola (por ejemplo, 2 horas sin actividad) se dice por que.
+  late String? _error = context.read<Sesion>().motivoCierre;
 
   @override
   void dispose() {

@@ -21,6 +21,7 @@ import 'formulario_habilitar_usuario.dart';
 import 'formulario_registrar_persona.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
+import 'tipos_usuario.dart';
 
 class PantallaPersonas extends StatelessWidget {
   const PantallaPersonas({super.key});
@@ -166,18 +167,42 @@ class _FichaPersonaState extends State<FichaPersona> {
   late Persona _p = widget.persona;
   DateTime? _nacimiento;
 
+  /// Tipos de usuario de la persona (uno o mas); null mientras se cargan.
+  late final _tipos = EdicionTipos(widget.api);
+  bool _tiposCargados = false;
+
   List<TextEditingController> get _controles => [_ci, _complemento, _nombres, _apellidos, _correo, _telefono];
 
   @override
   void initState() {
     super.initState();
     _llenar();
-    widget.control.vincular(guardar: _guardar, descartar: () => setState(_llenar), hayCambios: () => _cambios);
+    widget.control.vincular(guardar: _guardar, descartar: _descartar, hayCambios: () => _cambios || _tipos.cambio);
+    _cargarTipos();
   }
+
+  Future<void> _cargarTipos() async {
+    try {
+      final datos = await widget.api.tiposPersona(_p.idPersona);
+      if (!mounted) return;
+      setState(() {
+        _tipos.cargar(_p.idPersona, datos.tipos, datos.limiteAdelantoCompra);
+        _tiposCargados = true;
+      });
+    } catch (_) {
+      // Sin los tipos se muestran los de la lista (solo lectura).
+    }
+  }
+
+  void _descartar() => setState(() {
+    _llenar();
+    _tipos.descartar();
+  });
 
   @override
   void dispose() {
     widget.control.desvincular();
+    _tipos.dispose();
     for (final control in _controles) {
       control.dispose();
     }
@@ -210,17 +235,34 @@ class _FichaPersonaState extends State<FichaPersona> {
       mostrarMensaje(context, 'Revise los campos marcados en rojo', error: true);
       return false;
     }
-    if (!_cambios) {
+    if (!_cambios && !_tipos.cambio) {
       mostrarMensaje(context, 'No hay cambios para guardar');
       return true;
     }
+    final avisos = _tipos.avisos();
     final confirmado = await confirmarAccion(
       context,
-      mensaje: 'Va a guardar los cambios de ${_p.nombreCompleto}.',
+      mensaje: 'Va a guardar los cambios de ${_p.nombreCompleto}.${avisos.isEmpty ? '' : ' ${avisos.join(' ')}'}',
       textoConfirmar: 'Sí, guardar',
       tono: TonoBoton.verde,
     );
     if (!confirmado || !mounted) return false;
+    if (_cambios) await _guardarDatos();
+    if (!mounted) return true;
+    final cambiaTipos = _tipos.cambio;
+    final avisoTipos = cambiaTipos ? await _tipos.guardar(context) : null;
+    if (cambiaTipos) await _cargarTipos();
+    if (!mounted) return true;
+    widget.alGuardar();
+    await mostrarExito(
+      context,
+      titulo: '¡Cambios guardados!',
+      mensaje: 'Se actualizaron los datos de ${_p.nombreCompleto}.${avisoTipos == null ? '' : ' $avisoTipos'}',
+    );
+    return true;
+  }
+
+  Future<void> _guardarDatos() async {
     await widget.api.actualizarPersona(_p.idPersona, {
       'ci': _t(_ci.text),
       'complementoCi': _t(_complemento.text),
@@ -230,7 +272,7 @@ class _FichaPersonaState extends State<FichaPersona> {
       'correo': _t(_correo.text),
       'telefono': _t(_telefono.text),
     });
-    if (!mounted) return true;
+    if (!mounted) return;
     setState(() {
       _p = _p.con(
         ci: _t(_ci.text),
@@ -243,13 +285,6 @@ class _FichaPersonaState extends State<FichaPersona> {
       );
       _llenar();
     });
-    widget.alGuardar();
-    await mostrarExito(
-      context,
-      titulo: '¡Cambios guardados!',
-      mensaje: 'Se actualizaron los datos de ${_p.nombreCompleto}.',
-    );
-    return true;
   }
 
   static String? _requerido(String? valor) => (valor == null || valor.trim().isEmpty) ? 'Campo obligatorio' : null;
@@ -323,19 +358,30 @@ class _FichaPersonaState extends State<FichaPersona> {
             child: GrillaFicha(
               children: [
                 DatoFicha('Registrado', Formato.fechaHora(_p.creadoEn)),
-                DatoFicha.widget(
-                  'Usuarios',
-                  contenido: _p.tiposUsuario.isEmpty
-                      ? const Text('Sin usuario', style: TextStyle(color: Relieve.tenue))
-                      : Wrap(
-                          spacing: 6,
-                          runSpacing: 6,
-                          children: [
-                            for (final tipo in _p.tiposUsuario) InsigniaEstado(tipo, texto: nombreTipoUsuario(tipo)),
-                          ],
-                        ),
-                ),
                 if (_p.nombreUsuario != null) DatoFicha('Nombre de usuario', _p.nombreUsuario),
+                if (_tiposCargados)
+                  AnchoCompleto(
+                    child: CampoTiposUsuario(
+                      tipos: _tipos,
+                      editando: e,
+                      alCambiar: () => setState(() {}),
+                      alError: (error) => mostrarMensaje(context, error, error: true),
+                    ),
+                  )
+                else
+                  DatoFicha.widget(
+                    'Tipos de usuario',
+                    contenido: _p.tiposUsuario.isEmpty
+                        ? const Text('Sin usuario', style: TextStyle(color: Relieve.tenue))
+                        : Wrap(
+                            spacing: 6,
+                            runSpacing: 6,
+                            children: [
+                              for (final tipo in _p.tiposUsuario) InsigniaEstado(tipo, texto: nombreTipoUsuario(tipo)),
+                            ],
+                          ),
+                  ),
+                if (e && _tiposCargados && _tipos.pasaADelivery) CampoLimiteAdelanto(tipos: _tipos),
               ],
             ),
           ),

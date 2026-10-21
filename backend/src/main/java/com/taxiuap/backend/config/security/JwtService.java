@@ -47,6 +47,8 @@ public class JwtService {
                 .claim("uid", idUsuario)
                 .claim("rol", rol)
                 .claim("tipo", tipo.name())
+                // iat solo guarda segundos; "emi" lleva los milisegundos para comparar con el corte de sesion.
+                .claim("emi", ahora.getTime())
                 .issuedAt(ahora)
                 .expiration(new Date(ahora.getTime() + duracionMs))
                 .signWith(clave)
@@ -61,7 +63,9 @@ public class JwtService {
             throw new JwtException("Tipo de token invalido");
         }
         Long idUsuario = (claims.get("uid") instanceof Number n) ? n.longValue() : null;
-        return new JwtUser(idUsuario, claims.getSubject(), claims.get("rol", String.class));
+        Long emitido = claims.get("emi") instanceof Number n ? n.longValue()
+                : claims.getIssuedAt() == null ? null : claims.getIssuedAt().getTime();
+        return new JwtUser(idUsuario, claims.getSubject(), claims.get("rol", String.class), emitido);
     }
 
     public long getExpiracionMs() {

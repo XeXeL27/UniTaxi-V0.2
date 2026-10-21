@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.taxiuap.backend.identity.dto.CuentaIngresoResponse;
 import com.taxiuap.backend.identity.dto.LoginRequest;
 import com.taxiuap.backend.identity.dto.RefreshRequest;
 import com.taxiuap.backend.identity.dto.RegistroConductorRequest;
@@ -62,6 +63,12 @@ public class AutenticacionController {
     @PostMapping("/cuentas")
     public ResponseEntity<ApiResponse<List<String>>> cuentas(@Valid @RequestBody LoginRequest datos) {
         return ResponseEntity.ok(ApiResponse.exito(autenticacionService.cuentas(datos.usuario(), datos.password())));
+    }
+
+    /** Como /cuentas, con el tipo de cada una (la de conductor: CONDUCTOR de taxi o DELIVERY). */
+    @PostMapping("/cuentas/detalle")
+    public ResponseEntity<ApiResponse<List<CuentaIngresoResponse>>> cuentasDetalle(@Valid @RequestBody LoginRequest datos) {
+        return ResponseEntity.ok(ApiResponse.exito(autenticacionService.cuentasDetalle(datos.usuario(), datos.password())));
     }
 
     @PostMapping("/refresh")

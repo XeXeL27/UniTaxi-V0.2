@@ -75,6 +75,13 @@ public class Usuario extends EntidadAuditable {
     private String guiasVistas;
 
     /**
+     * Los tokens emitidos antes de esta hora ya no sirven (ni el de refresco): se pone al cambiar los
+     * tipos de usuario de la persona para que vuelva a ingresar y elija con que cuenta. null = sin corte.
+     */
+    @Column(name = "sesion_valida_desde")
+    private LocalDateTime sesionValidaDesde;
+
+    /**
      * true cuando se le envio un correo con sus credenciales y todavia no vio el aviso en la app
      * ("Tus credenciales llegaron a tu correo"). Se apaga al mostrarlo.
      */

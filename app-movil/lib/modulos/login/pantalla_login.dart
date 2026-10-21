@@ -175,6 +175,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
   /// Hoja inferior "¿Como quieres ingresar?" para quien tiene cuenta de pasajero y de conductor, o
   /// antes de ingresar con Google ([conGoogle]).
   Future<String?> _elegirModo(List<String> modos, {bool conGoogle = false}) {
+    final repartidor = !conGoogle && context.read<Sesion>().ingresoConductorRepartidor;
     return showModalBottomSheet<String>(
       context: context,
       constraints: const BoxConstraints(maxWidth: 520),
@@ -197,7 +198,8 @@ class _PantallaLoginState extends State<PantallaLogin> {
                     ? 'Luego eliges tu cuenta de Google. Si eres conductor nuevo te pediremos tu licencia, tu moto y tus documentos.'
                     : modos.contains(Config.rolAdmin)
                     ? 'Tu usuario tiene más de un tipo de cuenta. Elige con cuál entrar.'
-                    : 'Tu cuenta es de pasajero y de conductor. Luego puedes cambiar desde Más.',
+                    : 'Tu cuenta es de pasajero y de ${repartidor ? 'repartidor' : 'conductor'}. Luego puedes '
+                          'cambiar desde Perfil.',
                 style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 13.5),
               ),
               const SizedBox(height: 16),
@@ -212,9 +214,13 @@ class _PantallaLoginState extends State<PantallaLogin> {
               const SizedBox(height: 10),
               if (modos.contains(Config.rolConductor))
                 _OpcionModo(
-                  icono: Iconos.motorcycle,
-                  titulo: 'Conductor',
-                  detalle: conGoogle ? 'Llevo pasajeros y recibo solicitudes de viaje' : 'Recibe solicitudes de viaje',
+                  icono: repartidor ? Iconos.box : Iconos.motorcycle,
+                  titulo: repartidor ? 'Repartidor (delivery)' : conGoogle ? 'Conductor' : 'Conductor de taxi',
+                  detalle: repartidor
+                      ? 'Recibe pedidos de entrega'
+                      : conGoogle
+                      ? 'Llevo pasajeros y recibo solicitudes de viaje'
+                      : 'Recibe solicitudes de viaje',
                   color: ColoresApp.azul,
                   onTap: () => Navigator.of(context).pop(Config.rolConductor),
                 ),

@@ -205,8 +205,16 @@ class _PantallaMasState extends State<PantallaMas> {
           if (widget.onCambiarModo != null)
             TarjetaOpcion(
               icono: CupertinoIcons.arrow_2_squarepath,
-              titulo: esConductor ? 'Cambiar a modo pasajero' : 'Cambiar a modo conductor',
-              detalle: esConductor ? 'Pide un taxi con tu cuenta de pasajero' : 'Recibe solicitudes de viaje',
+              titulo: esConductor
+                  ? 'Cambiar a modo pasajero'
+                  : sesion.conductorRepartidor
+                  ? 'Cambiar a modo repartidor'
+                  : 'Cambiar a modo conductor',
+              detalle: esConductor
+                  ? 'Pide un taxi con tu cuenta de pasajero'
+                  : sesion.conductorRepartidor
+                  ? 'Recibe pedidos de entrega'
+                  : 'Recibe solicitudes de viaje',
               color: ColoresApp.rojo,
               onTap: widget.onCambiarModo,
             ),

@@ -11,6 +11,26 @@ class PersonasApi {
 
   Future<List<Persona>> listarPersonas() => _api.lista('/api/admin/personas', Persona.desdeJson);
 
+  Future<Persona> persona(int id) async =>
+      Persona.desdeJson(await _api.get('/api/admin/personas/$id') as Map<String, dynamic>);
+
+  /// Tipos de usuario de la persona (con DELIVERY para el repartidor) y su limite de adelanto.
+  Future<({List<String> tipos, num? limiteAdelantoCompra})> tiposPersona(int idPersona) async {
+    final datos = await _api.get('/api/admin/personas/$idPersona/tipos') as Map<String, dynamic>;
+    return (
+      tipos: (datos['tipos'] as List<dynamic>? ?? const []).cast<String>(),
+      limiteAdelantoCompra: datos['limiteAdelantoCompra'] as num?,
+    );
+  }
+
+  /// Deja a la persona con estos tipos de usuario (PASAJERO, CONDUCTOR, DELIVERY, ADMIN): quita cuentas,
+  /// agrega la de pasajero o pasa de taxi a delivery. Su sesion en la app se cierra.
+  Future<void> cambiarTipos(int idPersona, List<String> tipos, {num? limiteAdelantoCompra}) =>
+      _api.put('/api/admin/personas/$idPersona/tipos', {
+        'tipos': tipos,
+        'limiteAdelantoCompra': ?limiteAdelantoCompra,
+      });
+
   Future<void> crearPersona(Map<String, dynamic> datos) => _api.post('/api/admin/personas', datos);
 
   /// Registrar persona (externa o estudiante U.A.P.) con su cuenta de pasajero. [fotos]: partes

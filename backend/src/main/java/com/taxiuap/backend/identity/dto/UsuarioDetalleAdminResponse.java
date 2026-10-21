@@ -1,7 +1,9 @@
 package com.taxiuap.backend.identity.dto;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * Todo lo de una cuenta para el modal "Editar" de Usuarios del panel: datos de la persona, si tiene
@@ -35,5 +37,8 @@ public record UsuarioDetalleAdminResponse(
         String categoriaLicencia,
         LocalDate vencimientoLicencia,
         boolean licenciaAnverso,
-        boolean licenciaReverso) {
+        boolean licenciaReverso,
+        /** Tipos de usuario de la persona: PASAJERO, CONDUCTOR (taxi), DELIVERY, ADMIN. */
+        List<String> tiposPersona,
+        BigDecimal limiteAdelantoCompra) {
 }

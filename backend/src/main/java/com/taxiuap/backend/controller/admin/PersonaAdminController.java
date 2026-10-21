@@ -19,12 +19,15 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.UsuarioActual;
+import com.taxiuap.backend.identity.dto.CambiarTiposUsuarioRequest;
 import com.taxiuap.backend.identity.dto.HabilitarUsuarioRequest;
 import com.taxiuap.backend.identity.dto.PersonaAdminResponse;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.RegistroPersonaAdminRequest;
 import com.taxiuap.backend.identity.dto.RegistroPersonaAdminResponse;
+import com.taxiuap.backend.identity.dto.TiposPersonaResponse;
 import com.taxiuap.backend.identity.dto.UsuarioAdminResponse;
+import com.taxiuap.backend.identity.enums.TipoRegistroUsuario;
 import com.taxiuap.backend.identity.service.GestionPersonaService;
 import com.taxiuap.backend.identity.service.GestionUsuarioService;
 import com.taxiuap.backend.identity.service.RegistroPersonaAdminService;
@@ -85,6 +88,23 @@ public class PersonaAdminController {
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable Long id) {
         gestionPersonaService.eliminar(id, UsuarioActual.idUsuario());
         return ResponseEntity.ok(ApiResponse.exito("Persona eliminada", null));
+    }
+
+    /** Tipos de usuario de la persona (con DELIVERY para el repartidor) para su ficha. */
+    @GetMapping("/{id}/tipos")
+    public ResponseEntity<ApiResponse<TiposPersonaResponse>> tipos(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito(gestionUsuarioService.tiposPersona(id)));
+    }
+
+    /**
+     * Cambia los tipos de usuario de la persona (quitar, agregar pasajero, taxi o delivery). Devuelve los
+     * tipos que quedaron. Si cambio algo, su sesion en la app se cierra.
+     */
+    @PutMapping("/{id}/tipos")
+    public ResponseEntity<ApiResponse<List<TipoRegistroUsuario>>> cambiarTipos(
+            @PathVariable Long id, @Valid @RequestBody CambiarTiposUsuarioRequest datos) {
+        return ResponseEntity.ok(ApiResponse.exito("Tipos de usuario actualizados",
+                gestionUsuarioService.cambiarTipos(id, datos, UsuarioActual.idUsuario())));
     }
 
     /**

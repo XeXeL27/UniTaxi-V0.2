@@ -1,6 +1,6 @@
-import 'dart:typed_data';
-
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/api_excepcion.dart';
 import '../../core/cliente_api.dart';
@@ -19,6 +19,7 @@ import '../expediente/expediente_api.dart';
 import '../expediente/modal_carnet.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
+import 'tipos_usuario.dart';
 
 const _categoriasLicencia = ['P', 'M', 'A', 'B', 'C'];
 const _situacionesConductor = ['PENDIENTE', 'APROBADO', 'RECHAZADO', 'SUSPENDIDO'];
@@ -77,6 +78,9 @@ class _FichaUsuarioState extends State<FichaUsuario> {
   final _licencia = TextEditingController();
   final _motivo = TextEditingController();
 
+  /// Tipos de usuario de la persona (uno o mas) y el limite de adelanto al pasar a delivery.
+  late final _tipos = EdicionTipos(widget.api);
+
   UsuarioDetalle? _d;
   String? _errorCarga;
   DateTime? _nacimiento;
@@ -115,6 +119,7 @@ class _FichaUsuarioState extends State<FichaUsuario> {
   @override
   void dispose() {
     widget.control.desvincular();
+    _tipos.dispose();
     for (final control in _controles) {
       control.dispose();
     }
@@ -156,6 +161,7 @@ class _FichaUsuarioState extends State<FichaUsuario> {
     _categoria = _categoriasLicencia.contains(d.categoriaLicencia) ? d.categoriaLicencia : null;
     _suspendida = _suspendidaGuardada;
     _situacion = _situacionGuardada;
+    _tipos.cargar(d.idPersona, d.tiposPersona, d.limiteAdelantoCompra);
     _fotos.clear();
   }
 
@@ -184,7 +190,7 @@ class _FichaUsuarioState extends State<FichaUsuario> {
   bool get _cambioCuenta => _suspendida != _suspendidaGuardada;
   bool get _cambioSituacion => _situacion != _situacionGuardada;
 
-  bool _hayCambios() => _d != null && (_cambiaronDatos || _cambioCuenta || _cambioSituacion);
+  bool _hayCambios() => _d != null && (_cambiaronDatos || _cambioCuenta || _cambioSituacion || _tipos.cambio);
 
   Future<bool> _guardar() async {
     final d = _d;
@@ -202,6 +208,7 @@ class _FichaUsuarioState extends State<FichaUsuario> {
         'La cuenta quedará suspendida: no podrá ingresar y, si tiene la sesión abierta, se cerrará.',
       if (_cambioCuenta && _suspendida == false) 'La cuenta quedará habilitada: podrá volver a ingresar.',
       if (_cambioSituacion) 'La situación del conductor pasará a ${Formato.enumTexto(_situacion!).toLowerCase()}.',
+      ..._tipos.avisos(),
     ];
     final confirmado = await confirmarAccion(
       context,
@@ -238,8 +245,27 @@ class _FichaUsuarioState extends State<FichaUsuario> {
       await widget.api.cambiarSituacionConductor(widget.idConductor!, _situacion!, _t(_motivo.text));
       _situacionGuardada = _situacion;
     }
+    if (!mounted) return true;
+    final avisoTipos = _tipos.cambio ? await _tipos.guardar(context) : null;
+    final nota = avisoTipos == null ? '' : ' $avisoTipos';
 
-    final actualizado = await widget.api.detalleUsuario(d.idUsuario);
+    final UsuarioDetalle actualizado;
+    try {
+      actualizado = await widget.api.detalleUsuario(d.idUsuario);
+    } on ApiExcepcion catch (error) {
+      if (error.codigo != 404 || !_tipos.quitaCuenta(d.rol)) rethrow;
+      // Se le quito el tipo de esta cuenta: ya no existe. Se recarga la lista y se cierra su ventana.
+      if (!mounted) return true;
+      final ruta = ModalRoute.of(context);
+      widget.alGuardar();
+      await mostrarExito(
+        context,
+        titulo: '¡Cambios guardados!',
+        mensaje: 'Se guardaron los cambios de ${d.nombreCompleto}.$nota',
+      );
+      if (ruta != null && ruta.isActive) ruta.navigator?.removeRoute(ruta);
+      return true;
+    }
     if (!mounted) return true;
     setState(() {
       _d = actualizado;
@@ -250,7 +276,7 @@ class _FichaUsuarioState extends State<FichaUsuario> {
     await mostrarExito(
       context,
       titulo: '¡Cambios guardados!',
-      mensaje: 'Se guardaron los datos de ${actualizado.nombreCompleto}.',
+      mensaje: 'Se guardaron los datos de ${actualizado.nombreCompleto}.$nota',
     );
     return true;
   }
@@ -298,7 +324,6 @@ class _FichaUsuarioState extends State<FichaUsuario> {
                       ? null
                       : 'De 3 a 50: letras, números, punto o guion',
                 ),
-                DatoFicha.widget('Tipo', contenido: InsigniaEstado(d.rol, texto: nombreTipoUsuario(d.rol))),
                 if (_suspendida != null)
                   CampoOpcionesFicha<bool>(
                     etiqueta: 'Estado de la cuenta',
@@ -310,6 +335,15 @@ class _FichaUsuarioState extends State<FichaUsuario> {
                   )
                 else
                   DatoFicha.widget('Situación', contenido: InsigniaEstado(d.situacion)),
+                AnchoCompleto(
+                  child: CampoTiposUsuario(
+                    tipos: _tipos,
+                    editando: e,
+                    alCambiar: () => setState(() {}),
+                    alError: (error) => mostrarMensaje(context, error, error: true),
+                  ),
+                ),
+                if (e && _tipos.pasaADelivery) CampoLimiteAdelanto(tipos: _tipos),
               ],
             ),
           ),

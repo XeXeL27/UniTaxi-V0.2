@@ -4,6 +4,7 @@ import '../../core/formato.dart';
 String nombreTipoUsuario(String codigo) => switch (codigo) {
   'PASAJERO' => 'Pasajero',
   'CONDUCTOR' => 'Conductor',
+  'DELIVERY' => 'Delivery',
   'ADMIN' => 'Administrador',
   _ => Formato.enumTexto(codigo),
 };
@@ -200,6 +201,12 @@ class UsuarioDetalle {
   final bool licenciaAnverso;
   final bool licenciaReverso;
 
+  /// Tipos de usuario de la persona: PASAJERO, CONDUCTOR (taxi), DELIVERY y ADMIN.
+  final List<String> tiposPersona;
+
+  /// Cuanto puede adelantar en una compra (solo si tiene cuenta de conductor).
+  final num? limiteAdelantoCompra;
+
   UsuarioDetalle({
     required this.idUsuario,
     required this.idPersona,
@@ -225,6 +232,8 @@ class UsuarioDetalle {
     this.vencimientoLicencia,
     this.licenciaAnverso = false,
     this.licenciaReverso = false,
+    this.tiposPersona = const [],
+    this.limiteAdelantoCompra,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -254,6 +263,8 @@ class UsuarioDetalle {
     vencimientoLicencia: Formato.leerFecha(json['vencimientoLicencia']),
     licenciaAnverso: json['licenciaAnverso'] == true,
     licenciaReverso: json['licenciaReverso'] == true,
+    tiposPersona: (json['tiposPersona'] as List<dynamic>? ?? const []).cast<String>(),
+    limiteAdelantoCompra: json['limiteAdelantoCompra'] as num?,
   );
 }
 

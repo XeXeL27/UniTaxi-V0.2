@@ -14,6 +14,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.taxiuap.backend.config.security.JwtService;
 import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.config.security.TipoToken;
+import com.taxiuap.backend.identity.dto.CuentaIngresoResponse;
 import com.taxiuap.backend.identity.dto.LoginRequest;
 import com.taxiuap.backend.identity.dto.PersonaRequest;
 import com.taxiuap.backend.identity.dto.RefreshRequest;
@@ -25,6 +26,7 @@ import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
+import com.taxiuap.backend.identity.enums.TipoRegistroUsuario;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PersonaRepository;
 import com.taxiuap.backend.identity.repository.UsuarioRepository;
@@ -48,6 +50,9 @@ import static com.taxiuap.backend.identity.service.CuentaUsuarioService.normaliz
 public class AutenticacionService {
 
     private static final String MENSAJE_CREDENCIALES_INVALIDAS = "Credenciales invalidas";
+    /** Empieza con "Tu cuenta" para que la app (tambien las versiones viejas) lo muestre en el login. */
+    public static final String MENSAJE_TIPOS_CAMBIARON =
+            "Tu cuenta cambió: el administrador modificó tus tipos de usuario. Ingresa de nuevo.";
     public static final String MENSAJE_CUENTA_SUSPENDIDA =
             "Tu cuenta está suspendida. Envía un mensaje al administrador para que revise tu caso.";
 
@@ -72,6 +77,7 @@ public class AutenticacionService {
     private final CarnetService carnetService;
     private final LicenciaService licenciaService;
     private final CredencialesCorreoService credencialesCorreoService;
+    private final GestionUsuarioService gestionUsuarioService;
 
     @Transactional
     public TokenResponse registrarPasajero(RegistroPasajeroRequest datos) {
@@ -163,6 +169,28 @@ public class AutenticacionService {
      * usa para saber si la persona entra como pasajero, como conductor o si hay que preguntarle.
      */
     public List<String> cuentas(String identificador, String password) {
+        return cuentasParaIngresar(identificador, password).stream()
+                .map(u -> u.getRol().getCodigo())
+                .distinct()
+                .toList();
+    }
+
+    /**
+     * Como {@link #cuentas}, con el tipo de cada cuenta para la hoja "¿Como quieres ingresar?" de la app:
+     * la de conductor dice si es de taxi (CONDUCTOR) o de reparto (DELIVERY).
+     */
+    public List<CuentaIngresoResponse> cuentasDetalle(String identificador, String password) {
+        Map<String, CuentaIngresoResponse> porRol = new LinkedHashMap<>();
+        for (Usuario usuario : cuentasParaIngresar(identificador, password)) {
+            String rol = usuario.getRol().getCodigo();
+            String tipo = esRol(usuario, RolSistema.CONDUCTOR) && gestionUsuarioService.esRepartidor(usuario)
+                    ? TipoRegistroUsuario.DELIVERY.name() : rol;
+            porRol.putIfAbsent(rol, new CuentaIngresoResponse(rol, tipo));
+        }
+        return List.copyOf(porRol.values());
+    }
+
+    private List<Usuario> cuentasParaIngresar(String identificador, String password) {
         List<Usuario> usuarios = sinSuspendidas(buscarCandidatos(identificador.trim()).stream()
                 .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
                 .filter(u -> u.getPersona().getEstadoPersona() == EstadoRegistro.A)
@@ -176,8 +204,6 @@ public class AutenticacionService {
         boolean tienePasajero = usuarios.stream().anyMatch(u -> esRol(u, RolSistema.PASAJERO));
         return usuarios.stream()
                 .filter(u -> !tienePasajero || conductorHabilitado(u))
-                .map(u -> u.getRol().getCodigo())
-                .distinct()
                 .toList();
     }
 
@@ -239,6 +265,9 @@ public class AutenticacionService {
             if (usuario.getEstadoUsuario() != EstadoRegistro.A
                     || usuario.getPersona().getEstadoPersona() != EstadoRegistro.A) {
                 throw new NegocioException("La cuenta no esta activa");
+            }
+            if (jwtUser.emitidoAntesDe(usuario.getSesionValidaDesde())) {
+                throw new CredencialesInvalidasException(MENSAJE_TIPOS_CAMBIARON);
             }
 
             return generarTokens(usuario);
@@ -319,7 +348,10 @@ public class AutenticacionService {
                 .distinct()
                 .toList();
 
+        boolean repartidor = usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.A && esRol(u, RolSistema.CONDUCTOR))
+                .anyMatch(gestionUsuarioService::esRepartidor);
         return new TokenResponse(tokenAcceso, tokenRefresco, jwtService.getExpiracionMs(), usuarioResponse,
-                rolesDisponibles);
+                rolesDisponibles, repartidor);
     }
 }

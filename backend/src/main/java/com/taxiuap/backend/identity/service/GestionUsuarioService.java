@@ -1,6 +1,9 @@
 package com.taxiuap.backend.identity.service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.taxiuap.backend.config.security.RolSistema;
+import com.taxiuap.backend.identity.dto.CambiarTiposUsuarioRequest;
 import com.taxiuap.backend.identity.dto.DatosConductorRequest;
 import com.taxiuap.backend.identity.dto.HabilitarUsuarioRequest;
+import com.taxiuap.backend.identity.dto.TiposPersonaResponse;
 import com.taxiuap.backend.identity.dto.UsuarioAdminResponse;
 import com.taxiuap.backend.identity.entity.Administrador;
 import com.taxiuap.backend.identity.entity.Conductor;
@@ -36,7 +41,10 @@ import com.taxiuap.backend.trip.enums.SituacionViaje;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.trip.repository.ViajeRepository;
 import com.taxiuap.backend.vehicle.enums.TipoDocumento;
+import com.taxiuap.backend.vehicle.entity.Vehiculo;
+import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 import com.taxiuap.backend.vehicle.service.RegistroMotoConductorService;
+import com.taxiuap.backend.vehicle.service.VehiculoService;
 
 import lombok.RequiredArgsConstructor;
 
@@ -59,6 +67,8 @@ public class GestionUsuarioService {
     private final RegistroMotoConductorService registroMotoConductorService;
     private final ViajeRepository viajeRepository;
     private final SolicitudViajeRepository solicitudViajeRepository;
+    private final VehiculoRepository vehiculoRepository;
+    private final VehiculoService vehiculoService;
 
     public List<UsuarioAdminResponse> listar() {
         return usuarioRepository.findByEstadoUsuarioInOrderByIdAsc(List.of(EstadoRegistro.A, EstadoRegistro.S)).stream()
@@ -98,7 +108,11 @@ public class GestionUsuarioService {
                 throw new NegocioException("Faltan los datos del conductor (licencia y motocicleta)");
             }
             if (delivery) datosConductor = datosConductor.conCategoria(registroMotoConductorService.idCategoriaDelivery());
-            documentos = registroMotoConductorService.validar(datosConductor, archivos);
+            Long idConductorAnterior = cuentaEliminada(persona, RolSistema.CONDUCTOR)
+                    .flatMap(u -> conductorRepository.findByUsuarioId(u.getId()))
+                    .map(Conductor::getId)
+                    .orElse(null);
+            documentos = registroMotoConductorService.validar(datosConductor, archivos, idConductorAnterior);
         } else if (!archivos.isEmpty()) {
             throw new NegocioException("Solo se adjuntan documentos al habilitar un conductor");
         }
@@ -111,28 +125,211 @@ public class GestionUsuarioService {
         List<UsuarioAdminResponse> creados = new ArrayList<>();
         for (RolSistema rol : roles) {
             Credenciales credenciales = rol == RolSistema.ADMIN ? deAdmin : comunes;
-            Usuario usuario = cuentaUsuarioService.crearUsuario(persona, rol, credenciales.nombreUsuario(),
-                    credenciales.passwordHash());
+            // Si la persona ya tuvo una cuenta de este tipo y se la quitaron, se reactiva esa (conserva su
+            // historial y la restriccion unica de nombre y rol no permitiria otra con el mismo nombre).
+            Optional<Usuario> anterior = cuentaEliminada(persona, rol);
+            Usuario usuario = anterior.isPresent()
+                    ? reactivar(anterior.get(), credenciales)
+                    : cuentaUsuarioService.crearUsuario(persona, rol, credenciales.nombreUsuario(),
+                            credenciales.passwordHash());
+            String cargo = datos.cargo() == null || datos.cargo().isBlank() ? null : datos.cargo().trim();
             switch (rol) {
-                case PASAJERO -> cuentaUsuarioService.crearPasajero(usuario);
+                case PASAJERO -> pasajeroRepository.findByUsuarioId(usuario.getId()).ifPresentOrElse(
+                        p -> p.setEstadoPasajero(EstadoRegistro.A), () -> cuentaUsuarioService.crearPasajero(usuario));
                 case CONDUCTOR -> {
-                    Conductor conductor = cuentaUsuarioService.crearConductor(usuario,
-                            datosConductor.numeroLicencia().trim(), datosConductor.categoriaLicencia());
+                    String licencia = datosConductor.numeroLicencia().trim();
+                    Conductor conductor = conductorRepository.findByUsuarioId(usuario.getId()).orElse(null);
+                    boolean nuevo = conductor == null;
+                    if (nuevo) {
+                        conductor = cuentaUsuarioService.crearConductor(usuario, licencia,
+                                datosConductor.categoriaLicencia());
+                    } else {
+                        conductor.setEstadoConductor(EstadoRegistro.A);
+                        conductor.setNumeroLicencia(licencia);
+                        conductor.setCategoriaLicencia(datosConductor.categoriaLicencia());
+                    }
                     if (delivery && datos.limiteAdelantoCompra() != null) {
                         conductor.setLimiteAdelantoCompra(datos.limiteAdelantoCompra());
                     }
-                    registroMotoConductorService.registrar(conductor, datosConductor, documentos);
+                    if (nuevo) {
+                        registroMotoConductorService.registrar(conductor, datosConductor, documentos);
+                    } else {
+                        registroMotoConductorService.registrarDeNuevo(conductor, datosConductor, documentos);
+                    }
                 }
                 case ADMIN -> {
-                    Administrador administrador = new Administrador();
+                    Administrador administrador = administradorRepository.findByUsuarioId(usuario.getId())
+                            .orElseGet(Administrador::new);
                     administrador.setUsuario(usuario);
-                    administrador.setCargo(datos.cargo() == null || datos.cargo().isBlank() ? null : datos.cargo().trim());
+                    administrador.setEstadoAdmin(EstadoRegistro.A);
+                    administrador.setCargo(cargo);
                     administradorRepository.save(administrador);
                 }
             }
             creados.add(aRespuesta(usuario));
         }
+        // Con un tipo nuevo la persona vuelve a ingresar en la app y elige con que cuenta.
+        cerrarSesionesDeApp(persona);
         return creados;
+    }
+
+    /**
+     * Tipos de usuario de la persona segun sus cuentas no eliminadas: PASAJERO, CONDUCTOR (taxi), DELIVERY
+     * (conductor con moto de reparto) y ADMIN.
+     */
+    public List<TipoRegistroUsuario> tiposDe(Persona persona) {
+        List<TipoRegistroUsuario> tipos = new ArrayList<>();
+        Map<RolSistema, Usuario> cuentas = cuentasVigentes(persona);
+        if (cuentas.containsKey(RolSistema.PASAJERO)) tipos.add(TipoRegistroUsuario.PASAJERO);
+        Usuario conductor = cuentas.get(RolSistema.CONDUCTOR);
+        if (conductor != null) {
+            tipos.add(esRepartidor(conductor) ? TipoRegistroUsuario.DELIVERY : TipoRegistroUsuario.CONDUCTOR);
+        }
+        if (cuentas.containsKey(RolSistema.ADMIN)) tipos.add(TipoRegistroUsuario.ADMIN);
+        return tipos;
+    }
+
+    /** Tipos de la persona y el limite de adelanto de su cuenta de conductor (si la tiene). */
+    public TiposPersonaResponse tiposPersona(Long idPersona) {
+        Persona persona = gestionPersonaService.buscarActiva(idPersona);
+        Usuario conductor = cuentasVigentes(persona).get(RolSistema.CONDUCTOR);
+        return new TiposPersonaResponse(
+                tiposDe(persona).stream().map(Enum::name).toList(),
+                conductor == null ? null : conductorRepository.findByUsuarioId(conductor.getId())
+                        .map(Conductor::getLimiteAdelantoCompra).orElse(null));
+    }
+
+    /** La cuenta de conductor tiene una moto activa de reparto (categoria DELIVERY). */
+    public boolean esRepartidor(Usuario usuario) {
+        return conductorRepository.findByUsuarioId(usuario.getId())
+                .map(c -> vehiculoRepository.findByConductorIdInAndEstadoVehiculoOrderByIdAsc(
+                        List.of(c.getId()), EstadoRegistro.A).stream().anyMatch(Vehiculo::esMotoDelivery))
+                .orElse(false);
+    }
+
+    /**
+     * Cambia los tipos de usuario de la persona desde la ficha del panel: quita cuentas (borrado logico),
+     * agrega la de pasajero (con las credenciales que ya tiene) y pasa al conductor de taxi a delivery o
+     * al reves (categoria de su moto). Conductor, delivery o administrador nuevos piden datos: se
+     * agregan con Habilitar usuario. Todo en una transaccion; si algo cambio, la persona vuelve a
+     * ingresar en la app.
+     */
+    @Transactional
+    public List<TipoRegistroUsuario> cambiarTipos(Long idPersona, CambiarTiposUsuarioRequest datos,
+            Long idUsuarioActual) {
+        Persona persona = gestionPersonaService.buscarActiva(idPersona);
+        Set<TipoRegistroUsuario> pedidos = EnumSet.noneOf(TipoRegistroUsuario.class);
+        datos.tipos().stream().filter(Objects::nonNull).forEach(pedidos::add);
+        pedidos.remove(TipoRegistroUsuario.AMBOS);
+        if (pedidos.isEmpty()) {
+            throw new NegocioException("Deje al menos un tipo de usuario. Para quitarle todos use Eliminar");
+        }
+        boolean quiereTaxi = pedidos.contains(TipoRegistroUsuario.CONDUCTOR);
+        boolean quiereDelivery = pedidos.contains(TipoRegistroUsuario.DELIVERY);
+        if (quiereTaxi && quiereDelivery) {
+            throw new NegocioException("Una persona tiene una sola cuenta de conductor: elija conductor de taxi o delivery");
+        }
+
+        Map<RolSistema, Usuario> cuentas = cuentasVigentes(persona);
+        List<TipoRegistroUsuario> actuales = tiposDe(persona);
+        Usuario conductor = cuentas.get(RolSistema.CONDUCTOR);
+        for (TipoRegistroUsuario tipo : pedidos) {
+            boolean nuevo = switch (tipo) {
+                case CONDUCTOR, DELIVERY -> conductor == null;
+                case ADMIN -> !cuentas.containsKey(RolSistema.ADMIN);
+                default -> false;
+            };
+            if (nuevo) {
+                throw new NegocioException("Para agregar " + nombreTipo(tipo)
+                        + " use Habilitar usuario: hacen falta sus datos");
+            }
+        }
+
+        boolean cambio = false;
+        // Primero se agrega el pasajero: toma las credenciales de la cuenta de conductor antes de quitarla.
+        if (pedidos.contains(TipoRegistroUsuario.PASAJERO) && !cuentas.containsKey(RolSistema.PASAJERO)) {
+            habilitar(idPersona, new HabilitarUsuarioRequest(null, List.of(TipoRegistroUsuario.PASAJERO),
+                    null, null, null, null, null), Map.of());
+            cambio = true;
+        }
+        if (conductor != null && (quiereTaxi || quiereDelivery)) {
+            boolean esDelivery = actuales.contains(TipoRegistroUsuario.DELIVERY);
+            if (esDelivery != quiereDelivery) {
+                validarSinViajeEnCurso(conductor, "cambiar el servicio de");
+                vehiculoService.cambiarCategoriaServicio(conductor.getId(), null, quiereDelivery
+                        ? registroMotoConductorService.idCategoriaDelivery()
+                        : registroMotoConductorService.idCategoriaEstandar());
+                cambio = true;
+            }
+            if (quiereDelivery && datos.limiteAdelantoCompra() != null) {
+                conductorRepository.findByUsuarioId(conductor.getId())
+                        .ifPresent(c -> c.setLimiteAdelantoCompra(datos.limiteAdelantoCompra()));
+            }
+        }
+        for (Map.Entry<RolSistema, Usuario> cuenta : cuentas.entrySet()) {
+            boolean queda = switch (cuenta.getKey()) {
+                case PASAJERO -> pedidos.contains(TipoRegistroUsuario.PASAJERO);
+                case CONDUCTOR -> quiereTaxi || quiereDelivery;
+                case ADMIN -> pedidos.contains(TipoRegistroUsuario.ADMIN);
+            };
+            if (!queda) {
+                eliminar(cuenta.getValue().getId(), idUsuarioActual);
+                cambio = true;
+            }
+        }
+        if (cambio) cerrarSesionesDeApp(persona);
+        return tiposDe(persona);
+    }
+
+    /**
+     * Las sesiones abiertas en la app (pasajero y conductor) se cortan en su siguiente peticion: los
+     * tokens emitidos antes de ahora dejan de servir (JwtAuthFilter y el refresco).
+     */
+    private void cerrarSesionesDeApp(Persona persona) {
+        LocalDateTime ahora = LocalDateTime.now();
+        usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
+                .filter(u -> !RolSistema.ADMIN.getCodigo().equals(u.getRol().getCodigo()))
+                .forEach(u -> u.setSesionValidaDesde(ahora));
+    }
+
+    /** Cuentas activas o suspendidas de la persona, una por rol. */
+    private Map<RolSistema, Usuario> cuentasVigentes(Persona persona) {
+        Map<RolSistema, Usuario> cuentas = new EnumMap<>(RolSistema.class);
+        usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .filter(u -> u.getEstadoUsuario() != EstadoRegistro.X)
+                .forEach(u -> cuentas.putIfAbsent(RolSistema.valueOf(u.getRol().getCodigo()), u));
+        return cuentas;
+    }
+
+    /** La cuenta eliminada mas reciente de la persona para ese rol, si la tuvo. */
+    private Optional<Usuario> cuentaEliminada(Persona persona, RolSistema rol) {
+        return usuarioRepository.findByPersonaId(persona.getId()).stream()
+                .filter(u -> u.getEstadoUsuario() == EstadoRegistro.X)
+                .filter(u -> rol.getCodigo().equals(u.getRol().getCodigo()))
+                .max(Comparator.comparing(Usuario::getId));
+    }
+
+    /** Vuelve a activar una cuenta quitada con las credenciales que corresponden ahora. */
+    private Usuario reactivar(Usuario usuario, Credenciales credenciales) {
+        if (!credenciales.nombreUsuario().equals(usuario.getNombreUsuario())
+                && usuarioRepository.existsByNombreUsuarioAndRolCodigo(credenciales.nombreUsuario(),
+                        usuario.getRol().getCodigo())) {
+            throw new ConflictoException("El nombre de usuario " + credenciales.nombreUsuario() + " no esta disponible");
+        }
+        usuario.setNombreUsuario(credenciales.nombreUsuario());
+        usuario.setPasswordHash(credenciales.passwordHash());
+        usuario.setEstadoUsuario(EstadoRegistro.A);
+        return usuario;
+    }
+
+    private static String nombreTipo(TipoRegistroUsuario tipo) {
+        return switch (tipo) {
+            case CONDUCTOR -> "conductor de taxi";
+            case DELIVERY -> "delivery";
+            case ADMIN -> "administrador";
+            default -> "pasajero";
+        };
     }
 
     /**

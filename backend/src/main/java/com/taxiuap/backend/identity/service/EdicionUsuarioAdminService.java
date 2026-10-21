@@ -160,7 +160,9 @@ public class EdicionUsuarioAdminService {
                 conductor.map(Conductor::getCategoriaLicencia).orElse(null),
                 conductor.map(Conductor::getLicenciaVencimiento).orElse(null),
                 conductor.map(c -> c.getLicenciaAnversoUrl() != null).orElse(false),
-                conductor.map(c -> c.getLicenciaReversoUrl() != null).orElse(false));
+                conductor.map(c -> c.getLicenciaReversoUrl() != null).orElse(false),
+                gestionUsuarioService.tiposDe(persona).stream().map(Enum::name).toList(),
+                conductor.map(Conductor::getLimiteAdelantoCompra).orElse(null));
     }
 
     private static boolean tiene(MultipartFile archivo) {

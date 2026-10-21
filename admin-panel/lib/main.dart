@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import 'core/avisos_admin.dart';
 import 'core/cliente_api.dart';
+import 'core/inactividad.dart';
 import 'core/rutas.dart';
 import 'core/sesion.dart';
 import 'core/tema.dart';
@@ -50,6 +51,11 @@ class _AppAdminState extends State<AppAdmin> {
       debugShowCheckedModeBanner: false,
       theme: crearTema(),
       routerConfig: _rutas,
+      builder: (context, hijo) => VigilanteInactividad(
+        sesion: widget.sesion,
+        navegador: _rutas.routerDelegate.navigatorKey,
+        child: hijo ?? const SizedBox.shrink(),
+      ),
       locale: const Locale('es'),
       supportedLocales: const [Locale('es'), Locale('en')],
       localizationsDelegates: const [

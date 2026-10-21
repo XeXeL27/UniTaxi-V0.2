@@ -75,7 +75,23 @@ public class RegistroMotoConductorService {
     /** Validacion del alta desde el panel admin: los documentos obligatorios no se pueden omitir. */
     @Transactional(readOnly = true)
     public Map<TipoDocumento, MultipartFile> validar(DatosConductorRequest datos, Map<String, MultipartFile> archivos) {
-        return validar(datos, archivos, true);
+        return validar(datos, archivos, true, null);
+    }
+
+    /**
+     * Como el alta desde el panel, para un conductor que se vuelve a habilitar: su propia moto anterior
+     * (misma placa) no cuenta como placa repetida.
+     */
+    @Transactional(readOnly = true)
+    public Map<TipoDocumento, MultipartFile> validar(DatosConductorRequest datos, Map<String, MultipartFile> archivos,
+            Long idConductorAnterior) {
+        return validar(datos, archivos, true, idConductorAnterior);
+    }
+
+    @Transactional(readOnly = true)
+    public Map<TipoDocumento, MultipartFile> validar(
+            DatosConductorRequest datos, Map<String, MultipartFile> archivos, boolean exigirObligatorios) {
+        return validar(datos, archivos, exigirObligatorios, null);
     }
 
     /**
@@ -84,9 +100,8 @@ public class RegistroMotoConductorService {
      * [exigirObligatorios] en false (registro desde la app) faltar el CI o la licencia no impide el
      * registro: el conductor los sube despues desde Mis documentos.
      */
-    @Transactional(readOnly = true)
-    public Map<TipoDocumento, MultipartFile> validar(
-            DatosConductorRequest datos, Map<String, MultipartFile> archivos, boolean exigirObligatorios) {
+    private Map<TipoDocumento, MultipartFile> validar(DatosConductorRequest datos, Map<String, MultipartFile> archivos,
+            boolean exigirObligatorios, Long idConductorAnterior) {
         Map<TipoDocumento, MultipartFile> documentos = new EnumMap<>(TipoDocumento.class);
         archivos.forEach((clave, archivo) -> {
             if (QrPagoConductorService.esParteQr(clave) || CarnetService.esParteCarnet(clave)
@@ -110,7 +125,10 @@ public class RegistroMotoConductorService {
                 throw new NegocioException("Falta el documento PDF obligatorio: " + obligatorio.name());
             }
         }
-        if (vehiculoRepository.existsByPlaca(normalizarPlaca(datos.placa()))) {
+        boolean placaDeOtro = vehiculoRepository.findByPlaca(normalizarPlaca(datos.placa()))
+                .filter(v -> idConductorAnterior == null || !idConductorAnterior.equals(v.getConductor().getId()))
+                .isPresent();
+        if (placaDeOtro) {
             throw new ConflictoException("Ya existe un vehiculo con la placa " + normalizarPlaca(datos.placa()));
         }
         return documentos;
@@ -125,6 +143,40 @@ public class RegistroMotoConductorService {
 
         Vehiculo vehiculo = new Vehiculo();
         vehiculo.setConductor(conductor);
+        vehiculo = guardarMoto(vehiculo, moto, categoria, datos);
+        guardarDocumentos(conductor, vehiculo, datos, documentos);
+    }
+
+    /**
+     * Conductor que se vuelve a habilitar (su cuenta habia sido quitada): sus motos anteriores quedan
+     * eliminadas salvo la de la misma placa, que se reutiliza con los datos nuevos.
+     */
+    public void registrarDeNuevo(Conductor conductor, DatosConductorRequest datos,
+            Map<TipoDocumento, MultipartFile> documentos) {
+        String placa = normalizarPlaca(datos.placa());
+        Vehiculo propia = null;
+        for (Vehiculo anterior : vehiculoRepository.findByConductorId(conductor.getId())) {
+            if (placa.equals(anterior.getPlaca())) {
+                propia = anterior;
+            } else {
+                anterior.setEstadoVehiculo(EstadoRegistro.X);
+            }
+        }
+        if (propia == null) {
+            registrar(conductor, datos, documentos);
+            return;
+        }
+        TipoVehiculo moto = tipoVehiculoRepository.findByCodigo(CODIGO_MOTO)
+                .orElseThrow(() -> new NegocioException("El tipo de vehiculo MOTO no esta configurado"));
+        CategoriaServicio categoria = datos.idCategoriaServicio() != null
+                ? vehiculoService.resolverCategoriaServicio(moto, datos.idCategoriaServicio())
+                : categoriaEstandarDeMoto(moto);
+        propia.setEstadoVehiculo(EstadoRegistro.A);
+        guardarDocumentos(conductor, guardarMoto(propia, moto, categoria, datos), datos, documentos);
+    }
+
+    private Vehiculo guardarMoto(Vehiculo vehiculo, TipoVehiculo moto, CategoriaServicio categoria,
+            DatosConductorRequest datos) {
         vehiculo.setTipoVehiculo(moto);
         vehiculo.setCategoriaServicio(categoria);
         vehiculo.setPlaca(normalizarPlaca(datos.placa()));
@@ -132,8 +184,11 @@ public class RegistroMotoConductorService {
         vehiculo.setModelo(vacioANulo(datos.modelo()));
         vehiculo.setColor(vacioANulo(datos.color()));
         vehiculo.setAnio(datos.anio());
-        vehiculo = vehiculoRepository.save(vehiculo);
+        return vehiculoRepository.save(vehiculo);
+    }
 
+    private void guardarDocumentos(Conductor conductor, Vehiculo vehiculo, DatosConductorRequest datos,
+            Map<TipoDocumento, MultipartFile> documentos) {
         Map<TipoDocumento, LocalDate> vencimientos = datos.vencimientos() == null ? Map.of() : datos.vencimientos();
         for (Map.Entry<TipoDocumento, MultipartFile> entrada : documentos.entrySet()) {
             TipoDocumento tipo = entrada.getKey();
@@ -166,6 +221,14 @@ public class RegistroMotoConductorService {
                 .findFirst()
                 .orElseThrow(() -> new NegocioException(
                         "No hay una categoria de servicio DELIVERY activa para MOTO. Creela en Vehiculos > Categorias"));
+    }
+
+    /** Categoria de taxi de la moto (la estandar), para quien deja el reparto. */
+    @Transactional(readOnly = true)
+    public Integer idCategoriaEstandar() {
+        TipoVehiculo moto = tipoVehiculoRepository.findByCodigo(CODIGO_MOTO)
+                .orElseThrow(() -> new NegocioException("El tipo de vehiculo MOTO no esta configurado"));
+        return categoriaEstandarDeMoto(moto).getId();
     }
 
     private CategoriaServicio categoriaEstandarDeMoto(TipoVehiculo moto) {

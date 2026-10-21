@@ -28,6 +28,7 @@ import 'modulos/pasajero/inicio/pantalla_inicio.dart';
 import 'modulos/registro/formulario_conductor.dart';
 import 'widgets/aviso_conexion.dart';
 import 'widgets/requiere_gps.dart';
+import 'widgets/vigilante_inactividad.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -117,6 +118,9 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
   /// Rol de la sesion en el build anterior: de ninguno a uno = acaba de iniciar sesion.
   String? _rolAnterior;
 
+  /// Navegador de la app: al cerrarse la sesion se quitan las ventanas que quedaron abiertas.
+  final _navegador = GlobalKey<NavigatorState>();
+
   @override
   void initState() {
     super.initState();
@@ -169,6 +173,11 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
     final panelAdmin = context.select<Sesion, Map<String, dynamic>?>((s) => s.panelAdmin);
     // Acaba de iniciar sesion: la presentacion corta antes del inicio.
     if (_rolAnterior == null && rol != null && panelAdmin == null) _presentando = true;
+    // Se cerro la sesion (por ejemplo, el administrador cambio sus tipos de usuario): los avisos, guias
+    // y hojas del inicio no deben quedar encima del login.
+    if (_rolAnterior != null && rol == null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _navegador.currentState?.popUntil((ruta) => ruta.isFirst));
+    }
     _rolAnterior = rol;
     // Con la sesion iniciada lo que traia la vuelta de Google ya no se vuelve a mostrar.
     if (rol != null) {
@@ -177,13 +186,18 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
       _codigoPasajero = null;
     }
     return MaterialApp(
+      navigatorKey: _navegador,
       title: 'UNITAXI',
       debugShowCheckedModeBanner: false,
       theme: temaApp(),
-      builder: (context, child) => AnnotatedRegion<SystemUiOverlayStyle>(
-        value: BarraSistema.sobreAzul,
-        child: AvisoSinInternet(child: child ?? const SizedBox.shrink()),
-      ),
+      builder: (context, child) {
+        final contenido = AnnotatedRegion<SystemUiOverlayStyle>(
+          value: BarraSistema.sobreAzul,
+          child: AvisoSinInternet(child: child ?? const SizedBox.shrink()),
+        );
+        // En el navegador la sesion se cierra tras 2 horas sin actividad; en el APK nunca.
+        return kIsWeb ? VigilanteInactividad(sesion: context.read<Sesion>(), child: contenido) : contenido;
+      },
       // Primero la presentacion; al terminar se funde (400 ms) con el login o el inicio. La clave
       // 'app' no cambia despues, asi los cambios de pantalla de abajo no se animan.
       home: AnimatedSwitcher(

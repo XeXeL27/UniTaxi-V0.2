@@ -72,12 +72,16 @@ class FormularioHabilitarUsuario extends StatefulWidget {
   final List<TipoRegistro> tiposPermitidos;
   final String titulo;
 
+  /// Tipos ya marcados al abrir (desde la ficha, al agregar un tipo que pide datos).
+  final List<TipoRegistro> tiposIniciales;
+
   const FormularioHabilitarUsuario({
     super.key,
     required this.api,
     this.persona,
     this.tiposPermitidos = TipoRegistro.values,
     this.titulo = 'Habilitar usuario',
+    this.tiposIniciales = const [],
   });
 
   @override
@@ -108,6 +112,11 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
   @override
   void initState() {
     super.initState();
+    final iniciales = widget.tiposIniciales.where(_tiposDisponibles.contains);
+    if (iniciales.isNotEmpty) {
+      _tipos.addAll(iniciales);
+      return;
+    }
     final primero = _tiposDisponibles.firstOrNull;
     if (primero != null) _tipos.add(primero);
   }
@@ -273,6 +282,15 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
                   spacing: 8,
                   runSpacing: 8,
                   children: [
+                    // Los que ya tiene se ven en gris con un check, para que se entienda por que no estan.
+                    for (final rol in _persona?.tiposUsuario ?? const <String>[])
+                      Chip(
+                        avatar: const Icon(Iconos.check, size: 14, color: Colors.black45),
+                        label: Text('${nombreTipoUsuario(rol)}: ya lo tiene'),
+                        labelStyle: const TextStyle(color: Colors.black54),
+                        backgroundColor: const Color(0xFFF1F3F5),
+                        side: const BorderSide(color: Color(0xFFDDE1E6)),
+                      ),
                     for (final opcion in tipos)
                       FilterChip(
                         selected: _tipos.contains(opcion),

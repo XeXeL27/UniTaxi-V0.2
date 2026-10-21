@@ -60,9 +60,15 @@ public class JwtAuthFilter extends OncePerRequestFilter {
                 JwtUser usuario = jwtService.validar(header.substring(7), TipoToken.ACCESO);
                 // La cuenta suspendida o eliminada queda afuera en su siguiente peticion, aunque su
                 // token todavia no haya vencido (el refresco tambien la rechaza).
-                EstadoRegistro estado = usuarioRepository.findById(usuario.idUsuario())
-                        .map(Usuario::getEstadoUsuario)
-                        .orElse(EstadoRegistro.X);
+                Usuario cuenta = usuarioRepository.findById(usuario.idUsuario()).orElse(null);
+                EstadoRegistro estado = cuenta == null ? EstadoRegistro.X : cuenta.getEstadoUsuario();
+                if (estado == EstadoRegistro.A && usuario.emitidoAntesDe(cuenta.getSesionValidaDesde())) {
+                    // El administrador cambio sus tipos de usuario: vuelve a ingresar y elige con que cuenta.
+                    request.setAttribute(ATRIBUTO_MOTIVO, AutenticacionService.MENSAJE_TIPOS_CAMBIARON);
+                    SecurityContextHolder.clearContext();
+                    chain.doFilter(request, response);
+                    return;
+                }
                 if (estado != EstadoRegistro.A) {
                     request.setAttribute(ATRIBUTO_MOTIVO, estado == EstadoRegistro.S
                             ? motivoSuspendida(usuario.idUsuario())

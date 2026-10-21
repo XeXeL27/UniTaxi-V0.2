@@ -151,6 +151,14 @@ class Sesion extends ChangeNotifier {
   static const _claveRefresco = 'taxiuap_app_token_refresco';
   static const _claveUsuario = 'taxiuap_app_usuario';
   static const _claveRoles = 'taxiuap_app_roles';
+  static const _claveRepartidor = 'taxiuap_app_conductor_repartidor';
+
+  /// Ultima vez que se uso la app en el navegador (milisegundos), compartida entre pestanas.
+  static const _claveActividad = 'taxiuap_app_ultima_actividad';
+
+  /// Solo en el navegador (/app): sin actividad durante este tiempo la sesion se cierra. En el APK nunca.
+  static const limiteInactividad = Duration(hours: 2);
+  static const mensajeInactividad = 'Tu sesión se cerró después de 2 horas sin actividad. Ingresa de nuevo.';
 
   /// Claves con que el panel admin guarda su sesion (lib/core/sesion.dart del admin-panel).
   static const _clavesPanel = (acceso: 'taxiuap_token_acceso', refresco: 'taxiuap_token_refresco', usuario: 'taxiuap_usuario');
@@ -162,6 +170,17 @@ class Sesion extends ChangeNotifier {
   String? _tokenRefresco;
   UsuarioSesion? _usuario;
   List<String> _roles = const [];
+
+  /// La cuenta de conductor de la persona es de reparto (delivery): se dice "repartidor".
+  bool _conductorRepartidor = false;
+
+  bool get conductorRepartidor => _conductorRepartidor;
+
+  /// Tipo de cada cuenta de la ultima consulta del login (rol -> PASAJERO, CONDUCTOR, DELIVERY o ADMIN).
+  Map<String, String> _tiposCuentas = const {};
+
+  /// La cuenta de conductor que se ofrece al ingresar es de reparto.
+  bool get ingresoConductorRepartidor => _tiposCuentas[Config.rolConductor] == 'DELIVERY';
 
   /// Sesion de administrador recien iniciada en el APK (TokenResponse): la app abre el panel dentro
   /// de si misma con esos tokens. No se guarda: al cerrar la app vuelve al login.
@@ -188,6 +207,49 @@ class Sesion extends ChangeNotifier {
   UsuarioSesion? get usuario => _usuario;
   bool get autenticado => _tokenAcceso != null && _usuario != null;
 
+  /// Anota que la persona esta usando la app en el navegador (las otras pestanas lo ven).
+  Future<void> registrarActividad() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setInt(_claveActividad, DateTime.now().millisecondsSinceEpoch);
+    } catch (_) {
+      // Sin almacenamiento cuenta solo la actividad de esta pestana.
+    }
+  }
+
+  /// Ultima actividad anotada en cualquier pestana, o la emision del token de refresco si es posterior
+  /// (un inicio de sesion recien hecho cuenta como actividad).
+  Future<DateTime?> ultimaActividad() async {
+    DateTime? anotada;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.reload();
+      final ms = prefs.getInt(_claveActividad);
+      if (ms != null) anotada = DateTime.fromMillisecondsSinceEpoch(ms);
+    } catch (_) {
+      // Sin almacenamiento solo vale la emision del token.
+    }
+    final emitido = _emitido(_tokenRefresco);
+    if (anotada == null) return emitido;
+    if (emitido == null) return anotada;
+    return emitido.isAfter(anotada) ? emitido : anotada;
+  }
+
+  /// Cuando se emitio un JWT (claim "emi" en milisegundos o "iat" en segundos).
+  static DateTime? _emitido(String? token) {
+    final partes = token?.split('.');
+    if (partes == null || partes.length != 3) return null;
+    try {
+      final datos = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(partes[1])))) as Map<String, dynamic>;
+      final emi = datos['emi'];
+      if (emi is num) return DateTime.fromMillisecondsSinceEpoch(emi.toInt());
+      final iat = datos['iat'];
+      return iat is num ? DateTime.fromMillisecondsSinceEpoch(iat.toInt() * 1000) : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Modo al que puede cambiar la persona sin cerrar sesion (null si solo tiene uno).
   String? get otroModo {
     final actual = _usuario?.rol;
@@ -202,8 +264,16 @@ class Sesion extends ChangeNotifier {
       _tokenRefresco = prefs.getString(_claveRefresco);
       _usuario = usuarioJson == null ? null : UsuarioSesion.desdeJson(jsonDecode(usuarioJson));
       _roles = prefs.getStringList(_claveRoles) ?? const [];
+      _conductorRepartidor = prefs.getBool(_claveRepartidor) ?? false;
       // Una sesion guardada de una cuenta que no es de la app (por ejemplo admin) no sirve aqui.
       if (_usuario != null && !rolesApp.contains(_usuario!.rol)) await cerrar();
+      // En el navegador, si no se uso la app en 2 horas no se recupera la sesion guardada.
+      if (kIsWeb && autenticado) {
+        final ultima = await ultimaActividad();
+        if (ultima == null || DateTime.now().difference(ultima) >= limiteInactividad) {
+          await cerrar(motivo: mensajeInactividad);
+        }
+      }
     } catch (_) {
       _tokenAcceso = null;
       _tokenRefresco = null;
@@ -245,8 +315,22 @@ class Sesion extends ChangeNotifier {
   /// Roles de las cuentas con estas credenciales que se pueden usar desde este login, sin iniciar
   /// sesion (valida la contrasena): pasajero, conductor y administrador.
   Future<List<String>> cuentas(String usuario, String password) async {
-    final datos = await _postAuth('/api/auth/cuentas', {'usuario': usuario.trim(), 'password': password});
-    final roles = [for (final r in (datos as List<dynamic>)) '$r'];
+    final credenciales = {'usuario': usuario.trim(), 'password': password};
+    List<String> roles;
+    try {
+      // Con el tipo de cada cuenta: la de conductor puede ser de taxi o de reparto.
+      final datos = await _postAuth('/api/auth/cuentas/detalle', credenciales) as List<dynamic>;
+      _tiposCuentas = {
+        for (final cuenta in datos.cast<Map<String, dynamic>>()) '${cuenta['rol']}': '${cuenta['tipo']}',
+      };
+      roles = _tiposCuentas.keys.toList();
+    } on ApiExcepcion catch (e) {
+      // Servidor sin /cuentas/detalle: solo los roles.
+      if (e.codigo != 404) rethrow;
+      final datos = await _postAuth('/api/auth/cuentas', credenciales);
+      roles = [for (final r in (datos as List<dynamic>)) '$r'];
+      _tiposCuentas = {for (final r in roles) r: r};
+    }
     return [...roles.where(rolesApp.contains), if (roles.contains(Config.rolAdmin)) Config.rolAdmin];
   }
 
@@ -616,7 +700,9 @@ class Sesion extends ChangeNotifier {
           .then((_) {}, onError: (_) {}));
     }
     unawaited(Push.olvidar());
-    motivoCierre = motivo;
+    // Una peticion que sale despues del cierre (por ejemplo, al cerrarse una guia) vuelve a cerrar sin
+    // motivo: se conserva el que ya se mostraba en el login.
+    motivoCierre = motivo ?? (autenticado ? null : motivoCierre);
     _panelAdmin = null;
     _tokenAcceso = null;
     _tokenRefresco = null;
@@ -641,12 +727,14 @@ class Sesion extends ChangeNotifier {
     _tokenRefresco = datos['tokenRefresco'] as String;
     _usuario = UsuarioSesion.desdeJson(datos['usuario'] as Map<String, dynamic>);
     _roles = [for (final r in (datos['rolesDisponibles'] as List<dynamic>? ?? const [])) '$r'];
+    _conductorRepartidor = datos['conductorRepartidor'] == true;
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_claveAcceso, _tokenAcceso!);
       await prefs.setString(_claveRefresco, _tokenRefresco!);
       await prefs.setString(_claveUsuario, jsonEncode(_usuario!.aJson()));
       await prefs.setStringList(_claveRoles, _roles);
+      await prefs.setBool(_claveRepartidor, _conductorRepartidor);
     } catch (_) {
       // Sin almacenamiento la sesion vive solo mientras la app este abierta.
     }

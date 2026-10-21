@@ -9,5 +9,7 @@ public record TokenResponse(
         long expiraEnMs,
         UsuarioResponse usuario,
         /** Roles de todas las cuentas activas de la persona (para cambiar de modo en la app). */
-        List<String> rolesDisponibles) {
+        List<String> rolesDisponibles,
+        /** La cuenta de conductor de la persona es de reparto (moto DELIVERY): la app dice "repartidor". */
+        boolean conductorRepartidor) {
 }
