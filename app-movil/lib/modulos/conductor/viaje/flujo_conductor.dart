@@ -18,8 +18,9 @@ import '../../../comun/modelos_viaje.dart';
 enum EtapaConductor { cargando, lista, detalle, enViaje }
 
 /// Flujo del conductor: ve la lista de solicitudes, revisa la ruta de una antes de aceptarla y
-/// lleva el viaje por sus estados. El viaje se finaliza con el boton o solo, cuando el GPS
-/// queda a menos de [metrosLlegada] del destino.
+/// lleva el viaje por sus estados. El viaje se finaliza deslizando y confirmando el cobro; al quedar
+/// el GPS a menos de [metrosLlegada] del destino se le pregunta solo (una vez por viaje), nunca se
+/// cierra sin que confirme.
 class FlujoConductor extends ChangeNotifier {
   static const _intervaloLista = Duration(seconds: 4);
   static const _intervaloViaje = Duration(seconds: 5);
@@ -88,8 +89,9 @@ class FlujoConductor extends ChangeNotifier {
   /// bloqueada salvo Mas, donde los sube.
   List<String> documentosFaltantes = const [];
 
-  /// La lista de solicitudes esta a la vista (desde el rediseno siempre lo esta en Inicio: el panel
-  /// "Solicitudes cerca" ya no se pliega). Lo que se ve en ella deja de contar como nuevo.
+  /// La lista de solicitudes esta a la vista: el panel "Solicitudes cerca" se baja con el boton azul
+  /// a una sola linea para ver el mapa (la tarjeta de 15 s de una solicitud nueva se abre igual). Lo
+  /// que se ve en ella deja de contar como nuevo.
   bool listaAbierta = true;
 
   /// Viajes o entregas completados hoy (null mientras no se consulto). Solo la cantidad.
@@ -119,7 +121,11 @@ class FlujoConductor extends ChangeNotifier {
   Timer? _sondeoActivos;
   bool _consultandoActivos = false;
   bool _consultando = false;
-  bool _finalizandoSolo = false;
+  /// Viajes en los que ya se pregunto por el cobro al llegar al destino.
+  final Set<int> _preguntadoAlLlegar = {};
+
+  /// Viaje que llego a su destino: la pantalla abre la confirmacion del cobro (ver [tomarLlegadaDestino]).
+  Viaje? llegadaDestino;
   bool _cerrado = false;
 
   FlujoConductor({required this.api, required this.mapa, this.chat}) {
@@ -183,6 +189,7 @@ class FlujoConductor extends ChangeNotifier {
     conCuentaRegresiva = false;
     viaje = null;
     mapa.limpiar();
+    mapa.cambiarMiUbicacionComoMoto(false);
     final gps = mapa.miUbicacion;
     if (gps != null) mapa.centrarEn(gps, zoom: 15);
     _revisarSondeoActivos();
@@ -363,8 +370,10 @@ class FlujoConductor extends ChangeNotifier {
     _conocidas = null;
     etapa = EtapaConductor.enViaje;
     seleccionada = null;
-    _finalizandoSolo = false;
+    // En un viaje el conductor se ve como la moto y no como el punto azul.
+    mapa.cambiarMiUbicacionComoMoto(true);
     if (nuevo.datosEntrega?.tipoEnvio == TipoEnvio.encomienda) {
+      mapa.cambiarFuenteAvance(FuenteAvance.ninguna);
       // Encomienda: primero solo el punto de recogida (A); con el paquete en mano, solo el destino (B).
       final conPaquete = _conPaquete(nuevo);
       if ((esOtro || conPaquete != _faseConPaquete) && nuevo.tieneRuta) {
@@ -383,6 +392,10 @@ class FlujoConductor extends ChangeNotifier {
         destino: nuevo.destino == null ? null : nuevo.puntoB,
         esOtro: esOtro,
         conAcercamiento: _vaABuscarPasajero(nuevo.situacion),
+      );
+      // Con el pasajero (o el pedido) a bordo, la ruta A-B se va borrando con el GPS.
+      mapa.cambiarFuenteAvance(
+        nuevo.situacion == SituacionViaje.enCurso ? FuenteAvance.gps : FuenteAvance.ninguna,
       );
     }
     _iniciarSondeo(_consultarViaje, _intervaloViaje);
@@ -543,8 +556,9 @@ class FlujoConductor extends ChangeNotifier {
     }
   }
 
-  /// Avanza al siguiente estado del viaje segun el actual.
-  Future<void> avanzar() async {
+  /// Avanza al siguiente estado del viaje segun el actual. Al finalizar, [pagoRecibido] dice que el
+  /// conductor confirmo el cobro.
+  Future<void> avanzar({bool pagoRecibido = false}) async {
     final actual = viaje;
     if (actual == null || ocupado) return;
     ocupado = true;
@@ -554,7 +568,7 @@ class FlujoConductor extends ChangeNotifier {
         SituacionViaje.confirmado => await api.enCamino(actual.id),
         SituacionViaje.enCamino => await api.llegue(actual.id),
         SituacionViaje.llego => await api.iniciar(actual.id),
-        SituacionViaje.enCurso => await api.finalizar(actual.id),
+        SituacionViaje.enCurso => await api.finalizar(actual.id, pagoRecibido: pagoRecibido),
         _ => actual,
       };
       _aplicar(nuevo);
@@ -653,17 +667,23 @@ class FlujoConductor extends ChangeNotifier {
     }
   }
 
-  /// Regla del usuario: al llegar a menos de 50 m del destino el viaje se finaliza solo.
+  /// Al llegar a menos de [metrosLlegada] del destino el viaje ya no se finaliza solo (el conductor no
+  /// confirmaba el cobro): se pide a la pantalla que pregunte si finaliza y si cobro.
   void _alMoverseGps(LatLng posicion) {
     final actual = viaje;
-    if (etapa != EtapaConductor.enViaje || actual == null || _finalizandoSolo || ocupado) return;
+    if (etapa != EtapaConductor.enViaje || actual == null || ocupado) return;
     if (actual.datosEntrega != null || actual.situacion != SituacionViaje.enCurso || actual.destino == null) return;
+    if (_preguntadoAlLlegar.contains(actual.id)) return;
     if (ServiciosMapa.metros(posicion, actual.destino!) > metrosLlegada) return;
-    _finalizandoSolo = true;
-    avanzar().catchError((_) {
-      // Si falla (sin red), se vuelve a intentar con la proxima posicion del GPS.
-      _finalizandoSolo = false;
-    });
+    _preguntadoAlLlegar.add(actual.id);
+    llegadaDestino = actual;
+    _avisar();
+  }
+
+  Viaje? tomarLlegadaDestino() {
+    final v = llegadaDestino;
+    llegadaDestino = null;
+    return v;
   }
 
   /// Distancia en linea recta desde el conductor hasta un punto, si hay GPS.

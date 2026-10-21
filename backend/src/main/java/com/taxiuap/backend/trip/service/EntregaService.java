@@ -370,7 +370,7 @@ public class EntregaService {
     }
 
     private ViajeResponse completarEntrega(Long idViaje) {
-        ViajeResponse respuesta = viajeService.finalizarDesdeEntrega(idViaje, new FinalizarViajeRequest(null));
+        ViajeResponse respuesta = viajeService.finalizarDesdeEntrega(idViaje, FinalizarViajeRequest.sinDatos());
         avisarCliente(idViaje, "PAQUETE_ENTREGADO", "Tu paquete fue entregado",
                 " confirmó la entrega con una foto.");
         actualizarConstancia(idViaje);

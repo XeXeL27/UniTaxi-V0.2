@@ -82,6 +82,12 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
 
     long countByConductorIdAndSituacionViajeNotIn(Long idConductor, List<SituacionViaje> situaciones);
 
+    /** De estos conductores, los que tienen algun viaje sin terminar (para no mostrarlos como libres). */
+    @Query("select distinct v.conductor.id from Viaje v where v.conductor.id in :ids "
+            + "and v.situacionViaje not in :finales and v.estadoViaje = :estado")
+    List<Long> conductoresConViajeActivo(@Param("ids") List<Long> idConductores,
+            @Param("finales") List<SituacionViaje> finales, @Param("estado") EstadoRegistro estado);
+
     /**
      * Cuenta los viajes de un estudiante con descuento estudiantil aplicado en un rango de
      * fechas, usado por el calculo de precio para respetar viajes_maximos_dia de la regla 3.

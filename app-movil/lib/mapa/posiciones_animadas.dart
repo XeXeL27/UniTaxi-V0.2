@@ -12,8 +12,15 @@ class PosicionesAnimadas extends ChangeNotifier {
   final Map<int, LatLng> _desde = {};
   final Map<int, LatLng> _hasta = {};
 
-  PosicionesAnimadas({required TickerProvider vsync, Duration duracion = const Duration(milliseconds: 1600)})
-    : _animacion = AnimationController(vsync: vsync, duration: duracion) {
+  /// Ritmo del deslizamiento. Lineal, con la duracion igual a la frecuencia de las posiciones, el
+  /// marcador avanza sin frenar entre una y otra (se ve en movimiento continuo).
+  final Curve curva;
+
+  PosicionesAnimadas({
+    required TickerProvider vsync,
+    Duration duracion = const Duration(milliseconds: 1600),
+    this.curva = Curves.easeInOut,
+  }) : _animacion = AnimationController(vsync: vsync, duration: duracion) {
     _animacion.addListener(notifyListeners);
   }
 
@@ -22,7 +29,7 @@ class PosicionesAnimadas extends ChangeNotifier {
     final hasta = _hasta[id];
     if (hasta == null) return null;
     final desde = _desde[id] ?? hasta;
-    final t = Curves.easeInOut.transform(_animacion.value);
+    final t = curva.transform(_animacion.value);
     return LatLng(
       desde.latitude + (hasta.latitude - desde.latitude) * t,
       desde.longitude + (hasta.longitude - desde.longitude) * t,

@@ -28,6 +28,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
+import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
@@ -41,7 +42,10 @@ import com.taxiuap.backend.location.repository.DisponibilidadConductorRepository
 import com.taxiuap.backend.location.repository.UbicacionConductorRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.location.dto.ConductorEnLineaResponse;
+import com.taxiuap.backend.trip.repository.ViajeRepository;
 import com.taxiuap.backend.trip.service.SeguimientoViajePublisher;
+import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
 
@@ -63,6 +67,10 @@ class UbicacionServiceTest {
     private ConductorUbicacionPublisher publisher;
     @Mock
     private SeguimientoViajePublisher seguimientoViajePublisher;
+    @Mock
+    private ViajeRepository viajeRepository;
+    @Mock
+    private UsuarioRepository usuarioRepository;
 
     @InjectMocks
     private UbicacionService servicio;
@@ -364,5 +372,87 @@ class UbicacionServiceTest {
         assertEquals(List.of(), servicio.listaFlota());
 
         verify(ubicacionConductorRepository, never()).findByConductorIdIn(anyList());
+    }
+
+    // -------------------------------------------------------------- libres para el pasajero
+
+    /** Conductor aprobado, de la persona [idPersona], con la cuenta en [estadoCuenta]. */
+    private static Conductor conductor(Long id, Long idPersona, EstadoRegistro estadoCuenta) {
+        Persona persona = new Persona();
+        persona.setId(idPersona);
+        Usuario usuario = new Usuario();
+        usuario.setId(100L + id);
+        usuario.setPersona(persona);
+        usuario.setEstadoUsuario(estadoCuenta);
+        Conductor conductor = new Conductor();
+        conductor.setId(id);
+        conductor.setUsuario(usuario);
+        conductor.setSituacionAprobacion(SituacionAprobacion.APROBADO);
+        conductor.setEstadoConductor(EstadoRegistro.A);
+        return conductor;
+    }
+
+    @Test
+    void elPasajeroVeSoloTaxistasLibresHabilitadosQueNoSonEl() {
+        Conductor libre = conductor(3L, 300L, EstadoRegistro.A);
+        Conductor enViaje = conductor(4L, 400L, EstadoRegistro.A);
+        Conductor suspendido = conductor(5L, 500L, EstadoRegistro.S);
+        Conductor yoMismo = conductor(6L, 600L, EstadoRegistro.A);
+        Conductor repartidorConPedido = conductor(7L, 700L, EstadoRegistro.A);
+        List<Conductor> todos = List.of(libre, enViaje, suspendido, yoMismo, repartidorConPedido);
+
+        List<UbicacionConductor> ubicaciones = new java.util.ArrayList<>();
+        List<DisponibilidadConductor> disponibles = new java.util.ArrayList<>();
+        for (Conductor c : todos) {
+            UbicacionConductor ubicacion = new UbicacionConductor();
+            ubicacion.setConductor(c);
+            ubicacion.setUbicacion(punto(-11.02, -68.76));
+            ubicacion.setActualizadoEn(LocalDateTime.now());
+            ubicaciones.add(ubicacion);
+            DisponibilidadConductor disponibilidad = new DisponibilidadConductor();
+            disponibilidad.setConductor(c);
+            disponibilidad.setDisponibilidad(Disponibilidad.DISPONIBLE);
+            disponibles.add(disponibilidad);
+        }
+        com.taxiuap.backend.vehicle.entity.TipoVehiculo moto = new com.taxiuap.backend.vehicle.entity.TipoVehiculo();
+        moto.setCodigo("MOTO");
+        CategoriaServicio delivery = new CategoriaServicio();
+        delivery.setNombre("DELIVERY");
+        delivery.setTipoVehiculo(moto);
+        Vehiculo motoDelivery = new Vehiculo();
+        motoDelivery.setConductor(repartidorConPedido);
+        motoDelivery.setTipoVehiculo(moto);
+        motoDelivery.setCategoriaServicio(delivery);
+
+        Persona personaPasajero = new Persona();
+        personaPasajero.setId(600L);
+        Usuario pasajero = new Usuario();
+        pasajero.setId(50L);
+        pasajero.setPersona(personaPasajero);
+
+        when(conductorRepository.findBySituacionAprobacionAndEstadoConductorOrderByIdAsc(
+                SituacionAprobacion.APROBADO, EstadoRegistro.A))
+                .thenReturn(todos);
+        when(conductorRepository.findAllById(anyList())).thenReturn(todos);
+        when(ubicacionConductorRepository.findByConductorIdIn(anyList())).thenReturn(ubicaciones);
+        when(vehiculoRepository.findByConductorIdInAndEstadoVehiculoOrderByIdAsc(anyList(), any()))
+                .thenReturn(List.of(motoDelivery));
+        when(disponibilidadConductorRepository
+                .findByConductorIdInAndEstadoDisponibilidadConductorOrderByConductorIdAscDesdeDesc(
+                        anyList(), any()))
+                .thenReturn(disponibles);
+        when(usuarioRepository.findById(50L)).thenReturn(Optional.of(pasajero));
+        when(viajeRepository.conductoresConViajeActivo(anyList(), anyList(), any()))
+                .thenReturn(List.of(4L, 7L));
+
+        org.springframework.test.util.ReflectionTestUtils.setField(servicio, "segundosEnLinea", 120L);
+
+        List<ConductorEnLineaResponse> libres = servicio.conductoresLibres(50L);
+
+        // El taxista en viaje, la cuenta suspendida y la propia cuenta de conductor no salen; el
+        // repartidor con un pedido si (sigue recibiendo pedidos) y va marcado como repartidor.
+        assertEquals(List.of(3L, 7L), libres.stream().map(ConductorEnLineaResponse::idConductor).toList());
+        assertEquals(false, libres.get(0).repartidor());
+        assertEquals(true, libres.get(1).repartidor());
     }
 }

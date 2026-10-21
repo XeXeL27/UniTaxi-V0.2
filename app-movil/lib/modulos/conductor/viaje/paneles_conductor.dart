@@ -10,6 +10,7 @@ import '../../../core/api_excepcion.dart';
 
 import '../../../core/formato.dart';
 import '../../../core/tema.dart';
+import '../../../widgets/boton_plegar.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
@@ -26,8 +27,9 @@ String _km(double? metros) {
   return '${(metros / 1000).toStringAsFixed(1).replaceAll('.', ',')} km';
 }
 
-/// Inicio del conductor sin viaje: "Solicitudes cerca" (siempre a la vista) o, desconectado, la
-/// invitacion a conectarse. Los botones Conectarme / Desconectarme van fijos en el pie del panel.
+/// Inicio del conductor sin viaje: "Solicitudes cerca" (con el boton azul se baja a una sola linea
+/// para ver el mapa) o, desconectado, la invitacion a conectarse. Los botones Conectarme /
+/// Desconectarme van fijos en el pie del panel.
 class PanelSolicitudes extends StatelessWidget {
   final FlujoConductor flujo;
 
@@ -96,34 +98,43 @@ class PanelSolicitudes extends StatelessWidget {
               tooltip: 'Actualizar',
               icon: const Icon(Iconos.arrowsRotate, color: ColoresApp.grisTexto, size: 15),
             ),
+            const SizedBox(width: 4),
+            BotonPlegarHoja(
+              abierta: flujo.listaAbierta,
+              onTap: flujo.alternarLista,
+              textoBajar: 'Bajar para ver el mapa',
+            ),
           ],
         ),
-        const SizedBox(height: 8),
-        if (!flujo.listaCargada)
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 16),
-            child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
-          )
-        else if (flujo.errorLista != null)
-          _Mensaje(icono: Iconos.circleExclamation, texto: flujo.errorLista!, color: ColoresApp.rojo)
-        else if (lista.isEmpty)
-          _Mensaje(
-            icono: Iconos.hourglassHalf,
-            texto: flujo.esRepartidor
-                ? 'No hay pedidos por ahora. Cuando un cliente pida una entrega te aparecerá aquí.'
-                : 'No hay solicitudes por ahora. Cuando un pasajero pida un taxi te aparecerá aquí.',
-            color: ColoresApp.textoSuave,
-          )
-        else
-          for (final solicitud in lista)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _TarjetaSolicitud(
-                solicitud: solicitud,
-                distanciaAMi: flujo.metrosDesdeMi(solicitud.origen),
-                onTap: () => flujo.verSolicitud(solicitud),
+        // Bajado queda solo la linea del titulo (y el contador) para ver el mapa.
+        if (flujo.listaAbierta) ...[
+          const SizedBox(height: 8),
+          if (!flujo.listaCargada)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+            )
+          else if (flujo.errorLista != null)
+            _Mensaje(icono: Iconos.circleExclamation, texto: flujo.errorLista!, color: ColoresApp.rojo)
+          else if (lista.isEmpty)
+            _Mensaje(
+              icono: Iconos.hourglassHalf,
+              texto: flujo.esRepartidor
+                  ? 'No hay pedidos por ahora. Cuando un cliente pida una entrega te aparecerá aquí.'
+                  : 'No hay solicitudes por ahora. Cuando un pasajero pida un taxi te aparecerá aquí.',
+              color: ColoresApp.textoSuave,
+            )
+          else
+            for (final solicitud in lista)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: _TarjetaSolicitud(
+                  solicitud: solicitud,
+                  distanciaAMi: flujo.metrosDesdeMi(solicitud.origen),
+                  onTap: () => flujo.verSolicitud(solicitud),
+                ),
               ),
-            ),
+        ],
       ],
     );
   }
@@ -587,8 +598,9 @@ class PanelViajeConductor extends StatelessWidget {
             padding: const EdgeInsets.only(top: 4),
             child: Text(
               distanciaDestino == null
-                  ? 'El viaje se finaliza solo al llegar a menos de 50 m del destino.'
-                  : 'Faltan ${_km(distanciaDestino)} en línea recta. Se finaliza solo a menos de 50 m del destino.',
+                  ? 'Al llegar al destino desliza para finalizar y confirma que cobraste.'
+                  : 'Faltan ${_km(distanciaDestino)} en línea recta. Al llegar desliza para finalizar y confirma que '
+                        'cobraste.',
               style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5),
             ),
           ),

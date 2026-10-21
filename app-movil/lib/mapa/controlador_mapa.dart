@@ -7,6 +7,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../core/config.dart';
 import '../widgets/requiere_gps.dart';
+import 'avance_ruta.dart';
 import 'servicios_mapa.dart';
 
 /// Punto de la ruta con su texto (direccion o nombre del favorito).
@@ -73,6 +74,10 @@ List<double> matrizGris({required double saturacion, required double aclarar}) {
   ];
 }
 
+/// Que posicion va borrando la ruta A-B a medida que avanza (el viaje en curso): ninguna, el GPS del
+/// telefono (app del conductor) o la moto que se sigue (app del pasajero).
+enum FuenteAvance { ninguna, gps, conductor }
+
 /// Estado del mapa compartido por las dos apps: ubicacion GPS en vivo, puntos A (partida) y B
 /// (destino), la ruta azul entre ellos y, en la app del conductor, el tramo naranja desde su
 /// posicion hasta el punto A, o hasta B cuando todavia no hay A (acercamiento). En la app del
@@ -111,6 +116,119 @@ class ControladorMapa extends ChangeNotifier {
     if (ocultarMiUbicacion == ocultar) return;
     ocultarMiUbicacion = ocultar;
     _avisar();
+  }
+
+  /// La propia ubicacion se dibuja como la moto (girada hacia donde avanza) en vez del punto azul:
+  /// el conductor durante un viaje.
+  bool miUbicacionComoMoto = false;
+
+  /// Hacia donde avanza el telefono, en grados (0 = norte), sacado de las dos ultimas posiciones.
+  double? miRumbo;
+
+  void cambiarMiUbicacionComoMoto(bool comoMoto) {
+    if (miUbicacionComoMoto == comoMoto) return;
+    miUbicacionComoMoto = comoMoto;
+    _avisar();
+  }
+
+  /// Quien va borrando la ruta A-B mientras avanza (ver [FuenteAvance]).
+  FuenteAvance fuenteAvance = FuenteAvance.ninguna;
+
+  /// Hasta donde se recorrio la ruta A-B (null: se dibuja entera).
+  AvanceRuta? _avance;
+
+  /// Lecturas seguidas fuera de la ruta: con dos se traza otra desde ahi (una sola puede ser un
+  /// salto del GPS).
+  int _fueraDeRuta = 0;
+  bool _reTrazandoDesvio = false;
+  DateTime? _ultimoDesvio;
+
+  /// Pausa minima entre dos re-trazados por desvio (OSRM es un servicio publico).
+  static const _esperaEntreDesvios = Duration(seconds: 8);
+
+  /// Empieza o deja de borrar la ruta con el avance. Al empezar se ubica enseguida la ultima posicion.
+  void cambiarFuenteAvance(FuenteAvance fuente) {
+    if (fuenteAvance == fuente) return;
+    fuenteAvance = fuente;
+    _avance = null;
+    _fueraDeRuta = 0;
+    final posicion = switch (fuente) {
+      FuenteAvance.gps => miUbicacion,
+      FuenteAvance.conductor => conductorUbicacion,
+      FuenteAvance.ninguna => null,
+    };
+    if (posicion != null) _avanzar(posicion);
+    _avisar();
+  }
+
+  /// Ubica la posicion sobre la ruta A-B. Si se salio de ella (o volvio hacia atras), traza otra
+  /// desde donde esta hasta el mismo destino, como hace Google Maps.
+  void _avanzar(LatLng posicion) {
+    final actual = ruta;
+    final destino = b;
+    if (actual == null || destino == null || actual.aproximada) return;
+    final ubicado = ubicarEnRuta(actual.puntos, posicion, desde: _avance?.indice ?? 0);
+    if (ubicado != null) {
+      _avance = ubicado;
+      _fueraDeRuta = 0;
+      return;
+    }
+    if (++_fueraDeRuta < 2) return;
+    unawaited(_reTrazarDesde(posicion, destino.posicion));
+  }
+
+  Future<void> _reTrazarDesde(LatLng desde, LatLng destino) async {
+    final ultimo = _ultimoDesvio;
+    if (_reTrazandoDesvio || calculandoRuta) return;
+    if (ultimo != null && DateTime.now().difference(ultimo) < _esperaEntreDesvios) return;
+    _reTrazandoDesvio = true;
+    _ultimoDesvio = DateTime.now();
+    final consulta = ++_consultaRuta;
+    try {
+      final nueva = await _rutaOnull(desde, destino);
+      if (_cerrado || consulta != _consultaRuta || nueva == null || fuenteAvance == FuenteAvance.ninguna) return;
+      ruta = nueva;
+      _avance = null;
+      _fueraDeRuta = 0;
+      final ultimaPosicion = fuenteAvance == FuenteAvance.gps ? miUbicacion : conductorUbicacion;
+      if (ultimaPosicion != null) _avanzar(ultimaPosicion);
+      _avisar();
+    } finally {
+      _reTrazandoDesvio = false;
+    }
+  }
+
+  /// Puntos de la ruta A-B que se dibujan: lo que falta recorrer si se esta siguiendo el avance.
+  List<LatLng>? get puntosRuta {
+    final actual = ruta;
+    if (actual == null) return null;
+    final avance = _avance;
+    if (fuenteAvance == FuenteAvance.ninguna || avance == null) return actual.puntos;
+    return rutaRestante(actual.puntos, avance);
+  }
+
+  /// Lo que falta de un tramo punteado (acercamiento, conductor hasta el punto) desde [posicion]:
+  /// entre un re-trazado y el siguiente (cada [_metrosParaRecalcular]) se va borrando lo recorrido.
+  static List<LatLng> _restanteDesde(Ruta tramo, LatLng? posicion) {
+    if (posicion == null) return tramo.puntos;
+    final avance = ubicarEnRuta(tramo.puntos, posicion);
+    return avance == null ? tramo.puntos : rutaRestante(tramo.puntos, avance);
+  }
+
+  /// Tramo punteado desde el GPS hasta el punto, sin lo ya recorrido (null si no se muestra).
+  List<LatLng>? get puntosAcercamiento {
+    final tramo = acercamiento;
+    if (!mostrarAcercamiento || tramo == null) return null;
+    return _restanteDesde(tramo, miUbicacion);
+  }
+
+  /// Tramo punteado desde la moto hasta el punto (app del pasajero), sin lo ya recorrido. Mientras
+  /// la moto va borrando la ruta A-B no se dibuja: seria la misma linea.
+  List<LatLng>? get puntosRutaConductor {
+    final tramo = rutaConductor;
+    if (!mostrarRutaConductor || tramo == null) return null;
+    if (fuenteAvance == FuenteAvance.conductor && ruta != null) return null;
+    return _restanteDesde(tramo, conductorUbicacion);
   }
 
   /// Posicion del conductor asignado al viaje del pasajero (solo en la app del pasajero).
@@ -225,7 +343,12 @@ class ControladorMapa extends ChangeNotifier {
   }
 
   void _alNuevaPosicion(LatLng posicion, {bool centrar = false}) {
+    final anterior = miUbicacion;
+    if (anterior != null && ServiciosMapa.metros(anterior, posicion) >= 3) {
+      miRumbo = const Distance().bearing(anterior, posicion);
+    }
     miUbicacion = posicion;
+    if (fuenteAvance == FuenteAvance.gps) _avanzar(posicion);
     if (aSigueGps && a != null) {
       final anterior = a!.posicion;
       a = PuntoRuta(posicion, a!.texto);
@@ -351,6 +474,8 @@ class ControladorMapa extends ChangeNotifier {
     _consultaRuta++;
     _consultaAcercamiento++;
     detenerSeguimientoConductor();
+    fuenteAvance = FuenteAvance.ninguna;
+    _avance = null;
     _avisar();
   }
 
@@ -390,6 +515,7 @@ class ControladorMapa extends ChangeNotifier {
     final anterior = conductorUbicacion;
     conductorUbicacion = posicion;
     conductorRumbo = rumbo;
+    if (fuenteAvance == FuenteAvance.conductor) _avanzar(posicion);
     if (mostrarRutaConductor && _puntoReferenciaConductor != null) {
       // Solo recalcula si el conductor se movio mas de _metrosParaRecalcular.
       if (anterior == null || ServiciosMapa.metros(anterior, posicion) > _metrosParaRecalcular) {
@@ -407,6 +533,10 @@ class ControladorMapa extends ChangeNotifier {
     mostrarRutaConductor = false;
     _puntoReferenciaConductor = null;
     _consultaRutaConductor++;
+    if (fuenteAvance == FuenteAvance.conductor) {
+      fuenteAvance = FuenteAvance.ninguna;
+      _avance = null;
+    }
   }
 
   Future<void> _trazarRutaConductor() async {
@@ -452,6 +582,8 @@ class ControladorMapa extends ChangeNotifier {
     final resultado = await _rutaOnull(origen.posicion, destino.posicion);
     if (_cerrado || consulta != _consultaRuta) return;
     ruta = resultado;
+    _avance = null;
+    _fueraDeRuta = 0;
     calculandoRuta = false;
     _avisar();
     if (encuadrar) this.encuadrar();
@@ -474,8 +606,8 @@ class ControladorMapa extends ChangeNotifier {
   /// Ajusta el mapa para que se vean la ruta, el acercamiento y la ubicacion actual.
   void encuadrar() {
     final puntos = <LatLng>[
-      ...?ruta?.puntos,
-      if (mostrarAcercamiento) ...?acercamiento?.puntos,
+      ...?puntosRuta,
+      ...?puntosAcercamiento,
       if (a != null) a!.posicion,
       if (b != null) b!.posicion,
       if (mostrarAcercamiento && miUbicacion != null) miUbicacion!,

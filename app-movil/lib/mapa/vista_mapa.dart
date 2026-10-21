@@ -46,8 +46,11 @@ class MapaBase extends StatelessWidget {
       builder: (context, _) {
         final c = controlador;
         final ruta = c.ruta;
-        final acercamiento = c.mostrarAcercamiento ? c.acercamiento : null;
-        final rutaConductor = c.mostrarRutaConductor ? c.rutaConductor : null;
+        // Durante el viaje en curso la ruta se va borrando con el avance (lo recorrido no se dibuja).
+        final puntosRuta = c.puntosRuta;
+        final acercamiento = c.puntosAcercamiento;
+        final rutaConductor = c.puntosRutaConductor;
+        final siguiendoAvance = c.fuenteAvance != FuenteAvance.ninguna;
         final a = c.a;
         final b = c.b;
         final gps = c.miUbicacion;
@@ -83,30 +86,31 @@ class MapaBase extends StatelessWidget {
               ),
               PolylineLayer(
                 polylines: [
-                  if (acercamiento != null)
+                  if (acercamiento != null && acercamiento.length >= 2)
                     Polyline(
-                      points: acercamiento.puntos,
+                      points: acercamiento,
                       strokeWidth: 5,
                       color: ColoresApp.rutaSecundaria,
                       borderStrokeWidth: 1.5,
                       borderColor: ColoresApp.rutaSecundariaBorde,
                       pattern: StrokePattern.dashed(segments: const [10, 8]),
                     ),
-                  if (rutaConductor != null)
+                  if (rutaConductor != null && rutaConductor.length >= 2)
                     Polyline(
-                      points: rutaConductor.puntos,
+                      points: rutaConductor,
                       strokeWidth: 5,
                       color: ColoresApp.rutaSecundaria,
                       borderStrokeWidth: 1.5,
                       borderColor: ColoresApp.rutaSecundariaBorde,
                       pattern: StrokePattern.dashed(segments: const [10, 8]),
                     ),
-                  if (ruta != null) ...[
+                  if (ruta != null && puntosRuta != null && puntosRuta.length >= 2) ...[
                     // La ruta arranca en la calle mas cercana: se une con cada pin por una linea punteada.
-                    if (!ruta.aproximada && a != null) _tramoAPie(a.posicion, ruta.puntos.first),
-                    if (!ruta.aproximada && b != null) _tramoAPie(ruta.puntos.last, b.posicion),
+                    // Con el viaje en curso la ruta empieza donde va la moto: A ya no se une.
+                    if (!ruta.aproximada && a != null && !siguiendoAvance) _tramoAPie(a.posicion, puntosRuta.first),
+                    if (!ruta.aproximada && b != null) _tramoAPie(puntosRuta.last, b.posicion),
                     Polyline(
-                      points: ruta.puntos,
+                      points: puntosRuta,
                       strokeWidth: 6,
                       color: ColoresApp.ruta,
                       borderStrokeWidth: 1.5,
@@ -127,25 +131,13 @@ class MapaBase extends StatelessWidget {
                   if (a != null) _punto(a.posicion, ColoresApp.azul, 'A'),
                   if (b != null) _punto(b.posicion, ColoresApp.rojo, 'B'),
                   // El GPS va encima de los pines: es lo que se mueve en vivo.
+                  // El conductor en un viaje se ve como la moto, no como el punto azul.
                   if (gps != null && !c.ocultarMiUbicacion)
-                    Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
+                    c.miUbicacionComoMoto
+                        ? _moto(gps, c.miRumbo)
+                        : Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
                   // Marcador del conductor asignado al viaje del pasajero.
-                  if (conductorPos != null)
-                    Marker(
-                      point: conductorPos,
-                      width: 32,
-                      height: 32,
-                      child: Transform.rotate(
-                        angle: (conductorRumbo ?? 0) * 3.14159 / 180,
-                        child: Image.asset(
-                          'assets/mototaxi.png',
-                          width: 32,
-                          height: 32,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.medium,
-                        ),
-                      ),
-                    ),
+                  if (conductorPos != null) _moto(conductorPos, conductorRumbo),
                 ],
               ),
             ],
@@ -169,6 +161,22 @@ class MapaBase extends StatelessWidget {
           alignment: Alignment.topCenter,
           child: PinMapa(color: color, letra: letra),
         );
+
+  Marker _moto(LatLng posicion, double? rumbo) => Marker(
+        point: posicion,
+        width: 32,
+        height: 32,
+        child: Transform.rotate(
+          angle: (rumbo ?? 0) * 3.14159 / 180,
+          child: Image.asset(
+            'assets/mototaxi.png',
+            width: 32,
+            height: 32,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.medium,
+          ),
+        ),
+      );
 
   Polyline _tramoAPie(LatLng desde, LatLng hasta) => Polyline(
     points: [desde, hasta],
@@ -449,7 +457,10 @@ class _OpcionCapa extends StatelessWidget {
 class FilaBotonesMapa extends StatelessWidget {
   final ControladorMapa controlador;
 
-  const FilaBotonesMapa({super.key, required this.controlador});
+  /// Botones propios de la pantalla, a la izquierda de Capas (el pasajero: ver taxistas libres).
+  final List<Widget> extras;
+
+  const FilaBotonesMapa({super.key, required this.controlador, this.extras = const []});
 
   @override
   Widget build(BuildContext context) {
@@ -467,6 +478,7 @@ class FilaBotonesMapa extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
+                  for (final extra in extras) ...[extra, const SizedBox(width: 12)],
                   BotonCapas(controlador: controlador),
                   const SizedBox(width: 12),
                   BotonUbicacion(controlador: controlador),

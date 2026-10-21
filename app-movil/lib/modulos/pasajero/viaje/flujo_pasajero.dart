@@ -1059,8 +1059,14 @@ class FlujoPasajero extends ChangeNotifier {
     // Punto de referencia: origen mientras va a recoger (CONFIRMADO, EN_CAMINO, LLEGO), destino
     // durante el viaje (EN_CURSO); en una compra ya registrada no hay: el naranja se detiene.
     mapa.iniciarSeguimientoConductor(referenciaTramoNaranja(viaje));
+    _seguirAvance(viaje);
     _iniciarReceptor();
   }
+
+  /// Con el viaje en curso la ruta A-B se va borrando a medida que avanza la moto.
+  void _seguirAvance(Viaje viaje) => mapa.cambiarFuenteAvance(
+        viaje.situacion == SituacionViaje.enCurso ? FuenteAvance.conductor : FuenteAvance.ninguna,
+      );
 
   void _iniciarReceptor() {
     _receptor?.cerrar();
@@ -1133,6 +1139,7 @@ class FlujoPasajero extends ChangeNotifier {
       // La referencia del tramo naranja cambia con la situacion; en una compra ya registrada no
       // hay (aparece la ruta real desde el comercio) y el tramo se detiene ahi.
       mapa.cambiarPuntoReferenciaConductor(referenciaTramoNaranja(nuevo));
+      _seguirAvance(nuevo);
       // El tiempo de llegada de arriba sale de esta ruta: al subir el pasajero pasa a medirse hasta el
       // destino. Sin esto quedaba la ruta hasta la partida ("0 m") hasta la siguiente posicion.
       rutaAlConductor = null;
@@ -1152,6 +1159,8 @@ class FlujoPasajero extends ChangeNotifier {
       _detenerSondeo();
       _detenerSeguimientoConductor();
       _quitarDeEnCurso(nuevo.id);
+      // Viaje terminado: la ruta y los puntos se quitan (no quedan detras de la calificacion).
+      mapa.limpiar();
       etapa = EtapaPasajero.calificando;
       unawaited(_marcarOfrecida(nuevo.id));
     } else if (nuevo.situacion == SituacionViaje.cancelado) {
@@ -1340,10 +1349,12 @@ class FlujoPasajero extends ChangeNotifier {
 
   /// El punto azul de quien pide no se ve mientras el taxi es para otra persona (eligiendo los puntos,
   /// buscando conductor o en el viaje). Vuelve al pedir para si mismo, al cancelar o al terminar.
+  /// Tampoco en un taxi ya en curso: el pasajero va en la moto y solo se ve la moto.
   bool get _ocultarMiUbicacion => switch (etapa) {
         EtapaPasajero.eligiendo => paraOtraPersona,
         EtapaPasajero.buscando => solicitud?.tercero != null,
-        EtapaPasajero.enViaje => viaje?.tercero != null,
+        EtapaPasajero.enViaje => viaje?.tercero != null ||
+            (viaje?.situacion == SituacionViaje.enCurso && viaje?.datosEntrega == null),
         _ => false,
       };
 

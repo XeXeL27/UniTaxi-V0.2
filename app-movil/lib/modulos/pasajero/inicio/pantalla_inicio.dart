@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -52,6 +53,7 @@ import '../viaje/viaje_api.dart';
 import '../viaje/vista_calificacion.dart';
 import '../viaje/formulario_entrega.dart';
 import '../viaje/formulario_tercero.dart';
+import 'boton_taxistas.dart';
 import 'buscador_destino.dart';
 import 'menu_inicio.dart';
 
@@ -98,15 +100,30 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   String? _errorFavoritos;
   bool _enviando = false;
 
-  /// Mototaxistas libres en linea: siempre visibles mientras elige o espera; se deslizan entre
-  /// una consulta y la siguiente.
+  /// Conductores libres en linea (taxistas y repartidores). Se consultan siempre (los cuentan los
+  /// avisos de "sin taxistas libres" al pedir), pero en el mapa solo se dibujan los taxistas y solo
+  /// con el boton de ver taxistas encendido; se deslizan en vivo de una consulta a la siguiente.
   List<ConductorEnLinea> _conductores = const [];
   bool _conductoresCargados = false;
   late final PosicionesAnimadas _posiciones = PosicionesAnimadas(
     vsync: this,
-    duracion: const Duration(milliseconds: 2800),
+    duracion: _intervaloConVista,
+    curva: Curves.linear,
   );
   Timer? _sondeoConductores;
+
+  /// Con los taxistas a la vista se consulta mas seguido para verlos moverse.
+  static const _intervaloConVista = Duration(seconds: 3);
+  static const _intervaloSinVista = Duration(seconds: 5);
+
+  /// Boton de ver taxistas libres: apagado al principio; el telefono recuerda lo ultimo elegido.
+  bool _verTaxistas = false;
+  static const _claveVerTaxistas = 'taxiuap_app_ver_taxistas';
+
+  /// Hacia donde va cada taxista (grados), para girar su moto. Si el telefono no lo informa, sale de
+  /// sus dos ultimas posiciones.
+  final Map<int, double> _rumbos = {};
+  final Map<int, LatLng> _ultimasPosiciones = {};
 
   Uint8List? _foto;
   bool _calificando = false;
@@ -159,8 +176,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _cargarOcultos();
     _cargarFoto();
     _cargarRegistroConductor();
+    _cargarVerTaxistas();
     _cargarConductores();
-    _sondeoConductores = Timer.periodic(const Duration(seconds: 5), (_) => _cargarConductores());
+    _iniciarSondeoConductores();
     // Al volver a la app (Android la congela minimizada) se consulta enseguida la solicitud o el viaje.
     _alVolver = AppLifecycleListener(onResume: () {
       unawaited(_flujo.consultarAhora());
@@ -313,6 +331,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (_flujo.etapa == EtapaPasajero.enViaje && _panelAbierto && marcaEnPantalla('pasajero.conductor')) {
       return Guias.pasajeroViaje;
     }
+    // El boton de ver taxistas libres, la primera vez que se ve en el inicio.
+    if (_flujo.etapa == EtapaPasajero.eligiendo && _puedeVerTaxistas && marcaEnPantalla('pasajero.taxistas')) {
+      return Guias.pasajeroTaxistas;
+    }
     return null;
   }
 
@@ -329,10 +351,25 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (!mounted || _guiaDelPaso != guia || !guiaPendiente(context, guia)) return;
     await mostrarGuiaInicio(
       context,
-      guia == Guias.pasajeroServicios ? _pasosServicios() : _pasosViaje(),
+      switch (guia) {
+        Guias.pasajeroServicios => _pasosServicios(),
+        Guias.pasajeroTaxistas => _pasosTaxistas,
+        _ => _pasosViaje(),
+      },
       guia: guia,
     );
   }
+
+  /// Boton de ver taxistas libres: un solo paso, corto.
+  static const _pasosTaxistas = [
+    PasoGuia(
+      marca: 'pasajero.taxistas',
+      circulo: true,
+      titulo: 'Taxistas libres',
+      texto: 'Toca aquí para ver en el mapa los taxistas libres cerca de ti, moviéndose en vivo. Tócalo otra '
+          'vez para ocultarlos.',
+    ),
+  ];
 
   /// "Elige tu servicio": cada servicio y cada opcion, la primera vez que se pide algo.
   List<PasoGuia> _pasosServicios() {
@@ -696,6 +733,80 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _flujo.cambiarGuardandoLugar(true);
   }
 
+  void _iniciarSondeoConductores() {
+    _sondeoConductores?.cancel();
+    _sondeoConductores = Timer.periodic(
+      _verTaxistas ? _intervaloConVista : _intervaloSinVista,
+      (_) => _cargarConductores(),
+    );
+  }
+
+  Future<void> _cargarVerTaxistas() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ver = prefs.getBool(_claveVerTaxistas) ?? false;
+      if (!mounted || ver == _verTaxistas) return;
+      setState(() => _verTaxistas = ver);
+      _iniciarSondeoConductores();
+    } catch (_) {
+      // Sin almacenamiento empieza apagado.
+    }
+  }
+
+  /// El boton se ofrece solo en moto taxi, mientras elige o espera conductor (con el viaje aceptado
+  /// se ve unicamente su conductor).
+  bool get _puedeVerTaxistas =>
+      _flujo.servicio == ServicioActivo.viaje &&
+      (_flujo.etapa == EtapaPasajero.eligiendo || _flujo.etapa == EtapaPasajero.buscando);
+
+  bool get _mostrandoTaxistas => _verTaxistas && _puedeVerTaxistas;
+
+  Future<void> _alternarVerTaxistas() async {
+    final ver = !_verTaxistas;
+    setState(() => _verTaxistas = ver);
+    _iniciarSondeoConductores();
+    if (ver) {
+      await _cargarConductores();
+      if (!mounted) return;
+      final libres = _libresDe(entrega: false);
+      mostrarMensaje(
+        context,
+        switch (libres) {
+          null => 'Buscando taxistas libres...',
+          0 => 'No hay taxistas libres ahora.',
+          1 => 'Mostrando 1 taxista libre.',
+          _ => 'Mostrando $libres taxistas libres.',
+        },
+        icono: Iconos.motorcycle,
+      );
+    } else {
+      mostrarMensaje(context, 'Taxistas ocultos.', icono: Iconos.motorcycle);
+    }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_claveVerTaxistas, ver);
+    } catch (_) {
+      // Queda elegido mientras la app este abierta.
+    }
+  }
+
+  /// Guarda hacia donde va cada conductor: el rumbo que manda su telefono o, si no lo manda, el de
+  /// su ultimo movimiento (si se movio mas de 3 m; parado conserva el que tenia).
+  void _actualizarRumbos(List<ConductorEnLinea> lista) {
+    final ids = {for (final c in lista) c.id};
+    _rumbos.removeWhere((id, _) => !ids.contains(id));
+    _ultimasPosiciones.removeWhere((id, _) => !ids.contains(id));
+    for (final c in lista) {
+      final anterior = _ultimasPosiciones[c.id];
+      if (c.rumbo != null) {
+        _rumbos[c.id] = c.rumbo!;
+      } else if (anterior != null && ServiciosMapa.metros(anterior, c.posicion) > 3) {
+        _rumbos[c.id] = const Distance().bearing(anterior, c.posicion);
+      }
+      _ultimasPosiciones[c.id] = c.posicion;
+    }
+  }
+
   Future<void> _cargarConductores() async {
     final etapa = _flujo.etapa;
     // Con el viaje ya asignado se sigue solo al conductor propio (lo dibuja el flujo).
@@ -706,8 +817,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     try {
       final lista = await _flujo.api.conductoresEnLinea();
       if (!mounted) return;
+      _actualizarRumbos(lista);
       _posiciones.conservar({for (final c in lista) c.id});
-      _posiciones.mover({for (final c in lista) c.id: c.posicion});
+      // Sin los taxistas a la vista no hace falta animar (no se redibuja el mapa en cada cuadro).
+      _posiciones.mover({for (final c in lista) c.id: c.posicion}, animar: _mostrandoTaxistas);
       setState(() {
         _conductores = lista;
         _conductoresCargados = true;
@@ -1289,21 +1402,24 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
                         ),
                 ],
                 capasAnimadas: [
-                  ListenableBuilder(
-                    listenable: _posiciones,
-                    builder: (context, _) => MarkerLayer(
-                      rotate: true,
-                      markers: [
-                        for (final conductor in _delServicio)
-                          Marker(
-                            point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
-                            width: _MarcadorMototaxi.ancho,
-                            height: _MarcadorMototaxi.alto,
-                            child: const _MarcadorMototaxi(),
-                          ),
-                      ],
+                  // Taxistas libres (nunca repartidores), solo con el boton de verlos encendido.
+                  if (_mostrandoTaxistas)
+                    ListenableBuilder(
+                      listenable: _posiciones,
+                      builder: (context, _) => MarkerLayer(
+                        rotate: true,
+                        markers: [
+                          for (final conductor in _conductores)
+                            if (!conductor.repartidor)
+                              Marker(
+                                point: _posiciones.posicion(conductor.id) ?? conductor.posicion,
+                                width: _MarcadorMototaxi.alto,
+                                height: _MarcadorMototaxi.alto,
+                                child: _MarcadorMototaxi(rumbo: _rumbos[conductor.id]),
+                              ),
+                        ],
+                      ),
                     ),
-                  ),
                   // Radar de busqueda desde el punto de partida: solo mientras la solicitud esta
                   // abierta. Va debajo de los pines, asi que no tapa nada.
                   if (_flujo.etapa == EtapaPasajero.buscando && _mapa.a != null)
@@ -1352,7 +1468,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  FilaBotonesMapa(controlador: _mapa),
+                  FilaBotonesMapa(
+                    controlador: _mapa,
+                    extras: [
+                      if (_puedeVerTaxistas)
+                        MarcaGuia(
+                          id: 'pasajero.taxistas',
+                          child: BotonTaxistas(
+                            activo: _verTaxistas,
+                            libres: _verTaxistas ? _libresDe(entrega: false) : null,
+                            onTap: _alternarVerTaxistas,
+                          ),
+                        ),
+                    ],
+                  ),
                   if (panel != null)
                     PanelInferior(
                       flotante: true,
@@ -1595,19 +1724,29 @@ class _MarcadorMototaxi extends StatelessWidget {
   static const double ancho = 26;
   static const double alto = 48;
 
-  const _MarcadorMototaxi();
+  /// Hacia donde va (grados, 0 = norte): la moto se gira; sin dato queda derecha.
+  final double? rumbo;
+
+  const _MarcadorMototaxi({this.rumbo});
 
   @override
   Widget build(BuildContext context) {
-    return Image.asset(
-      'assets/mototaxi.png',
-      width: ancho,
-      height: alto,
-      fit: BoxFit.contain,
-      filterQuality: FilterQuality.medium,
+    // El marcador es cuadrado (alto x alto) para que la moto girada no se corte.
+    return Center(
+      child: Transform.rotate(
+        angle: (rumbo ?? 0) * math.pi / 180,
+        child: Image.asset(
+          'assets/mototaxi.png',
+          width: ancho,
+          height: alto,
+          fit: BoxFit.contain,
+          filterQuality: FilterQuality.medium,
+        ),
+      ),
     );
   }
 }
+
 
 /// Tarjeta flotante con distancia y ETA del conductor asignado. Aparece debajo de la cabecera
 /// durante el viaje (CONFIRMADO -> EN_CURSO) como una notificacion emergente sobre el mapa.

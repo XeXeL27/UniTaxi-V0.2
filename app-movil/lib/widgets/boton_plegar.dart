@@ -9,12 +9,20 @@ class BotonPlegarHoja extends StatelessWidget {
   final bool abierta;
   final VoidCallback onTap;
 
-  const BotonPlegarHoja({super.key, required this.abierta, required this.onTap});
+  /// Ayuda del boton con la hoja abierta (la lista de solicitudes no tiene ruta: "ver el mapa").
+  final String textoBajar;
+
+  const BotonPlegarHoja({
+    super.key,
+    required this.abierta,
+    required this.onTap,
+    this.textoBajar = 'Bajar para ver la ruta',
+  });
 
   @override
   Widget build(BuildContext context) {
     return Tooltip(
-      message: abierta ? 'Bajar para ver la ruta' : 'Ver el detalle',
+      message: abierta ? textoBajar : 'Ver el detalle',
       child: Material(
         color: ColoresApp.azul,
         borderRadius: BorderRadius.circular(16),

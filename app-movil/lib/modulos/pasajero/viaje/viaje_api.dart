@@ -32,7 +32,10 @@ class ConductorEnLinea {
   /// Su moto es de reparto (solo hace entregas); si no, es taxista.
   final bool repartidor;
 
-  const ConductorEnLinea({required this.id, required this.posicion, this.repartidor = false});
+  /// Hacia donde va, en grados (0 = norte), si el telefono del conductor lo informa.
+  final double? rumbo;
+
+  const ConductorEnLinea({required this.id, required this.posicion, this.repartidor = false, this.rumbo});
 
   static ConductorEnLinea? desdeJson(Map<String, dynamic> json) {
     final latitud = numeroDesdeJson(json['latitud']);
@@ -42,6 +45,7 @@ class ConductorEnLinea {
       id: (json['idConductor'] as num).toInt(),
       posicion: LatLng(latitud, longitud),
       repartidor: json['repartidor'] == true,
+      rumbo: numeroDesdeJson(json['rumbo']),
     );
   }
 }

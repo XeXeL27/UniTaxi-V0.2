@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.taxiuap.backend.config.security.UsuarioActual;
 import com.taxiuap.backend.location.dto.ConductorEnLineaResponse;
 import com.taxiuap.backend.location.service.UbicacionService;
 import com.taxiuap.backend.shared.response.ApiResponse;
@@ -23,6 +24,6 @@ public class ConductoresEnLineaController {
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<ConductorEnLineaResponse>>> listar() {
-        return ResponseEntity.ok(ApiResponse.exito(ubicacionService.conductoresLibres()));
+        return ResponseEntity.ok(ApiResponse.exito(ubicacionService.conductoresLibres(UsuarioActual.idUsuario())));
     }
 }

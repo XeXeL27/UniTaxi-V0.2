@@ -131,6 +131,94 @@ Future<void> _mostrar(BuildContext context, TipoDialogo tipo, String titulo, Str
   );
 }
 
+/// Modal naranja que pide marcar una casilla antes de confirmar (por ejemplo "Recibí el pago" al
+/// finalizar un viaje): el boton de confirmar se habilita recien con la casilla marcada. Devuelve
+/// true si el usuario confirma.
+Future<bool> confirmarConCasilla(
+  BuildContext context, {
+  required String titulo,
+  required Widget contenido,
+  required String casilla,
+  required String textoConfirmar,
+  String textoCancelar = 'Cancelar',
+}) async {
+  var marcada = false;
+  final confirmado = await _abrir<bool>(
+    context,
+    barreraCierra: false,
+    tarjeta: StatefulBuilder(
+      builder: (context, setState) => _TarjetaAlerta(
+        tipo: TipoDialogo.confirmacion,
+        titulo: titulo,
+        textoBoton: '',
+        contenido: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            contenido,
+            const SizedBox(height: 14),
+            _Casilla(texto: casilla, marcada: marcada, alCambiar: (valor) => setState(() => marcada = valor)),
+          ],
+        ),
+        acciones: [
+          _BotonModal(
+            texto: textoConfirmar,
+            principal: true,
+            tipo: TipoDialogo.confirmacion,
+            onPressed: marcada ? () => Navigator.of(context).pop(true) : null,
+          ),
+          _BotonModal(
+            texto: textoCancelar,
+            principal: false,
+            tipo: TipoDialogo.confirmacion,
+            onPressed: () => Navigator.of(context).pop(false),
+          ),
+        ],
+      ),
+    ),
+  );
+  return confirmado ?? false;
+}
+
+/// Casilla de [confirmarConCasilla]: toda la fila se puede tocar.
+class _Casilla extends StatelessWidget {
+  final String texto;
+  final bool marcada;
+  final ValueChanged<bool> alCambiar;
+
+  const _Casilla({required this.texto, required this.marcada, required this.alCambiar});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: marcada ? const Color(0xFFFFF4EA) : const Color(0xFFF8F9FA),
+      borderRadius: BorderRadius.circular(10),
+      child: InkWell(
+        onTap: () => alCambiar(!marcada),
+        borderRadius: BorderRadius.circular(10),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(4, 6, 12, 6),
+          child: Row(
+            children: [
+              Checkbox(
+                value: marcada,
+                activeColor: _naranja,
+                onChanged: (valor) => alCambiar(valor ?? false),
+              ),
+              Expanded(
+                child: Text(
+                  texto,
+                  style: const TextStyle(fontSize: 14.5, color: Color(0xFF212529), fontWeight: FontWeight.w600),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 /// Opcion de [elegirOpcion]: [principal] va como boton lleno del color del modal; las demas, con
 /// borde.
 typedef OpcionModal<T> = ({String texto, T valor, bool principal});
@@ -225,7 +313,11 @@ class _BotonModal extends StatelessWidget {
               onPressed: onPressed,
               style: ButtonStyle(
                 backgroundColor: WidgetStateProperty.resolveWith(
-                  (estados) => estados.contains(WidgetState.hovered) ? colorHover : color,
+                  (estados) => estados.contains(WidgetState.disabled)
+                      ? color.withValues(alpha: 0.35)
+                      : estados.contains(WidgetState.hovered)
+                      ? colorHover
+                      : color,
                 ),
                 foregroundColor: const WidgetStatePropertyAll(Colors.white),
                 padding: const WidgetStatePropertyAll(relleno),

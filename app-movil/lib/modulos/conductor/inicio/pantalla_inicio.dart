@@ -298,6 +298,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     if (terminado != null) _mostrarCobro(terminado);
     final pedido = _flujo.tomarPedidoPago();
     if (pedido != null) _preguntarCambioPago(pedido);
+    // Llego al destino: se pregunta si finaliza y si cobro (nunca se cierra solo).
+    final enDestino = _flujo.tomarLlegadaDestino();
+    if (enDestino != null && enDestino.id == _flujo.viaje?.id) unawaited(_avanzar());
     _revisarGuia();
   }
 
@@ -311,6 +314,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       _seccion == _seccionInicio &&
       _flujo.etapa == EtapaConductor.lista &&
       !_flujo.enRevision &&
+      _flujo.listaAbierta &&
       (ModalRoute.of(context)?.isCurrent ?? true);
 
   /// La de inicio, o la del repartidor (la reemplaza) si todavia no la vio con esta cuenta.
@@ -478,8 +482,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     PasoGuia(
       icono: Iconos.flagCheckered,
       titulo: 'Finalizar y cobrar',
-      texto: 'Para finalizar debes estar a 50 m o menos del destino. Cobra en efectivo o por QR lo que dice el '
-          'viaje.',
+      texto: 'Al llegar al destino desliza para finalizar, cobra en efectivo o por QR lo que dice el viaje y '
+          'confirma que recibiste el pago.',
     ),
   ];
 
@@ -567,7 +571,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       // En un reparto el cobro ya se confirmo antes de entregar.
       esEntrega
           ? 'Pedido entregado a ${viaje.primerNombrePasajero}.'
-          : 'Viaje finalizado. ${MetodoPago.frase('Cobra ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)} a ${viaje.primerNombrePasajero}.',
+          : 'Viaje finalizado. ${MetodoPago.frase('Cobraste ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)}.',
       duracion: const Duration(seconds: 5),
     );
   }
@@ -593,21 +597,63 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       }
       return;
     }
-    // Finalizar se desliza (esa es la confirmacion); solo se pregunta si el pago por QR no llego.
-    if (viaje.situacion == SituacionViaje.enCurso && viaje.pagaConQr && viaje.pagoRecibidoEn == null) {
-      final confirmado = await confirmarAccion(
-        context,
-        titulo: '¿Finalizar el viaje?',
-        mensaje: 'El pago por QR aún no fue confirmado: revisa que te haya llegado o cobra en efectivo.',
-        textoConfirmar: 'Sí, finalizar',
-      );
-      if (!confirmado) return;
+    // Finalizar siempre pregunta y pide confirmar que se cobro el viaje.
+    final finalizando = viaje.situacion == SituacionViaje.enCurso;
+    if (finalizando) {
+      if (_confirmandoFin) return;
+      _confirmandoFin = true;
+      final confirmado = await _confirmarFinalizar(viaje);
+      _confirmandoFin = false;
+      if (!confirmado || !mounted || _flujo.viaje?.id != viaje.id) return;
     }
     try {
-      await _flujo.avanzar();
+      await _flujo.avanzar(pagoRecibido: finalizando);
     } on ApiExcepcion catch (e) {
       if (mounted) mostrarMensaje(context, e.mensaje, error: true);
     }
+  }
+
+  /// La ventana de finalizar esta abierta (al llegar al destino y al deslizar no se abre dos veces).
+  bool _confirmandoFin = false;
+
+  /// "¿Finalizar el viaje?" con lo que se cobra; "Sí, finalizar" se habilita al marcar que se recibio
+  /// el pago.
+  Future<bool> _confirmarFinalizar(Viaje viaje) {
+    final monto = formatoBs(viaje.precioFinal);
+    final porQr = viaje.pagaConQr;
+    final quienPaga = viaje.tercero?.pagaSolicitante ?? false
+        ? 'quien pidió el viaje'
+        : enTitulo(viaje.nombreQuienViaja.trim().split(RegExp(r'\s+')).first);
+    final detallePago = !porQr
+        ? null
+        : viaje.pagoRecibidoEn != null
+        ? 'Ya confirmaste que te llegó el pago por QR.'
+        : viaje.pagoAvisadoEn != null
+        ? 'Quien pidió el viaje avisó que ya pagó: revisa que te haya llegado.'
+        : 'Revisa en tu banco que te haya llegado el pago.';
+    return confirmarConCasilla(
+      context,
+      titulo: '¿Finalizar el viaje?',
+      contenido: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            MetodoPago.frase('Cobra $monto', viaje.metodoPago),
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: ColoresApp.tinta),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Paga $quienPaga.${detallePago == null ? '' : ' $detallePago'}',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14.5, color: Color(0xFF6C757D), height: 1.4),
+          ),
+        ],
+      ),
+      casilla: MetodoPago.frase('Recibí el pago de $monto', viaje.metodoPago),
+      textoConfirmar: 'Sí, finalizar',
+      textoCancelar: 'Todavía no',
+    );
   }
 
   Future<void> _cancelarViaje() async {
@@ -772,8 +818,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
             ),
           );
         }
-        // Con pedidos en curso no se desconecta: primero los termina.
-        if (_flujo.enCurso.isNotEmpty) return null;
+        // Con pedidos en curso no se desconecta: primero los termina. Con el panel bajado tampoco se
+        // muestra: queda solo la linea de "Solicitudes cerca".
+        if (_flujo.enCurso.isNotEmpty || !_flujo.listaAbierta) return null;
         return SizedBox(
           key: _guiaConectar,
           height: 50,
@@ -1081,7 +1128,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         }
         // Lo que tapan la parte de arriba y el panel, para encuadrar la ruta; con el panel del viaje
         // bajado el mapa queda casi completo.
-        final plegado = etapa == EtapaConductor.enViaje && !_apertura.abierto;
+        final plegado = (etapa == EtapaConductor.enViaje && !_apertura.abierto) ||
+            (etapa == EtapaConductor.lista && _flujo.enLinea && !_flujo.listaAbierta);
         _mapa.margenesVista = EdgeInsets.fromLTRB(
           40,
           margen.top + (_conPestanas ? 190 : 100),

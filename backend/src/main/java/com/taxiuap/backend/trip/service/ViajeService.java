@@ -406,6 +406,9 @@ public class ViajeService {
                 : metodoPagoDe(viaje);
         viaje.setMetodoPago(metodoPago);
         viaje.setMetodoPagoPedido(null);
+        if (request != null && Boolean.TRUE.equals(request.pagoRecibido()) && viaje.getPagoRecibidoEn() == null) {
+            viaje.setPagoRecibidoEn(LocalDateTime.now());
+        }
         procesarPagoYComision(viaje, metodoPago);
         if (viaje.getSolicitud().esParaOtraPersona()) {
             avisarPasajero(viaje, "VIAJE_COMPLETADO", primerNombre(viaje.getSolicitud().getNombrePasajeroTercero())

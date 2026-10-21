@@ -340,13 +340,45 @@ class ViajeDeliveryPricingTest {
 
         // El viaje DELIVERY no se cierra con finalizar (esa via esta reservada al taxi): se cierra
         // desde la entrega, que es la que exige el pago confirmado antes de completar.
-        viajeService.finalizarDesdeEntrega(500L, new FinalizarViajeRequest(null));
+        viajeService.finalizarDesdeEntrega(500L, FinalizarViajeRequest.sinDatos());
 
         ArgumentCaptor<com.taxiuap.backend.pricing.entity.Pago> pago =
                 ArgumentCaptor.forClass(com.taxiuap.backend.pricing.entity.Pago.class);
         verify(pagoRepository).save(pago.capture());
         assertEquals(new BigDecimal("21.25"), pago.getValue().getMonto());
         verify(comisionRepository, never()).save(any(com.taxiuap.backend.pricing.entity.Comision.class));
+    }
+
+    @Test
+    void finalizarConElPagoConfirmadoGuardaLaHoraDelCobro() {
+        SolicitudViaje solicitud = solicitud(TipoEnvio.COMPRA_Y_ENTREGA, new BigDecimal("21.25"));
+        solicitud.getDatosEntrega().setCostoProductoReal(new BigDecimal("25.00"));
+        Viaje viaje = new Viaje();
+        viaje.setId(500L);
+        viaje.setSolicitud(solicitud);
+        viaje.setPasajero(pasajero);
+        viaje.setConductor(conductor);
+        viaje.setVehiculo(motoDelivery);
+        viaje.setCategoriaServicio(delivery);
+        viaje.setOrigen(solicitud.getOrigen());
+        viaje.setDestino(solicitud.getDestino());
+        viaje.setPrecioFinal(new BigDecimal("21.25"));
+        viaje.setPrecioOriginal(new BigDecimal("21.25"));
+        viaje.setMontoDescuento(new BigDecimal("0.00"));
+        viaje.setSituacionViaje(SituacionViaje.EN_CURSO);
+        when(conductorRepository.findByUsuarioId(20L)).thenReturn(Optional.of(conductor));
+        when(viajeRepository.findById(500L)).thenReturn(Optional.of(viaje));
+        when(billeteraConductorRepository.findByConductorId(40L)).thenReturn(Optional.of(billetera()));
+        org.springframework.test.util.ReflectionTestUtils.setField(viajeService, "porcentajeComision",
+                new BigDecimal("15.00"));
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(
+                new JwtUser(20L, "repartidor", "CONDUCTOR"), null));
+
+        // El conductor confirmo en la app que cobro el viaje: queda la hora del cobro.
+        viajeService.finalizarDesdeEntrega(500L, new FinalizarViajeRequest(null, true));
+
+        assertNotNull(viaje.getPagoRecibidoEn());
+        assertEquals(SituacionViaje.COMPLETADO, viaje.getSituacionViaje());
     }
 
     private SolicitudViaje solicitud(TipoEnvio tipo, BigDecimal precio) {

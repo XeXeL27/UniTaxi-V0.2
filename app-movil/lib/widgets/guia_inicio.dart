@@ -24,6 +24,9 @@ abstract final class Guias {
 
   /// Primer pedido aceptado del repartidor.
   static const repartidorPedido = 'REPARTIDOR_PEDIDO';
+
+  /// Boton del mapa del pasajero para ver u ocultar los taxistas libres.
+  static const pasajeroTaxistas = 'PASAJERO_TAXISTAS';
 }
 
 /// Un paso de la guia: lo que se ilumina y lo que se explica. Se ilumina el widget de [clave] o el

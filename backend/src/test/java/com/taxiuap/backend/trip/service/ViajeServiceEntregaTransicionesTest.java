@@ -176,7 +176,7 @@ class ViajeServiceEntregaTransicionesTest {
         when(viajeRepository.findById(500L)).thenReturn(Optional.of(viaje));
         autenticarConductor();
 
-        assertThrows(NegocioException.class, () -> viajeService.finalizar(500L, new FinalizarViajeRequest(null)));
+        assertThrows(NegocioException.class, () -> viajeService.finalizar(500L, FinalizarViajeRequest.sinDatos()));
 
         assertEquals(SituacionViaje.EN_CURSO, viaje.getSituacionViaje());
         verify(pagoRepository, never()).save(any());

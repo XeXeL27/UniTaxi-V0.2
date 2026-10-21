@@ -5,10 +5,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
@@ -22,6 +24,7 @@ import com.taxiuap.backend.config.security.RolSistema;
 import com.taxiuap.backend.identity.entity.Conductor;
 import com.taxiuap.backend.identity.enums.SituacionAprobacion;
 import com.taxiuap.backend.identity.repository.ConductorRepository;
+import com.taxiuap.backend.identity.repository.UsuarioRepository;
 import com.taxiuap.backend.location.dto.ConductorEnLineaResponse;
 import com.taxiuap.backend.location.dto.PosicionConductor;
 import com.taxiuap.backend.location.dto.PosicionConductorMensaje;
@@ -33,6 +36,8 @@ import com.taxiuap.backend.location.repository.DisponibilidadConductorRepository
 import com.taxiuap.backend.location.repository.UbicacionConductorRepository;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.trip.enums.SituacionViaje;
+import com.taxiuap.backend.trip.repository.ViajeRepository;
 import com.taxiuap.backend.trip.service.SeguimientoViajePublisher;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
 import com.taxiuap.backend.vehicle.repository.VehiculoRepository;
@@ -53,6 +58,8 @@ public class UbicacionService {
     private static final int SRID = 4326;
     private static final GeometryFactory FABRICA_GEOMETRIA =
             new GeometryFactory(new PrecisionModel(), SRID);
+    private static final List<SituacionViaje> VIAJE_TERMINADO =
+            List.of(SituacionViaje.COMPLETADO, SituacionViaje.CANCELADO);
 
     private final UbicacionConductorRepository ubicacionConductorRepository;
     private final DisponibilidadConductorRepository disponibilidadConductorRepository;
@@ -60,6 +67,8 @@ public class UbicacionService {
     private final VehiculoRepository vehiculoRepository;
     private final ConductorUbicacionPublisher publisher;
     private final SeguimientoViajePublisher seguimientoViajePublisher;
+    private final ViajeRepository viajeRepository;
+    private final UsuarioRepository usuarioRepository;
 
     @Value("${taxiuap.conductores.segundos-en-linea:120}")
     private long segundosEnLinea;
@@ -184,11 +193,14 @@ public class UbicacionService {
 
     /**
      * Conductores libres que el pasajero ve en su mapa: aprobados, con la app abierta (reportaron
-     * su GPS hace menos de taxiuap.conductores.segundos-en-linea) y con disponibilidad DISPONIBLE.
-     * Solo se expone la posicion, no los datos personales.
+     * su GPS hace menos de taxiuap.conductores.segundos-en-linea), con disponibilidad DISPONIBLE y
+     * con su cuenta habilitada (no suspendida). Nunca la cuenta de conductor de quien consulta (una
+     * persona con las dos cuentas no se ve a si misma). Los taxistas con un viaje sin terminar
+     * tampoco salen; los repartidores si (llevan hasta 3 pedidos y siguen recibiendo: el pasajero
+     * los cuenta al pedir una entrega). Solo se expone la posicion, no los datos personales.
      */
     @Transactional(readOnly = true)
-    public List<ConductorEnLineaResponse> conductoresLibres() {
+    public List<ConductorEnLineaResponse> conductoresLibres(Long idUsuarioPasajero) {
         LocalDateTime limite = LocalDateTime.now().minusSeconds(segundosEnLinea);
         List<PosicionConductor> libres = listaFlota().stream()
                 .filter(posicion -> posicion.disponibilidad() == Disponibilidad.DISPONIBLE)
@@ -198,13 +210,32 @@ public class UbicacionService {
         if (libres.isEmpty()) {
             return List.of();
         }
+        List<Long> ids = libres.stream().map(PosicionConductor::idConductor).toList();
+        Long idPersonaPasajero = idUsuarioPasajero == null ? null
+                : usuarioRepository.findById(idUsuarioPasajero).map(usuario -> usuario.getPersona().getId()).orElse(null);
+        Set<Long> excluidos = new HashSet<>();
+        for (Conductor conductor : conductorRepository.findAllById(ids)) {
+            var usuario = conductor.getUsuario();
+            boolean habilitada = usuario != null && EstadoRegistro.A.equals(usuario.getEstadoUsuario());
+            boolean propia = usuario != null && idPersonaPasajero != null
+                    && idPersonaPasajero.equals(usuario.getPersona().getId());
+            if (!habilitada || propia) {
+                excluidos.add(conductor.getId());
+            }
+        }
         // Repartidor = su (primera) moto activa es de la categoria DELIVERY.
         Map<Long, Boolean> repartidores = new HashMap<>();
         for (Vehiculo vehiculo : vehiculoRepository.findByConductorIdInAndEstadoVehiculoOrderByIdAsc(
-                libres.stream().map(PosicionConductor::idConductor).toList(), EstadoRegistro.A)) {
+                ids, EstadoRegistro.A)) {
             repartidores.putIfAbsent(vehiculo.getConductor().getId(), vehiculo.esMotoDelivery());
         }
+        for (Long idConductor : viajeRepository.conductoresConViajeActivo(ids, VIAJE_TERMINADO, EstadoRegistro.A)) {
+            if (!repartidores.getOrDefault(idConductor, false)) {
+                excluidos.add(idConductor);
+            }
+        }
         return libres.stream()
+                .filter(posicion -> !excluidos.contains(posicion.idConductor()))
                 .map(posicion -> new ConductorEnLineaResponse(posicion.idConductor(), posicion.latitud(),
                         posicion.longitud(), posicion.rumbo(),
                         repartidores.getOrDefault(posicion.idConductor(), false)))
