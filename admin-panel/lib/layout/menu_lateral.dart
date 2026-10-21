@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -99,6 +101,7 @@ class MenuLateral extends StatelessWidget {
                       grupo: grupo,
                       rutaActual: rutaActual,
                       abiertoAlInicio: grupo.titulo == grupoAbierto,
+                      conMouse: !enDrawer,
                       pendientes: grupo.items.fold<int>(0, (suma, i) => suma + _contador(i, avisos)),
                       opcion: (item) => _OpcionMenu(
                         item: item,
@@ -118,13 +121,16 @@ class MenuLateral extends StatelessWidget {
   }
 }
 
-/// Grupo desplegable del menu. Se abre solo al navegar a una de sus opciones.
+/// Grupo desplegable del menu. Se abre solo al navegar a una de sus opciones y con un toque en su
+/// titulo. En escritorio ([conMouse]) tambien se despliega al pasar el cursor y se esconde al sacarlo; el
+/// grupo de la pantalla actual queda siempre abierto.
 class _GrupoMenu extends StatefulWidget {
   final GrupoMenu grupo;
   final String rutaActual;
   final int pendientes;
   final Widget Function(ItemMenu item) opcion;
   final bool abiertoAlInicio;
+  final bool conMouse;
 
   const _GrupoMenu({
     required this.grupo,
@@ -132,6 +138,7 @@ class _GrupoMenu extends StatefulWidget {
     required this.pendientes,
     required this.opcion,
     this.abiertoAlInicio = false,
+    this.conMouse = false,
   });
 
   @override
@@ -145,6 +152,12 @@ class _GrupoMenuState extends State<_GrupoMenu> with SingleTickerProviderStateMi
     value: _contieneActiva ? 1 : 0,
   );
   bool _encima = false;
+
+  /// Espera antes de abrir (bajar rapido por el menu no abre todos) y antes de cerrar (salirse un
+  /// momento camino a una opcion no lo cierra).
+  static const _esperaAbrir = Duration(milliseconds: 120);
+  static const _esperaCerrar = Duration(milliseconds: 250);
+  Timer? _espera;
 
   bool get _contieneActiva => widget.grupo.items.any((i) => i.ruta == widget.rutaActual);
   bool get _abierto => _apertura.status == AnimationStatus.forward || _apertura.status == AnimationStatus.completed;
@@ -165,11 +178,31 @@ class _GrupoMenuState extends State<_GrupoMenu> with SingleTickerProviderStateMi
 
   @override
   void dispose() {
+    _espera?.cancel();
     _apertura.dispose();
     super.dispose();
   }
 
-  void _alternar() => setState(() => _abierto ? _apertura.reverse() : _apertura.forward());
+  void _alEntrarGrupo() {
+    _espera?.cancel();
+    if (_abierto) return;
+    _espera = Timer(_esperaAbrir, () {
+      if (mounted) _apertura.forward();
+    });
+  }
+
+  void _alSalirGrupo() {
+    _espera?.cancel();
+    if (_contieneActiva) return;
+    _espera = Timer(_esperaCerrar, () {
+      if (mounted) _apertura.reverse();
+    });
+  }
+
+  void _alternar() {
+    _espera?.cancel();
+    setState(() => _abierto ? _apertura.reverse() : _apertura.forward());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +212,7 @@ class _GrupoMenuState extends State<_GrupoMenu> with SingleTickerProviderStateMi
       animation: _apertura,
       builder: (context, _) {
         final abierto = _apertura.value > 0;
-        return AnimatedContainer(
+        final grupo = AnimatedContainer(
           duration: const Duration(milliseconds: 220),
           margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
           decoration: BoxDecoration(
@@ -250,6 +283,8 @@ class _GrupoMenuState extends State<_GrupoMenu> with SingleTickerProviderStateMi
             ],
           ),
         );
+        if (!widget.conMouse) return grupo;
+        return MouseRegion(onEnter: (_) => _alEntrarGrupo(), onExit: (_) => _alSalirGrupo(), child: grupo);
       },
     );
   }
