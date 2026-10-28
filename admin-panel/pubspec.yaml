@@ -74,6 +74,8 @@ flutter:
   # Fuentes para los PDF exportados (las estandar del paquete pdf no cubren bien acentos y enie)
   assets:
     - assets/fuentes/
+    # Figuras del mapa Usuarios en linea (la moto es la misma de la app)
+    - assets/mapa/
 
   # Plus Jakarta Sans (licencia SIL Open Font License 1.1), la fuente del estilo relieve. Pesos fijos
   # generados de la fuente variable del paquete relieve-ui.

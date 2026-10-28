@@ -20,6 +20,7 @@ import '../../../core/iconos.dart';
 import '../../../core/push.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
+import '../../../core/latido_pasajero.dart';
 import '../../../core/config.dart';
 import '../../../core/formato.dart';
 import '../../../core/chat.dart';
@@ -85,6 +86,19 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     sesion: context.read<Sesion>(),
     chat: context.read<ChatEstado>(),
   );
+
+  /// Posicion para el mapa "Usuarios en linea" del panel, solo con la app en pantalla.
+  /// El cliente se toma al crearlo (se crea en initState): el aviso de salida corre en dispose,
+  /// donde ya no se puede leer el Provider.
+  late final LatidoPasajero _latido = () {
+    final cliente = context.read<ClienteApi>();
+    return LatidoPasajero(
+      enviar: (p) => cliente.post('/api/pasajero/latido', {'latitud': p.latitude, 'longitud': p.longitude}),
+      salir: () => cliente.post('/api/pasajero/latido/salir', {}),
+      fuente: _mapa,
+      posicion: () => _mapa.miUbicacion,
+    );
+  }();
 
   int _seccion = _seccionInicio;
 
@@ -180,10 +194,16 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _cargarConductores();
     _iniciarSondeoConductores();
     // Al volver a la app (Android la congela minimizada) se consulta enseguida la solicitud o el viaje.
-    _alVolver = AppLifecycleListener(onResume: () {
-      unawaited(_flujo.consultarAhora());
-      _cargarConductores();
-    });
+    _latido.reanudar();
+    _alVolver = AppLifecycleListener(
+      onResume: () {
+        unawaited(_flujo.consultarAhora());
+        _cargarConductores();
+      },
+      // Minimizada (o la pestana oculta en la web) deja de verse en el mapa del panel.
+      onHide: _latido.pausar,
+      onShow: _latido.reanudar,
+    );
   }
 
   AppLifecycleListener? _alVolver;
@@ -191,6 +211,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   @override
   void dispose() {
     _alVolver?.dispose();
+    _latido.dispose();
     _sondeoConductores?.cancel();
     _sondeoRegistro?.cancel();
     RequiereGps.listo.removeListener(_revisarGuia);

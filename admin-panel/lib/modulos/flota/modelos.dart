@@ -35,6 +35,9 @@ class ConductorFlota {
   final DisponibilidadConductor disponibilidad;
   final DateTime? actualizadoEn;
 
+  /// Su moto es de la categoria DELIVERY: en el mapa va como delivery, no como conductor de taxi.
+  final bool repartidor;
+
   ConductorFlota({
     required this.idConductor,
     required this.nombres,
@@ -46,6 +49,7 @@ class ConductorFlota {
     this.velocidad,
     required this.disponibilidad,
     this.actualizadoEn,
+    this.repartidor = false,
   });
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
@@ -76,6 +80,7 @@ class ConductorFlota {
       velocidad: _aDoble(json['velocidad']),
       disponibilidad: DisponibilidadConductor.desdeCodigo(json['disponibilidad'] as String?),
       actualizadoEn: _aFecha(json['actualizadoEn']),
+      repartidor: json['repartidor'] == true,
     );
   }
 
@@ -97,6 +102,75 @@ class ConductorFlota {
           ? disponibilidad
           : DisponibilidadConductor.desdeCodigo(posicion['disponibilidad'] as String?),
       actualizadoEn: _aFecha(posicion['actualizadoEn']) ?? actualizadoEn,
+      repartidor: repartidor,
+    );
+  }
+}
+
+/// Que esta haciendo un pasajero en linea (ActividadPasajero del backend).
+enum ActividadPasajero {
+  libre('LIBRE', 'Con la app abierta'),
+  buscando('BUSCANDO', 'Buscando conductor'),
+  enViaje('EN_VIAJE', 'En un viaje o pedido');
+
+  final String codigo;
+  final String etiqueta;
+
+  const ActividadPasajero(this.codigo, this.etiqueta);
+
+  static ActividadPasajero desdeCodigo(String? codigo) {
+    for (final valor in ActividadPasajero.values) {
+      if (valor.codigo == codigo) return valor;
+    }
+    return ActividadPasajero.libre;
+  }
+}
+
+/// Pasajero con la app abierta (PasajeroEnLineaResponse del backend). El mismo JSON llega por el topic
+/// /topic/admin/pasajeros; con [enLinea] false salio de la app y se quita del mapa.
+class PasajeroEnLinea {
+  final int idPasajero;
+  final int idUsuario;
+  final String nombres;
+  final String apellidos;
+  final double latitud;
+  final double longitud;
+  final ActividadPasajero actividad;
+  final DateTime actualizadoEn;
+  final bool enLinea;
+
+  const PasajeroEnLinea({
+    required this.idPasajero,
+    required this.idUsuario,
+    required this.nombres,
+    required this.apellidos,
+    required this.latitud,
+    required this.longitud,
+    required this.actividad,
+    required this.actualizadoEn,
+    this.enLinea = true,
+  });
+
+  String get nombreCompleto => '$nombres $apellidos'.trim();
+
+  Duration get antiguedad => DateTime.now().difference(actualizadoEn);
+
+  /// null si al JSON le falta algo para dibujarlo.
+  static PasajeroEnLinea? desdeJson(Map<String, dynamic> json) {
+    final id = json['idPasajero'] as num?;
+    final latitud = json['latitud'] as num?;
+    final longitud = json['longitud'] as num?;
+    if (id == null || latitud == null || longitud == null) return null;
+    return PasajeroEnLinea(
+      idPasajero: id.toInt(),
+      idUsuario: (json['idUsuario'] as num?)?.toInt() ?? 0,
+      nombres: json['nombres'] as String? ?? '',
+      apellidos: json['apellidos'] as String? ?? '',
+      latitud: latitud.toDouble(),
+      longitud: longitud.toDouble(),
+      actividad: ActividadPasajero.desdeCodigo(json['actividad'] as String?),
+      actualizadoEn: DateTime.tryParse('${json['actualizadoEn']}')?.toLocal() ?? DateTime.now(),
+      enLinea: json['enLinea'] != false,
     );
   }
 }

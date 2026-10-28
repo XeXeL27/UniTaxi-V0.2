@@ -35,7 +35,7 @@ class Menu {
       ItemMenu('Eliminación permanente', Iconos.eliminarPermanente, '/eliminacion-permanente');
   static const zonas = ItemMenu('Zonas de servicio', Iconos.drawPolygon, '/zonas');
   static const mapa = ItemMenu('Mapa', Iconos.mapLocationDot, '/mapa');
-  static const flota = ItemMenu('Conductores en vivo', Iconos.carSide, '/flota');
+  static const flota = ItemMenu('Usuarios en línea', Iconos.users, '/flota');
   static const precioViaje = ItemMenu('Precio del viaje', Iconos.route, '/tarifas/precio');
   static const descuentoEstudiante = ItemMenu('Descuento estudiante', Iconos.idBadge, '/tarifas/descuento-estudiante');
   static const carpetaArchivos = ItemMenu('Carpeta de archivos', Iconos.folderOpen, '/sistema/carpeta');

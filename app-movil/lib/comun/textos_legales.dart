@@ -23,7 +23,10 @@ const List<SeccionLegal> politicasPrivacidad = [
     titulo: 'Con quién los compartimos',
     texto:
         'Durante un viaje, el pasajero ve el nombre, la foto, el vehículo y la ubicación del conductor, y '
-        'el conductor ve el nombre del pasajero y los puntos de partida y destino. No vendemos tus datos.',
+        'el conductor ve el nombre del pasajero y los puntos de partida y destino. Mientras tienes la app '
+        'abierta en pantalla, la administración de UNITAXI ve tu ubicación en vivo en su mapa, para la '
+        'seguridad del servicio; al minimizarla o cerrarla deja de verla y no se guarda un historial de '
+        'esas ubicaciones. No vendemos tus datos.',
   ),
   (
     titulo: 'Fotos del carnet y de la licencia',
@@ -106,7 +109,8 @@ const List<SeccionLegal> terminosCondiciones = [
   (
     titulo: 'Privacidad',
     texto:
-        'Usamos tu ubicación solo mientras pides o realizas un viaje. Las fotos de tu carnet y de tu licencia se '
+        'Usamos tu ubicación solo con la app abierta: para pedir o realizar un viaje y para que la '
+        'administración vea en su mapa quién está usando la app (sin guardar un historial). Las fotos de tu carnet y de tu licencia se '
         'leen con Gemini (inteligencia artificial de Google) al momento de registrarte y quedan guardadas en el '
         'servidor de UNITAXI, donde solo las ve la administración. Más detalles en Políticas de privacidad.',
   ),

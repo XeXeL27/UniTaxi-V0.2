@@ -157,9 +157,11 @@ public class UbicacionService {
         }
 
         Map<Long, String> placas = new HashMap<>();
+        Map<Long, Boolean> repartidores = new HashMap<>();
         for (Vehiculo vehiculo : vehiculoRepository
                 .findByConductorIdInAndEstadoVehiculoOrderByIdAsc(idConductores, EstadoRegistro.A)) {
             placas.putIfAbsent(vehiculo.getConductor().getId(), vehiculo.getPlaca());
+            repartidores.putIfAbsent(vehiculo.getConductor().getId(), vehiculo.esMotoDelivery());
         }
 
         Map<Long, Disponibilidad> disponibilidades = new HashMap<>();
@@ -187,7 +189,8 @@ public class UbicacionService {
                             ? null : ubicacion.getVelocidad().doubleValue(),
                     disponibilidades.getOrDefault(conductor.getId(), Disponibilidad.DESCONECTADO),
                     ubicacion == null || ubicacion.getActualizadoEn() == null
-                            ? null : aInstante(ubicacion.getActualizadoEn()));
+                            ? null : aInstante(ubicacion.getActualizadoEn()),
+                    repartidores.getOrDefault(conductor.getId(), false));
         }).toList();
     }
 
@@ -223,12 +226,9 @@ public class UbicacionService {
                 excluidos.add(conductor.getId());
             }
         }
-        // Repartidor = su (primera) moto activa es de la categoria DELIVERY.
+        // Repartidor = su (primera) moto activa es de la categoria DELIVERY (ya viene en la flota).
         Map<Long, Boolean> repartidores = new HashMap<>();
-        for (Vehiculo vehiculo : vehiculoRepository.findByConductorIdInAndEstadoVehiculoOrderByIdAsc(
-                ids, EstadoRegistro.A)) {
-            repartidores.putIfAbsent(vehiculo.getConductor().getId(), vehiculo.esMotoDelivery());
-        }
+        libres.forEach(posicion -> repartidores.put(posicion.idConductor(), posicion.repartidor()));
         for (Long idConductor : viajeRepository.conductoresConViajeActivo(ids, VIAJE_TERMINADO, EstadoRegistro.A)) {
             if (!repartidores.getOrDefault(idConductor, false)) {
                 excluidos.add(idConductor);
