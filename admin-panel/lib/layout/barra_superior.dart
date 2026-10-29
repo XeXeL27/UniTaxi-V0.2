@@ -12,6 +12,7 @@ import '../core/sesion.dart';
 import '../core/relieve.dart';
 import '../core/tema.dart';
 import '../widgets/boton_relieve.dart';
+import '../widgets/dialogos.dart';
 
 /// Barra superior fija: boton para mostrar/esconder el menu, titulo de la pantalla, datos del
 /// administrador y cierre de sesion.
@@ -93,7 +94,7 @@ class BarraSuperior extends StatelessWidget {
           movil
               ? IconButton(
                   tooltip: 'Cerrar sesion',
-                  onPressed: sesion.cerrar,
+                  onPressed: () => _confirmarCerrarSesion(context, sesion),
                   icon: const Icon(Iconos.powerOff, color: ColoresApp.rojo, size: 18),
                 )
               : BotonRelieve(
@@ -101,12 +102,24 @@ class BarraSuperior extends StatelessWidget {
                   icono: Iconos.powerOff,
                   tono: TonoBoton.rojo,
                   tamano: TamanoBoton.pequeno,
-                  alPresionar: sesion.cerrar,
+                  alPresionar: () => _confirmarCerrarSesion(context, sesion),
                 ),
         ],
       ),
     );
   }
+}
+
+/// Pregunta antes de cerrar la sesion; el cierre por inactividad no pasa por aqui.
+Future<void> _confirmarCerrarSesion(BuildContext context, Sesion sesion) async {
+  final confirmado = await confirmarAccion(
+    context,
+    titulo: '¿Cerrar sesión?',
+    mensaje: 'Vas a salir del panel de administración.',
+    textoConfirmar: 'Sí, cerrar sesión',
+    tono: TonoBoton.rojo,
+  );
+  if (confirmado) await sesion.cerrar();
 }
 
 /// Campana de la barra superior con los mensajes de "Problemas de ingreso" sin atender. Cuando llega uno

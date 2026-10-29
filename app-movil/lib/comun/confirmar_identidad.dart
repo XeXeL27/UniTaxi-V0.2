@@ -1,3 +1,4 @@
+import '../widgets/dialogo_animado.dart';
 import 'package:flutter/material.dart';
 
 import '../core/huella.dart';
@@ -18,7 +19,7 @@ Future<String?> confirmarIdentidad(BuildContext context, {String accion = 'guard
 
 /// Dialogo para escribir la contrasena de la cuenta.
 Future<String?> pedirContrasena(BuildContext context, {String accion = 'guardar los cambios'}) {
-  return showDialog<String>(
+  return mostrarDialogo<String>(
     context: context,
     builder: (context) => _DialogoContrasena(accion: accion),
   );

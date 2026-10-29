@@ -56,6 +56,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Enviar el nuevo PDF?',
+      accion: AccionModal.enviar,
       mensaje: 'Vas a reemplazar tu ${_enFrase(documento.nombre)} por "${archivo.name}". Quedará pendiente de revisión.',
       textoConfirmar: 'Sí, enviar',
     );
@@ -81,6 +82,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Enviar el documento?',
+      accion: AccionModal.enviar,
       mensaje: 'Vas a enviar "${archivo.name}" como tu ${_enFrase(pedido.nombre)}. Quedará pendiente de revisión.',
       textoConfirmar: 'Sí, enviar',
     );

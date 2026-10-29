@@ -1,3 +1,4 @@
+import '../widgets/dialogo_animado.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -78,7 +79,7 @@ class _VinculoChatState extends State<VinculoChat> {
 /// leerlo fallaba con "Null check" y el chat quedaba como abierto, sin contar no leidos).
 Future<void> abrirChat(BuildContext context, {required int idViaje, required String nombreContraparte}) {
   final chat = context.read<ChatEstado>();
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
     builder: (_) => Dialog(
       insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),

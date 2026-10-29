@@ -103,7 +103,11 @@ class _PantallaCarnetObservadoState extends State<PantallaCarnetObservado> {
                     tipo: TipoDialogo.revision,
                     principal: false,
                     texto: 'Cerrar sesión',
-                    onPressed: () => context.read<Sesion>().cerrar(),
+                    onPressed: () async {
+                      if (await confirmarCerrarSesion(context) && context.mounted) {
+                        await context.read<Sesion>().cerrar();
+                      }
+                    },
                   ),
                 ],
               ),

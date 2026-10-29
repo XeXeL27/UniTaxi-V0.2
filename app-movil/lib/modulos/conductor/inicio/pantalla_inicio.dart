@@ -237,6 +237,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       final confirmado = await confirmarAccion(
         context,
         titulo: '¿Desconectarte?',
+        accion: AccionModal.desconectar,
         mensaje: 'Dejarás de aparecer en el mapa de los pasajeros y de recibir solicitudes.',
         textoConfirmar: 'Sí, desconectarme',
       );
@@ -523,6 +524,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final aceptar = await confirmarAccion(
       context,
       titulo: '¿Aceptas el cambio de pago?',
+      accion: pedido == MetodoPago.qr ? AccionModal.pagoQr : AccionModal.pagoEfectivo,
       mensaje:
           '${viaje.primerNombrePasajero} pide pagar ${pedido == MetodoPago.qr ? 'por QR' : 'en efectivo'} '
           'en lugar de ${viaje.pagaConQr ? 'por QR' : 'en efectivo'}.',
@@ -548,6 +550,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final confirmado = await confirmarAccion(
       context,
       titulo: aQr ? '¿Cobrar por QR?' : '¿Cobrar en efectivo?',
+      accion: aQr ? AccionModal.pagoQr : AccionModal.pagoEfectivo,
       mensaje: aQr
           ? 'El pasajero verá tus QR de cobro para pagarte.'
           : 'El pasajero te pagará en efectivo al llegar al destino.',
@@ -634,6 +637,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     return confirmarConCasilla(
       context,
       titulo: '¿Finalizar el viaje?',
+      accion: AccionModal.finalizar,
       contenido: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -661,6 +665,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final confirmado = await confirmarAccion(
       context,
       titulo: esPedido ? '¿Cancelar el pedido?' : '¿Cancelar el viaje?',
+      accion: AccionModal.cancelar,
       mensaje: esPedido
           ? 'El pedido volverá a publicarse para que lo tome otro repartidor.'
           : 'El pasajero tendrá que pedir otro taxi.',
@@ -684,6 +689,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Cambiar a modo pasajero?',
+      accion: AccionModal.cambiarModo,
       mensaje: 'Dejarás de aparecer en línea y de recibir solicitudes hasta que vuelvas al modo conductor.',
       textoConfirmar: 'Sí, cambiar',
     );
@@ -700,13 +706,11 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   }
 
   Future<void> _confirmarCerrarSesion() async {
-    final confirmado = await confirmarAccion(
+    final confirmado = await confirmarCerrarSesion(
       context,
-      titulo: '¿Cerrar sesión?',
       mensaje: _flujo.enCurso.isNotEmpty
           ? 'Tienes servicios en curso. Si sales, podrás retomarlos al volver a entrar.'
           : 'Vas a salir de tu cuenta de conductor y dejarás de aparecer en línea.',
-      textoConfirmar: 'Sí, salir',
     );
     if (!confirmado || !mounted) return;
     final sesion = context.read<Sesion>();

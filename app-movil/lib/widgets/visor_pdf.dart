@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'dialogo_animado.dart';
 import 'package:flutter/material.dart';
 
 import '../core/iconos.dart';
@@ -8,7 +9,7 @@ import 'cuerpo_pdf_movil.dart' if (dart.library.js_interop) 'cuerpo_pdf_web.dart
 
 /// Muestra un PDF en un cuadro modal sobre la pantalla.
 Future<void> mostrarPdf(BuildContext context, {required String titulo, required Future<Uint8List?> Function() cargar}) {
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
     builder: (_) => _VisorPdf(titulo: titulo, cargar: cargar),
   );

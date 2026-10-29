@@ -115,6 +115,7 @@ class _PantallaMisQrState extends State<PantallaMisQr> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Quitar el QR ${qr.numero}?',
+      accion: AccionModal.eliminar,
       mensaje: 'Los pasajeros ya no verán este QR para pagarte.',
       textoConfirmar: 'Sí, quitar',
     );

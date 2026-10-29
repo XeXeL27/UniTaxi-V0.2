@@ -1,3 +1,4 @@
+import '../widgets/dialogo_animado.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -119,7 +120,7 @@ class _PantallaMasState extends State<PantallaMas> {
 
   Future<String?> _pedirContrasena() {
     final controlador = TextEditingController();
-    return showDialog<String>(
+    return mostrarDialogo<String>(
       context: context,
       builder: (context) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),

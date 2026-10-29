@@ -544,6 +544,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final cambiar = await confirmarAccion(
       context,
       titulo: '¡Ya eres conductor!',
+      accion: AccionModal.cambiarModo,
       mensaje:
           'La administración aprobó tu cuenta de conductor. ¿Quieres cambiar a modo conductor para empezar a '
           'recibir solicitudes de viaje?',
@@ -710,6 +711,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Quitar este lugar?',
+      accion: AccionModal.eliminar,
       mensaje: '"${lugar.nombre}" ya no aparecerá en tus lugares frecuentes.',
       textoConfirmar: 'Sí, quitar',
     );
@@ -728,6 +730,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Eliminar favorito?',
+      accion: AccionModal.eliminar,
       mensaje: 'Vas a quitar "${favorito.nombre}" de tus lugares favoritos.',
       textoConfirmar: 'Sí, eliminar',
     );
@@ -1133,6 +1136,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
             ? '¿Confirmas el viaje de ${_flujo.tercero!.primerNombre}?'
             : textoConfirmacion(_flujo.servicio),
         contenido: DetalleSolicitudViaje(flujo: _flujo),
+        accion: _flujo.servicio == ServicioActivo.entrega ? AccionModal.solicitarEntrega : AccionModal.solicitarViaje,
       );
       if (!confirmado || !mounted) return;
     }
@@ -1173,6 +1177,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Ya pagaste por QR?',
+      accion: AccionModal.pagoQr,
       mensaje:
           'Le avisaremos al conductor que pagaste ${formatoBs(viaje.precioFinal)} con su QR. Él confirmará que le llegó.',
       textoConfirmar: 'Sí, ya pagué',
@@ -1191,6 +1196,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final confirmado = await confirmarAccion(
       context,
       titulo: aQr ? '¿Pagar por QR?' : '¿Pagar en efectivo?',
+      accion: aQr ? AccionModal.pagoQr : AccionModal.pagoEfectivo,
       mensaje: 'Le preguntaremos al conductor si acepta que pagues ${aQr ? 'por QR' : 'en efectivo'}.',
       textoConfirmar: 'Sí, preguntar',
     );
@@ -1216,6 +1222,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final confirmado = await confirmarAccion(
       context,
       titulo: _flujo.servicio == ServicioActivo.entrega ? '¿Cancelar tu pedido?' : '¿Cancelar la solicitud?',
+      accion: AccionModal.cancelar,
       mensaje: textoCancelarBusqueda(_flujo.servicio),
       textoConfirmar: 'Sí, cancelar',
     );
@@ -1239,6 +1246,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final confirmado = await confirmarAccion(
       context,
       titulo: entrega ? '¿Cancelar tu pedido?' : '¿Cancelar el viaje?',
+      accion: AccionModal.cancelar,
       mensaje: entrega
           ? 'Tu repartidor ya está asignado. Si cancelas, tendrás que solicitar otro envío.'
           : 'Tu conductor ya está asignado. Si cancelas, tendrás que pedir otro taxi.',
@@ -1270,6 +1278,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Cambiar a modo conductor?',
+      accion: AccionModal.cambiarModo,
       mensaje: 'Vas a usar la app como conductor para recibir solicitudes de viaje.',
       textoConfirmar: 'Sí, cambiar',
     );
@@ -1282,11 +1291,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   }
 
   Future<void> _confirmarCerrarSesion() async {
-    final confirmado = await confirmarAccion(
+    final confirmado = await confirmarCerrarSesion(
       context,
-      titulo: '¿Cerrar sesión?',
       mensaje: 'Vas a salir de tu cuenta de pasajero en este teléfono.',
-      textoConfirmar: 'Sí, salir',
     );
     if (confirmado && mounted) await context.read<Sesion>().cerrar();
   }

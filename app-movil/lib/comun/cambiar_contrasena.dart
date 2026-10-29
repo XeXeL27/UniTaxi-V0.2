@@ -1,3 +1,4 @@
+import '../widgets/dialogo_animado.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -26,7 +27,7 @@ const double _anchoModal = 600;
 /// recien entonces la nueva contrasena dos veces. Al guardar llega un aviso al correo (sin la contrasena).
 Future<void> abrirCambiarContrasena(BuildContext context, {CuentaApi? api}) async {
   final cambiada = MediaQuery.sizeOf(context).width >= _anchoModal
-      ? await showDialog<_Resultado>(
+      ? await mostrarDialogo<_Resultado>(
           context: context,
           barrierDismissible: false,
           builder: (_) => Dialog(

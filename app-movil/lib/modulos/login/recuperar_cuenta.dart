@@ -1,3 +1,4 @@
+import '../../widgets/dialogo_animado.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -114,6 +115,7 @@ Future<void> avisarCuentaRegistrada(
     titulo: titulo,
     mensaje: mensaje,
     textoConfirmar: 'Recuperar mis credenciales',
+    accion: AccionModal.enviar,
     textoCancelar: 'Volver',
   );
   if (recuperar && context.mounted) await abrirRecuperarCuenta(context, cuenta, alVolverAlLogin: alVolverAlLogin);
@@ -147,7 +149,7 @@ Future<void> abrirRecuperarCuenta(BuildContext context, CuentaRegistrada cuenta,
   final formulario = _FormularioRecuperar(cuenta: cuenta, enModal: enModal);
   final navegador = Navigator.of(context);
   final resultado = enModal
-      ? await showDialog<_Resultado>(
+      ? await mostrarDialogo<_Resultado>(
           context: context,
           barrierDismissible: false,
           builder: (_) => Dialog(

@@ -1,3 +1,4 @@
+import '../../../widgets/dialogo_animado.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -28,7 +29,7 @@ Future<PasajeroTercero?> abrirFormularioTercero(BuildContext context, PasajeroTe
       ),
     );
   }
-  return showDialog<PasajeroTercero>(
+  return mostrarDialogo<PasajeroTercero>(
     context: context,
     builder: (_) => Dialog(
       insetPadding: const EdgeInsets.all(24),

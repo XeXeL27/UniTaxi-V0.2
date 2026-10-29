@@ -1,3 +1,4 @@
+import '../../../widgets/dialogo_animado.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -105,7 +106,7 @@ class TarjetaFotosDocumento extends StatelessWidget {
   Future<void> _verFotos(BuildContext context, String titulo) {
     final api = DocumentosApi(context.read<ClienteApi>());
     Future<Uint8List?> cargar(String lado) => _esLicencia ? api.fotoLicencia(lado) : api.fotoCarnet(lado);
-    return showDialog<void>(
+    return mostrarDialogo<void>(
       context: context,
       builder: (context) => Dialog(
         insetPadding: const EdgeInsets.all(16),

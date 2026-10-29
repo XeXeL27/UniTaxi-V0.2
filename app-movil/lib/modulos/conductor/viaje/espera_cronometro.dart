@@ -1,3 +1,4 @@
+import '../../../widgets/dialogo_animado.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -288,7 +289,7 @@ Future<String?> pedirMotivo(
   String textoConfirmar = 'Cancelar y reportar',
 }) {
   final controlador = TextEditingController();
-  return showDialog<String>(
+  return mostrarDialogo<String>(
     context: context,
     builder: (contexto) => StatefulBuilder(
       builder: (contexto, actualizar) => AlertDialog(

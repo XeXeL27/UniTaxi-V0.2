@@ -734,6 +734,7 @@ class _EstadoPagoQr extends StatelessWidget {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Recibiste el pago?',
+      accion: AccionModal.finalizar,
       mensaje: 'Confirma que te llegaron ${formatoBs(viaje.precioFinal)} por QR.',
       textoConfirmar: 'Sí, lo recibí',
     );

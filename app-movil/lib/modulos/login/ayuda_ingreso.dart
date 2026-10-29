@@ -1,3 +1,4 @@
+import '../../widgets/dialogo_animado.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -47,7 +48,7 @@ Future<bool> abrirAyudaIngreso(
     enModal: enModal,
   );
   final celular = enModal
-      ? await showDialog<String>(
+      ? await mostrarDialogo<String>(
           context: context,
           barrierDismissible: false,
           builder: (_) => Dialog(

@@ -1,3 +1,4 @@
+import '../../widgets/dialogo_animado.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -60,7 +61,7 @@ Future<void> continuarConGoogle(BuildContext context, String modo, {ValueChanged
 /// como conductor desde Mas) el nombre y el correo ya se conocen; pide CI, telefono, fecha de
 /// nacimiento, licencia, moto, PDF y QR. Devuelve true si se envio el registro desde Mas.
 Future<bool?> abrirFormularioConductor(BuildContext context, {String? codigoGoogle, bool desdePasajero = false}) {
-  return showDialog<bool>(
+  return mostrarDialogo<bool>(
     context: context,
     barrierDismissible: false,
     builder: (context) {

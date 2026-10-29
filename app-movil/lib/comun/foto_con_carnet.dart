@@ -179,6 +179,7 @@ class _PantallaFotoConCarnetState extends State<PantallaFotoConCarnet> {
     final envia = await confirmarAccion(
       context,
       titulo: '¿Enviar tus fotos a revisión?',
+      accion: AccionModal.enviar,
       mensaje:
           'Un administrador comparará tus fotos con los datos de tu cuenta y los corregirá. Mientras tanto no '
           'podrás pedir viajes ni recibir solicitudes; te avisaremos cuando esté listo.',

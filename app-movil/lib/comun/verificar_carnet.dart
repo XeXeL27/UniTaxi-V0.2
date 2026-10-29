@@ -15,6 +15,7 @@ import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../modulos/login/recuperar_cuenta.dart';
 import '../widgets/boton_principal.dart';
+import '../widgets/dialogos.dart';
 import '../widgets/formatos.dart';
 import 'aceptar_terminos.dart';
 import 'selector_carnet.dart';
@@ -175,7 +176,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
     }
   }
 
-  void _cancelar() {
+  Future<void> _cancelar() async {
     if (_registro) {
       if (widget.onCancelar != null) {
         widget.onCancelar!();
@@ -184,7 +185,7 @@ class _PantallaVerificarCarnetState extends State<PantallaVerificarCarnet> {
       }
       return;
     }
-    context.read<Sesion>().cerrar();
+    if (await confirmarCerrarSesion(context) && mounted) await context.read<Sesion>().cerrar();
   }
 
   @override

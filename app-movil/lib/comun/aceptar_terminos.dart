@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/iconos.dart';
 import '../core/tema.dart';
+import '../widgets/dialogo_animado.dart';
 import '../widgets/dialogos.dart';
 import 'textos_legales.dart';
 
@@ -14,17 +15,11 @@ Future<bool> aceptarTerminos(BuildContext context) async {
     context: context,
     barrierDismissible: false,
     barrierLabel: 'Términos y condiciones',
-    barrierColor: const Color(0x66000000),
-    transitionDuration: const Duration(milliseconds: 300),
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 320),
     pageBuilder: (_, _, _) => const Center(child: _ModalTerminos()),
-    transitionBuilder: (context, animacion, _, hijo) => FadeTransition(
-      opacity: animacion,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero)
-            .animate(CurvedAnimation(parent: animacion, curve: Curves.easeOutCubic)),
-        child: hijo,
-      ),
-    ),
+    transitionBuilder: (context, animacion, _, hijo) =>
+        TransicionModal(animacion: animacion, cierraAlTocar: false, child: hijo),
   );
   return acepto ?? false;
 }

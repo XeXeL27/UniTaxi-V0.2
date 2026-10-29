@@ -7,6 +7,7 @@ import '../core/iconos.dart';
 import '../core/sesion.dart';
 import '../core/tema.dart';
 import '../widgets/boton_principal.dart';
+import '../widgets/dialogos.dart';
 
 /// Quien entra a la app sin correo registrado (cuentas creadas por la administracion sin correo)
 /// tiene que darlo antes de seguir: por ahi le llegan sus credenciales y el codigo para restablecer
@@ -130,7 +131,13 @@ class _PantallaCompletarCorreoState extends State<PantallaCompletarCorreo> {
                       BotonPrincipal(texto: 'Guardar y continuar', cargando: _enviando, onPressed: _guardar),
                       const SizedBox(height: 10),
                       TextButton(
-                        onPressed: _enviando ? null : () => context.read<Sesion>().cerrar(),
+                        onPressed: _enviando
+                            ? null
+                            : () async {
+                                if (await confirmarCerrarSesion(context) && context.mounted) {
+                                  await context.read<Sesion>().cerrar();
+                                }
+                              },
                         child: const Text('Cerrar sesión', style: TextStyle(color: ColoresApp.textoSuave)),
                       ),
                     ],

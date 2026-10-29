@@ -1,3 +1,4 @@
+import '../../../widgets/dialogo_animado.dart';
 import 'package:flutter/material.dart';
 
 import '../../../comun/modelos_viaje.dart';
@@ -32,7 +33,7 @@ Future<DatosEntregaForm?> abrirFormularioEntrega(BuildContext context, TipoEnvio
       ),
     );
   }
-  return showDialog<DatosEntregaForm>(
+  return mostrarDialogo<DatosEntregaForm>(
     context: context,
     builder: (_) => Dialog(
       insetPadding: const EdgeInsets.all(24),

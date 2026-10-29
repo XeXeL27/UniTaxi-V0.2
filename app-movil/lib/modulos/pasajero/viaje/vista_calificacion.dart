@@ -1,3 +1,4 @@
+import '../../../widgets/dialogo_animado.dart';
 import 'package:flutter/material.dart';
 
 import '../../../core/api_excepcion.dart';
@@ -14,7 +15,7 @@ import 'flujo_pasajero.dart';
 /// Cuadro pequeno al terminar el viaje: estrellas y un comentario corto para el conductor. Es la
 /// unica oportunidad de calificar ese viaje: una vez enviada (u omitida) no se puede cambiar.
 Future<void> mostrarCalificacion(BuildContext context, FlujoPasajero flujo) {
-  return showDialog<void>(
+  return mostrarDialogo<void>(
     context: context,
     barrierDismissible: false,
     builder: (_) => _CuadroCalificacion(flujo: flujo),

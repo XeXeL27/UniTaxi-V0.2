@@ -1,3 +1,4 @@
+import '../widgets/dialogo_animado.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -74,7 +75,7 @@ class _TarjetaEstudianteUapState extends State<TarjetaEstudianteUap> {
 
   Future<String?> _pedirRu() {
     final campo = TextEditingController(text: _estado?['ru'] as String? ?? '');
-    return showDialog<String>(
+    return mostrarDialogo<String>(
       context: context,
       builder: (contexto) => AlertDialog(
         title: const Text('Soy estudiante UAP'),

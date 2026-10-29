@@ -1,26 +1,82 @@
 import 'dart:math' as math;
 import 'dart:ui' show PathMetric;
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
-/// Modales de resultado y confirmacion del panel: tarjeta blanca que entra con escala sobre un
-/// fondo oscuro, con el icono dibujado con animacion (primero el circulo y luego el simbolo).
-/// Se usan en todas las pantallas:
+import '../core/tema.dart';
+import 'dialogo_animado.dart';
+
+/// Modales de resultado y confirmacion de la app, planos (sin degradados ni sombras, como el resto
+/// de la app): tarjeta blanca que sube con un rebote corto sobre un fondo oscuro, con el icono
+/// dibujado con animacion (primero el circulo y luego el simbolo). Los colores son los de los
+/// botones del panel web. Resultados:
 ///
-/// - verde (check): la accion se realizo (registro, edicion).
-/// - naranja (signo de pregunta): pide confirmacion antes de editar o eliminar, o antes de pedir un
-///   viaje, en cuyo caso el cuerpo lleva los datos ([confirmarViaje]).
+/// - verde (check): la accion se realizo.
 /// - rojo (X): se elimino un registro, o la accion fallo.
 /// - naranja (signo de exclamacion): aviso informativo, sin nada que confirmar.
 /// - rojo (signo de exclamacion): algo espera una revision (datos del carnet en revision).
+///
+/// Las confirmaciones toman el color y el icono de lo que se va a hacer ([AccionModal]).
 enum TipoDialogo { exito, confirmacion, eliminado, error, aviso, revision }
 
-const _verde = Color(0xFF198754);
-const _verdeOscuro = Color(0xFF157347);
-const _rojo = Color(0xFFDC3545);
-const _rojoOscuro = Color(0xFFBB2D3B);
-const _naranja = Color(0xFFFD7E14);
-const _naranjaOscuro = Color(0xFFE56B0B);
+const _verde = Color(0xFF2E7D4F);
+const _rojo = Color(0xFFC8243F);
+const _naranja = Color(0xFFEA580C);
+const _azul = Color(0xFF2F6BD8);
+const _celeste = Color(0xFF0284C7);
+const _marino = ColoresApp.azul;
+
+/// Simbolos que se dibujan trazo a trazo dentro del circulo.
+enum _Trazo { check, x, pregunta, exclamacion }
+
+/// Lo que confirma un modal: decide el color (el de su boton en el panel web) y el icono. Los que
+/// llevan [_trazo] lo dibujan con animacion; los que llevan [icono] lo hacen aparecer con un salto.
+enum AccionModal {
+  /// Pregunta general (naranja con signo de pregunta).
+  pregunta(_naranja, null, _Trazo.pregunta),
+  cerrarSesion(_rojo, Icons.logout_rounded, null),
+
+  /// Cancelar un viaje, un pedido o una solicitud.
+  cancelar(_rojo, null, _Trazo.x),
+
+  /// Eliminar o quitar algo guardado (favorito, lugar, QR).
+  eliminar(_rojo, CupertinoIcons.trash, null),
+  desconectar(_naranja, CupertinoIcons.power, null),
+
+  /// Terminar algo que salio bien (finalizar el viaje, confirmar que se recibio el pago).
+  finalizar(_verde, null, _Trazo.check),
+  pagoEfectivo(_verde, Icons.payments_outlined, null),
+  pagoQr(_verde, CupertinoIcons.qrcode, null),
+  solicitarViaje(_marino, Icons.two_wheeler_rounded, null),
+  solicitarEntrega(_marino, CupertinoIcons.cube_box, null),
+
+  /// Revisar los datos leidos del carnet o la licencia.
+  confirmarDatos(_marino, CupertinoIcons.person_crop_rectangle, null),
+  cambiarModo(_azul, CupertinoIcons.arrow_right_arrow_left, null),
+
+  /// Enviar algo (documentos, fotos a revision, pedir las credenciales).
+  enviar(_celeste, CupertinoIcons.paperplane, null);
+
+  final Color color;
+  final IconData? icono;
+  final _Trazo? _trazo;
+
+  const AccionModal(this.color, this.icono, this._trazo);
+}
+
+/// Color y simbolo con el que se dibuja un modal.
+typedef _Estilo = ({Color color, IconData? icono, _Trazo? trazo});
+
+_Estilo _estiloDe(TipoDialogo tipo) => switch (tipo) {
+  TipoDialogo.exito => (color: _verde, icono: null, trazo: _Trazo.check),
+  TipoDialogo.confirmacion => _estiloAccion(AccionModal.pregunta),
+  TipoDialogo.eliminado || TipoDialogo.error => (color: _rojo, icono: null, trazo: _Trazo.x),
+  TipoDialogo.aviso => (color: _naranja, icono: null, trazo: _Trazo.exclamacion),
+  TipoDialogo.revision => (color: _rojo, icono: null, trazo: _Trazo.exclamacion),
+};
+
+_Estilo _estiloAccion(AccionModal accion) => (color: accion.color, icono: accion.icono, trazo: accion._trazo);
 
 /// Tiempos de la animacion del icono.
 const _duracionCirculo = Duration(milliseconds: 400);
@@ -60,20 +116,28 @@ Future<void> mostrarAviso(
     context,
     barreraCierra: true,
     alAbrir: alAbrir,
-    tarjeta: _TarjetaAlerta(tipo: TipoDialogo.aviso, titulo: titulo, mensaje: mensaje, textoBoton: textoBoton),
+    tarjeta: _TarjetaAlerta(
+      estilo: _estiloDe(TipoDialogo.aviso),
+      titulo: titulo,
+      mensaje: mensaje,
+      textoBoton: textoBoton,
+    ),
   );
 }
 
-/// Modal naranja con Cancelar / confirmar. Devuelve true si el usuario confirma.
+/// Modal con Cancelar / confirmar, del color e icono de [accion]. Devuelve true si el usuario
+/// confirma.
 Future<bool> confirmarAccion(
   BuildContext context, {
   String titulo = '¿Está seguro?',
   required String mensaje,
   String textoConfirmar = 'Sí, continuar',
   String textoCancelar = 'Cancelar',
+  AccionModal accion = AccionModal.pregunta,
 }) async {
   return _confirmar(
     context,
+    accion: accion,
     titulo: titulo,
     mensaje: mensaje,
     textoConfirmar: textoConfirmar,
@@ -81,17 +145,33 @@ Future<bool> confirmarAccion(
   );
 }
 
-/// Modal naranja de confirmacion cuyo cuerpo son datos, no un texto: se usa al pedir un viaje para
-/// mostrar el servicio, la distancia, el pago y el precio. Devuelve true si el usuario confirma.
+/// Confirmacion roja antes de cerrar la sesion (la misma en toda la app y en el panel web).
+Future<bool> confirmarCerrarSesion(
+  BuildContext context, {
+  String mensaje = 'Vas a salir de tu cuenta en este teléfono.',
+}) {
+  return confirmarAccion(
+    context,
+    titulo: '¿Cerrar sesión?',
+    mensaje: mensaje,
+    textoConfirmar: 'Sí, cerrar sesión',
+    accion: AccionModal.cerrarSesion,
+  );
+}
+
+/// Modal de confirmacion cuyo cuerpo son datos, no un texto: se usa al pedir un viaje para mostrar
+/// el servicio, la distancia, el pago y el precio. Devuelve true si el usuario confirma.
 Future<bool> confirmarViaje(
   BuildContext context, {
   String titulo = '¿Confirmas tu viaje?',
   required Widget contenido,
   String textoConfirmar = 'Confirmar',
   String textoCancelar = 'Cancelar',
+  AccionModal accion = AccionModal.solicitarViaje,
 }) async {
   return _confirmar(
     context,
+    accion: accion,
     titulo: titulo,
     contenido: contenido,
     textoConfirmar: textoConfirmar,
@@ -101,23 +181,29 @@ Future<bool> confirmarViaje(
 
 Future<bool> _confirmar(
   BuildContext context, {
+  required AccionModal accion,
   required String titulo,
   String? mensaje,
   Widget? contenido,
   required String textoConfirmar,
   required String textoCancelar,
 }) async {
+  final estilo = _estiloAccion(accion);
   final confirmado = await _abrir<bool>(
     context,
     barreraCierra: false,
-    tarjeta: _TarjetaAlerta(
-      tipo: TipoDialogo.confirmacion,
-      titulo: titulo,
-      mensaje: mensaje,
-      contenido: contenido,
-      textoBoton: textoConfirmar,
-      textoCancelar: textoCancelar,
-      conCancelar: true,
+    tarjeta: Builder(
+      builder: (context) => _TarjetaAlerta(
+        estilo: estilo,
+        titulo: titulo,
+        mensaje: mensaje,
+        contenido: contenido,
+        textoBoton: textoConfirmar,
+        acciones: [
+          _BotonModal(texto: textoConfirmar, color: estilo.color, onPressed: () => Navigator.of(context).pop(true)),
+          _BotonModal(texto: textoCancelar, onPressed: () => Navigator.of(context).pop(false)),
+        ],
+      ),
     ),
   );
   return confirmado ?? false;
@@ -127,13 +213,13 @@ Future<void> _mostrar(BuildContext context, TipoDialogo tipo, String titulo, Str
   return _abrir<void>(
     context,
     barreraCierra: true,
-    tarjeta: _TarjetaAlerta(tipo: tipo, titulo: titulo, mensaje: mensaje, textoBoton: 'Aceptar'),
+    tarjeta: _TarjetaAlerta(estilo: _estiloDe(tipo), titulo: titulo, mensaje: mensaje, textoBoton: 'Aceptar'),
   );
 }
 
-/// Modal naranja que pide marcar una casilla antes de confirmar (por ejemplo "Recibí el pago" al
-/// finalizar un viaje): el boton de confirmar se habilita recien con la casilla marcada. Devuelve
-/// true si el usuario confirma.
+/// Modal que pide marcar una casilla antes de confirmar (por ejemplo "Recibí el pago" al finalizar
+/// un viaje): el boton de confirmar se habilita recien con la casilla marcada. Devuelve true si el
+/// usuario confirma.
 Future<bool> confirmarConCasilla(
   BuildContext context, {
   required String titulo,
@@ -141,14 +227,16 @@ Future<bool> confirmarConCasilla(
   required String casilla,
   required String textoConfirmar,
   String textoCancelar = 'Cancelar',
+  AccionModal accion = AccionModal.pregunta,
 }) async {
+  final estilo = _estiloAccion(accion);
   var marcada = false;
   final confirmado = await _abrir<bool>(
     context,
     barreraCierra: false,
     tarjeta: StatefulBuilder(
       builder: (context, setState) => _TarjetaAlerta(
-        tipo: TipoDialogo.confirmacion,
+        estilo: estilo,
         titulo: titulo,
         textoBoton: '',
         contenido: Column(
@@ -157,22 +245,21 @@ Future<bool> confirmarConCasilla(
           children: [
             contenido,
             const SizedBox(height: 14),
-            _Casilla(texto: casilla, marcada: marcada, alCambiar: (valor) => setState(() => marcada = valor)),
+            _Casilla(
+              texto: casilla,
+              marcada: marcada,
+              color: estilo.color,
+              alCambiar: (valor) => setState(() => marcada = valor),
+            ),
           ],
         ),
         acciones: [
           _BotonModal(
             texto: textoConfirmar,
-            principal: true,
-            tipo: TipoDialogo.confirmacion,
+            color: estilo.color,
             onPressed: marcada ? () => Navigator.of(context).pop(true) : null,
           ),
-          _BotonModal(
-            texto: textoCancelar,
-            principal: false,
-            tipo: TipoDialogo.confirmacion,
-            onPressed: () => Navigator.of(context).pop(false),
-          ),
+          _BotonModal(texto: textoCancelar, onPressed: () => Navigator.of(context).pop(false)),
         ],
       ),
     ),
@@ -184,31 +271,28 @@ Future<bool> confirmarConCasilla(
 class _Casilla extends StatelessWidget {
   final String texto;
   final bool marcada;
+  final Color color;
   final ValueChanged<bool> alCambiar;
 
-  const _Casilla({required this.texto, required this.marcada, required this.alCambiar});
+  const _Casilla({required this.texto, required this.marcada, required this.color, required this.alCambiar});
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: marcada ? const Color(0xFFFFF4EA) : const Color(0xFFF8F9FA),
-      borderRadius: BorderRadius.circular(10),
+      color: marcada ? color.withValues(alpha: 0.1) : const Color(0xFFF1F3F5),
+      borderRadius: BorderRadius.circular(Redondeo.tarjeta),
       child: InkWell(
         onTap: () => alCambiar(!marcada),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(Redondeo.tarjeta),
         child: Padding(
           padding: const EdgeInsets.fromLTRB(4, 6, 12, 6),
           child: Row(
             children: [
-              Checkbox(
-                value: marcada,
-                activeColor: _naranja,
-                onChanged: (valor) => alCambiar(valor ?? false),
-              ),
+              Checkbox(value: marcada, activeColor: color, onChanged: (valor) => alCambiar(valor ?? false)),
               Expanded(
                 child: Text(
                   texto,
-                  style: const TextStyle(fontSize: 14.5, color: Color(0xFF212529), fontWeight: FontWeight.w600),
+                  style: const TextStyle(fontSize: 14.5, color: ColoresApp.texto, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
@@ -219,24 +303,25 @@ class _Casilla extends StatelessWidget {
   }
 }
 
-/// Opcion de [elegirOpcion]: [principal] va como boton lleno del color del modal; las demas, con
-/// borde.
+/// Opcion de [elegirOpcion]: [principal] va como boton lleno del color del modal; las demas, en gris.
 typedef OpcionModal<T> = ({String texto, T valor, bool principal});
 
-/// Modal naranja con varias opciones apiladas (por ejemplo confirmar, repetir o enviar a revision).
-/// Devuelve el valor de la opcion elegida; null si se cerro sin elegir.
+/// Modal con varias opciones apiladas (por ejemplo confirmar, repetir o enviar a revision). Devuelve
+/// el valor de la opcion elegida; null si se cerro sin elegir.
 Future<T?> elegirOpcion<T>(
   BuildContext context, {
   required String titulo,
   required Widget contenido,
   required List<OpcionModal<T>> opciones,
+  AccionModal accion = AccionModal.pregunta,
 }) {
+  final estilo = _estiloAccion(accion);
   return _abrir<T>(
     context,
     barreraCierra: false,
     tarjeta: Builder(
       builder: (context) => _TarjetaAlerta(
-        tipo: TipoDialogo.confirmacion,
+        estilo: estilo,
         titulo: titulo,
         contenido: contenido,
         textoBoton: '',
@@ -244,8 +329,7 @@ Future<T?> elegirOpcion<T>(
           for (final opcion in opciones)
             _BotonModal(
               texto: opcion.texto,
-              principal: opcion.principal,
-              tipo: TipoDialogo.confirmacion,
+              color: opcion.principal ? estilo.color : null,
               onPressed: () => Navigator.of(context).pop(opcion.valor),
             ),
         ],
@@ -274,11 +358,11 @@ class TarjetaModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      _TarjetaAlerta(tipo: tipo, titulo: titulo, mensaje: mensaje, textoBoton: '', acciones: acciones);
+      _TarjetaAlerta(estilo: _estiloDe(tipo), titulo: titulo, mensaje: mensaje, textoBoton: '', acciones: acciones);
 }
 
 /// Boton de ancho completo con el estilo de los modales: lleno del color del tipo si es
-/// [principal], con borde gris si no.
+/// [principal], gris claro si no.
 class BotonModal extends StatelessWidget {
   final String texto;
   final bool principal;
@@ -289,65 +373,53 @@ class BotonModal extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      _BotonModal(texto: texto, principal: principal, tipo: tipo, onPressed: onPressed);
+      _BotonModal(texto: texto, color: principal ? _estiloDe(tipo).color : null, onPressed: onPressed);
 }
 
+/// Boton plano de ancho completo: lleno de [color] o, sin color, gris claro (Cancelar y opciones
+/// secundarias).
 class _BotonModal extends StatelessWidget {
   final String texto;
-  final bool principal;
-  final TipoDialogo tipo;
+  final Color? color;
   final VoidCallback? onPressed;
 
-  const _BotonModal({required this.texto, required this.principal, required this.tipo, this.onPressed});
+  const _BotonModal({required this.texto, this.color, this.onPressed});
+
+  static const _gris = Color(0xFFF1F3F5);
 
   @override
   Widget build(BuildContext context) {
-    final (color, colorHover) = _coloresDe(tipo);
-    final forma = RoundedRectangleBorder(borderRadius: BorderRadius.circular(6));
-    const relleno = EdgeInsets.symmetric(horizontal: 16, vertical: 13);
-    final hijo = Text(texto, textAlign: TextAlign.center);
+    final lleno = color;
+    final fondo = lleno ?? _gris;
+    final letra = lleno == null ? ColoresApp.texto : Colors.white;
     return SizedBox(
       width: double.infinity,
-      child: principal
-          ? FilledButton(
-              onPressed: onPressed,
-              style: ButtonStyle(
-                backgroundColor: WidgetStateProperty.resolveWith(
-                  (estados) => estados.contains(WidgetState.disabled)
-                      ? color.withValues(alpha: 0.35)
-                      : estados.contains(WidgetState.hovered)
-                      ? colorHover
-                      : color,
-                ),
-                foregroundColor: const WidgetStatePropertyAll(Colors.white),
-                padding: const WidgetStatePropertyAll(relleno),
-                shape: WidgetStatePropertyAll(forma),
-                textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
-              ),
-              child: hijo,
-            )
-          : OutlinedButton(
-              onPressed: onPressed,
-              style: OutlinedButton.styleFrom(
-                backgroundColor: const Color(0xFFF8F9FA),
-                foregroundColor: const Color(0xFF212529),
-                side: const BorderSide(color: Color(0xFFDEE2E6)),
-                padding: relleno,
-                shape: forma,
-              ),
-              child: hijo,
-            ),
+      child: FilledButton(
+        onPressed: onPressed,
+        style: ButtonStyle(
+          elevation: const WidgetStatePropertyAll(0),
+          backgroundColor: WidgetStateProperty.resolveWith(
+            (estados) => estados.contains(WidgetState.disabled) ? fondo.withValues(alpha: 0.4) : fondo,
+          ),
+          foregroundColor: WidgetStateProperty.resolveWith(
+            (estados) => estados.contains(WidgetState.disabled) ? letra.withValues(alpha: 0.7) : letra,
+          ),
+          overlayColor: WidgetStatePropertyAll(
+            (lleno == null ? Colors.black : Colors.white).withValues(alpha: lleno == null ? 0.06 : 0.14),
+          ),
+          padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 16, vertical: 14)),
+          shape: const WidgetStatePropertyAll(
+            RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(Redondeo.tarjeta))),
+          ),
+          textStyle: const WidgetStatePropertyAll(TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+        ),
+        child: Text(texto, textAlign: TextAlign.center),
+      ),
     );
   }
 }
 
-(Color, Color) _coloresDe(TipoDialogo tipo) => switch (tipo) {
-  TipoDialogo.exito => (_verde, _verdeOscuro),
-  TipoDialogo.confirmacion || TipoDialogo.aviso => (_naranja, _naranjaOscuro),
-  TipoDialogo.eliminado || TipoDialogo.error || TipoDialogo.revision => (_rojo, _rojoOscuro),
-};
-
-/// Fondo oscuro que aparece en 0,3 s y tarjeta que entra con escala 0,8 -> 1 con rebote.
+/// Abre la tarjeta con la entrada plana de [TransicionModal].
 Future<R?> _abrir<R>(
   BuildContext context, {
   required bool barreraCierra,
@@ -358,28 +430,20 @@ Future<R?> _abrir<R>(
     context: context,
     barrierDismissible: barreraCierra,
     barrierLabel: 'Cerrar',
-    barrierColor: const Color(0x66000000),
-    transitionDuration: const Duration(milliseconds: 300),
+    barrierColor: Colors.transparent,
+    transitionDuration: const Duration(milliseconds: 320),
     pageBuilder: (contexto, _, _) {
       final ruta = ModalRoute.of(contexto);
       if (ruta != null) alAbrir?.call(ruta);
       return Center(child: tarjeta);
     },
-    transitionBuilder: (context, animacion, _, hijo) {
-      final escala = Tween<double>(
-        begin: 0.8,
-        end: 1,
-      ).animate(CurvedAnimation(parent: animacion, curve: const Cubic(0.175, 0.885, 0.32, 1.275)));
-      return FadeTransition(
-        opacity: animacion,
-        child: ScaleTransition(scale: escala, child: hijo),
-      );
-    },
+    transitionBuilder: (context, animacion, _, hijo) =>
+        TransicionModal(animacion: animacion, cierraAlTocar: barreraCierra, child: hijo),
   );
 }
 
 class _TarjetaAlerta extends StatelessWidget {
-  final TipoDialogo tipo;
+  final _Estilo estilo;
   final String titulo;
 
   /// Texto del cuerpo. Se usa [contenido] en su lugar cuando se pasa.
@@ -387,61 +451,50 @@ class _TarjetaAlerta extends StatelessWidget {
 
   /// Cuerpo con datos en vez de texto (detalle de una solicitud, por ejemplo).
   final Widget? contenido;
-  final String textoBoton;
-  final bool conCancelar;
-  final String textoCancelar;
 
-  /// Botones propios apilados en lugar de Cancelar / [textoBoton].
+  /// Texto del unico boton cuando no hay [acciones] (cierra el modal).
+  final String textoBoton;
+
+  /// Botones propios apilados en lugar del boton [textoBoton].
   final List<Widget>? acciones;
 
   const _TarjetaAlerta({
-    required this.tipo,
+    required this.estilo,
     required this.titulo,
     required this.textoBoton,
     this.mensaje,
     this.contenido,
-    this.conCancelar = false,
-    this.textoCancelar = 'Cancelar',
     this.acciones,
   }) : assert(mensaje != null || contenido != null, 'Hay que pasar mensaje o contenido');
 
-  (Color, Color) get _colores => _coloresDe(tipo);
-
   @override
   Widget build(BuildContext context) {
-    final (color, colorHover) = _colores;
+    final color = estilo.color;
+    final botones =
+        acciones ??
+        [_BotonModal(texto: textoBoton, color: color, onPressed: () => Navigator.of(context).pop(true))];
     // En pantallas bajas (o con letra grande) la tarjeta entera se desplaza en vez de desbordar.
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(Espacio.l),
       child: Material(
         color: Colors.white,
         elevation: 0,
-        borderRadius: BorderRadius.circular(20),
-        shadowColor: Colors.transparent,
+        borderRadius: BorderRadius.circular(Redondeo.hoja),
         child: Container(
           width: double.infinity,
-          constraints: const BoxConstraints(maxWidth: 320),
-          padding: const EdgeInsets.fromLTRB(24, 40, 24, 40),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 30, offset: Offset(0, 15))],
-            color: Colors.white,
-          ),
+          constraints: const BoxConstraints(maxWidth: 340),
+          padding: const EdgeInsets.fromLTRB(Espacio.xl, Espacio.xxl, Espacio.xl, Espacio.xl),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              SizedBox(
-                width: 90,
-                height: 90,
-                child: _IconoAnimado(tipo: tipo, color: color),
-              ),
-              const SizedBox(height: 15),
+              SizedBox(width: 84, height: 84, child: _IconoAnimado(estilo: estilo)),
+              const SizedBox(height: Espacio.l),
               Text(
                 titulo,
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600, color: color),
+                style: TextStyle(fontSize: 21, fontWeight: FontWeight.w700, color: color),
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: Espacio.s),
               // Con contenido largo la tarjeta podria pasarse de alto en telefonos chicos, asi que
               // el cuerpo se desplaza dentro en vez de desbordar la pantalla.
               ConstrainedBox(
@@ -452,52 +505,17 @@ class _TarjetaAlerta extends StatelessWidget {
                       Text(
                         mensaje!,
                         textAlign: TextAlign.center,
-                        style: const TextStyle(fontSize: 14.5, color: Color(0xFF6C757D), height: 1.4),
+                        style: const TextStyle(fontSize: 14.5, color: ColoresApp.textoSuave, height: 1.4),
                       ),
                 ),
               ),
-              const SizedBox(height: 25),
-              if (acciones != null)
-                Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (final (i, accion) in acciones!.indexed) ...[if (i > 0) const SizedBox(height: 8), accion],
-                  ],
-                )
-              else
-                Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    if (conCancelar)
-                      OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(false),
-                        style: OutlinedButton.styleFrom(
-                          backgroundColor: const Color(0xFFF8F9FA),
-                          foregroundColor: const Color(0xFF212529),
-                          side: const BorderSide(color: Color(0xFFDEE2E6)),
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                        ),
-                        child: Text(textoCancelar),
-                      ),
-                    FilledButton(
-                      autofocus: true,
-                      onPressed: () => Navigator.of(context).pop(true),
-                      style: ButtonStyle(
-                        backgroundColor: WidgetStateProperty.resolveWith(
-                          (estados) => estados.contains(WidgetState.hovered) ? colorHover : color,
-                        ),
-                        foregroundColor: const WidgetStatePropertyAll(Colors.white),
-                        padding: const WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 30, vertical: 12)),
-                        shape: WidgetStatePropertyAll(RoundedRectangleBorder(borderRadius: BorderRadius.circular(6))),
-                        textStyle: const WidgetStatePropertyAll(TextStyle(fontWeight: FontWeight.w600)),
-                      ),
-                      child: Text(textoBoton),
-                    ),
-                  ],
-                ),
+              const SizedBox(height: Espacio.xl),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  for (final (i, boton) in botones.indexed) ...[if (i > 0) const SizedBox(height: Espacio.s), boton],
+                ],
+              ),
             ],
           ),
         ),
@@ -506,13 +524,12 @@ class _TarjetaAlerta extends StatelessWidget {
   }
 }
 
-/// Icono que se dibuja solo: el circulo en 0,4 s y despues el simbolo (check, X o signo de
-/// pregunta con su punto).
+/// Icono que se dibuja solo: el circulo en 0,4 s y despues el simbolo (check, X, signo de pregunta
+/// o de exclamacion con su punto) o, si la accion tiene icono propio, el icono entra con un salto.
 class _IconoAnimado extends StatefulWidget {
-  final TipoDialogo tipo;
-  final Color color;
+  final _Estilo estilo;
 
-  const _IconoAnimado({required this.tipo, required this.color});
+  const _IconoAnimado({required this.estilo});
 
   @override
   State<_IconoAnimado> createState() => _IconoAnimadoState();
@@ -539,6 +556,12 @@ class _IconoAnimadoState extends State<_IconoAnimado> with SingleTickerProviderS
     curve: Interval(_fraccion(_retrasoPunto), 1, curve: Curves.ease),
   );
 
+  /// Salto del icono propio: crece de 0 a 1 pasandose un poco, despues de dibujar el circulo.
+  late final Animation<double> _salto = CurvedAnimation(
+    parent: _control,
+    curve: Interval(_fraccion(_duracionCirculo) * 0.8, 0.85, curve: Curves.easeOutBack),
+  );
+
   static double _fraccion(Duration momento) => momento.inMicroseconds / _total.inMicroseconds;
 
   @override
@@ -549,32 +572,46 @@ class _IconoAnimadoState extends State<_IconoAnimado> with SingleTickerProviderS
 
   @override
   Widget build(BuildContext context) {
+    final estilo = widget.estilo;
+    final icono = estilo.icono;
     return AnimatedBuilder(
       animation: _control,
-      builder: (context, _) => CustomPaint(
-        painter: _PintorIcono(
-          tipo: widget.tipo,
-          color: widget.color,
-          progresoCirculo: _circulo.value,
-          progresoSimbolo: _simbolo.value,
-          opacidadPunto: _punto.value,
-        ),
+      builder: (context, _) => Stack(
+        fit: StackFit.expand,
+        children: [
+          CustomPaint(
+            painter: _PintorIcono(
+              trazo: estilo.trazo,
+              color: estilo.color,
+              progresoCirculo: _circulo.value,
+              progresoSimbolo: _simbolo.value,
+              opacidadPunto: _punto.value,
+            ),
+          ),
+          if (icono != null)
+            Center(
+              child: Transform.scale(
+                scale: _salto.value,
+                child: Icon(icono, color: estilo.color, size: 38),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-/// Dibuja el icono en un lienzo de 52 x 52 unidades (el mismo viewBox del SVG de referencia),
-/// escalado al tamano disponible.
+/// Dibuja el circulo y el simbolo en un lienzo de 52 x 52 unidades (el mismo viewBox del SVG de
+/// referencia), escalado al tamano disponible.
 class _PintorIcono extends CustomPainter {
-  final TipoDialogo tipo;
+  final _Trazo? trazo;
   final Color color;
   final double progresoCirculo;
   final double progresoSimbolo;
   final double opacidadPunto;
 
   _PintorIcono({
-    required this.tipo,
+    required this.trazo,
     required this.color,
     required this.progresoCirculo,
     required this.progresoSimbolo,
@@ -601,19 +638,21 @@ class _PintorIcono extends CustomPainter {
     final circulo = Path()..addArc(Rect.fromCircle(center: const Offset(26, 26), radius: 25), 0, 2 * math.pi - 0.0001);
     canvas.drawPath(_parcial(circulo, progresoCirculo), pincelCirculo);
 
-    for (final trazo in _trazosSimbolo()) {
-      canvas.drawPath(_parcial(trazo, progresoSimbolo), pincelSimbolo);
+    for (final linea in _trazosSimbolo()) {
+      canvas.drawPath(_parcial(linea, progresoSimbolo), pincelSimbolo);
     }
 
-    final conPunto = tipo == TipoDialogo.confirmacion || tipo == TipoDialogo.aviso || tipo == TipoDialogo.revision;
+    final conPunto = trazo == _Trazo.pregunta || trazo == _Trazo.exclamacion;
     if (conPunto && opacidadPunto > 0) {
       canvas.drawCircle(const Offset(26, 38), 2.5, Paint()..color = color.withValues(alpha: opacidadPunto));
     }
   }
 
   List<Path> _trazosSimbolo() {
-    switch (tipo) {
-      case TipoDialogo.exito:
+    switch (trazo) {
+      case null:
+        return const [];
+      case _Trazo.check:
         // M14.1 27.2 l7.1 7.2 16.7-16.8
         return [
           Path()
@@ -621,8 +660,7 @@ class _PintorIcono extends CustomPainter {
             ..lineTo(21.2, 34.4)
             ..lineTo(37.9, 17.6),
         ];
-      case TipoDialogo.eliminado:
-      case TipoDialogo.error:
+      case _Trazo.x:
         return [
           Path()
             ..moveTo(16, 16)
@@ -631,14 +669,13 @@ class _PintorIcono extends CustomPainter {
             ..moveTo(36, 16)
             ..lineTo(16, 36),
         ];
-      case TipoDialogo.aviso:
-      case TipoDialogo.revision:
+      case _Trazo.exclamacion:
         return [
           Path()
             ..moveTo(26, 13)
             ..lineTo(26, 30),
         ];
-      case TipoDialogo.confirmacion:
+      case _Trazo.pregunta:
         // M19,20 A7,7 0 1,1 26,27 C26,30 26,31 26,31
         return [
           Path()
@@ -664,5 +701,6 @@ class _PintorIcono extends CustomPainter {
       anterior.progresoCirculo != progresoCirculo ||
       anterior.progresoSimbolo != progresoSimbolo ||
       anterior.opacidadPunto != opacidadPunto ||
-      anterior.color != color;
+      anterior.color != color ||
+      anterior.trazo != trazo;
 }

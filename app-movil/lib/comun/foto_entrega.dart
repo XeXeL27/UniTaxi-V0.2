@@ -1,3 +1,4 @@
+import '../widgets/dialogo_animado.dart';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -21,7 +22,7 @@ class _FotoEntregaState extends State<FotoEntrega> {
   late final Future<Uint8List?> _foto = widget.cargar();
 
   void _verGrande(Uint8List foto) {
-    showDialog<void>(
+    mostrarDialogo<void>(
       context: context,
       builder: (contexto) => Dialog(
         backgroundColor: ColoresApp.tinta,

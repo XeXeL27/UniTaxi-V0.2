@@ -86,6 +86,7 @@ class _PantallaPanelAdminState extends State<PantallaPanelAdmin> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Salir del panel?',
+      accion: AccionModal.cerrarSesion,
       mensaje: 'Vas a cerrar el panel de administración y volver al inicio de sesión.',
       textoConfirmar: 'Sí, salir',
     );

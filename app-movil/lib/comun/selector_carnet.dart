@@ -515,6 +515,7 @@ Future<RespuestaCarnet> confirmarDatosCarnet(
       context,
       titulo: 'Confirma tus datos',
       textoConfirmar: 'Sí, son mis datos',
+      accion: AccionModal.confirmarDatos,
       textoCancelar: 'No',
       contenido: contenido,
     );
@@ -526,6 +527,7 @@ Future<RespuestaCarnet> confirmarDatosCarnet(
       context,
       titulo: 'Confirma tus datos',
       contenido: contenido,
+      accion: AccionModal.confirmarDatos,
       opciones: const [
         (texto: 'Sí, son mis datos', valor: RespuestaCarnet.confirma, principal: true),
         (texto: 'No, volver a tomar las fotos', valor: RespuestaCarnet.repetir, principal: false),
@@ -537,6 +539,7 @@ Future<RespuestaCarnet> confirmarDatosCarnet(
     final envia = await confirmarAccion(
       context,
       titulo: '¿Enviar tus datos a revisión?',
+      accion: AccionModal.enviar,
       mensaje:
           mensajeObservado ??
           'Observado significa que un administrador verificará los datos que llenó el sistema (la IA o '
@@ -564,6 +567,7 @@ Future<bool> confirmarNumeroLicencia(
     context,
     titulo: 'Confirma tu licencia',
     textoConfirmar: 'Sí, es correcto',
+    accion: AccionModal.confirmarDatos,
     textoCancelar: 'No',
     contenido: Column(
       mainAxisSize: MainAxisSize.min,

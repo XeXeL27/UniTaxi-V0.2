@@ -1,3 +1,4 @@
+import '../../widgets/dialogo_animado.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -27,7 +28,7 @@ Future<String?> abrirRestablecerContrasena(BuildContext context, {String? correo
     correoInicial: correoInicial,
   );
   final correo = formulario.enModal
-      ? await showDialog<String>(
+      ? await mostrarDialogo<String>(
           context: context,
           barrierDismissible: false,
           builder: (_) => Dialog(
