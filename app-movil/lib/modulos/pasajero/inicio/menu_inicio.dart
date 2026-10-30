@@ -5,6 +5,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
+import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/inicio_mapa.dart';
 
 /// Lugar que se ofrece en el menu del inicio: un favorito guardado o un lugar frecuente.
@@ -35,7 +36,8 @@ class MenuInicio extends StatelessWidget {
   final ValueChanged<LugarMenu> onLugar;
   final VoidCallback onAnadirLugar;
   final VoidCallback onMotoTaxi;
-  final VoidCallback onEntrega;
+  final VoidCallback onEncomienda;
+  final VoidCallback onDelivery;
 
   /// Claves para la guia de inicio (el buscador y el boton azul).
   final Key? claveBuscador;
@@ -52,7 +54,8 @@ class MenuInicio extends StatelessWidget {
     required this.onLugar,
     required this.onAnadirLugar,
     required this.onMotoTaxi,
-    required this.onEntrega,
+    required this.onEncomienda,
+    required this.onDelivery,
     this.claveBuscador,
     this.claveBoton,
   });
@@ -172,11 +175,24 @@ class MenuInicio extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: _AccesoServicio(icono: Iconos.motorcycle, texto: 'Moto taxi', onTap: onMotoTaxi),
+                child: MarcaGuia(
+                  id: 'pasajero.menuMotoTaxi',
+                  child: _AccesoServicio(icono: Iconos.motorcycle, texto: 'Moto taxi', onTap: onMotoTaxi),
+                ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 8),
               Expanded(
-                child: _AccesoServicio(icono: Iconos.boxOpen, texto: 'Entrega', onTap: onEntrega),
+                child: MarcaGuia(
+                  id: 'pasajero.menuEncomienda',
+                  child: _AccesoServicio(icono: Iconos.boxOpen, texto: 'Encomienda', onTap: onEncomienda),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: MarcaGuia(
+                  id: 'pasajero.menuDelivery',
+                  child: _AccesoServicio(icono: Iconos.bagShopping, texto: 'Delivery', onTap: onDelivery),
+                ),
               ),
             ],
           ),
@@ -237,7 +253,7 @@ class _FilaLugar extends StatelessWidget {
   }
 }
 
-/// Moto taxi o Entrega en el menu del inicio.
+/// Moto taxi, Encomienda o Delivery en el menu del inicio.
 class _AccesoServicio extends StatelessWidget {
   final IconData icono;
   final String texto;
@@ -255,7 +271,7 @@ class _AccesoServicio extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         child: Container(
           height: 76,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           alignment: Alignment.centerLeft,
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -263,7 +279,16 @@ class _AccesoServicio extends StatelessWidget {
             children: [
               Icon(icono, color: ColoresApp.azul, size: 22),
               const SizedBox(height: 8),
-              Text(texto, style: const TextStyle(color: ColoresApp.tinta, fontSize: 15, fontWeight: FontWeight.w700)),
+              // Tres en una fila: en un celular angosto el texto se achica antes que cortarse.
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  texto,
+                  maxLines: 1,
+                  style: const TextStyle(color: ColoresApp.tinta, fontSize: 15, fontWeight: FontWeight.w700),
+                ),
+              ),
             ],
           ),
         ),

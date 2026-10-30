@@ -83,7 +83,7 @@ class DetalleSolicitudViaje extends StatelessWidget {
                 const Icon(Iconos.boxOpen, color: ColoresApp.ruta, size: 14),
                 const SizedBox(width: 8),
                 Text(
-                  flujo.tipoEnvio?.nombre ?? 'Entrega',
+                  flujo.tipoEnvio?.nombreServicio ?? 'Entrega',
                   style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w600, color: ColoresApp.texto),
                 ),
               ] else ...[
@@ -201,7 +201,7 @@ class PanelBuscando extends StatelessWidget {
     final tercero = solicitud?.tercero;
     final esCompra = solicitud?.datosEntrega?.tipoEnvio == TipoEnvio.compraYEntrega;
     final nombreServicio = servicio == ServicioActivo.entrega
-        ? (solicitud?.datosEntrega?.tipoEnvio.nombre ?? 'Entrega')
+        ? (solicitud?.datosEntrega?.tipoEnvio.nombreServicio ?? 'Entrega')
         : 'Moto taxi';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

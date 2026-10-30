@@ -81,6 +81,11 @@ class FlujoConductor extends ChangeNotifier {
   /// Conectado para recibir solicitudes (boton del centro). Desconectado no se consulta la lista.
   bool enLinea = true;
 
+  /// Usa el GPS aunque la app no este a la vista: conectado (manda su posicion) o con un viaje o
+  /// pedido. Desconectado y sin viajes, minimizado, el GPS se pausa.
+  bool get necesitaGpsDeFondo =>
+      (enLinea && !enRevision) || enCurso.isNotEmpty || viaje != null || etapa == EtapaConductor.enViaje;
+
   /// La administracion todavia no aprobo al conductor (regla 1) o le faltan documentos
   /// obligatorios: no se consulta la lista ni se envia el GPS.
   bool enRevision = false;

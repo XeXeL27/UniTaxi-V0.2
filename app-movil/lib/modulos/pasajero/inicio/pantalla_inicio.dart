@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemUiOverlayStyle;
 import 'package:flutter_map/flutter_map.dart';
@@ -126,9 +127,17 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   );
   Timer? _sondeoConductores;
 
-  /// Con los taxistas a la vista se consulta mas seguido para verlos moverse.
+  /// Con los taxistas a la vista se consulta mas seguido para verlos moverse. Ocultos solo sirven
+  /// para contar los libres: basta cada 15 s.
   static const _intervaloConVista = Duration(seconds: 3);
-  static const _intervaloSinVista = Duration(seconds: 5);
+  static const _intervaloSinVista = Duration(seconds: 15);
+
+  /// Lo que se espera, al solicitar, una lectura exacta del GPS para la partida.
+  static const _esperaUbicacionExacta = Duration(seconds: 10);
+
+  /// La app no esta a la vista (minimizada o la pestana oculta): no se consultan los taxistas y, sin
+  /// un servicio en curso, el GPS queda en pausa.
+  bool _oculta = false;
 
   /// Boton de ver taxistas libres: apagado al principio; el telefono recuerda lo ultimo elegido.
   bool _verTaxistas = false;
@@ -201,8 +210,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         _cargarConductores();
       },
       // Minimizada (o la pestana oculta en la web) deja de verse en el mapa del panel.
-      onHide: _latido.pausar,
-      onShow: _latido.reanudar,
+      onHide: () {
+        _latido.pausar();
+        _oculta = true;
+        _sondeoConductores?.cancel();
+        _sondeoConductores = null;
+        _revisarGpsDeFondo();
+      },
+      onShow: () {
+        _oculta = false;
+        _revisarGpsDeFondo();
+        _latido.reanudar();
+        // La consulta inmediata la hace onResume.
+        _iniciarSondeoConductores();
+      },
     );
   }
 
@@ -236,8 +257,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
 
   /// Los avisos del flujo (por ejemplo "El conductor cancelo") se muestran una sola vez, y al
   /// terminar el viaje se abre el cuadro para calificar.
+  /// Minimizada y sin un servicio en curso nada usa la ubicacion: el GPS se pausa para no gastar
+  /// bateria. Buscando conductor o con un servicio en curso sigue como siempre.
+  void _revisarGpsDeFondo() {
+    final sinServicio = _flujo.etapa == EtapaPasajero.eligiendo && _flujo.enCurso.isEmpty;
+    if (_oculta && sinServicio) {
+      _mapa.pausarGps();
+    } else {
+      _mapa.reanudarGps();
+    }
+  }
+
   void _alCambiarFlujo() {
     if (!mounted) return;
+    if (_oculta) _revisarGpsDeFondo();
     if (_flujo.etapa != _etapaPanel) {
       _etapaPanel = _flujo.etapa;
       // Eligiendo destino empieza compacto (solo tarifa, taxistas libres y pago); el viaje, abierto.
@@ -317,7 +350,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         clave: _guiaServicio,
         titulo: 'Lugares y servicios',
         texto:
-            'Toca aquí para ver tus lugares guardados y elegir moto taxi o entrega. Con el destino '
+            'Toca aquí para ver tus lugares guardados y elegir moto taxi, encomienda o delivery. Con el destino '
             'elegido verás el precio y pedirás tu servicio.',
       ),
       PasoGuia(
@@ -348,9 +381,28 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         !(ModalRoute.of(context)?.isCurrent ?? true)) {
       return null;
     }
-    if (_enPasoServicio && _hojaAbierta && marcaEnPantalla('pasajero.motoTaxi')) return Guias.pasajeroServicios;
-    if (_flujo.etapa == EtapaPasajero.enViaje && _panelAbierto && marcaEnPantalla('pasajero.conductor')) {
-      return Guias.pasajeroViaje;
+    bool pendiente(String guia) => guiaPendiente(context, guia);
+    if (_enPasoServicio && _hojaAbierta && marcaEnPantalla('pasajero.motoTaxi')) {
+      if (pendiente(Guias.pasajeroServicios)) return Guias.pasajeroServicios;
+      // La primera vez que elige Delivery: como funciona la compra (despues de la guia de los servicios).
+      if (_flujo.esCompra && marcaEnPantalla('pasajero.delivery') && pendiente(Guias.pasajeroDelivery)) {
+        return Guias.pasajeroDelivery;
+      }
+      if (pendiente(Guias.pasajeroEncomiendaDelivery)) return Guias.pasajeroEncomiendaDelivery;
+    }
+    // Quien ya conocia "Entrega" (vio la guia de los servicios) ve la novedad apenas abre el menu. Una
+    // cuenta nueva no: la guia completa de los servicios ya se lo explica.
+    if (_enInicio && _menuAbierto && marcaEnPantalla('pasajero.menuDelivery') &&
+        !pendiente(Guias.pasajeroServicios) && pendiente(Guias.pasajeroEncomiendaDelivery)) {
+      return Guias.pasajeroEncomiendaDelivery;
+    }
+    if (_flujo.etapa == EtapaPasajero.enViaje && _panelAbierto) {
+      // El repartidor registro la compra: aceptar el costo total, la primera vez.
+      final costoPendiente = _flujo.viaje?.datosEntrega?.propuestaVigente?.pendiente ?? false;
+      if (costoPendiente && marcaEnPantalla('pasajero.costoCompra') && pendiente(Guias.pasajeroCosto)) {
+        return Guias.pasajeroCosto;
+      }
+      if (marcaEnPantalla('pasajero.conductor') && pendiente(Guias.pasajeroViaje)) return Guias.pasajeroViaje;
     }
     // El boton de ver taxistas libres, la primera vez que se ve en el inicio.
     if (_flujo.etapa == EtapaPasajero.eligiendo && _puedeVerTaxistas && marcaEnPantalla('pasajero.taxistas')) {
@@ -363,22 +415,38 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
 
   Future<void> _revisarGuiaDelPaso() async {
     if (_guiaPasoEnEspera || !mounted) return;
-    final guia = _guiaDelPaso;
-    if (guia == null || !guiaPendiente(context, guia)) return;
     _guiaPasoEnEspera = true;
-    // Deja que el panel termine de subir y la ruta de dibujarse.
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    _guiaPasoEnEspera = false;
+    String? guia;
+    try {
+      // Lo que dispara la revision (un cambio del flujo, abrir el menu) llega antes de que la pantalla se
+      // dibuje: se mira despues del cuadro, con los botones nuevos ya en pantalla.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      guia = _guiaDelPaso;
+      if (guia == null || !guiaPendiente(context, guia)) return;
+      // Deja que el panel termine de subir y la ruta de dibujarse.
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+    } finally {
+      _guiaPasoEnEspera = false;
+    }
     if (!mounted || _guiaDelPaso != guia || !guiaPendiente(context, guia)) return;
     await mostrarGuiaInicio(
       context,
       switch (guia) {
         Guias.pasajeroServicios => _pasosServicios(),
         Guias.pasajeroTaxistas => _pasosTaxistas,
+        Guias.pasajeroEncomiendaDelivery => _pasosNovedadServicios(),
+        Guias.pasajeroDelivery => _pasosDelivery,
+        Guias.pasajeroCosto => _pasosCosto,
         _ => _pasosViaje(),
       },
       guia: guia,
+      // La guia completa de los servicios ya explica la novedad: no se ve dos veces.
+      tambien: guia == Guias.pasajeroServicios ? const [Guias.pasajeroEncomiendaDelivery] : const [],
     );
+    // Si con lo que se ve ahora falta otra (por ejemplo la del delivery despues de la de los servicios).
+    // Solo si esta quedo vista: sin nada a la vista no se marca y no se reintenta en bucle.
+    if (mounted && !guiaPendiente(context, guia)) unawaited(_revisarGuiaDelPaso());
   }
 
   /// Boton de ver taxistas libres: un solo paso, corto.
@@ -392,6 +460,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     ),
   ];
 
+  /// Regla de los servicios a la vez (el servidor la aplica igual).
+  static const _pasoUnDelivery = PasoGuia(
+    icono: Iconos.circleInfo,
+    titulo: 'Un envío a la vez',
+    texto: 'Puedes tener una sola encomienda o delivery en curso. Con un delivery en curso igual puedes pedir un '
+        'moto taxi, pero con un moto taxi en curso no puedes pedir encomienda ni delivery.',
+  );
+
   /// "Elige tu servicio": cada servicio y cada opcion, la primera vez que se pide algo.
   List<PasoGuia> _pasosServicios() {
     final esTaxi = _flujo.servicio == ServicioActivo.viaje;
@@ -399,8 +475,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       const PasoGuia(
         icono: Iconos.motorcycle,
         titulo: 'Elige tu servicio',
-        texto: 'En UNITAXI puedes pedir un moto taxi para ti o para otra persona, enviar un paquete '
-            '(encomienda) o pedir que te compren algo (compra). Te mostramos cada opción.',
+        texto: 'En UNITAXI puedes pedir un moto taxi para ti o para otra persona, enviar un paquete (Encomienda) o '
+            'pedir que te compren algo (Delivery). Te mostramos cada opción.',
       ),
       const PasoGuia(
         marca: 'pasajero.motoTaxi',
@@ -409,22 +485,32 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
             'pedir; si eres estudiante UAP verificado, ya incluye tu descuento.',
       ),
       const PasoGuia(
-        marca: 'pasajero.entrega',
-        titulo: 'Entrega',
-        texto: 'Un repartidor lleva tu pedido: elige encomienda para enviar un paquete de un lugar a otro, o '
-            'compra para que compre lo que necesitas y te lo lleve.',
+        marca: 'pasajero.encomienda',
+        titulo: 'Encomienda',
+        texto: 'Un repartidor recoge tu paquete en el punto de partida y lo lleva al destino. Al recoger y al '
+            'entregar se confirma con un código de 6 dígitos y una foto.',
       ),
-      PasoGuia(
-        marca: 'pasajero.paraQuien',
-        icono: esTaxi ? Iconos.userGroup : Iconos.boxOpen,
-        titulo: esTaxi ? '¿Para quién es?' : '¿Qué envías?',
-        texto: esTaxi
-            ? 'Con "Cambiar" pides el moto taxi para otra persona, por ejemplo un familiar: marcas dónde lo '
-                  'recogen y dónde lo dejan, escribes su nombre y celular y eliges quién paga.'
-            : 'Con "Cambiar" eliges si es una encomienda (un paquete de un lugar a otro) o una compra (el repartidor '
-                  'compra y te lo trae).',
+      const PasoGuia(
+        marca: 'pasajero.delivery',
+        titulo: 'Delivery',
+        texto: 'Escribes tu lista de productos y un repartidor los compra y te los lleva a donde estás. Pagas lo que '
+            'costaron más el envío, después de aceptar el costo total.',
       ),
-      if (!esTaxi)
+      if (esTaxi)
+        const PasoGuia(
+          marca: 'pasajero.paraQuien',
+          icono: Iconos.userGroup,
+          titulo: '¿Para quién es?',
+          texto: 'Con "Cambiar" pides el moto taxi para otra persona, por ejemplo un familiar: marcas dónde lo '
+              'recogen y dónde lo dejan, escribes su nombre y celular y eliges quién paga.',
+        )
+      else ...[
+        const PasoGuia(
+          icono: Iconos.userGroup,
+          titulo: '¿Quién recibe y quién paga?',
+          texto: 'Lo eliges al tocar Solicitar: lo recibes tú u otra persona (con su nombre y celular), y pagas tú '
+              'por QR o paga quien recibe.',
+        ),
         const PasoGuia(
           icono: Iconos.userGroup,
           titulo: 'Moto taxi para otra persona',
@@ -432,13 +518,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
               'recogen y dónde la dejan, escribes su nombre y celular y eliges quién paga. Te avisamos '
               'cuando el conductor llegue para que le avises.',
         ),
-      const PasoGuia(
-        icono: Iconos.boxOpen,
-        titulo: 'Encomienda o compra',
-        texto: 'Encomienda: el repartidor recoge el paquete en el punto de partida y lo lleva al destino; al recoger y al entregar se '
-            'confirma con un código de 6 dígitos y una foto. Compra: dices qué comprar y dónde; el repartidor '
-            'te propone el comercio y el monto, tú lo confirmas y te lo lleva.',
-      ),
+      ],
+      _pasoUnDelivery,
       const PasoGuia(
         marca: 'pasajero.pago',
         titulo: '¿Cómo pagas?',
@@ -457,6 +538,99 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       ),
     ];
   }
+
+  /// Novedad para quien ya conocia "Entrega": Encomienda y Delivery son opciones separadas. Ilumina las
+  /// del menu del inicio o las de "Elige tu servicio", las que esten a la vista.
+  List<PasoGuia> _pasosNovedadServicios() {
+    final enMenu = marcaEnPantalla('pasajero.menuDelivery') && !marcaEnPantalla('pasajero.delivery');
+    return [
+      const PasoGuia(
+        icono: Iconos.boxOpen,
+        titulo: 'Nuevo: Encomienda y Delivery',
+        texto: 'Ahora Encomienda y Delivery son opciones separadas: eliges directamente lo que necesitas, sin '
+            'pasar por "Entrega".',
+      ),
+      PasoGuia(
+        marca: enMenu ? 'pasajero.menuEncomienda' : 'pasajero.encomienda',
+        icono: Iconos.boxOpen,
+        titulo: 'Encomienda',
+        texto: 'Para enviar un paquete de un lugar a otro: eliges a dónde va y un repartidor lo recoge y lo lleva.',
+      ),
+      PasoGuia(
+        marca: enMenu ? 'pasajero.menuDelivery' : 'pasajero.delivery',
+        icono: Iconos.bagShopping,
+        titulo: 'Delivery',
+        texto: 'Para que te compren algo: escribes tu lista de productos y un repartidor los compra y te los lleva '
+            'a donde estás.',
+      ),
+      _pasoUnDelivery,
+    ];
+  }
+
+  /// La primera vez que elige Delivery: como funciona la compra, de la lista al costo total.
+  static const _pasosDelivery = [
+    PasoGuia(
+      marca: 'pasajero.delivery',
+      icono: Iconos.bagShopping,
+      titulo: 'Tu delivery',
+      texto: 'Un repartidor compra lo que necesitas y te lo lleva a donde estás. Te contamos cómo funciona.',
+    ),
+    PasoGuia(
+      icono: Iconos.listUl,
+      titulo: 'Tu lista de productos',
+      texto: 'Al tocar Solicitar compra escribes cada producto con su cantidad y, si quieres, indicaciones como la '
+          'marca o el tamaño.',
+    ),
+    PasoGuia(
+      icono: Iconos.moneyBill1,
+      titulo: 'Cuánto crees que costarán',
+      texto: 'Es solo una referencia para que lo tome un repartidor que pueda adelantar ese monto. Pagas el precio '
+          'real que él registre.',
+    ),
+    PasoGuia(
+      icono: Iconos.userGroup,
+      titulo: 'Quién recibe y quién paga',
+      texto: 'Lo recibes tú u otra persona (con su nombre y celular). Pagas tú por QR desde la app, o paga quien '
+          'recibe al recibirlo.',
+    ),
+    PasoGuia(
+      icono: Iconos.circleCheck,
+      titulo: 'Aceptas el costo total',
+      texto: 'El repartidor compra y registra el precio de cada producto (o que no lo consiguió). Tú revisas el '
+          'detalle y lo aceptas: recién ahí se paga y se entrega.',
+    ),
+    PasoGuia(
+      marca: 'pasajero.solicitar',
+      titulo: 'Solicitar compra',
+      texto: 'Cuando estés listo, toca aquí para escribir tu lista.',
+    ),
+  ];
+
+  /// La primera vez que tiene que aceptar el costo total de su delivery.
+  static const _pasosCosto = [
+    PasoGuia(
+      marca: 'pasajero.costoCompra',
+      icono: Iconos.listUl,
+      titulo: 'Revisa el costo total',
+      texto: 'Aquí está cada producto con lo que costó, lo que no se consiguió, el envío y el total.',
+    ),
+    PasoGuia(
+      icono: Iconos.circleCheck,
+      titulo: 'ACEPTO EL COSTO TOTAL',
+      texto: 'Si estás de acuerdo, toca ese botón. Sin aceptarlo el repartidor no puede cobrar ni entregarte la '
+          'compra. Si tienes dudas, escríbele por Mensaje.',
+    ),
+    PasoGuia(
+      icono: Iconos.pen,
+      titulo: 'Si cambia algún precio',
+      texto: 'Si el repartidor corrige un precio te llega el costo nuevo y tienes que aceptarlo otra vez.',
+    ),
+    PasoGuia(
+      icono: Iconos.qrcode,
+      titulo: 'Después de aceptar',
+      texto: 'Aparece cuánto pagar y, si pagas por QR, el QR del repartidor.',
+    ),
+  ];
 
   /// Primer viaje o pedido con conductor: que ver y que se puede hacer desde el panel.
   List<PasoGuia> _pasosViaje() {
@@ -759,6 +933,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
 
   void _iniciarSondeoConductores() {
     _sondeoConductores?.cancel();
+    _sondeoConductores = null;
+    if (_oculta) return;
     _sondeoConductores = Timer.periodic(
       _verTaxistas ? _intervaloConVista : _intervaloSinVista,
       (_) => _cargarConductores(),
@@ -841,10 +1017,15 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     try {
       final lista = await _flujo.api.conductoresEnLinea();
       if (!mounted) return;
+      // Nadie se movio ni cambio: no se reconstruye la pantalla.
+      if (_conductoresCargados && mismosConductores(_conductores, lista)) return;
       _actualizarRumbos(lista);
       _posiciones.conservar({for (final c in lista) c.id});
       // Sin los taxistas a la vista no hace falta animar (no se redibuja el mapa en cada cuadro).
-      _posiciones.mover({for (final c in lista) c.id: c.posicion}, animar: _mostrandoTaxistas);
+      _posiciones.mover(
+        {for (final c in lista) c.id: c.posicion},
+        animar: _mostrandoTaxistas && _seccion == _seccionInicio,
+      );
       setState(() {
         _conductores = lista;
         _conductoresCargados = true;
@@ -955,6 +1136,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   void _alternarMenu() {
     setState(() => _menuAbierto = !_menuAbierto);
     if (_menuAbierto && _viajesLugares == null) _cargarViajesLugares();
+    // Con el menu abierto se ven Encomienda y Delivery: la guia de la novedad puede mostrarse.
+    if (_menuAbierto) _revisarGuiaDelPaso();
   }
 
   void _cerrarMenu() {
@@ -1012,9 +1195,10 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (_mapa.b == null) await _abrirBuscador();
   }
 
-  /// Entrega: primero se pregunta que se envia. Una encomienda necesita destino (se abre el
-  /// buscador); una compra se entrega donde esta el pasajero y pasa directo a "Elige tu servicio".
-  Future<void> _elegirEntrega() async {
+  /// Encomienda o Delivery (menu del inicio o tarjeta de "Elige tu servicio"), cada uno es su propia
+  /// opcion. Una encomienda necesita destino (se abre el buscador); un delivery se entrega donde esta
+  /// el pasajero y pasa directo a "Elige tu servicio".
+  Future<void> _elegirEnvio(TipoEnvio tipo) async {
     _cerrarMenu();
     // Un delivery a la vez, y nunca con un taxi en curso (el servidor tambien lo rechaza).
     final sinEntrega = _flujo.motivoSinEntrega;
@@ -1022,17 +1206,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       mostrarMensaje(context, sinEntrega, error: true);
       return;
     }
-    if (_flujo.servicio == ServicioActivo.entrega && _flujo.modo.tipo != null) return;
-    await _elegirTipoEnvio();
-  }
-
-  /// "¿Qué quieres enviar?" (tarjeta Entrega o la fila de la hoja del servicio).
-  Future<void> _elegirTipoEnvio() async {
-    final tipo = await preguntarTipoEnvio(context, _flujo.modo.tipo);
-    if (tipo == null || !mounted) return;
     if (tipo != _flujo.modo.tipo) _flujo.elegirTipoEnvio(tipo);
     if (tipo == TipoEnvio.encomienda && _mapa.b == null) await _abrirBuscador(titulo: '¿A dónde lo envías?');
   }
+
+  Future<void> _elegirEncomienda() => _elegirEnvio(TipoEnvio.encomienda);
+
+  Future<void> _elegirDelivery() => _elegirEnvio(TipoEnvio.compraYEntrega);
 
   /// "Para mí" o "Para otra persona" desde la hoja del servicio. Con otra persona ya elegida,
   /// volver a elegirla abre sus datos para corregirlos.
@@ -1149,6 +1329,13 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     setState(() => _enviando = true);
     String? error;
     try {
+      // La partida es la ubicacion del telefono y todavia no es la exacta (llego primero la del wifi o
+      // la de las antenas): se espera un momento la del GPS. Si no llega, se pide con la mejor que haya.
+      if (!kIsWeb && _flujo.partidaEsMiGps && _mapa.precisionBaja) {
+        mostrarMensaje(context, 'Buscando tu ubicación exacta...', icono: Iconos.locationCrosshairs);
+        await _mapa.esperarPrecision(_esperaUbicacionExacta);
+        if (!mounted) return;
+      }
       await _flujo.solicitar();
     } on ApiExcepcion catch (e) {
       error = e.mensaje;
@@ -1319,35 +1506,43 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       body: Stack(
         children: [
           Positioned.fill(
+            // Las secciones que no se ven conservan su estado pero no animan (TickerMode): el radar,
+            // los indicadores de carga y demas animaciones no gastan bateria detras de otra seccion.
             child: IndexedStack(
               index: _seccion,
               children: [
-                _vistaInicio(sesion.usuario),
-                PantallaHistorial(
-                  key: _historial,
-                  cargarHistorial: _flujo.api.historial,
-                  cargarTodos: _flujo.api.misViajes,
-                  esConductor: false,
-                  pestanaFavoritos: _pestanaFavoritos,
-                  cargarFotoEntrega: _flujo.api.fotoEntrega,
-                  enCurso: ListenableBuilder(
-                    listenable: _flujo,
-                    builder: (context, _) => SeccionEnCurso(
-                      viajes: _flujo.enCurso,
-                      idEnPantalla: _flujo.etapa == EtapaPasajero.enViaje ? _flujo.viaje?.id : null,
-                      esConductor: false,
-                      onElegir: _verServicio,
+                TickerMode(enabled: _seccion == _seccionInicio, child: _vistaInicio(sesion.usuario)),
+                TickerMode(
+                  enabled: _seccion == _seccionHistorial,
+                  child: PantallaHistorial(
+                    key: _historial,
+                    cargarHistorial: _flujo.api.historial,
+                    cargarTodos: _flujo.api.misViajes,
+                    esConductor: false,
+                    pestanaFavoritos: _pestanaFavoritos,
+                    cargarFotoEntrega: _flujo.api.fotoEntrega,
+                    enCurso: ListenableBuilder(
+                      listenable: _flujo,
+                      builder: (context, _) => SeccionEnCurso(
+                        viajes: _flujo.enCurso,
+                        idEnPantalla: _flujo.etapa == EtapaPasajero.enViaje ? _flujo.viaje?.id : null,
+                        esConductor: false,
+                        onElegir: _verServicio,
+                      ),
                     ),
                   ),
                 ),
-                PantallaMas(
-                  foto: _foto,
-                  onDatosPersonales: _abrirPerfil,
-                  // Aprobado recien (la sesion todavia no lo sabia): tambien puede cambiar.
-                  onCambiarModo: sesion.otroModo != null || _registroConductor == 'APROBADO' ? _cambiarModo : null,
-                  registroConductor: _opcionRegistroConductor(sesion),
-                  onRegistroConductor: _registroConductorTocado,
-                  onCerrarSesion: _confirmarCerrarSesion,
+                TickerMode(
+                  enabled: _seccion == _seccionMas,
+                  child: PantallaMas(
+                    foto: _foto,
+                    onDatosPersonales: _abrirPerfil,
+                    // Aprobado recien (la sesion todavia no lo sabia): tambien puede cambiar.
+                    onCambiarModo: sesion.otroModo != null || _registroConductor == 'APROBADO' ? _cambiarModo : null,
+                    registroConductor: _opcionRegistroConductor(sesion),
+                    onRegistroConductor: _registroConductorTocado,
+                    onCerrarSesion: _confirmarCerrarSesion,
+                  ),
                 ),
               ],
             ),
@@ -1356,8 +1551,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
             left: 0,
             right: 0,
             bottom: 0,
+            // La barra no usa nada del mapa: no se reconstruye (con su desenfoque) en cada lectura del GPS.
             child: ListenableBuilder(
-              listenable: Listenable.merge([_flujo, _mapa]),
+              listenable: _flujo,
               builder: (context, _) => BarraInferior(
                 indice: _seccion,
                 onCambiar: _irA,
@@ -1412,7 +1608,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
           EtapaPasajero.enViaje => _panelAbierto ? alto * 0.5 : 150.0,
           _ when _enInicio => _menuAbierto ? 360.0 : 170.0,
           _ when panel is PanelDosPuntos => 110.0,
-          _ => _hojaAbierta ? 430.0 : 150.0,
+          // Tres tarjetas (moto taxi, encomienda y delivery) mas el pago.
+          _ => _hojaAbierta ? 490.0 : 150.0,
         };
         _mapa.margenesVista = EdgeInsets.fromLTRB(
           40,
@@ -1596,7 +1793,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         : 'Desde ${_flujo.direccionOrigen ?? a.texto}';
     if (_flujo.esCompra) {
       return BarraRutaElegida(
-        partida: 'Compra y entrega: se entrega donde estás',
+        partida: 'Delivery: se entrega donde estás',
         destino: a == null ? 'Obteniendo tu ubicación...' : (_flujo.direccionOrigen ?? a.texto),
       );
     }
@@ -1625,9 +1822,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       taxistasLibres: _libresDe(entrega: false),
       repartidoresLibres: _libresDe(entrega: true),
       onMotoTaxi: _elegirMotoTaxi,
-      onEntrega: _elegirEntrega,
+      onEncomienda: _elegirEncomienda,
+      onDelivery: _elegirDelivery,
       onParaQuien: _elegirParaQuien,
-      onTipoEnvio: _elegirTipoEnvio,
       onPago: _elegirPago,
       abierta: _hojaAbierta,
       onAlternar: _alternarHoja,
@@ -1648,7 +1845,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final indicacion = switch (_mapa.a) {
       null when _mapa.gpsDisponible == false => 'No pudimos obtener tu ubicación: toca el mapa donde te recogen.',
       null => 'Obteniendo tu ubicación...',
-      _ when _flujo.servicio == ServicioActivo.entrega => 'Entrega: busca a dónde va tu paquete o tócalo en el mapa.',
+      _ when _flujo.servicio == ServicioActivo.entrega => 'Encomienda: busca a dónde va tu paquete o tócalo en el mapa.',
       _ => 'Toca el botón azul para ver tus lugares y los servicios.',
     };
     return MenuInicio(
@@ -1664,7 +1861,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         _iniciarAnadir();
       },
       onMotoTaxi: _elegirMotoTaxi,
-      onEntrega: _elegirEntrega,
+      onEncomienda: _elegirEncomienda,
+      onDelivery: _elegirDelivery,
       claveBuscador: _guiaDestino,
       claveBoton: _guiaServicio,
     );

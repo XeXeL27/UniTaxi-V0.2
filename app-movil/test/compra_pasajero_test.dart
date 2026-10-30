@@ -296,9 +296,13 @@ void main() {
       await tester.pumpWidget(_envolver(_panel(flujo)));
 
       expect(find.text('Elige tu servicio'), findsOneWidget);
-      expect(find.text('A calcular'), findsOneWidget);
-      expect(find.text('Compra y entrega'), findsNWidgets(2));
+      // Encomienda (sin destino) y Delivery, cada una con su tarjeta.
+      expect(find.text('A calcular'), findsNWidgets(2));
+      expect(find.text('Delivery'), findsOneWidget);
+      expect(find.text('Compra y entrega'), findsNothing);
       expect(find.text('Se entrega donde estás'), findsOneWidget);
+      // Ya no se pregunta "que envias": encomienda y delivery son opciones separadas.
+      expect(find.text('Elige qué envías'), findsNothing);
       expect(find.text('Efectivo'), findsOneWidget);
       // Sin destino la tarjeta del taxi no tiene precio: pide elegir uno.
       expect(find.textContaining('Elige un destino'), findsOneWidget);
@@ -306,7 +310,7 @@ void main() {
       expect(flujo.puedeSolicitar, isTrue);
     });
 
-    testWidgets('en una encomienda la tarjeta Entrega muestra el precio de delivery de la ruta', (tester) async {
+    testWidgets('en una encomienda su tarjeta muestra el precio de delivery de la ruta', (tester) async {
       final flujo = _flujo(_ApiEspia(), servicio: TipoEnvio.encomienda)..precio = const PrecioViaje(precio: 8);
       _ponerPuntos(flujo);
 
@@ -314,8 +318,28 @@ void main() {
       await tester.pump();
 
       expect(find.text('11,76 Bs'), findsOneWidget);
-      expect(find.text('Encomienda'), findsNWidgets(2));
-      expect(find.text('1 repartidor libre'), findsOneWidget);
+      expect(find.text('Encomienda'), findsOneWidget);
+      // El delivery no tiene precio hasta que el repartidor registra la compra.
+      expect(find.text('A calcular'), findsOneWidget);
+      expect(find.text('1 repartidor libre'), findsNWidgets(2));
+    });
+
+    testWidgets('cada tarjeta lleva a su servicio', (tester) async {
+      final flujo = _flujo(_ApiEspia())..precio = const PrecioViaje(precio: 8);
+      _ponerPuntos(flujo);
+      final tocados = <String>[];
+
+      await tester.pumpWidget(_envolver(_panel(
+        flujo,
+        onMotoTaxi: () => tocados.add('taxi'),
+        onEncomienda: () => tocados.add('encomienda'),
+        onDelivery: () => tocados.add('delivery'),
+      )));
+      await tester.tap(find.text('Encomienda'));
+      await tester.tap(find.text('Delivery'));
+      await tester.tap(find.text('Moto taxi'));
+
+      expect(tocados, ['encomienda', 'delivery', 'taxi']);
     });
   });
 
@@ -455,16 +479,22 @@ FlujoPasajero _flujo(_ApiEspia api, {TipoEnvio? servicio}) {
   return flujo;
 }
 
-Widget _panel(FlujoPasajero flujo, {bool abierta = true}) => PanelElegirServicio(
+Widget _panel(
+  FlujoPasajero flujo, {
+  bool abierta = true,
+  VoidCallback? onMotoTaxi,
+  VoidCallback? onEncomienda,
+  VoidCallback? onDelivery,
+}) => PanelElegirServicio(
   flujo: flujo,
   abierta: abierta,
   onAlternar: () {},
   taxistasLibres: 1,
   repartidoresLibres: 1,
-  onMotoTaxi: () {},
-  onEntrega: () {},
+  onMotoTaxi: onMotoTaxi ?? () {},
+  onEncomienda: onEncomienda ?? () {},
+  onDelivery: onDelivery ?? () {},
   onParaQuien: () {},
-  onTipoEnvio: () {},
   onPago: () {},
 );
 

@@ -55,93 +55,99 @@ class MapaBase extends StatelessWidget {
         // El mapa queda fuera de la accesibilidad: como se puede tocar, Flutter lo publicaba como un
         // boton "A B" del tamano de la pantalla, encima de los botones del panel (con el lector de
         // pantalla o la accesibilidad del navegador, los toques le llegaban al mapa).
-        return ExcludeSemantics(
-          child: FlutterMap(
-            mapController: c.mapa,
-            options: MapOptions(
-              initialCenter: c.centroInicial,
-              initialZoom: 15,
-              minZoom: 5,
-              maxZoom: c.capa.zoomNativo.toDouble(),
-              backgroundColor: c.capa.enGrises ? const Color(0xFFEDEDED) : const Color(0xFFE8E6E1),
-              // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
-              interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
-              onMapReady: c.alListarMapa,
-              onPositionChanged: (camara, _) => c.alMoverMapa(camara),
-              onTap: onTap == null ? null : (_, punto) => onTap!(punto),
-            ),
-            children: [
-              TileLayer(
-                key: ValueKey(c.capa),
-                urlTemplate: c.capa.url,
-                userAgentPackageName: Config.agenteMapas,
-                maxNativeZoom: c.capa.zoomNativo,
-                tileBuilder: c.capa.enGrises
-                    ? (context, tesela, _) => ColorFiltered(colorFilter: filtroMapaGris, child: tesela)
-                    : null,
+        // RepaintBoundary: el mapa se pinta aparte del panel, los botones y los globos de encima; un
+        // cronometro o una animacion del panel no obliga a volver a pintar el mapa, ni al reves.
+        return RepaintBoundary(
+          child: ExcludeSemantics(
+            child: FlutterMap(
+              mapController: c.mapa,
+              options: MapOptions(
+                initialCenter: c.centroInicial,
+                initialZoom: 15,
+                minZoom: 5,
+                maxZoom: c.capa.zoomNativo.toDouble(),
+                backgroundColor: c.capa.enGrises ? const Color(0xFFEDEDED) : const Color(0xFFE8E6E1),
+                // Se gira con dos dedos; la brujula (BotonBrujula) vuelve a poner el norte arriba.
+                interactionOptions: const InteractionOptions(flags: InteractiveFlag.all),
+                onMapReady: c.alListarMapa,
+                onPositionChanged: (camara, _) => c.alMoverMapa(camara),
+                onTap: onTap == null ? null : (_, punto) => onTap!(punto),
               ),
-              PolylineLayer(
-                polylines: [
-                  if (acercamiento != null && acercamiento.length >= 2)
-                    Polyline(
-                      points: acercamiento,
-                      strokeWidth: 5,
-                      color: ColoresApp.rutaSecundaria,
-                      borderStrokeWidth: 1.5,
-                      borderColor: ColoresApp.rutaSecundariaBorde,
-                      pattern: StrokePattern.dashed(segments: const [10, 8]),
-                    ),
-                  if (rutaConductor != null && rutaConductor.length >= 2)
-                    Polyline(
-                      points: rutaConductor,
-                      strokeWidth: 5,
-                      color: ColoresApp.rutaSecundaria,
-                      borderStrokeWidth: 1.5,
-                      borderColor: ColoresApp.rutaSecundariaBorde,
-                      pattern: StrokePattern.dashed(segments: const [10, 8]),
-                    ),
-                  if (ruta != null && puntosRuta != null && puntosRuta.length >= 2) ...[
-                    // La ruta arranca en la calle mas cercana: se une con cada pin por una linea punteada.
-                    // Con el viaje en curso la ruta empieza donde va la moto: A ya no se une.
-                    if (!ruta.aproximada && a != null && !siguiendoAvance) _tramoAPie(a.posicion, puntosRuta.first),
-                    if (!ruta.aproximada && b != null) _tramoAPie(puntosRuta.last, b.posicion),
-                    Polyline(
-                      points: puntosRuta,
-                      strokeWidth: 6,
-                      color: ColoresApp.ruta,
-                      borderStrokeWidth: 1.5,
-                      borderColor: ColoresApp.rutaBorde,
-                      pattern: ruta.aproximada
-                          ? StrokePattern.dashed(segments: const [14, 10])
-                          : const StrokePattern.solid(),
-                    ),
+              children: [
+                TileLayer(
+                  key: ValueKey(c.capa),
+                  urlTemplate: c.capa.url,
+                  userAgentPackageName: Config.agenteMapas,
+                  maxNativeZoom: c.capa.zoomNativo,
+                  tileBuilder: c.capa.enGrises ? _teselaGris : null,
+                ),
+                PolylineLayer(
+                  polylines: [
+                    if (acercamiento != null && acercamiento.length >= 2)
+                      Polyline(
+                        points: acercamiento,
+                        strokeWidth: 5,
+                        color: ColoresApp.rutaSecundaria,
+                        borderStrokeWidth: 1.5,
+                        borderColor: ColoresApp.rutaSecundariaBorde,
+                        pattern: StrokePattern.dashed(segments: const [10, 8]),
+                      ),
+                    if (rutaConductor != null && rutaConductor.length >= 2)
+                      Polyline(
+                        points: rutaConductor,
+                        strokeWidth: 5,
+                        color: ColoresApp.rutaSecundaria,
+                        borderStrokeWidth: 1.5,
+                        borderColor: ColoresApp.rutaSecundariaBorde,
+                        pattern: StrokePattern.dashed(segments: const [10, 8]),
+                      ),
+                    if (ruta != null && puntosRuta != null && puntosRuta.length >= 2) ...[
+                      // La ruta arranca en la calle mas cercana: se une con cada pin por una linea punteada.
+                      // Con el viaje en curso la ruta empieza donde va la moto: A ya no se une.
+                      if (!ruta.aproximada && a != null && !siguiendoAvance) _tramoAPie(a.posicion, puntosRuta.first),
+                      if (!ruta.aproximada && b != null) _tramoAPie(puntosRuta.last, b.posicion),
+                      Polyline(
+                        points: puntosRuta,
+                        strokeWidth: 6,
+                        color: ColoresApp.ruta,
+                        borderStrokeWidth: 1.5,
+                        borderColor: ColoresApp.rutaBorde,
+                        pattern: ruta.aproximada
+                            ? StrokePattern.dashed(segments: const [14, 10])
+                            : const StrokePattern.solid(),
+                      ),
+                    ],
                   ],
-                ],
-              ),
-              ...capasAnimadas,
-              // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
-              MarkerLayer(
-                rotate: true,
-                markers: [
-                  ...marcadoresExtra,
-                  if (a != null) _punto(a.posicion, ColoresApp.azul),
-                  if (b != null) _punto(b.posicion, ColoresApp.rojo),
-                  // El GPS va encima de los pines: es lo que se mueve en vivo.
-                  // El conductor en un viaje se ve como la moto, no como el punto azul.
-                  if (gps != null && !c.ocultarMiUbicacion)
-                    c.miUbicacionComoMoto
-                        ? _moto(gps, c.miRumbo)
-                        : Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
-                  // Marcador del conductor asignado al viaje del pasajero.
-                  if (conductorPos != null) _moto(conductorPos, conductorRumbo),
-                ],
-              ),
-            ],
+                ),
+                ...capasAnimadas,
+                // rotate: los pines y el GPS quedan derechos aunque se gire el mapa.
+                MarkerLayer(
+                  rotate: true,
+                  markers: [
+                    ...marcadoresExtra,
+                    if (a != null) _punto(a.posicion, ColoresApp.azul),
+                    if (b != null) _punto(b.posicion, ColoresApp.rojo),
+                    // El GPS va encima de los pines: es lo que se mueve en vivo.
+                    // El conductor en un viaje se ve como la moto, no como el punto azul.
+                    if (gps != null && !c.ocultarMiUbicacion)
+                      c.miUbicacionComoMoto
+                          ? _moto(gps, c.miRumbo)
+                          : Marker(point: gps, width: 26, height: 26, child: const PuntoUbicacion()),
+                    // Marcador del conductor asignado al viaje del pasajero.
+                    if (conductorPos != null) _moto(conductorPos, conductorRumbo),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
     );
   }
+
+  /// Funcion fija para las teselas en grises: no se crea otra en cada reconstruccion del mapa.
+  static Widget _teselaGris(BuildContext context, Widget tesela, TileImage _) =>
+      ColorFiltered(colorFilter: filtroMapaGris, child: tesela);
 
   Marker _punto(LatLng posicion, Color color) => Marker(
         point: posicion,

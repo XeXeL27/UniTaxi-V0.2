@@ -25,6 +25,17 @@ class Etiqueta {
 }
 
 /// Mototaxista libre en linea (solo su posicion).
+/// Dos consultas de conductores en linea con los mismos conductores, en el mismo lugar y con el mismo
+/// rumbo: no hace falta volver a dibujar nada.
+bool mismosConductores(List<ConductorEnLinea> a, List<ConductorEnLinea> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    final x = a[i], y = b[i];
+    if (x.id != y.id || x.posicion != y.posicion || x.repartidor != y.repartidor || x.rumbo != y.rumbo) return false;
+  }
+  return true;
+}
+
 class ConductorEnLinea {
   final int id;
   final LatLng posicion;

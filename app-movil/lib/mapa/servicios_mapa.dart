@@ -8,6 +8,18 @@ import 'package:latlong2/latlong.dart';
 
 import '../core/config.dart';
 
+/// Una posicion del GPS con su margen de error en metros (null si el telefono no lo informa).
+class LecturaGps {
+  final LatLng posicion;
+  final double? precision;
+
+  const LecturaGps(this.posicion, {this.precision});
+
+  /// Android e iOS dan 0 cuando no saben el margen: se toma como desconocido.
+  factory LecturaGps.de(Position p) =>
+      LecturaGps(LatLng(p.latitude, p.longitude), precision: p.accuracy > 0 ? p.accuracy : null);
+}
+
 /// Ruta entre dos puntos, lista para dibujar.
 class Ruta {
   final List<LatLng> puntos;
@@ -159,27 +171,31 @@ class ServiciosMapa {
     }
   }
 
-  /// Posiciones del GPS a medida que el telefono se mueve (cada 5 m como minimo). Pedir antes el
-  /// permiso con [ubicacionActual].
-  static Stream<LatLng> seguirUbicacion() {
+  /// Lecturas del GPS a medida que el telefono se mueve (cada 5 m como minimo), con su margen de
+  /// error. Pedir antes el permiso con [ubicacionActual].
+  static Stream<LecturaGps> seguirLecturas() {
     return Geolocator.getPositionStream(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, distanceFilter: 5),
-    ).map((posicion) => LatLng(posicion.latitude, posicion.longitude));
+    ).map(LecturaGps.de);
   }
 
   /// Distancia en metros entre dos puntos.
   static double metros(LatLng a, LatLng b) => const Distance().as(LengthUnit.Meter, a, b);
 
   /// Posicion actual del telefono, o null si no hay permiso, GPS apagado o no responde a tiempo.
-  static Future<LatLng?> ubicacionActual() async {
+  static Future<LatLng?> ubicacionActual() async => (await lecturaActual())?.posicion;
+
+  /// Lectura actual del GPS con su margen de error, o null si no hay permiso, GPS apagado o no
+  /// responde a tiempo.
+  static Future<LecturaGps?> lecturaActual() async {
     try {
-      return await _ubicacion().timeout(const Duration(seconds: 12));
+      return await _lectura().timeout(const Duration(seconds: 12));
     } catch (_) {
       return null;
     }
   }
 
-  static Future<LatLng?> _ubicacion() async {
+  static Future<LecturaGps?> _lectura() async {
     if (!await Geolocator.isLocationServiceEnabled()) return null;
     // El permiso lo pide RequiereGps una sola vez, con la pantalla principal a la vista.
     final permiso = await Geolocator.checkPermission();
@@ -187,7 +203,7 @@ class ServiciosMapa {
     final posicion = await Geolocator.getCurrentPosition(
       locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)),
     );
-    return LatLng(posicion.latitude, posicion.longitude);
+    return LecturaGps.de(posicion);
   }
 
   /// El navegador no deja cambiar el User-Agent; en el telefono se identifica la app.

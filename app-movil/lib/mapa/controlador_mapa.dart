@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
@@ -24,6 +25,16 @@ class PuntoRuta {
 /// motivo (LatLng compara por posicion).
 bool debeReTrazar({required bool esOtro, required LatLng? aActual, required PuntoRuta? partida}) =>
     partida != null && (esOtro || aActual != partida.posicion);
+
+/// Si una lectura del GPS se usa o se descarta. Se descarta solo la que es mucho peor que la ultima
+/// usada (mas del doble del margen y fuera de [ControladorMapa.metrosPrecisa]) y llega poco despues
+/// de ella: es el salto a la ubicacion por wifi o por antenas cuando el GPS ya tenia la real. Pasado
+/// [ControladorMapa.vigenciaLectura] se usa igual, para no quedar con una posicion vieja.
+bool lecturaAceptable({required double? nueva, required double? actual, required Duration? desdeActual}) {
+  if (nueva == null || actual == null || desdeActual == null) return true;
+  if (desdeActual >= ControladorMapa.vigenciaLectura) return true;
+  return nueva <= math.max(ControladorMapa.metrosPrecisa, actual * 2);
+}
 
 /// Estilo de los tiles del mapa (boton de capas).
 ///
@@ -89,9 +100,22 @@ class ControladorMapa extends ChangeNotifier {
   /// Distancia que debe moverse el GPS para volver a calcular el acercamiento.
   static const double _metrosParaRecalcular = 60;
 
+  /// Margen de error (metros) desde el que una lectura cuenta como la ubicacion exacta del telefono.
+  static const double metrosPrecisa = 30;
+
+  /// Tiempo durante el que una lectura buena no se cambia por una mucho peor ([lecturaAceptable]).
+  static const vigenciaLectura = Duration(seconds: 8);
+
   final MapController mapa = MapController();
 
   LatLng? miUbicacion;
+
+  /// Margen de error en metros de [miUbicacion] (null si el telefono no lo informo).
+  double? precisionGps;
+  DateTime? _horaLectura;
+
+  /// La ubicacion actual todavia no es la exacta (margen mayor a [metrosPrecisa]).
+  bool get precisionBaja => miUbicacion != null && (precisionGps ?? 0) > metrosPrecisa;
 
   /// null mientras se consulta; false si no hay permiso o el GPS esta apagado.
   bool? gpsDisponible;
@@ -288,12 +312,21 @@ class ControladorMapa extends ChangeNotifier {
   /// Se llama con cada nueva posicion del GPS.
   void Function(LatLng posicion)? alMoverseGps;
 
-  StreamSubscription<LatLng>? _gps;
+  StreamSubscription<LecturaGps>? _gps;
   LatLng? _origenAcercamiento;
   int _consultaRuta = 0;
   int _consultaAcercamiento = 0;
   bool _mapaListo = false;
   bool _cerrado = false;
+
+  /// Ya se empezo a seguir el GPS (despues de la primera lectura).
+  bool _siguiendoGps = false;
+
+  /// El GPS esta en pausa: la app no esta a la vista y nada necesita la ubicacion (ver [pausarGps]).
+  bool _gpsPausado = false;
+
+  /// Esperas de [esperarPrecision] pendientes.
+  final List<Completer<bool>> _esperasPrecision = [];
 
   /// Espera a que el GPS este encendido y con permiso (RequiereGps), centra el mapa en la ubicacion
   /// actual y empieza a seguir el GPS.
@@ -308,14 +341,15 @@ class ControladorMapa extends ChangeNotifier {
       RequiereGps.listo.removeListener(alCambiar);
       if (_cerrado) return;
     }
-    final posicion = await ServiciosMapa.ubicacionActual();
+    final lectura = await ServiciosMapa.lecturaActual();
     if (_cerrado) return;
-    gpsDisponible = posicion != null;
-    if (posicion == null) {
+    gpsDisponible = lectura != null;
+    if (lectura == null) {
       _avisar();
       return;
     }
-    _alNuevaPosicion(posicion, centrar: true);
+    _alNuevaLectura(lectura, centrar: true);
+    _siguiendoGps = true;
     _seguirGps();
     // Si el GPS se apaga, el seguimiento de Android termina con error: al volver a estar listo
     // (encendido y con permiso) se empieza de nuevo.
@@ -325,11 +359,72 @@ class ControladorMapa extends ChangeNotifier {
 
   void _seguirGps() {
     _gps?.cancel();
-    _gps = ServiciosMapa.seguirUbicacion().listen((p) => _alNuevaPosicion(p), onError: (_) {});
+    _gps = null;
+    // En pausa no se lee el GPS; [reanudarGps] lo vuelve a seguir.
+    if (_gpsPausado || _cerrado) return;
+    _gps = ServiciosMapa.seguirLecturas().listen(_alNuevaLectura, onError: (_) {});
   }
 
   void _alCambiarGps() {
     if (!_cerrado && RequiereGps.listo.value) _seguirGps();
+  }
+
+  /// Deja de leer el GPS mientras la app no esta a la vista y nada lo necesita (el pasajero
+  /// minimizado, el conductor desconectado y sin viajes): asi no gasta bateria. Lo que se ve al
+  /// volver es una lectura nueva (ver [reanudarGps]).
+  void pausarGps() {
+    if (_gpsPausado) return;
+    _gpsPausado = true;
+    _gps?.cancel();
+    _gps = null;
+  }
+
+  /// Vuelve a seguir el GPS despues de [pausarGps]. La ultima posicion queda vieja: la primera
+  /// lectura nueva se usa aunque su margen sea mayor ([lecturaAceptable]).
+  void reanudarGps() {
+    if (!_gpsPausado) return;
+    _gpsPausado = false;
+    _horaLectura = null;
+    if (_siguiendoGps && RequiereGps.listo.value) _seguirGps();
+  }
+
+  bool get gpsPausado => _gpsPausado;
+
+  /// Espera hasta [maximo] una lectura con la ubicacion exacta (margen de [metrosPrecisa] o menos).
+  /// true si ya la hay o llego; false si se acabo el tiempo (se sigue con la mejor que haya).
+  Future<bool> esperarPrecision(Duration maximo) {
+    if (miUbicacion == null || !precisionBaja) return Future.value(miUbicacion != null);
+    final espera = Completer<bool>();
+    _esperasPrecision.add(espera);
+    Timer(maximo, () {
+      if (_esperasPrecision.remove(espera)) espera.complete(false);
+    });
+    return espera.future;
+  }
+
+  /// Pasa una lectura como si llegara del GPS (pruebas).
+  @visibleForTesting
+  void recibirLectura(LecturaGps lectura) => _alNuevaLectura(lectura);
+
+  void _alNuevaLectura(LecturaGps lectura, {bool centrar = false}) {
+    if (_cerrado) return;
+    final hora = _horaLectura;
+    final aceptable = lecturaAceptable(
+      nueva: lectura.precision,
+      actual: miUbicacion == null ? null : precisionGps,
+      desdeActual: hora == null ? null : DateTime.now().difference(hora),
+    );
+    if (!aceptable) return;
+    precisionGps = lectura.precision;
+    _horaLectura = DateTime.now();
+    _alNuevaPosicion(lectura.posicion, centrar: centrar);
+    if (!precisionBaja && _esperasPrecision.isNotEmpty) {
+      final esperas = List.of(_esperasPrecision);
+      _esperasPrecision.clear();
+      for (final espera in esperas) {
+        espera.complete(true);
+      }
+    }
   }
 
   void alListarMapa() {
@@ -628,12 +723,17 @@ class ControladorMapa extends ChangeNotifier {
       encuadrar();
       return true;
     }
-    final gps = miUbicacion ?? await ServiciosMapa.ubicacionActual();
-    if (_cerrado || gps == null) return false;
-    if (miUbicacion == null) {
-      gpsDisponible = true;
-      _alNuevaPosicion(gps);
-      _gps ??= ServiciosMapa.seguirUbicacion().listen((p) => _alNuevaPosicion(p), onError: (_) {});
+    var gps = miUbicacion;
+    if (gps == null) {
+      final lectura = await ServiciosMapa.lecturaActual();
+      if (_cerrado || lectura == null) return false;
+      gps = lectura.posicion;
+      if (miUbicacion == null) {
+        gpsDisponible = true;
+        _alNuevaLectura(lectura);
+        _siguiendoGps = true;
+        if (_gps == null) _seguirGps();
+      }
     }
     _mover(gps, zoomCalle);
     return true;
@@ -672,6 +772,10 @@ class ControladorMapa extends ChangeNotifier {
     _cerrado = true;
     RequiereGps.listo.removeListener(_alCambiarGps);
     _gps?.cancel();
+    for (final espera in _esperasPrecision) {
+      espera.complete(false);
+    }
+    _esperasPrecision.clear();
     mapa.dispose();
     rotacion.dispose();
     super.dispose();

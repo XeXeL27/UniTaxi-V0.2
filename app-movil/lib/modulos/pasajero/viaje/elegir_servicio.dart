@@ -21,9 +21,11 @@ class PanelElegirServicio extends StatelessWidget {
   final int? repartidoresLibres;
 
   final VoidCallback onMotoTaxi;
-  final VoidCallback onEntrega;
+
+  /// Encomienda (un paquete de A a B) y Delivery (el repartidor compra y lo trae): opciones separadas.
+  final VoidCallback onEncomienda;
+  final VoidCallback onDelivery;
   final VoidCallback onParaQuien;
-  final VoidCallback onTipoEnvio;
   final VoidCallback onPago;
 
   /// Abierta muestra todo; bajada, solo la linea del servicio elegido.
@@ -36,9 +38,9 @@ class PanelElegirServicio extends StatelessWidget {
     required this.taxistasLibres,
     required this.repartidoresLibres,
     required this.onMotoTaxi,
-    required this.onEntrega,
+    required this.onEncomienda,
+    required this.onDelivery,
     required this.onParaQuien,
-    required this.onTipoEnvio,
     required this.onPago,
     this.abierta = true,
     required this.onAlternar,
@@ -59,6 +61,7 @@ class PanelElegirServicio extends StatelessWidget {
         ? 'Trazando la ruta...'
         : '${ruta.duracionTexto} · ${ruta.distanciaTexto}';
     final tipo = flujo.modo.tipo;
+    final sinEntrega = flujo.motivoSinEntrega;
     final boton = MarcaGuia(id: 'pasajero.plegar', child: BotonPlegarHoja(abierta: abierta, onTap: onAlternar));
 
     if (!abierta) {
@@ -70,7 +73,11 @@ class PanelElegirServicio extends StatelessWidget {
             height: 44,
             decoration: BoxDecoration(color: ColoresApp.gris, borderRadius: BorderRadius.circular(12)),
             child: Center(
-              child: Icon(esTaxi ? Iconos.motorcycle : Iconos.boxOpen, color: ColoresApp.azul, size: 18),
+              child: Icon(
+                esTaxi ? Iconos.motorcycle : (tipo == TipoEnvio.compraYEntrega ? Iconos.bagShopping : Iconos.boxOpen),
+                color: ColoresApp.azul,
+                size: 18,
+              ),
             ),
           ),
           const SizedBox(width: 12),
@@ -79,7 +86,7 @@ class PanelElegirServicio extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${esTaxi ? 'Moto taxi' : (tipo?.nombre ?? 'Entrega')} · ${flujo.textoPrecio}',
+                  '${esTaxi ? 'Moto taxi' : (tipo?.nombreServicio ?? 'Encomienda')} · ${flujo.textoPrecio}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: ColoresApp.tinta, fontSize: 16, fontWeight: FontWeight.w700),
@@ -135,17 +142,34 @@ class PanelElegirServicio extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         MarcaGuia(
-          id: 'pasajero.entrega',
+          id: 'pasajero.encomienda',
           child: TarjetaServicio(
             icono: Iconos.boxOpen,
-            titulo: 'Entrega',
-            detalle: flujo.motivoSinEntrega ?? tipo?.nombre ?? 'Encomienda o compra',
-            bloqueada: flujo.motivoSinEntrega != null,
-            libres: flujo.motivoSinEntrega != null ? null : repartidoresLibres,
+            titulo: 'Encomienda',
+            detalle: sinEntrega ??
+                (tipo == TipoEnvio.encomienda && conDestino ? detalleTaxi : 'Envía un paquete a otro lugar'),
+            bloqueada: sinEntrega != null,
+            libres: sinEntrega != null ? null : repartidoresLibres,
             textoLibres: textoLibresCorto(repartidoresLibres, ServicioActivo.entrega),
-            precio: flujo.textoPrecioDe(ServicioActivo.entrega),
-            elegida: !esTaxi,
-            onTap: onEntrega,
+            precio: flujo.textoPrecioEntrega(TipoEnvio.encomienda),
+            elegida: tipo == TipoEnvio.encomienda,
+            onTap: onEncomienda,
+          ),
+        ),
+        const SizedBox(height: 12),
+        MarcaGuia(
+          id: 'pasajero.delivery',
+          child: TarjetaServicio(
+            icono: Iconos.bagShopping,
+            titulo: 'Delivery',
+            detalle: sinEntrega ??
+                (tipo == TipoEnvio.compraYEntrega ? 'Se entrega donde estás' : 'Te compran y te lo traen'),
+            bloqueada: sinEntrega != null,
+            libres: sinEntrega != null ? null : repartidoresLibres,
+            textoLibres: textoLibresCorto(repartidoresLibres, ServicioActivo.entrega),
+            precio: flujo.textoPrecioEntrega(TipoEnvio.compraYEntrega),
+            elegida: tipo == TipoEnvio.compraYEntrega,
+            onTap: onDelivery,
           ),
         ),
         if (ruta != null && ruta.aproximada && conDestino) ...[
@@ -156,7 +180,8 @@ class PanelElegirServicio extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 8),
-        if (esTaxi)
+        // Quien recibe y quien paga una encomienda o un delivery se eligen en el formulario del pedido.
+        if (esTaxi) ...[
           MarcaGuia(
             id: 'pasajero.paraQuien',
             child: FilaCambiar(
@@ -169,18 +194,9 @@ class PanelElegirServicio extends StatelessWidget {
               detalle: flujo.paraOtraPersona && tercero?.telefono != null ? 'Celular ${tercero!.telefono}' : null,
               onTap: onParaQuien,
             ),
-          )
-        else
-          MarcaGuia(
-            id: 'pasajero.paraQuien',
-            child: FilaCambiar(
-              icono: Iconos.boxOpen,
-              texto: tipo?.nombre ?? 'Elige qué envías',
-              detalle: tipo == TipoEnvio.compraYEntrega ? 'Se entrega donde estás' : null,
-              onTap: onTipoEnvio,
-            ),
           ),
-        const Divider(height: 1, color: ColoresApp.borde),
+          const Divider(height: 1, color: ColoresApp.borde),
+        ],
         MarcaGuia(
           id: 'pasajero.pago',
           child: FilaCambiar(
@@ -573,24 +589,3 @@ Future<T?> elegirEnHoja<T>(
     ),
   );
 }
-
-/// "¿Qué quieres enviar?": encomienda o compra y entrega.
-Future<TipoEnvio?> preguntarTipoEnvio(BuildContext context, TipoEnvio? actual) => elegirEnHoja<TipoEnvio>(
-  context,
-  titulo: '¿Qué quieres enviar?',
-  actual: actual,
-  opciones: const [
-    OpcionHoja(
-      TipoEnvio.encomienda,
-      Iconos.boxOpen,
-      'Encomienda',
-      'Un repartidor recoge tu paquete y lo lleva a su destino',
-    ),
-    OpcionHoja(
-      TipoEnvio.compraYEntrega,
-      Iconos.bagShopping,
-      'Compra y entrega',
-      'El repartidor compra lo que necesitas y te lo trae',
-    ),
-  ],
-);

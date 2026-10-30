@@ -105,10 +105,34 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     _flujo.addListener(_alCambiarFlujo);
     RequiereGps.listo.addListener(_revisarGuia);
     RequiereGps.listo.addListener(_revisarAvisoCredenciales);
+    _alOcultar = AppLifecycleListener(
+      onHide: () {
+        _oculta = true;
+        _revisarGpsDeFondo();
+      },
+      onShow: () {
+        _oculta = false;
+        _revisarGpsDeFondo();
+      },
+    );
     _arrancar();
     // Este telefono recibe los avisos push de la cuenta (tambien con la app cerrada).
     unawaited(Push.registrar(context.read<ClienteApi>()));
     _cargarFoto();
+  }
+
+  /// La app no esta a la vista (minimizada).
+  bool _oculta = false;
+  AppLifecycleListener? _alOcultar;
+
+  /// Minimizada, desconectado y sin viajes nada usa la ubicacion: el GPS se pausa para no gastar
+  /// bateria. Conectado o con un viaje sigue como siempre (la posicion se manda en vivo).
+  void _revisarGpsDeFondo() {
+    if (_oculta && !_flujo.necesitaGpsDeFondo) {
+      _mapa.pausarGps();
+    } else {
+      _mapa.reanudarGps();
+    }
   }
 
   /// Aviso de credenciales enviadas al correo, con la pantalla principal a la vista (GPS listo).
@@ -273,6 +297,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
 
   @override
   void dispose() {
+    _alOcultar?.dispose();
     _sondeoAprobacion?.cancel();
     _emisor.dispose();
     RequiereGps.listo.removeListener(_revisarGuia);
@@ -285,6 +310,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
 
   void _alCambiarFlujo() {
     if (!mounted) return;
+    if (_oculta) _revisarGpsDeFondo();
     // Al entrar o salir de un viaje la disponibilidad cambia (ocupado / libre): se avisa ya.
     if (_flujo.etapa != _etapaAnterior || _flujo.enCurso.length != _enCursoAnterior) {
       _etapaAnterior = _flujo.etapa;
@@ -434,25 +460,50 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         !(ModalRoute.of(context)?.isCurrent ?? true)) {
       return null;
     }
-    return _flujo.viaje!.datosEntrega != null ? Guias.repartidorPedido : Guias.conductorViaje;
+    final datos = _flujo.viaje!.datosEntrega;
+    if (datos == null) return Guias.conductorViaje;
+    bool pendiente(String guia) => guiaPendiente(context, guia);
+    if (pendiente(Guias.repartidorPedido)) return Guias.repartidorPedido;
+    // Quien ya vio la guia del pedido antes de lo nuevo del delivery.
+    if (pendiente(Guias.repartidorNovedades)) return Guias.repartidorNovedades;
+    // La primera vez que tiene que registrar una compra (el formulario a la vista).
+    if (datos.esCompra && marcaEnPantalla('repartidor.registroCompra')) return Guias.repartidorCompra;
+    return null;
   }
 
   bool _guiaViajeEnEspera = false;
 
   Future<void> _revisarGuiaDelViaje() async {
     if (_guiaViajeEnEspera || !mounted) return;
-    final guia = _guiaDelViaje;
-    if (guia == null || !guiaPendiente(context, guia)) return;
     _guiaViajeEnEspera = true;
-    // Deja que el panel termine de subir y la ruta de dibujarse.
-    await Future<void>.delayed(const Duration(milliseconds: 1200));
-    _guiaViajeEnEspera = false;
+    String? guia;
+    try {
+      // El cambio del flujo llega antes de que el panel se dibuje (por ejemplo el registro de la compra):
+      // se mira despues del cuadro.
+      await WidgetsBinding.instance.endOfFrame;
+      if (!mounted) return;
+      guia = _guiaDelViaje;
+      if (guia == null || !guiaPendiente(context, guia)) return;
+      // Deja que el panel termine de subir y la ruta de dibujarse.
+      await Future<void>.delayed(const Duration(milliseconds: 1200));
+    } finally {
+      _guiaViajeEnEspera = false;
+    }
     if (!mounted || _guiaDelViaje != guia || !guiaPendiente(context, guia)) return;
     await mostrarGuiaInicio(
       context,
-      guia == Guias.repartidorPedido ? _pasosPedido() : _pasosViaje(),
+      switch (guia) {
+        Guias.repartidorPedido => _pasosPedido(),
+        Guias.repartidorCompra => _pasosCompra,
+        Guias.repartidorNovedades => _pasosNovedadesPedido,
+        _ => _pasosViaje(),
+      },
       guia: guia,
+      // La guia del pedido ya cuenta lo nuevo: no se ve dos veces.
+      tambien: guia == Guias.repartidorPedido ? const [Guias.repartidorNovedades] : const [],
     );
+    // Si falta otra con lo que se ve ahora (solo si esta quedo vista: sin pasos a la vista no se marca).
+    if (mounted && !guiaPendiente(context, guia)) unawaited(_revisarGuiaDelViaje());
   }
 
   /// Primer viaje del conductor de taxi.
@@ -505,15 +556,71 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     PasoGuia(
       icono: Iconos.boxOpen,
       titulo: 'Recoger',
-      texto: 'En una encomienda pide el código de recogida y toma la foto del paquete. En una compra propón el '
-          'comercio y el monto, espera a que el cliente lo confirme y registra la compra.',
+      texto: 'En una encomienda pide el código de recogida y toma la foto del paquete. En una compra compra lo de la '
+          'lista y registra el precio de cada producto: el cliente tiene que aceptar el costo total.',
     ),
+    _pasoParaOtraPersona,
     PasoGuia(
       icono: Iconos.flagCheckered,
       titulo: 'Entregar',
       texto: 'A 100 m o menos del punto de entrega pide el código de entrega y toma la foto de la persona con su pedido. '
-          'Si no sale, avísale con el cronómetro; si no aparece, usa "No se pudo entregar" con el motivo y una '
-          'foto.',
+          'Si no sale, avísale con el cronómetro.',
+    ),
+    _pasoNoSePudoEntregar,
+  ];
+
+  static const _pasoParaOtraPersona = PasoGuia(
+    icono: Iconos.userGroup,
+    titulo: 'Pedidos para otra persona',
+    texto: 'Si el cliente lo pidió para otra persona, verás quién recibe y quién paga: si paga quien lo pidió, no le '
+        'cobres a quien recibe. A quien lo pidió le avisamos cuando llegas.',
+  );
+
+  static const _pasoNoSePudoEntregar = PasoGuia(
+    icono: Iconos.triangleExclamation,
+    titulo: 'No se pudo entregar',
+    texto: 'Desde el 3.er aviso en el punto de entrega puedes reportarlo: eliges el motivo, escribes qué pasó y tomas '
+        'una foto. El pedido se cierra en tu app y en la del cliente.',
+  );
+
+  /// Lo nuevo del pedido para el repartidor que ya conocia la guia del pedido.
+  static const _pasosNovedadesPedido = [
+    PasoGuia(
+      icono: Iconos.listUl,
+      titulo: 'Nuevo: compras con lista',
+      texto: 'En una compra ves la lista de productos antes de aceptarla. Al comprar registras el precio de cada '
+          'producto o que no lo conseguiste.',
+    ),
+    PasoGuia(
+      icono: Iconos.circleCheck,
+      titulo: 'El cliente acepta el costo',
+      texto: 'El cliente acepta el costo total antes de pagar: sin eso no puedes cobrar ni entregar. Puedes corregir '
+          'los precios hasta que te paguen.',
+    ),
+    _pasoParaOtraPersona,
+    _pasoNoSePudoEntregar,
+  ];
+
+  /// La primera vez que registra una compra.
+  static const _pasosCompra = [
+    PasoGuia(
+      marca: 'repartidor.registroCompra',
+      icono: Iconos.bagShopping,
+      titulo: 'Registra la compra',
+      texto: 'Por cada producto marca "Lo conseguí" con la cantidad y el precio de cada uno, o "No lo conseguí". '
+          'Escribe también el comercio donde compraste.',
+    ),
+    PasoGuia(
+      icono: Iconos.paperPlane,
+      titulo: 'Envía el costo al cliente',
+      texto: 'UNITAXI suma tus precios y el envío desde el comercio hasta el cliente, y le manda el costo total para '
+          'que lo acepte.',
+    ),
+    PasoGuia(
+      icono: Iconos.clock,
+      titulo: 'Espera que lo acepte',
+      texto: 'Sin el costo aceptado no puedes cobrar ni entregar. Si te equivocaste usa "Corregir los precios" antes '
+          'de cobrar: el cliente tendrá que aceptarlo otra vez.',
     ),
   ];
 
@@ -725,35 +832,46 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       body: Stack(
         children: [
           Positioned.fill(
+            // Las secciones que no se ven conservan su estado pero no animan (TickerMode). Inicio no se
+            // toca: la tarjeta de 15 s de una solicitud nueva corre aunque se mire otra seccion.
             child: IndexedStack(
               index: _seccion,
               children: [
                 _vistaInicio(sesion.usuario),
-                PantallaHistorial(
-                  key: _historial,
-                  cargarHistorial: _flujo.api.historial,
-                  esConductor: true,
-                  enCurso: ListenableBuilder(
-                    listenable: _flujo,
-                    builder: (context, _) => SeccionEnCurso(
-                      viajes: _flujo.enCurso,
-                      idEnPantalla: _flujo.etapa == EtapaConductor.enViaje ? _flujo.viaje?.id : null,
-                      esConductor: true,
-                      onElegir: (viaje) {
-                        _flujo.enfocar(viaje);
-                        _irA(_seccionInicio);
-                      },
+                TickerMode(
+                  enabled: _seccion == _seccionHistorial,
+                  child: PantallaHistorial(
+                    key: _historial,
+                    cargarHistorial: _flujo.api.historial,
+                    esConductor: true,
+                    enCurso: ListenableBuilder(
+                      listenable: _flujo,
+                      builder: (context, _) => SeccionEnCurso(
+                        viajes: _flujo.enCurso,
+                        idEnPantalla: _flujo.etapa == EtapaConductor.enViaje ? _flujo.viaje?.id : null,
+                        esConductor: true,
+                        onElegir: (viaje) {
+                          _flujo.enfocar(viaje);
+                          _irA(_seccionInicio);
+                        },
+                      ),
                     ),
                   ),
                 ),
-                PantallaComentarios(key: _comentarios),
-                PantallaMas(
-                  foto: _foto,
-                  onDatosPersonales: () => _abrirYRecargar(const PantallaPerfilConductor()),
-                  onDocumentos: _abrirDocumentos,
-                  onMisQr: () => _abrirYRecargar(const PantallaMisQr()),
-                  onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
-                  onCerrarSesion: _confirmarCerrarSesion,
+                TickerMode(
+                  enabled: _seccion == _seccionComentarios,
+                  child: PantallaComentarios(key: _comentarios),
+                ),
+                TickerMode(
+                  enabled: _seccion == _seccionMas,
+                  child: PantallaMas(
+                    foto: _foto,
+                    onDatosPersonales: () => _abrirYRecargar(const PantallaPerfilConductor()),
+                    onDocumentos: _abrirDocumentos,
+                    onMisQr: () => _abrirYRecargar(const PantallaMisQr()),
+                    onCambiarModo: sesion.otroModo == null ? null : _cambiarModo,
+                    onCerrarSesion: _confirmarCerrarSesion,
+                  ),
                 ),
               ],
             ),

@@ -423,6 +423,11 @@ typedef AvisoChat = ({int idViaje, String titulo, String texto});
 class CanalChat {
   static const _destino = '/user/queue/chat';
 
+  /// Latido del socket del chat (se usa el mayor entre este y el del servidor, 10 s). Cada latido
+  /// despierta la radio del celular; si el socket se corta sin aviso, la consulta cada
+  /// [ChatEstado.intervaloConSocket] sigue trayendo los mensajes.
+  static const latidoSegundos = 25;
+
   final Sesion sesion;
   final void Function(MensajeChat mensaje) alRecibir;
   final VoidCallback alConectar;
@@ -464,8 +469,8 @@ class CanalChat {
           cabeceras['Authorization'] = 'Bearer ${sesion.tokenAcceso ?? ''}';
         },
         reconnectDelay: const Duration(seconds: 5),
-        heartbeatIncoming: const Duration(seconds: 10),
-        heartbeatOutgoing: const Duration(seconds: 10),
+        heartbeatIncoming: const Duration(seconds: CanalChat.latidoSegundos),
+        heartbeatOutgoing: const Duration(seconds: CanalChat.latidoSegundos),
         connectionTimeout: const Duration(seconds: 10),
         onConnect: (_) => _suscribir(),
         onDisconnect: (_) => alDesconectar(),

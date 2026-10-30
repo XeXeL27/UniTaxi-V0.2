@@ -10,7 +10,9 @@ import '../core/navegador.dart';
 import '../core/tema.dart';
 import 'boton_principal.dart';
 
-enum _EstadoGps { verificando, listo, apagado, sinPermiso, bloqueado }
+/// [aproximada]: Android 12+ con el permiso de "ubicacion aproximada" (un punto a 1-3 km de donde
+/// esta la persona): no sirve para marcar la partida ni para seguir al conductor.
+enum _EstadoGps { verificando, listo, apagado, sinPermiso, bloqueado, aproximada }
 
 /// Exige la ubicacion encendida y con permiso para usar la app (pasajero y conductor). Mientras
 /// falte, una pantalla tapa todo con el boton para activarla; la vista de abajo sigue viva, asi un
@@ -35,6 +37,9 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
   Timer? _reintento;
   Timer? _inicio;
   bool _pidiendo = false;
+
+  /// Ya se le pidio la ubicacion precisa y siguio la aproximada: el boton abre los ajustes de la app.
+  bool _precisaPedida = false;
 
   @override
   void initState() {
@@ -95,6 +100,9 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
       if (nuevo == _EstadoGps.listo && !kIsWeb && !await Geolocator.isLocationServiceEnabled()) {
         nuevo = _EstadoGps.apagado;
       }
+      if (nuevo == _EstadoGps.listo && !kIsWeb && await _soloAproximada()) {
+        nuevo = _EstadoGps.aproximada;
+      }
     } catch (_) {
       // El navegador sin soporte de ubicacion no bloquea la app. En el telefono el error suele ser
       // que otro permiso se estaba preguntando (por ejemplo el de notificaciones): se vuelve a pedir.
@@ -114,8 +122,40 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
     }
   }
 
+  /// Android 12+ deja dar solo la ubicacion aproximada. Si no se puede saber, se sigue como antes.
+  Future<bool> _soloAproximada() async {
+    try {
+      return await Geolocator.getLocationAccuracy() == LocationAccuracyStatus.reduced;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Pide pasar a la ubicacion precisa (Android muestra "Cambiar a ubicacion precisa"). Si la persona
+  /// ya la nego, Android no vuelve a preguntar: entonces se abren los ajustes de la app.
+  Future<void> _pedirPrecisa() async {
+    if (_precisaPedida) {
+      try {
+        await Geolocator.openAppSettings();
+      } catch (_) {}
+      return;
+    }
+    _pidiendo = true;
+    try {
+      await Geolocator.requestPermission();
+    } catch (_) {
+      // Otro permiso se estaba preguntando: se intenta de nuevo con el boton.
+    } finally {
+      _pidiendo = false;
+    }
+    await _verificar();
+    if (mounted && _estado == _EstadoGps.aproximada) setState(() => _precisaPedida = true);
+  }
+
   Future<void> _activar() async {
     switch (_estado) {
+      case _EstadoGps.aproximada:
+        await _pedirPrecisa();
       case _EstadoGps.apagado:
         // Algunos telefonos no tienen la pantalla de ubicacion directa: entonces los ajustes de la app.
         var abierto = false;
@@ -160,6 +200,20 @@ class _RequiereGpsState extends State<RequiereGps> with WidgetsBindingObserver {
 
   Widget _pantalla() {
     final (titulo, texto, boton) = switch (_estado) {
+      _EstadoGps.aproximada when _precisaPedida => (
+        'Activa la ubicación precisa',
+        'Tu celular le da a UNITAXI solo una ubicación aproximada, que puede estar a más de un '
+            'kilómetro de donde estás. En los ajustes de la app, en Permisos > Ubicación, activa '
+            '"Usar ubicación precisa".',
+        'Abrir ajustes',
+      ),
+      _EstadoGps.aproximada => (
+        'Activa la ubicación precisa',
+        'Tu celular le da a UNITAXI solo una ubicación aproximada, que puede estar a más de un '
+            'kilómetro de donde estás. Para que el conductor llegue al lugar correcto, permite la '
+            'ubicación precisa.',
+        'Permitir ubicación precisa',
+      ),
       _EstadoGps.apagado => (
         'Activa tu ubicación',
         'UNITAXI necesita el GPS de tu celular encendido para ubicarte en el mapa y conectarte con '

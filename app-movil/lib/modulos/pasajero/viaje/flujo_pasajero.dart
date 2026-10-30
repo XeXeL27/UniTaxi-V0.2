@@ -115,6 +115,13 @@ class FlujoPasajero extends ChangeNotifier {
   /// y no hay destino que elegir.
   bool get esCompra => tipoEnvio == TipoEnvio.compraYEntrega;
 
+  /// La partida es la ubicacion del telefono y la sigue (no un punto marcado a mano ni el de otra
+  /// persona): una lectura mejor del GPS la corrige sola.
+  bool get partidaEsMiGps {
+    final gps = mapa.miUbicacion;
+    return !paraOtraPersona && mapa.aSigueGps && gps != null && mapa.a?.posicion == gps;
+  }
+
   /// Servicio de lo que se está pidiendo ahora, para hablar de repartidor o de taxista. Con un pedido
   /// en curso manda el del servidor; antes de pedir, el de la cabecera (Entrega desde que se toca,
   /// aunque todavia no se eligio que enviar: si no, seguian a la vista las opciones del taxi).
@@ -283,17 +290,21 @@ class FlujoPasajero extends ChangeNotifier {
 
   /// Precio de cada tarjeta de "Elige tu servicio", aunque no sea el servicio elegido.
   String textoPrecioDe(ServicioActivo servicio) {
-    if (servicio == ServicioActivo.entrega) {
-      if (modo.tipo == TipoEnvio.compraYEntrega) return 'A calcular';
-      final e = cotizacionEntrega;
-      if (e != null) return formatoBs(e.precio);
-      return cotizandoEntrega ? 'Calculando...' : 'A calcular';
-    }
+    if (servicio == ServicioActivo.entrega) return textoPrecioEntrega(modo.tipo ?? TipoEnvio.encomienda);
     final c = cotizacion;
     if (c != null) return formatoBs(c.precio);
     if (cotizando) return 'Calculando...';
     final base = precio?.precio;
     return base != null ? 'Desde ${formatoBs(base)}' : 'A calcular';
+  }
+
+  /// Precio de la tarjeta Encomienda o Delivery. El delivery se calcula cuando el repartidor registra
+  /// la compra (el comercio todavia no se sabe); la encomienda, con la tarifa de delivery de A a B.
+  String textoPrecioEntrega(TipoEnvio tipo) {
+    if (tipo == TipoEnvio.compraYEntrega) return 'A calcular';
+    final e = cotizacionEntrega;
+    if (e != null) return formatoBs(e.precio);
+    return cotizandoEntrega ? 'Calculando...' : 'A calcular';
   }
 
   /// "Estudiante UAP: 12,00 Bs menos 2,00 Bs" cuando tiene descuento.

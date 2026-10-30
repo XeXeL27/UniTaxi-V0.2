@@ -36,12 +36,27 @@ class PosicionesAnimadas extends ChangeNotifier {
     );
   }
 
+  /// Distancia (metros) por debajo de la cual un marcador se considera en el mismo lugar.
+  static const double _metrosQuieto = 0.5;
+
   /// Aplica las posiciones nuevas. Un id que aparece por primera vez se pone directo, sin animar;
-  /// los que no vienen en [destinos] se quedan donde estan.
+  /// los que no vienen en [destinos] se quedan donde estan. Si ningun marcador cambio de lugar no
+  /// se anima ni se avisa: el mapa no se vuelve a dibujar 60 veces por segundo con todo quieto.
   void mover(Map<int, LatLng> destinos, {bool animar = true}) {
     if (destinos.isEmpty) return;
     // Primero se congela donde se ve cada marcador, antes de reiniciar la animacion.
     final actuales = {for (final id in _hasta.keys) id: posicion(id)!};
+    var nuevo = false;
+    var seMueve = false;
+    for (final entrada in destinos.entries) {
+      final actual = actuales[entrada.key];
+      if (actual == null) {
+        nuevo = true;
+      } else if (const Distance().as(LengthUnit.Meter, actual, entrada.value) >= _metrosQuieto) {
+        seMueve = true;
+      }
+    }
+    if (!nuevo && !seMueve) return;
     for (final id in _hasta.keys) {
       _desde[id] = actuales[id]!;
       _hasta[id] = actuales[id]!;
@@ -50,11 +65,11 @@ class PosicionesAnimadas extends ChangeNotifier {
       _desde[entrada.key] = animar ? (actuales[entrada.key] ?? entrada.value) : entrada.value;
       _hasta[entrada.key] = entrada.value;
     }
-    if (animar) {
+    if (animar && seMueve) {
       _animacion.forward(from: 0);
     } else {
+      // Fijar el valor ya avisa a los oyentes (una sola vez).
       _animacion.value = 1;
-      notifyListeners();
     }
   }
 

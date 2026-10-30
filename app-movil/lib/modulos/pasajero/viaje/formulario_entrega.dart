@@ -30,7 +30,7 @@ Future<DatosEntregaForm?> abrirFormularioEntrega(BuildContext context, TipoEnvio
           appBar: AppBar(
             backgroundColor: ColoresApp.azul,
             foregroundColor: ColoresApp.blanco,
-            title: Text(tipo.nombre, style: const TextStyle(fontWeight: FontWeight.w600)),
+            title: Text(tipo.nombreServicio, style: const TextStyle(fontWeight: FontWeight.w600)),
           ),
           body: SafeArea(
             child: SingleChildScrollView(
@@ -171,7 +171,7 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                widget.tipo.nombre,
+                widget.tipo.nombreServicio,
                 style: const TextStyle(color: ColoresApp.azul, fontSize: 20, fontWeight: FontWeight.w700),
               ),
               const SizedBox(height: 8),

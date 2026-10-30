@@ -27,6 +27,22 @@ abstract final class Guias {
 
   /// Boton del mapa del pasajero para ver u ocultar los taxistas libres.
   static const pasajeroTaxistas = 'PASAJERO_TAXISTAS';
+
+  /// Novedad: Encomienda y Delivery son opciones separadas (para quien ya vio [pasajeroServicios]).
+  static const pasajeroEncomiendaDelivery = 'PASAJERO_ENCOMIENDA_DELIVERY';
+
+  /// Primera vez que el pasajero elige Delivery: lista de productos, quien recibe y paga, costo total.
+  static const pasajeroDelivery = 'PASAJERO_DELIVERY';
+
+  /// Primera vez que el pasajero tiene que aceptar el costo total de su delivery.
+  static const pasajeroCosto = 'PASAJERO_COSTO';
+
+  /// Primera vez que el repartidor registra una compra (precio de cada producto).
+  static const repartidorCompra = 'REPARTIDOR_COMPRA';
+
+  /// Novedades del pedido para el repartidor que ya vio [repartidorPedido]: lista antes de aceptar,
+  /// costo aceptado, pedido para otra persona y reporte desde el tercer aviso.
+  static const repartidorNovedades = 'REPARTIDOR_NOVEDADES';
 }
 
 /// Un paso de la guia: lo que se ilumina y lo que se explica. Se ilumina el widget de [clave] o el
@@ -88,12 +104,14 @@ final Set<String> _guiasEnCurso = {};
 /// en pantalla se omiten (o van al centro si tienen icono). Al terminarla o saltarla se marca como
 /// vista en el servidor (POST /api/cuenta/guia-vista) y en la sesion, asi no se vuelve a mostrar.
 /// Sin [guia] es la guia de inicio; con [guia] (uno de [Guias]) la de esa parte de la app, y con
-/// [tambienInicio] marca ademas la de inicio (la del repartidor la reemplaza).
+/// [tambienInicio] marca ademas la de inicio (la del repartidor la reemplaza). [tambien] marca otras
+/// guias que esta ya explica (la completa incluye lo de la guia de novedades: no se ve dos veces).
 Future<void> mostrarGuiaInicio(
   BuildContext context,
   List<PasoGuia> pasos, {
   String? guia,
   bool tambienInicio = false,
+  List<String> tambien = const [],
 }) async {
   final pantalla = Offset.zero & MediaQuery.sizeOf(context);
   final visibles = [
@@ -124,10 +142,11 @@ Future<void> mostrarGuiaInicio(
       // Sin conexion queda marcada en el telefono; el servidor la ofreceria en el proximo ingreso.
     }
   }
-  if (guia != null) {
-    await sesion.marcarGuia(guia);
+  for (final vista in [?guia, ...tambien]) {
+    if (!sesion.guiaPendiente(vista)) continue;
+    await sesion.marcarGuia(vista);
     try {
-      await api.post('/api/cuenta/guia-vista', {'guia': guia});
+      await api.post('/api/cuenta/guia-vista', {'guia': vista});
     } catch (_) {
       // Igual que la de inicio: queda marcada en el telefono.
     }

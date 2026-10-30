@@ -13,6 +13,9 @@ enum TipoEnvio {
   final String nombre;
   const TipoEnvio(this.codigo, this.nombre);
 
+  /// Nombre de la opcion que elige el pasajero (Moto taxi, Encomienda o Delivery).
+  String get nombreServicio => this == compraYEntrega ? 'Delivery' : nombre;
+
   static TipoEnvio? desde(String? codigo) => values.where((tipo) => tipo.codigo == codigo).firstOrNull;
 }
 

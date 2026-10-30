@@ -11,6 +11,7 @@ import '../../../core/formato.dart';
 import '../../../comun/editor_foto.dart';
 import '../../../core/enlaces.dart';
 import '../../../comun/modelos_viaje.dart';
+import '../../../widgets/guia_inicio.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
@@ -453,11 +454,14 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   // ------------------------------------------------------------------ compra y entrega
 
-  Widget _compraPanel(DatosEntrega entrega) => RegistroCompra(
-    key: const ValueKey('registro-compra'),
-    productos: entrega.productos,
-    ocupado: flujo.ocupado,
-    onRegistrar: _registrarCompra,
+  Widget _compraPanel(DatosEntrega entrega) => MarcaGuia(
+    id: 'repartidor.registroCompra',
+    child: RegistroCompra(
+      key: const ValueKey('registro-compra'),
+      productos: entrega.productos,
+      ocupado: flujo.ocupado,
+      onRegistrar: _registrarCompra,
+    ),
   );
 
   /// Registra la compra (o corrige los precios) con el GPS de donde compro: el servidor calcula los
