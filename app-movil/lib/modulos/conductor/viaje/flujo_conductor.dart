@@ -4,7 +4,10 @@ import 'package:flutter/foundation.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../core/api_excepcion.dart';
+import '../../../core/aviso_viaje.dart';
 import '../../../core/chat.dart';
+import '../../../core/formato.dart';
+import '../../../core/push.dart';
 import '../../../core/notificador.dart';
 import '../../../core/vibracion.dart';
 import '../../../core/sonido.dart';
@@ -593,11 +596,13 @@ class FlujoConductor extends ChangeNotifier {
   Future<void> validarRecogida(String codigo, Uint8List foto) =>
       _accionDelivery((id) => api.validarRecogida(id, codigo, foto, mapa.miUbicacion));
 
-  Future<void> proponerCompra(LatLng punto, String detalle, double costo) =>
-      _accionDelivery((id) => api.proponerCompra(id, punto, detalle, costo));
-
-  Future<void> registrarCompra(LatLng punto, String detalle, double costo, String? observacion, Uint8List? comprobante) =>
-      _accionDelivery((id) => api.registrarCompra(id, punto, detalle, costo, observacion, comprobante));
+  Future<void> registrarCompra(
+    LatLng punto,
+    String detalle,
+    List<ProductoComprado> productos,
+    String? observacion,
+    Uint8List? comprobante,
+  ) => _accionDelivery((id) => api.registrarCompra(id, punto, detalle, productos, observacion, comprobante));
 
   Future<void> confirmarPago(double monto, String metodo) => _accionDelivery((id) => api.confirmarPago(id, monto, metodo));
 
@@ -626,8 +631,8 @@ class FlujoConductor extends ChangeNotifier {
   /// Otro aviso "te estoy esperando" en el punto de entrega.
   Future<void> avisarEsperaEntrega() => _accionDelivery((id) => api.avisarEsperaEntrega(id));
 
-  Future<void> noSePudoEntregar(String motivo, Uint8List foto) =>
-      _accionDelivery((id) => api.noSePudoEntregar(id, motivo, foto));
+  Future<void> noSePudoEntregar(String motivo, Uint8List foto, {MotivoFalla tipo = MotivoFalla.otro}) =>
+      _accionDelivery((id) => api.noSePudoEntregar(id, motivo, foto, tipo: tipo));
 
   Future<void> paqueteNoCoincide(String motivo, Uint8List foto) =>
       _accionDelivery((id) => api.paqueteNoCoincide(id, motivo, foto));
@@ -747,9 +752,35 @@ class FlujoConductor extends ChangeNotifier {
 
   void _avisar() {
     if (_cerrado) return;
+    _revisarCostosAceptados();
     _revisarSeguimiento();
     _mantenerChats();
     notifyListeners();
+  }
+
+  /// Version del costo de cada compra y si ya estaba aceptada la ultima vez que se vio.
+  final Map<int, ({int version, bool aceptada})> _costos = {};
+
+  /// Compras: suena y vibra cuando el cliente acepta el costo total (solo el cambio que se ve en esta
+  /// sesion; al abrir la app con un costo ya aceptado no suena).
+  void _revisarCostosAceptados() {
+    final actual = etapa == EtapaConductor.enViaje ? viaje : null;
+    for (final v in [...enCurso, ?actual]) {
+      final propuesta = v.datosEntrega?.propuestaVigente;
+      if (propuesta == null) continue;
+      final antes = _costos[v.id];
+      final ahora = (version: propuesta.version, aceptada: propuesta.aceptada);
+      _costos[v.id] = ahora;
+      if (antes != null && ahora.aceptada && (!antes.aceptada || antes.version != ahora.version)) {
+        unawaited(AvisoViaje.avisar(
+          titulo: 'El cliente aceptó el costo',
+          cuerpo: '${enTitulo(v.nombrePasajero.split(' ').first)} aceptó ${formatoBs(propuesta.total)} en total. '
+              'Ya puedes llevarle el pedido.',
+          idNotificacion: idCostoAceptado(v.id),
+          sonido: SonidoAviso.viajeAceptado,
+        ));
+      }
+    }
   }
 
   /// Chat vinculado en cada viaje o pedido en curso (el de la pantalla y los otros), aunque el boton

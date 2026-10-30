@@ -6,12 +6,19 @@ import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.locationtech.jts.geom.Point;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+
+import lombok.extern.slf4j.Slf4j;
 
 import com.taxiuap.backend.identity.entity.Persona;
 import com.taxiuap.backend.communication.entity.Reporte;
@@ -21,22 +28,33 @@ import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.archivo.ProcesadorImagen;
+import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.shared.exception.ConflictoException;
 import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.trip.dto.AceptarCostoRequest;
 import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
 import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
-import com.taxiuap.backend.trip.dto.ProponerCompraRequest;
+import com.taxiuap.backend.trip.dto.ProductoCompradoRequest;
+import com.taxiuap.backend.trip.dto.PropuestaCostoResponse;
 import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
 import com.taxiuap.backend.trip.dto.LlegadaEntregaRequest;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
+import com.taxiuap.backend.trip.entity.ProductoEntrega;
+import com.taxiuap.backend.trip.entity.PropuestaCostoEntrega;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
+import com.taxiuap.backend.trip.enums.MotivoFallaEntrega;
+import com.taxiuap.backend.trip.enums.SituacionProducto;
+import com.taxiuap.backend.trip.enums.SituacionPropuestaCosto;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.enums.TipoFotoEntrega;
 import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
+import com.taxiuap.backend.trip.repository.ProductoEntregaRepository;
+import com.taxiuap.backend.trip.repository.PropuestaCostoEntregaRepository;
 
 /**
  * Acciones propias de DELIVERY. ViajeService mantiene el ciclo del viaje (aceptar, cancelar,
@@ -47,6 +65,7 @@ import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
  * cuando aplica), de modo que una doble pulsacion o dos pantallas simultaneas no puedan hacer avanzar el
  * pedido dos veces: la segunda no actualiza ninguna fila.</p>
  */
+@Slf4j
 @Service
 public class EntregaService {
 
@@ -68,17 +87,31 @@ public class EntregaService {
     private final CalculoPrecioDeliveryService calculoPrecioDeliveryService;
     private final AlmacenamientoArchivos almacenamientoArchivos;
     private final ReporteRepository reporteRepository;
+    private final ProductoEntregaRepository productoEntregaRepository;
+    private final PropuestaCostoEntregaRepository propuestaCostoRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     public EntregaService(ViajeService viajeService,
             DatosEntregaRepository datosEntregaRepository,
             CalculoPrecioDeliveryService calculoPrecioDeliveryService,
-            AlmacenamientoArchivos almacenamientoArchivos, ReporteRepository reporteRepository) {
+            AlmacenamientoArchivos almacenamientoArchivos, ReporteRepository reporteRepository,
+            ProductoEntregaRepository productoEntregaRepository,
+            PropuestaCostoEntregaRepository propuestaCostoRepository) {
         this.viajeService = viajeService;
         this.datosEntregaRepository = datosEntregaRepository;
         this.calculoPrecioDeliveryService = calculoPrecioDeliveryService;
         this.almacenamientoArchivos = almacenamientoArchivos;
         this.reporteRepository = reporteRepository;
+        this.productoEntregaRepository = productoEntregaRepository;
+        this.propuestaCostoRepository = propuestaCostoRepository;
+    }
+
+    /** Constructor para pruebas unitarias del flujo DELIVERY que no tocan la compra. */
+    public EntregaService(ViajeService viajeService, DatosEntregaRepository datosEntregaRepository,
+            CalculoPrecioDeliveryService calculoPrecioDeliveryService,
+            AlmacenamientoArchivos almacenamientoArchivos, ReporteRepository reporteRepository) {
+        this(viajeService, datosEntregaRepository, calculoPrecioDeliveryService, almacenamientoArchivos,
+                reporteRepository, null, null);
     }
 
     /** Constructor de compatibilidad para pruebas unitarias antiguas del flujo DELIVERY. */
@@ -90,92 +123,59 @@ public class EntregaService {
 
     // ---------------------------------------------------------------- COMPRA_Y_ENTREGA: la compra
 
-    /**
-     * COMPRA_Y_ENTREGA: el repartidor propone donde comprar antes de gastar el dinero de otra persona.
-     * La propuesta es una expectativa, no una compra: queda con el monto que el cliente deberia
-     * confirmar. Proponer de nuevo invalida la confirmacion anterior, porque el cliente confirmo un
-     * comercio y un monto concretos.
-     */
-    @Transactional
-    public ViajeResponse proponerCompra(Long idViaje, ProponerCompraRequest request) {
-        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
-        DatosEntrega datos = datosDe(viaje);
-        exigirTipo(datos, TipoEnvio.COMPRA_Y_ENTREGA);
-        exigirEstado(datos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO);
-        if (request.detalleCompra() == null || request.detalleCompra().isBlank()) {
-            throw new NegocioException("Describe el comercio donde comprarias el producto");
-        }
-        // Una compra por encima del limite no debio llegar a mostrarse; si llego (el limite pudo
-        // bajar despues), el repartidor no puede proponer gastarlo.
-        if (!calculoPrecioDeliveryService.puedeAdelantar(request.costoProducto(),
-                viaje.getConductor().getLimiteAdelantoCompra())) {
-            throw new NegocioException("El monto supera tu limite de adelanto para compras");
-        }
+    /** Mensaje para las apps de antes de la lista de productos (proponer y confirmar compra ya no existen). */
+    public static final String MENSAJE_ACTUALIZAR_COMPRA = "Actualiza UNITAXI: ahora el repartidor registra el "
+            + "precio de cada producto al comprar y el cliente acepta el costo total";
 
-        datos.setPuntoCompraPropuesto(PuntoDesdeWkt.convertir(request.puntoCompraWkt()));
-        datos.setDetalleCompraPropuesto(request.detalleCompra().trim());
-        datos.setCostoProductoConfirmado(dinero(request.costoProducto()));
-        datos.setCompraConfirmadaPorCliente(false);
-        datosEntregaRepository.save(datos);
-        return viajeService.obtener(idViaje);
+    /** Proponer y confirmar la compra antes de comprar ya no existen: se acepta el costo total despues. */
+    public ViajeResponse compraConFlujoAnterior() {
+        throw new NegocioException(MENSAJE_ACTUALIZAR_COMPRA);
     }
 
     /**
-     * COMPRA_Y_ENTREGA: el cliente confirma el comercio y el monto que el repartidor propuso. Sin esta
-     * confirmacion el repartidor no puede comprar, y el monto real nunca puede superar al confirmado:
-     * si se pasa, tiene que volver a proponer y volver a recibir la confirmacion.
-     */
-    @Transactional
-    public ViajeResponse confirmarCompra(Long idViaje) {
-        Viaje viaje = viajeService.obtenerViajeDelPasajero(idViaje);
-        DatosEntrega datos = datosDe(viaje);
-        exigirTipo(datos, TipoEnvio.COMPRA_Y_ENTREGA);
-        exigirEstado(datos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO);
-        if (datos.getCostoProductoConfirmado() == null
-                || (datos.getDetalleCompraPropuesto() == null && datos.getPuntoCompraPropuesto() == null)) {
-            throw new NegocioException("El repartidor todavia no propuso donde comprar el producto");
-        }
-
-        datos.setCompraConfirmadaPorCliente(true);
-        datosEntregaRepository.save(datos);
-        return viajeService.obtener(idViaje);
-    }
-
-    /**
-     * COMPRA_Y_ENTREGA: compra ya hecha. El pedido pasa a EN_MANO con el punto de compra real y el
-     * costo real, y el precio del servicio se recalcula desde el comercio hasta el destino: el trayecto
-     * del repartidor hasta el comercio no se cobra. El producto queda fuera del precio de la plataforma
-     * porque la comision no aplica actualmente a DELIVERY.
+     * COMPRA_Y_ENTREGA: el repartidor compro y registra cada producto del pedido (conseguido con cantidad y
+     * precio unitario, o no conseguido). El servidor calcula subtotales y total; nada del monto llega
+     * calculado de la app. La primera vez el pedido pasa a EN_MANO y el precio del servicio se fija desde
+     * el comercio hasta el destino con la tarifa del pedido; despues, antes del pago, sirve para corregir
+     * precios. Cada registro crea una nueva version del costo total y deja sin efecto la anterior (aunque
+     * el cliente ya la hubiera aceptado): el cliente tiene que aceptar de nuevo.
      */
     @Transactional
     public ViajeResponse registrarCompra(Long idViaje, RegistrarCompraRequest request, MultipartFile comprobante) {
+        if (request.productos() == null || request.productos().isEmpty()) {
+            throw new NegocioException(MENSAJE_ACTUALIZAR_COMPRA);
+        }
         Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
         DatosEntrega datos = datosDe(viaje);
         exigirTipo(datos, TipoEnvio.COMPRA_Y_ENTREGA);
-        exigirEstado(datos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO);
-        if (!Boolean.TRUE.equals(datos.getCompraConfirmadaPorCliente())) {
-            throw new NegocioException("El cliente todavia no confirmo la compra: no compres antes");
+        boolean correccion = datos.getEstadoEntrega() == EstadoEntrega.EN_MANO;
+        if (!correccion) {
+            exigirEstado(datos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO);
+        } else if (Boolean.TRUE.equals(datos.getPagoConfirmado())) {
+            throw new NegocioException("El pago ya fue confirmado: ya no puedes cambiar los precios");
         }
-        BigDecimal confirmado = datos.getCostoProductoConfirmado();
-        if (confirmado == null || request.costoProducto().compareTo(confirmado) > 0) {
-            throw new NegocioException("El costo real supera el monto confirmado: pide una nueva "
-                    + "confirmacion del cliente antes de comprar");
-        }
+        List<ProductoEntrega> productos = productoEntregaRepository
+                .findByDatosEntregaIdAndEstadoProductoEntregaOrderByOrdenAscIdAsc(datos.getId(), EstadoRegistro.A);
+        Map<Long, ProductoCompradoRequest> comprados = productosComprados(productos, request.productos());
 
         // El comprobante se procesa antes de tocar el estado: si la imagen no sirve, el pedido no avanza.
         byte[] contenidoComprobante = imagenOpcional(comprobante, "El comprobante");
         Point puntoCompra = PuntoDesdeWkt.convertir(request.puntoCompraWkt());
         Long idSolicitud = viaje.getSolicitud().getId();
         Point destino = viaje.getDestino();
-        BigDecimal costoReal = dinero(request.costoProducto());
         Long idDatos = datos.getId();
         // El recibo se escribe antes del UPDATE: despues, el viaje ya no esta en el contexto de persistencia.
         String rutaComprobante = contenidoComprobante == null ? null
                 : guardarEvidencia(contenidoComprobante, viaje, "comprobante_compra");
 
-        int filas = datosEntregaRepository.avanzarSiEstadoPermitido(idDatos, ANTES_DE_TENER_EL_PEDIDO,
-                EstadoEntrega.EN_MANO);
+        int filas = correccion
+                ? datosEntregaRepository.invalidarAprobacionSiSinPago(idDatos)
+                : datosEntregaRepository.avanzarSiEstadoPermitido(idDatos, ANTES_DE_TENER_EL_PEDIDO,
+                        EstadoEntrega.EN_MANO);
         if (filas == 0) {
+            if (correccion) {
+                throw new NegocioException("El pago ya fue confirmado: ya no puedes cambiar los precios");
+            }
             throw transicionRechazada(idDatos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO,
                     "El pedido ya no se puede comprar");
         }
@@ -183,20 +183,155 @@ public class EntregaService {
         // El UPDATE condicional limpio el contexto de persistencia: se relee el pedido antes de escribir.
         DatosEntrega actualizada = datosEntregaRepository.findBySolicitudId(idSolicitud)
                 .orElseThrow(() -> new NegocioException("El pedido ya no existe"));
-        actualizada.setPuntoCompra(puntoCompra);
+        List<PropuestaCostoResponse.LineaCosto> lineas = new ArrayList<>();
+        BigDecimal totalProductos = BigDecimal.ZERO.setScale(2);
+        for (ProductoEntrega producto : productoEntregaRepository
+                .findByDatosEntregaIdAndEstadoProductoEntregaOrderByOrdenAscIdAsc(idDatos, EstadoRegistro.A)) {
+            ProductoCompradoRequest comprado = comprados.get(producto.getId());
+            String nota = textoOpcional(comprado.observacion());
+            producto.setObservacion(nota);
+            if (Boolean.TRUE.equals(comprado.conseguido())) {
+                BigDecimal precio = dinero(comprado.precioUnitario());
+                BigDecimal subtotal = dinero(precio.multiply(BigDecimal.valueOf(comprado.cantidad())));
+                producto.setSituacionProducto(SituacionProducto.CONSEGUIDO);
+                producto.setCantidadConseguida(comprado.cantidad());
+                producto.setPrecioUnitario(precio);
+                producto.setSubtotal(subtotal);
+                totalProductos = totalProductos.add(subtotal);
+                lineas.add(new PropuestaCostoResponse.LineaCosto(producto.getNombre(), comprado.cantidad(), precio,
+                        subtotal, true, nota));
+            } else {
+                producto.setSituacionProducto(SituacionProducto.NO_CONSEGUIDO);
+                producto.setCantidadConseguida(null);
+                producto.setPrecioUnitario(null);
+                producto.setSubtotal(BigDecimal.ZERO.setScale(2));
+                lineas.add(new PropuestaCostoResponse.LineaCosto(producto.getNombre(), producto.getCantidad(), null,
+                        BigDecimal.ZERO.setScale(2), false, nota));
+            }
+            productoEntregaRepository.save(producto);
+        }
         actualizada.setDetalleCompra(request.detalleCompra().trim());
-        actualizada.setCostoProductoReal(costoReal);
+        actualizada.setCostoProductoReal(totalProductos);
         actualizada.setObservacionCompra(textoOpcional(request.observacionCompra()));
-        actualizada.setFechaRecogida(LocalDateTime.now());
         if (rutaComprobante != null) {
             actualizada.setFotoComprobanteUrl(rutaComprobante);
         }
+        if (!correccion) {
+            // El servicio se cobra desde el comercio: el punto de compra queda fijo con la primera compra.
+            actualizada.setPuntoCompra(puntoCompra);
+            actualizada.setFechaRecogida(LocalDateTime.now());
+            // Lo unico que vale es aceptar el costo total que se presenta ahora (nada confirmado de antes).
+            actualizada.setCompraConfirmadaPorCliente(false);
+            actualizada.setCostoProductoConfirmado(null);
+        }
         datosEntregaRepository.save(actualizada);
 
-        DesglosePrecioDelivery precio = calculoPrecioDeliveryService.fijarPrecioCompra(puntoCompra, destino);
-        ViajeResponse respuesta = viajeService.registrarPedidoEnMano(idViaje, precio);
+        if (!correccion) {
+            DesglosePrecioDelivery precio = calculoPrecioDeliveryService.fijarPrecioCompra(puntoCompra, destino,
+                    calculoPrecioDeliveryService.tarifaDe(actualizada));
+            viajeService.registrarPedidoEnMano(idViaje, precio);
+        }
+        // La version anterior se reemplaza antes de releer el viaje: el UPDATE condicional limpia el
+        // contexto de persistencia y dejaria al viaje ya leido sin sesion.
+        int anterior = propuestaCostoRepository.findFirstByDatosEntregaIdOrderByVersionDesc(idDatos)
+                .map(PropuestaCostoEntrega::getVersion)
+                .orElse(0);
+        propuestaCostoRepository.reemplazarVigentes(idDatos,
+                List.of(SituacionPropuestaCosto.PENDIENTE, SituacionPropuestaCosto.ACEPTADA));
+        Viaje conPrecio = viajeService.obtenerViajeDelConductor(idViaje);
+        PropuestaCostoEntrega propuesta = nuevaPropuesta(conPrecio, idDatos, anterior + 1, totalProductos, lineas);
+        log.info("Compra del viaje {} {}: version {} del costo, productos {} Bs, total {} Bs", idViaje,
+                correccion ? "corregida" : "registrada", propuesta.getVersion(), totalProductos, propuesta.getTotal());
+        viajeService.avisarPasajero(conPrecio, "COSTO_POR_APROBAR",
+                correccion ? "El costo de tu compra cambió" : "Revisa el costo de tu compra",
+                " registró la compra: " + dinero(propuesta.getTotal()) + " Bs en total. Acéptalo para recibir tu pedido.",
+                Map.of("version", String.valueOf(propuesta.getVersion())));
         actualizarConstancia(idViaje);
-        return respuesta;
+        return viajeService.obtener(idViaje);
+    }
+
+    /**
+     * El repartidor debe responder por cada producto del pedido, una sola vez, y conseguir al menos uno: si
+     * no consiguio nada no hay compra que cobrar (avisa por el chat o reporta el pedido).
+     */
+    private static Map<Long, ProductoCompradoRequest> productosComprados(List<ProductoEntrega> productos,
+            List<ProductoCompradoRequest> enviados) {
+        Map<Long, ProductoCompradoRequest> porId = new HashMap<>();
+        for (ProductoCompradoRequest enviado : enviados) {
+            if (porId.put(enviado.idProducto(), enviado) != null) {
+                throw new NegocioException("Un producto aparece dos veces en la compra");
+            }
+        }
+        Set<Long> delPedido = productos.stream().map(ProductoEntrega::getId).collect(Collectors.toSet());
+        if (productos.isEmpty() || !porId.keySet().equals(delPedido)) {
+            throw new NegocioException("Registra cada producto del pedido: conseguido con su precio o no conseguido");
+        }
+        if (enviados.stream().noneMatch(p -> Boolean.TRUE.equals(p.conseguido()))) {
+            throw new NegocioException("No conseguiste ningún producto: avísale al cliente por el chat o reporta el pedido");
+        }
+        return porId;
+    }
+
+    /** La nueva version del costo total, PENDIENTE (la anterior ya quedo REEMPLAZADA). */
+    private PropuestaCostoEntrega nuevaPropuesta(Viaje viaje, Long idDatos, int version, BigDecimal totalProductos,
+            List<PropuestaCostoResponse.LineaCosto> lineas) {
+        BigDecimal servicio = viaje.getPrecioFinal();
+        if (servicio == null) {
+            throw new NegocioException("El viaje todavia no tiene precio de servicio calculado");
+        }
+        PropuestaCostoEntrega propuesta = new PropuestaCostoEntrega();
+        propuesta.setDatosEntrega(datosEntregaRepository.getReferenceById(idDatos));
+        propuesta.setViaje(viaje);
+        propuesta.setConductor(viaje.getConductor());
+        propuesta.setVersion(version);
+        propuesta.setPrecioServicio(dinero(servicio));
+        propuesta.setTotalProductos(dinero(totalProductos));
+        propuesta.setTotal(dinero(servicio.add(totalProductos)));
+        propuesta.setDetalleJson(PropuestaCostoResponse.aJson(lineas));
+        propuesta.setSituacionPropuesta(SituacionPropuestaCosto.PENDIENTE);
+        propuesta.setFechaPropuesta(LocalDateTime.now());
+        return propuestaCostoRepository.save(propuesta);
+    }
+
+    /**
+     * "ACEPTO EL COSTO TOTAL": solo el cliente del pedido y solo la version que vio. Si el repartidor la
+     * corrigio mientras tanto, responde 409 con el aviso de revisar el nuevo total. Dos toques seguidos no
+     * aceptan dos veces: el segundo encuentra la misma version ya aceptada y no hace nada.
+     */
+    @Transactional
+    public ViajeResponse aceptarCosto(Long idViaje, AceptarCostoRequest request) {
+        Viaje viaje = viajeService.obtenerViajeDelPasajero(idViaje);
+        DatosEntrega datos = datosDe(viaje);
+        exigirTipo(datos, TipoEnvio.COMPRA_Y_ENTREGA);
+        PropuestaCostoEntrega vigente = propuestaCostoRepository
+                .findFirstByDatosEntregaIdOrderByVersionDesc(datos.getId())
+                .orElseThrow(() -> new NegocioException("El repartidor todavía no registró el costo de tu compra"));
+        if (!vigente.getVersion().equals(request.version())) {
+            throw new ConflictoException("El costo de tu compra cambió: revisa el nuevo total antes de aceptarlo");
+        }
+        if (vigente.getSituacionPropuesta() == SituacionPropuestaCosto.ACEPTADA) {
+            return viajeService.obtener(idViaje);
+        }
+        if (Boolean.TRUE.equals(datos.getPagoConfirmado())) {
+            throw new NegocioException("El pago ya fue confirmado");
+        }
+        Long idPropuesta = vigente.getId();
+        Long idDatos = datos.getId();
+        BigDecimal totalProductos = vigente.getTotalProductos();
+        BigDecimal total = vigente.getTotal();
+        if (propuestaCostoRepository.aceptarSiPendiente(idPropuesta, viaje.getPasajero().getUsuario(),
+                LocalDateTime.now()) == 0) {
+            throw new ConflictoException("El costo de tu compra cambió: revisa el nuevo total antes de aceptarlo");
+        }
+        if (datosEntregaRepository.marcarCostoAprobado(idDatos, totalProductos) == 0) {
+            throw new NegocioException("El pago ya fue confirmado");
+        }
+        Viaje actualizado = viajeService.obtenerViajeDelPasajero(idViaje);
+        log.info("Costo total del viaje {} aceptado por el cliente (version {}, {} Bs)", idViaje,
+                request.version(), total);
+        viajeService.avisarConductor(actualizado, "COSTO_ACEPTADO", "El cliente aceptó el costo",
+                "Aceptó " + dinero(total) + " Bs en total. Ya puedes llevarle el pedido.");
+        return viajeService.obtener(idViaje);
     }
 
     // ---------------------------------------------------------------- ENCOMIENDA: recogida en A
@@ -274,6 +409,11 @@ public class EntregaService {
         Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
         DatosEntrega datos = datosDe(viaje);
         exigirEstado(datos, CON_PEDIDO_EN_MANO, EstadoEntrega.EN_MANO);
+        exigirCostoAceptado(datos);
+        if (Boolean.TRUE.equals(viaje.getSolicitud().getPagaSolicitante())
+                && request.metodoPago() != null && request.metodoPago() != com.taxiuap.backend.pricing.enums.MetodoPago.QR) {
+            throw new NegocioException("Este pedido lo paga quien lo pidió, por QR: no le cobres a quien recibe");
+        }
 
         BigDecimal total = totalACobrar(datos, viaje);
         if (request.montoRecibido() == null || request.montoRecibido().compareTo(total) != 0) {
@@ -289,7 +429,10 @@ public class EntregaService {
             if (actual == null || actual != EstadoEntrega.EN_MANO) {
                 throw new NegocioException("Transicion de estado no permitida: " + actual + " -> ENTREGADO");
             }
-            throw new NegocioException("El pago ya fue confirmado");
+            boolean pagado = datosEntregaRepository.findById(datos.getId())
+                    .map(d -> Boolean.TRUE.equals(d.getPagoConfirmado())).orElse(false);
+            // Una compra sin pagar que no avanzo: el repartidor corrigio los precios al mismo tiempo.
+            throw new NegocioException(pagado ? "El pago ya fue confirmado" : MENSAJE_COSTO_SIN_ACEPTAR);
         }
         if (request.metodoPago() != null) {
             viajeService.cambiarMetodoPago(idViaje, request.metodoPago());
@@ -340,6 +483,7 @@ public class EntregaService {
         DatosEntrega datos = datosDe(viaje);
         exigirTipo(datos, TipoEnvio.COMPRA_Y_ENTREGA);
         exigirEstado(datos, CON_PEDIDO_EN_MANO, EstadoEntrega.ENTREGADO);
+        exigirCostoAceptado(datos);
         exigirPagoConfirmado(datos);
         validarReceptor(viaje, request);
         Point ubicacion = exigirCercaDelDestino(viaje, request.latitud(), request.longitud());
@@ -440,10 +584,11 @@ public class EntregaService {
     /** Push "REPARTIDOR_EN_ENTREGA" con el numero del aviso: la app hace sonar el aviso del taxi que llego. */
     private void avisarEsperaEntrega(Viaje viaje, DatosEntrega datos, int aviso) {
         java.util.Map<String, String> extra = java.util.Map.of("aviso", String.valueOf(aviso));
-        String receptor = datos.getTipoEnvio() == TipoEnvio.ENCOMIENDA ? primerNombre(datos.getNombreReceptor()) : null;
+        String receptor = receptorTercero(viaje, datos);
         if (receptor != null) {
             viajeService.avisarPasajero(viaje, "REPARTIDOR_EN_ENTREGA",
-                    "Avísale a " + receptor + ": su paquete llegó",
+                    "Avísale a " + receptor + (datos.getTipoEnvio() == TipoEnvio.ENCOMIENDA
+                            ? ": su paquete llegó" : ": su pedido llegó"),
                     " está en el punto de entrega" + ViajeService.textoAviso(aviso) + ".", extra);
         } else {
             viajeService.avisarPasajero(viaje, "REPARTIDOR_EN_ENTREGA",
@@ -456,23 +601,48 @@ public class EntregaService {
         return nombre == null || nombre.isBlank() ? null : ViajeService.primerNombre(nombre);
     }
 
+    /**
+     * Primer nombre de quien recibe cuando no es el cliente: el pedido para otra persona o, en una
+     * encomienda de antes, el receptor que se escribio. null si recibe el mismo cliente.
+     */
+    private static String receptorTercero(Viaje viaje, DatosEntrega datos) {
+        if (viaje.getSolicitud() != null && viaje.getSolicitud().esParaOtraPersona()) {
+            return primerNombre(viaje.getSolicitud().getNombrePasajeroTercero());
+        }
+        return datos.getTipoEnvio() == TipoEnvio.ENCOMIENDA ? primerNombre(datos.getNombreReceptor()) : null;
+    }
+
     // ---------------------------------------------------------------- fallo de entrega
 
-    /**
-     * "No se pudo entregar": el repartidor ya tiene el pedido pero no pudo entregarlo (receptor
-     * ausente, se niega a pagar, direccion imposible). Exige foto y motivo porque es un incidente que
-     * el administrador resuelve con el reporte, y cancela sin republicar: otro repartidor no debe
-     * tomar el mismo pedido. El costo real del producto ya pagado se conserva para resolverlo.
-     */
+    /** Sin motivo elegido (apps de antes de los motivos): cuenta como "Otro motivo". */
     @Transactional
     public ViajeResponse noSePudoEntregar(Long idViaje, String motivo, MultipartFile foto) {
+        return noSePudoEntregar(idViaje, null, motivo, foto);
+    }
+
+    /**
+     * "No se pudo entregar": el repartidor ya tiene el pedido pero no pudo entregarlo (el cliente no
+     * lo recibio, no pago, no acepto el costo total u otro motivo). Exige el mensaje y la foto porque
+     * es un incidente que el administrador resuelve con el reporte, y cancela sin republicar: otro
+     * repartidor no debe tomar el mismo pedido. El viaje se cierra para los dos (al cliente le llega
+     * el aviso) y queda en el historial como no entregado. El costo de lo comprado se conserva.
+     */
+    @Transactional
+    public ViajeResponse noSePudoEntregar(Long idViaje, MotivoFallaEntrega tipo, String motivo, MultipartFile foto) {
         Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
         DatosEntrega datos = datosDe(viaje);
         if (datos.getEstadoEntrega() != EstadoEntrega.EN_MANO) {
             throw new NegocioException("Solo se puede reportar la falla cuando el pedido ya esta en tus manos");
         }
+        MotivoFallaEntrega elegido = tipo == null ? MotivoFallaEntrega.OTRO : tipo;
+        if (elegido == MotivoFallaEntrega.NO_APROBO_COSTO && (datos.getTipoEnvio() != TipoEnvio.COMPRA_Y_ENTREGA
+                || Boolean.TRUE.equals(datos.getCompraConfirmadaPorCliente()))) {
+            throw new NegocioException(datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA
+                    ? "El cliente ya aceptó el costo total: elige otro motivo"
+                    : "Ese motivo es solo para una compra");
+        }
         if (motivo == null || motivo.isBlank()) {
-            throw new NegocioException("Describe el motivo por el que no pudiste entregar");
+            throw new NegocioException("Escribe qué pasó para que el administrador lo revise");
         }
         byte[] contenido = imagenOpcional(foto, "La foto de la falla");
         if (contenido == null) {
@@ -483,16 +653,20 @@ public class EntregaService {
         String rutaFoto = guardarEvidencia(contenido, viaje, "falla_entrega");
         String motivoNormalizado = motivo.trim();
         int filas = datosEntregaRepository.registrarFallaSiEstadoPermitido(idDatos, CON_PEDIDO_EN_MANO,
-                EstadoEntrega.NO_ENTREGADO, motivoNormalizado, rutaFoto);
+                EstadoEntrega.NO_ENTREGADO, elegido, motivoNormalizado, rutaFoto);
         if (filas == 0) {
             throw transicionRechazada(idDatos, CON_PEDIDO_EN_MANO, EstadoEntrega.NO_ENTREGADO,
                     "El pedido ya no esta en tus manos");
         }
 
-        crearReporteFalla(viaje, motivoNormalizado);
+        crearReporteFalla(viaje, elegido.texto() + ": " + motivoNormalizado);
 
         ViajeResponse respuesta = viajeService.cancelarFallaEntrega(idViaje);
+        avisarCliente(idViaje, "PEDIDO_NO_ENTREGADO", "Tu pedido se cerró sin entregar",
+                " reportó: " + elegido.texto().toLowerCase(java.util.Locale.forLanguageTag("es"))
+                        + ". Un administrador lo revisará.");
         actualizarConstancia(idViaje);
+        log.info("Pedido del viaje {} reportado como no entregado ({})", idViaje, elegido);
         return respuesta;
     }
 
@@ -587,6 +761,17 @@ public class EntregaService {
         }
     }
 
+    static final String MENSAJE_COSTO_SIN_ACEPTAR =
+            "El cliente todavía no aceptó el costo total de la compra: no puedes cobrar ni entregar";
+
+    /** Compra: sin el costo total aceptado por el cliente no se cobra ni se entrega. */
+    private void exigirCostoAceptado(DatosEntrega datos) {
+        if (datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA
+                && !Boolean.TRUE.equals(datos.getCompraConfirmadaPorCliente())) {
+            throw new NegocioException(MENSAJE_COSTO_SIN_ACEPTAR);
+        }
+    }
+
     private void exigirPagoConfirmado(DatosEntrega datos) {
         if (!Boolean.TRUE.equals(datos.getPagoConfirmado())) {
             throw new NegocioException("Registra primero el pago recibido para completar la entrega");
@@ -610,6 +795,17 @@ public class EntregaService {
     }
 
     private void validarReceptor(Viaje viaje, IdentificarReceptorRequest request) {
+        if (viaje.getSolicitud() != null && viaje.getSolicitud().esParaOtraPersona()) {
+            // Para otra persona: el cliente dio el nombre y el celular de quien recibe; el celular manda.
+            if (request.nombre() == null || request.nombre().isBlank()) {
+                throw new NegocioException("Ingresa el nombre de quien recibió");
+            }
+            if (!digitos(request.telefono()).equals(digitos(viaje.getSolicitud().getTelefonoPasajeroTercero()))) {
+                throw new NegocioException("El celular de quien recibió no coincide con el de "
+                        + primerNombre(viaje.getSolicitud().getNombrePasajeroTercero()));
+            }
+            return;
+        }
         Persona persona = receptorEsperado(viaje);
         String nombreEsperado = normalizar(persona.getNombres() + " " + persona.getApellidos());
         if (!normalizar(request.nombre()).equals(nombreEsperado)) {
@@ -734,6 +930,25 @@ public class EntregaService {
         t.append("\n");
         t.append("Tipo de envio: ").append(datos.getTipoEnvio()).append("\n");
         t.append("Descripcion: ").append(texto(datos.getDescripcion())).append("\n");
+        if (datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA && datos.getProductos() != null) {
+            for (ProductoEntrega producto : datos.getProductos()) {
+                t.append("  - ").append(producto.getCantidad()).append(" x ").append(producto.getNombre());
+                if (producto.getIndicaciones() != null) {
+                    t.append(" (").append(producto.getIndicaciones()).append(")");
+                }
+                if (producto.getSituacionProducto() == SituacionProducto.CONSEGUIDO) {
+                    t.append(" | comprado ").append(producto.getCantidadConseguida()).append(" x ")
+                            .append(dinero(producto.getPrecioUnitario())).append(" = ")
+                            .append(dinero(producto.getSubtotal())).append(" Bs");
+                } else if (producto.getSituacionProducto() == SituacionProducto.NO_CONSEGUIDO) {
+                    t.append(" | no conseguido");
+                }
+                if (producto.getObservacion() != null) {
+                    t.append(" | nota: ").append(producto.getObservacion());
+                }
+                t.append("\n");
+            }
+        }
         t.append("Cliente: ").append(nombre(viaje.getPasajero() == null ? null
                 : viaje.getPasajero().getUsuario())).append("\n");
         t.append("Repartidor: ").append(nombre(viaje.getConductor().getUsuario()));
@@ -781,6 +996,18 @@ public class EntregaService {
                     .append(" | GPS ").append(coordenadas(datos.getUbicacionRecogida()))
                     .append(" | foto: ").append(archivo(datos.getFotoRecogidaUrl())).append("\n");
         }
+        if (datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA && datos.getPropuestas() != null) {
+            for (PropuestaCostoEntrega propuesta : datos.getPropuestas()) {
+                t.append("- ").append(fecha(propuesta.getFechaPropuesta())).append("  Costo total version ")
+                        .append(propuesta.getVersion()).append(": servicio ").append(dinero(propuesta.getPrecioServicio()))
+                        .append(" + productos ").append(dinero(propuesta.getTotalProductos())).append(" = ")
+                        .append(dinero(propuesta.getTotal())).append(" Bs | ").append(propuesta.getSituacionPropuesta());
+                if (propuesta.getFechaRespuesta() != null) {
+                    t.append(" por el cliente el ").append(fecha(propuesta.getFechaRespuesta()));
+                }
+                t.append("\n");
+            }
+        }
         if (Boolean.TRUE.equals(datos.getPagoConfirmado())) {
             t.append("- Pago recibido: ").append(dinero(datos.getMontoPagoRecibido())).append(" Bs (")
                     .append(viaje.getMetodoPago() == null ? "EFECTIVO" : viaje.getMetodoPago()).append(")\n");
@@ -795,7 +1022,8 @@ public class EntregaService {
         }
         if (datos.getMotivoFalla() != null) {
             t.append("- ").append(datos.getEstadoEntrega() == EstadoEntrega.NO_ENTREGADO
-                    ? "No se pudo entregar: " : "Paquete rechazado: ").append(datos.getMotivoFalla())
+                    ? "No se pudo entregar" + (datos.getTipoFalla() == null ? "" : " (" + datos.getTipoFalla().texto() + ")")
+                            + ": " : "Paquete rechazado: ").append(datos.getMotivoFalla())
                     .append(datos.getFotoFallaUrl() == null ? "" : " | foto: " + archivo(datos.getFotoFallaUrl()))
                     .append("\n");
         }

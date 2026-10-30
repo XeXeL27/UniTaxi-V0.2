@@ -25,6 +25,7 @@ import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
+import com.taxiuap.backend.trip.dto.AceptarCostoRequest;
 import com.taxiuap.backend.trip.dto.CambioMetodoPagoRequest;
 import com.taxiuap.backend.trip.dto.CancelarViajeRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
@@ -97,14 +98,17 @@ public class ViajePasajeroController {
         return ResponseEntity.ok(ApiResponse.exito("Viaje cancelado", cancelado));
     }
 
-    /**
-     * COMPRA_Y_ENTREGA: el cliente confirma el comercio y el monto que propuso el repartidor. Sin esta
-     * confirmacion el repartidor no puede comprar, y si el costo real se pasa hace falta confirmar otra
-     * vez. No aplica a ENCOMIENDA, donde no hay nada que comprar.
-     */
+    /** Confirmar la compra antes de comprar ya no existe (apps viejas): responde que hay que actualizar. */
     @PostMapping("/{id}/entrega/confirmar-compra")
     public ResponseEntity<ApiResponse<ViajeResponse>> confirmarCompra(@PathVariable Long id) {
-        return ResponseEntity.ok(ApiResponse.exito("Compra confirmada", entregaService.confirmarCompra(id)));
+        return ResponseEntity.ok(ApiResponse.exito(entregaService.compraConFlujoAnterior()));
+    }
+
+    /** "ACEPTO EL COSTO TOTAL" de la compra, con la version que el cliente vio (409 si cambio). */
+    @PostMapping("/{id}/entrega/aceptar-costo")
+    public ResponseEntity<ApiResponse<ViajeResponse>> aceptarCosto(@PathVariable Long id,
+            @Valid @RequestBody AceptarCostoRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Aceptaste el costo total", entregaService.aceptarCosto(id, request)));
     }
 
     /** Viaje pedido para otra persona y pagado por quien lo pidio: "Ya pague" por el QR del conductor. */

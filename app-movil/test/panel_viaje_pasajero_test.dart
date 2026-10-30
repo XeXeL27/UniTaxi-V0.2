@@ -155,7 +155,7 @@ Widget _envolver(FlujoPasajero flujo, {required bool abierto}) => ChangeNotifier
           onAlternar: () {},
           onCancelar: () {},
           onPedirCambioPago: (_) {},
-          onConfirmarCompra: () {},
+          onAceptarCosto: (_) {},
         ),
       ),
     ),

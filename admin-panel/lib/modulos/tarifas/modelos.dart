@@ -43,3 +43,19 @@ class ParametrosPrecio {
     viajesEstudiantePorDia: Formato.leerEntero(json['viajesEstudiantePorDia']),
   );
 }
+
+/// Tarifa del delivery (encomienda y compra): servicio = tarifa base + precio por km por calles.
+class TarifaDelivery {
+  final double tarifaBase;
+  final double precioKm;
+
+  const TarifaDelivery({required this.tarifaBase, required this.precioKm});
+
+  factory TarifaDelivery.desdeJson(Map<String, dynamic> json) => TarifaDelivery(
+    tarifaBase: (json['tarifaBase'] as num?)?.toDouble() ?? 0,
+    precioKm: (json['precioKm'] as num?)?.toDouble() ?? 0,
+  );
+
+  /// Precio del servicio para [km] por calles, redondeado como en el servidor.
+  double precioPara(double km) => ((tarifaBase + precioKm * km) * 100).roundToDouble() / 100;
+}

@@ -2,6 +2,7 @@ package com.taxiuap.backend.trip.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -14,6 +15,7 @@ import static org.mockito.Mockito.when;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import javax.imageio.ImageIO;
@@ -42,25 +44,34 @@ import com.taxiuap.backend.identity.entity.Usuario;
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.shared.archivo.AlmacenamientoArchivos;
+import com.taxiuap.backend.shared.enums.EstadoRegistro;
+import com.taxiuap.backend.shared.exception.ConflictoException;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
-import com.taxiuap.backend.trip.dto.ProponerCompraRequest;
+import com.taxiuap.backend.trip.dto.AceptarCostoRequest;
+import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
+import com.taxiuap.backend.trip.dto.ProductoCompradoRequest;
 import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
+import com.taxiuap.backend.trip.entity.ProductoEntrega;
+import com.taxiuap.backend.trip.entity.PropuestaCostoEntrega;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
+import com.taxiuap.backend.trip.enums.SituacionProducto;
+import com.taxiuap.backend.trip.enums.SituacionPropuestaCosto;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
+import com.taxiuap.backend.trip.repository.ProductoEntregaRepository;
+import com.taxiuap.backend.trip.repository.PropuestaCostoEntregaRepository;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
 import com.taxiuap.backend.vehicle.entity.TipoVehiculo;
 
 /**
- * COMPRA_Y_ENTREGA: el repartidor propone el comercio, el cliente lo confirma y solo entonces puede
- * comprar. El monto real nunca supera el confirmado sin una confirmacion nueva, y el precio del
- * servicio se recalcula desde el comercio real hasta el destino: el trayecto hasta el comercio no se
- * cobra y el producto nunca entra al precio de la plataforma.
+ * COMPRA_Y_ENTREGA: el repartidor registra cada producto (conseguido con su precio o no), el servidor
+ * calcula el total y el cliente acepta esa version exacta del costo. Corregir los precios antes del pago
+ * anula la aceptacion; sin aceptacion no se cobra ni se entrega. El servicio se cobra desde el comercio.
  */
 @ExtendWith(MockitoExtension.class)
 class EntregaServiceCompraTest {
@@ -72,14 +83,21 @@ class EntregaServiceCompraTest {
     @Mock private DatosEntregaRepository datosEntregaRepository;
     @Mock private CalculoPrecioDeliveryService calculoPrecioDeliveryService;
     @Mock private AlmacenamientoArchivos almacenamientoArchivos;
+    @Mock private ProductoEntregaRepository productoRepository;
+    @Mock private PropuestaCostoEntregaRepository propuestaRepository;
 
     private EntregaService entregaService;
     private Conductor conductor;
+    private ProductoEntrega pan;
+    private ProductoEntrega leche;
+    private DatosEntrega enMano;
 
     @BeforeEach
     void setUp() {
         entregaService = new EntregaService(viajeService, datosEntregaRepository,
-                calculoPrecioDeliveryService, almacenamientoArchivos);
+                calculoPrecioDeliveryService, almacenamientoArchivos, null, productoRepository, propuestaRepository);
+        pan = producto(11L, "Pan", 2);
+        leche = producto(12L, "Leche", 1);
         conductor = new Conductor();
         conductor.setId(40L);
         conductor.setUsuario(usuario(20L, "Repartidor", "999111"));
@@ -92,198 +110,219 @@ class EntregaServiceCompraTest {
     }
 
     @Test
-    void laPropuestaQuedaPendienteDeConfirmacionDelCliente() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(viajeService.obtener(500L)).thenReturn(null);
-        when(calculoPrecioDeliveryService.puedeAdelantar(any(), any())).thenReturn(true);
+    void lasAppsViejasQueProponenLaCompraRecibenElAvisoDeActualizar() {
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.compraConFlujoAnterior());
 
-        entregaService.proponerCompra(500L,
-                new ProponerCompraRequest(WKT_COMERCIO, "Farmacia Central", new BigDecimal("25.00")));
-
-        ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        verify(datosEntregaRepository).save(guardados.capture());
-        DatosEntrega datos = guardados.getValue();
-        assertEquals("Farmacia Central", datos.getDetalleCompraPropuesto());
-        assertEquals(new BigDecimal("25.00"), datos.getCostoProductoConfirmado());
-        // Todavia no se compro nada: el cliente tiene que confirmar antes.
-        assertEquals(false, datos.getCompraConfirmadaPorCliente());
-        assertEquals(-68.745, datos.getPuntoCompraPropuesto().getX(), 0.000001);
+        assertTrue(error.getMessage().contains("Actualiza UNITAXI"));
     }
 
     @Test
-    void unaPropuestaNuevaInvalidaLaConfirmacionAnterior() {
+    void registrarLaCompraCalculaLosSubtotalesYPresentaLaPrimeraVersionDelCosto() {
         Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        viaje.getSolicitud().getDatosEntrega().setCompraConfirmadaPorCliente(true);
-        viaje.getSolicitud().getDatosEntrega().setDetalleCompraPropuesto("Farmacia Vieja");
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(viajeService.obtener(500L)).thenReturn(null);
-        when(calculoPrecioDeliveryService.puedeAdelantar(any(), any())).thenReturn(true);
-
-        entregaService.proponerCompra(500L,
-                new ProponerCompraRequest(WKT_COMERCIO, "Farmacia Nueva", new BigDecimal("30.00")));
-
-        ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        verify(datosEntregaRepository).save(guardados.capture());
-        assertEquals("Farmacia Nueva", guardados.getValue().getDetalleCompraPropuesto());
-        assertEquals(false, guardados.getValue().getCompraConfirmadaPorCliente());
-    }
-
-    @Test
-    void noSeProponeUnaCompraQueSuperaElLimiteDelRepartidor() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(calculoPrecioDeliveryService.puedeAdelantar(any(), any())).thenReturn(false);
-
-        NegocioException error = assertThrows(NegocioException.class,
-                () -> entregaService.proponerCompra(500L,
-                        new ProponerCompraRequest(WKT_COMERCIO, "Farmacia", new BigDecimal("150.00"))));
-
-        assertEquals(true, error.getMessage().contains("limite"));
-        verify(datosEntregaRepository, never()).save(any(DatosEntrega.class));
-    }
-
-    @Test
-    void elClienteConfirmaElComercioPropuesto() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        viaje.getSolicitud().getDatosEntrega().setDetalleCompraPropuesto("Farmacia Central");
-        viaje.getSolicitud().getDatosEntrega().setCostoProductoConfirmado(new BigDecimal("25.00"));
-        when(viajeService.obtenerViajeDelPasajero(500L)).thenReturn(viaje);
-        when(viajeService.obtener(500L)).thenReturn(null);
-        autenticarPasajero();
-
-        entregaService.confirmarCompra(500L);
-
-        ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        verify(datosEntregaRepository).save(guardados.capture());
-        assertEquals(true, guardados.getValue().getCompraConfirmadaPorCliente());
-    }
-
-    @Test
-    void elClienteNoConfirmaSiElRepartidorNoPropusoNada() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        when(viajeService.obtenerViajeDelPasajero(500L)).thenReturn(viaje);
-        autenticarPasajero();
-
-        assertThrows(NegocioException.class, () -> entregaService.confirmarCompra(500L));
-
-        verify(datosEntregaRepository, never()).save(any(DatosEntrega.class));
-    }
-
-    @Test
-    void elRepartidorNoCompraSinConfirmacionDelCliente() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        viaje.getSolicitud().getDatosEntrega().setCostoProductoConfirmado(new BigDecimal("25.00"));
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-
-        NegocioException error = assertThrows(NegocioException.class,
-                () -> entregaService.registrarCompra(500L,
-                        new RegistrarCompraRequest(WKT_COMERCIO, "Farmacia Central", new BigDecimal("25.00"), null),
-                        null));
-
-        assertEquals(true, error.getMessage().contains("confirmo"));
-        verify(datosEntregaRepository, never()).avanzarSiEstadoPermitido(anyLong(), anyCollection(), any());
-    }
-
-    @Test
-    void unMontoRealMayorAlConfirmadoExigeUnaConfirmacionNueva() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
-        datos.setCompraConfirmadaPorCliente(true);
-        datos.setCostoProductoConfirmado(new BigDecimal("25.00"));
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-
-        NegocioException error = assertThrows(NegocioException.class,
-                () -> entregaService.registrarCompra(500L,
-                        new RegistrarCompraRequest(WKT_COMERCIO, "Farmacia Central", new BigDecimal("31.00"), null),
-                        null));
-
-        assertEquals(true, error.getMessage().contains("supera"));
-        verify(datosEntregaRepository, never()).avanzarSiEstadoPermitido(anyLong(), anyCollection(), any());
-    }
-
-    @Test
-    void laCompraConfirmadaPoneElPedidoEnManoYCobraSoloElTrayectoDelComercioAlDestino() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        viaje.getSolicitud().getDatosEntrega().setId(1L);
-        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
-        datos.setCompraConfirmadaPorCliente(true);
-        datos.setCostoProductoConfirmado(new BigDecimal("25.00"));
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        prepararRegistro(viaje);
         when(datosEntregaRepository.avanzarSiEstadoPermitido(eq(1L), anyCollection(), eq(EstadoEntrega.EN_MANO)))
                 .thenReturn(1);
-        // El UPDATE condicional limpia el contexto: el servicio debe releer el pedido.
-        when(datosEntregaRepository.findBySolicitudId(90L)).thenReturn(Optional.of(compraEnMano(viaje)));
         DesglosePrecioDelivery precio = new DesglosePrecioDelivery(new BigDecimal("9.80"),
                 new BigDecimal("2.35"), 12, false);
-        when(calculoPrecioDeliveryService.fijarPrecioCompra(any(), eq(viaje.getDestino()))).thenReturn(precio);
+        when(calculoPrecioDeliveryService.fijarPrecioCompra(any(), eq(viaje.getDestino()), any())).thenReturn(precio);
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L)).thenReturn(Optional.empty());
 
-        entregaService.registrarCompra(500L,
-                new RegistrarCompraRequest(WKT_COMERCIO, "Farmacia Central", new BigDecimal("25.00"), null), null);
+        entregaService.registrarCompra(500L, compra(
+                new ProductoCompradoRequest(11L, true, 2, new BigDecimal("5"), null),
+                new ProductoCompradoRequest(12L, false, null, null, "No habia")), null);
 
-        ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        // El primer save es la compra; el siguiente, la ruta de la constancia del pedido.
-        verify(datosEntregaRepository, org.mockito.Mockito.atLeastOnce()).save(guardados.capture());
-        assertEquals(new BigDecimal("25.00"), guardados.getAllValues().get(0).getCostoProductoReal());
-        assertEquals("Farmacia Central", guardados.getAllValues().get(0).getDetalleCompra());
-        assertEquals(-68.745, guardados.getAllValues().get(0).getPuntoCompra().getX(), 0.000001);
-        // El precio que se cobra es solo el del servicio: comercio -> destino.
+        // El precio del servicio se fija desde el comercio (solo la primera vez).
         verify(viajeService).registrarPedidoEnMano(500L, precio);
+        assertEquals(SituacionProducto.CONSEGUIDO, pan.getSituacionProducto());
+        assertEquals(new BigDecimal("10.00"), pan.getSubtotal());
+        assertEquals(SituacionProducto.NO_CONSEGUIDO, leche.getSituacionProducto());
+        assertEquals(new BigDecimal("0.00"), leche.getSubtotal());
+        assertEquals(new BigDecimal("10.00"), enMano.getCostoProductoReal());
+        PropuestaCostoEntrega propuesta = propuestaGuardada();
+        assertEquals(1, propuesta.getVersion());
+        assertEquals(new BigDecimal("9.80"), propuesta.getPrecioServicio());
+        assertEquals(new BigDecimal("10.00"), propuesta.getTotalProductos());
+        assertEquals(new BigDecimal("19.80"), propuesta.getTotal());
+        assertEquals(SituacionPropuestaCosto.PENDIENTE, propuesta.getSituacionPropuesta());
+        assertTrue(propuesta.getDetalleJson().contains("No habia"));
+        verify(viajeService).avisarPasajero(eq(viaje), eq("COSTO_POR_APROBAR"), anyString(), anyString(),
+                eq(java.util.Map.of("version", "1")));
     }
 
     @Test
-    void elReciboEsOpcionalPeroSeGuardaSiViene() {
-        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        viaje.getSolicitud().getDatosEntrega().setId(1L);
-        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
-        datos.setCompraConfirmadaPorCliente(true);
-        datos.setCostoProductoConfirmado(new BigDecimal("25.00"));
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
-        when(datosEntregaRepository.avanzarSiEstadoPermitido(eq(1L), anyCollection(), eq(EstadoEntrega.EN_MANO)))
-                .thenReturn(1);
-        when(datosEntregaRepository.findBySolicitudId(90L)).thenReturn(Optional.of(compraEnMano(viaje)));
-        when(calculoPrecioDeliveryService.fijarPrecioCompra(any(), any()))
-                .thenReturn(new DesglosePrecioDelivery(new BigDecimal("9.80"), new BigDecimal("2.35"), 12, false));
-        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
-        when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
-                .thenReturn("personas/20_x/entrega/comprobante_1.jpg");
+    void unaAppViejaQueRegistraSinLaListaRecibeElAvisoDeActualizar() {
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.registrarCompra(500L,
+                new RegistrarCompraRequest(WKT_COMERCIO, "Tienda Central", null, null), null));
 
-        entregaService.registrarCompra(500L,
-                new RegistrarCompraRequest(WKT_COMERCIO, "Farmacia Central", new BigDecimal("25.00"),
-                        "El comercio no dio comprobante"),
-                comprobante());
-
-        ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        // El primer save es la compra; el siguiente, la ruta de la constancia del pedido.
-        verify(datosEntregaRepository, org.mockito.Mockito.atLeastOnce()).save(guardados.capture());
-        assertEquals("personas/20_x/entrega/comprobante_1.jpg", guardados.getAllValues().get(0).getFotoComprobanteUrl());
-        assertEquals("El comercio no dio comprobante", guardados.getAllValues().get(0).getObservacionCompra());
+        assertTrue(error.getMessage().contains("Actualiza UNITAXI"));
+        verify(datosEntregaRepository, never()).avanzarSiEstadoPermitido(anyLong(), anyCollection(), any());
     }
 
     @Test
-    void laCompraSinReciboSeRegistraConObservacion() {
+    void laConfirmacionDeAntesDeComprarNoCuentaComoCostoAceptado() {
         Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
-        viaje.getSolicitud().getDatosEntrega().setId(1L);
-        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
-        datos.setCompraConfirmadaPorCliente(true);
-        datos.setCostoProductoConfirmado(new BigDecimal("25.00"));
-        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        prepararRegistro(viaje);
+        // Pedido del flujo anterior: el cliente habia confirmado antes de que el repartidor comprara.
+        enMano.setCompraConfirmadaPorCliente(true);
+        enMano.setCostoProductoConfirmado(new BigDecimal("30.00"));
         when(datosEntregaRepository.avanzarSiEstadoPermitido(eq(1L), anyCollection(), eq(EstadoEntrega.EN_MANO)))
                 .thenReturn(1);
-        when(datosEntregaRepository.findBySolicitudId(90L)).thenReturn(Optional.of(compraEnMano(viaje)));
-        when(calculoPrecioDeliveryService.fijarPrecioCompra(any(), any()))
+        when(calculoPrecioDeliveryService.fijarPrecioCompra(any(), eq(viaje.getDestino()), any()))
                 .thenReturn(new DesglosePrecioDelivery(new BigDecimal("9.80"), new BigDecimal("2.35"), 12, false));
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L)).thenReturn(Optional.empty());
 
-        entregaService.registrarCompra(500L,
-                new RegistrarCompraRequest(WKT_COMERCIO, "Puesto informal", new BigDecimal("25.00"),
-                        "Puesto informal sin boleta"),
-                null);
+        entregaService.registrarCompra(500L, compra(
+                new ProductoCompradoRequest(11L, true, 1, new BigDecimal("5"), null),
+                new ProductoCompradoRequest(12L, false, null, null, null)), null);
 
-        ArgumentCaptor<DatosEntrega> guardados = ArgumentCaptor.forClass(DatosEntrega.class);
-        // El primer save es la compra; el siguiente, la ruta de la constancia del pedido.
-        verify(datosEntregaRepository, org.mockito.Mockito.atLeastOnce()).save(guardados.capture());
-        assertEquals(null, guardados.getAllValues().get(0).getFotoComprobanteUrl());
-        verify(almacenamientoArchivos, never()).guardarConSello(any(), anyString(), anyString(), anyString());
+        assertEquals(Boolean.FALSE, enMano.getCompraConfirmadaPorCliente());
+        assertEquals(null, enMano.getCostoProductoConfirmado());
+        assertEquals(SituacionPropuestaCosto.PENDIENTE, propuestaGuardada().getSituacionPropuesta());
+    }
+
+    @Test
+    void faltaResponderPorUnProductoYNoSeRegistraNada() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        when(productoRepository.findByDatosEntregaIdAndEstadoProductoEntregaOrderByOrdenAscIdAsc(1L, EstadoRegistro.A))
+                .thenReturn(List.of(pan, leche));
+
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.registrarCompra(500L,
+                compra(new ProductoCompradoRequest(11L, true, 2, new BigDecimal("5"), null)), null));
+
+        assertTrue(error.getMessage().contains("cada producto"));
+        verify(datosEntregaRepository, never()).avanzarSiEstadoPermitido(anyLong(), anyCollection(), any());
+    }
+
+    @Test
+    void sinNingunProductoConseguidoNoHayCompraQueCobrar() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        when(productoRepository.findByDatosEntregaIdAndEstadoProductoEntregaOrderByOrdenAscIdAsc(1L, EstadoRegistro.A))
+                .thenReturn(List.of(pan, leche));
+
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.registrarCompra(500L,
+                compra(new ProductoCompradoRequest(11L, false, null, null, null),
+                        new ProductoCompradoRequest(12L, false, null, null, null)), null));
+
+        assertTrue(error.getMessage().contains("ningún producto"));
+        verify(datosEntregaRepository, never()).avanzarSiEstadoPermitido(anyLong(), anyCollection(), any());
+    }
+
+    @Test
+    void corregirLosPreciosAntesDelPagoAnulaLaAceptacionYPresentaOtraVersion() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().getDatosEntrega().setCompraConfirmadaPorCliente(true);
+        prepararRegistro(viaje);
+        when(datosEntregaRepository.invalidarAprobacionSiSinPago(1L)).thenReturn(1);
+        PropuestaCostoEntrega anterior = new PropuestaCostoEntrega();
+        anterior.setVersion(1);
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L)).thenReturn(Optional.of(anterior));
+
+        entregaService.registrarCompra(500L, compra(
+                new ProductoCompradoRequest(11L, true, 2, new BigDecimal("6.50"), null),
+                new ProductoCompradoRequest(12L, true, 1, new BigDecimal("8"), null)), null);
+
+        verify(propuestaRepository).reemplazarVigentes(eq(1L), anyCollection());
+        PropuestaCostoEntrega propuesta = propuestaGuardada();
+        assertEquals(2, propuesta.getVersion());
+        assertEquals(new BigDecimal("21.00"), propuesta.getTotalProductos());
+        assertEquals(new BigDecimal("30.80"), propuesta.getTotal());
+        // El servicio ya estaba fijado: una correccion no lo recalcula.
+        verify(viajeService, never()).registrarPedidoEnMano(anyLong(), any());
+        verify(calculoPrecioDeliveryService, never()).fijarPrecioCompra(any(), any(), any());
+    }
+
+    @Test
+    void conElPagoConfirmadoYaNoSeCorrigenLosPrecios() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().getDatosEntrega().setPagoConfirmado(true);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.registrarCompra(500L,
+                compra(new ProductoCompradoRequest(11L, true, 2, new BigDecimal("5"), null)), null));
+
+        assertTrue(error.getMessage().contains("pago ya fue confirmado"));
+        verify(datosEntregaRepository, never()).invalidarAprobacionSiSinPago(anyLong());
+    }
+
+    @Test
+    void elClienteAceptaLaVersionQueVio() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        when(viajeService.obtenerViajeDelPasajero(500L)).thenReturn(viaje);
+        PropuestaCostoEntrega vigente = propuesta(3L, 2, SituacionPropuestaCosto.PENDIENTE);
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L)).thenReturn(Optional.of(vigente));
+        when(propuestaRepository.aceptarSiPendiente(eq(3L), eq(viaje.getPasajero().getUsuario()), any())).thenReturn(1);
+        when(datosEntregaRepository.marcarCostoAprobado(1L, new BigDecimal("10.00"))).thenReturn(1);
+
+        entregaService.aceptarCosto(500L, new AceptarCostoRequest(2));
+
+        verify(datosEntregaRepository).marcarCostoAprobado(1L, new BigDecimal("10.00"));
+        verify(viajeService).avisarConductor(eq(viaje), eq("COSTO_ACEPTADO"), anyString(), anyString());
+    }
+
+    @Test
+    void unaVersionViejaNoSeAcepta() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        when(viajeService.obtenerViajeDelPasajero(500L)).thenReturn(viaje);
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L))
+                .thenReturn(Optional.of(propuesta(3L, 2, SituacionPropuestaCosto.PENDIENTE)));
+
+        assertThrows(ConflictoException.class, () -> entregaService.aceptarCosto(500L, new AceptarCostoRequest(1)));
+
+        verify(propuestaRepository, never()).aceptarSiPendiente(anyLong(), any(), any());
+        verify(datosEntregaRepository, never()).marcarCostoAprobado(anyLong(), any());
+    }
+
+    @Test
+    void siElRepartidorCorrigeAlMismoTiempoLaAceptacionNoVale() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        when(viajeService.obtenerViajeDelPasajero(500L)).thenReturn(viaje);
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L))
+                .thenReturn(Optional.of(propuesta(3L, 2, SituacionPropuestaCosto.PENDIENTE)));
+        when(propuestaRepository.aceptarSiPendiente(eq(3L), any(), any())).thenReturn(0);
+
+        assertThrows(ConflictoException.class, () -> entregaService.aceptarCosto(500L, new AceptarCostoRequest(2)));
+
+        verify(datosEntregaRepository, never()).marcarCostoAprobado(anyLong(), any());
+    }
+
+    @Test
+    void aceptarDosVecesLaMismaVersionNoHaceNadaLaSegunda() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        when(viajeService.obtenerViajeDelPasajero(500L)).thenReturn(viaje);
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L))
+                .thenReturn(Optional.of(propuesta(3L, 2, SituacionPropuestaCosto.ACEPTADA)));
+
+        entregaService.aceptarCosto(500L, new AceptarCostoRequest(2));
+
+        verify(propuestaRepository, never()).aceptarSiPendiente(anyLong(), any(), any());
+        verify(viajeService, never()).avisarConductor(any(), anyString(), anyString(), anyString());
+    }
+
+    @Test
+    void sinElCostoAceptadoNoSeCobraLaCompra() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().getDatosEntrega().setCostoProductoReal(new BigDecimal("10.00"));
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.confirmarPago(500L,
+                new ConfirmarPagoEntregaRequest(new BigDecimal("19.80"), null)));
+
+        assertEquals(EntregaService.MENSAJE_COSTO_SIN_ACEPTAR, error.getMessage());
+        verify(datosEntregaRepository, never()).confirmarPagoSiEnMano(anyLong(), any(), any());
+    }
+
+    @Test
+    void sinElCostoAceptadoNoSeEntregaLaCompra() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().getDatosEntrega().setPagoConfirmado(true);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.entregarConReceptor(500L,
+                new IdentificarReceptorRequest("Pasajera Prueba", "71234567", -11.03, -68.74), foto()));
+
+        assertEquals(EntregaService.MENSAJE_COSTO_SIN_ACEPTAR, error.getMessage());
     }
 
     @Test
@@ -309,7 +348,8 @@ class EntregaServiceCompraTest {
     void otraPersonaNoPuedeFirmarLaEntregaDeUnaCompra() {
         Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
         viaje.getSolicitud().getDatosEntrega().setId(1L);
-        // El pago ya esta confirmado: lo que se prueba aqui es solo quien firma.
+        // El costo y el pago ya estan confirmados: lo que se prueba aqui es solo quien firma.
+        viaje.getSolicitud().getDatosEntrega().setCompraConfirmadaPorCliente(true);
         viaje.getSolicitud().getDatosEntrega().setPagoConfirmado(true);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
 
@@ -325,6 +365,7 @@ class EntregaServiceCompraTest {
     void unTelefonoDistintoTampocoDejaFirmar() {
         Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
         viaje.getSolicitud().getDatosEntrega().setId(1L);
+        viaje.getSolicitud().getDatosEntrega().setCompraConfirmadaPorCliente(true);
         viaje.getSolicitud().getDatosEntrega().setPagoConfirmado(true);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
 
@@ -353,6 +394,72 @@ class EntregaServiceCompraTest {
         entregaService.entregarConReceptor(500L, new IdentificarReceptorRequest("Pasajera Prueba", null, -11.03, -68.74), foto());
 
         verify(viajeService).finalizarDesdeEntrega(eq(500L), any());
+    }
+
+    @Test
+    void unaCompraParaOtraPersonaLaFirmaQuienRecibeConSuCelular() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().setParaOtraPersona(true);
+        viaje.getSolicitud().setNombrePasajeroTercero("JUAN PEREZ");
+        viaje.getSolicitud().setTelefonoPasajeroTercero("72223333");
+        DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        datos.setId(1L);
+        datos.setCompraConfirmadaPorCliente(true);
+        datos.setPuntoCompra(PuntoDesdeWkt.convertir(WKT_COMERCIO));
+        datos.setCostoProductoReal(new BigDecimal("25.00"));
+        datos.setPagoConfirmado(true);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        // El celular del cliente no sirve: recibe Juan.
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.entregarConReceptor(500L,
+                new IdentificarReceptorRequest("Pasajera Prueba", "71234567", -11.03, -68.74), foto()));
+        assertEquals(true, error.getMessage().contains("Juan"));
+
+        when(datosEntregaRepository.avanzarSiEstadoPermitido(eq(1L), anyCollection(), eq(EstadoEntrega.ENTREGADO)))
+                .thenReturn(1);
+        when(datosEntregaRepository.findBySolicitudId(viaje.getSolicitud().getId())).thenReturn(Optional.of(datos));
+        entregaService.entregarConReceptor(500L, new IdentificarReceptorRequest("Juan", "7222-3333", -11.03, -68.74), foto());
+
+        verify(viajeService).finalizarDesdeEntrega(eq(500L), any());
+    }
+
+    /** Lo que el registro necesita: los productos del pedido, el pedido releido y la propuesta guardada. */
+    private void prepararRegistro(Viaje viaje) {
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        when(productoRepository.findByDatosEntregaIdAndEstadoProductoEntregaOrderByOrdenAscIdAsc(1L, EstadoRegistro.A))
+                .thenReturn(List.of(pan, leche));
+        enMano = compraEnMano(viaje);
+        when(datosEntregaRepository.findBySolicitudId(90L)).thenReturn(Optional.of(enMano));
+        when(datosEntregaRepository.getReferenceById(1L)).thenReturn(enMano);
+        when(propuestaRepository.save(any(PropuestaCostoEntrega.class))).thenAnswer(i -> i.getArgument(0));
+    }
+
+    private PropuestaCostoEntrega propuestaGuardada() {
+        ArgumentCaptor<PropuestaCostoEntrega> guardada = ArgumentCaptor.forClass(PropuestaCostoEntrega.class);
+        verify(propuestaRepository).save(guardada.capture());
+        return guardada.getValue();
+    }
+
+    private static RegistrarCompraRequest compra(ProductoCompradoRequest... productos) {
+        return new RegistrarCompraRequest(WKT_COMERCIO, "Tienda Central", null, List.of(productos));
+    }
+
+    private static ProductoEntrega producto(Long id, String nombre, int cantidad) {
+        ProductoEntrega producto = new ProductoEntrega();
+        producto.setId(id);
+        producto.setNombre(nombre);
+        producto.setCantidad(cantidad);
+        return producto;
+    }
+
+    private static PropuestaCostoEntrega propuesta(Long id, int version, SituacionPropuestaCosto situacion) {
+        PropuestaCostoEntrega propuesta = new PropuestaCostoEntrega();
+        propuesta.setId(id);
+        propuesta.setVersion(version);
+        propuesta.setSituacionPropuesta(situacion);
+        propuesta.setTotalProductos(new BigDecimal("10.00"));
+        propuesta.setTotal(new BigDecimal("19.80"));
+        return propuesta;
     }
 
     private MultipartFile foto() {

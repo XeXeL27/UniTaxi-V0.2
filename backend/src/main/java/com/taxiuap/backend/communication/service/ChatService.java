@@ -82,6 +82,15 @@ public class ChatService {
     }
 
     /**
+     * Chat completo de un viaje para el panel admin, tambien despues de terminado: al revisar un reporte
+     * de entrega se ve lo que se dijeron el cliente y el repartidor.
+     */
+    public List<MensajeResponse> historialParaAdmin(Long idViaje) {
+        viajeService.obtenerParaAdmin(idViaje);
+        return mensajeRepository.findByViajeIdOrderByFechaAsc(idViaje).stream().map(ChatService::respuesta).toList();
+    }
+
+    /**
      * Push al otro participante: con la app minimizada o cerrada le llega "Mensaje de Rene" aunque el
      * WebSocket este cortado. Con la app abierta el aviso lo da el chat y el push no se muestra.
      */

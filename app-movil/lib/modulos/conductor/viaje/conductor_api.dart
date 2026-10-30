@@ -151,14 +151,14 @@ class ConductorApi {
         if (gps != null) 'longitud': gps.longitude,
       }, [(campo: 'foto', bytes: foto, nombre: 'recogida.jpg', tipo: MediaType('image', 'jpeg'))]));
 
-  Future<Viaje> proponerCompra(int id, LatLng punto, String detalle, double costo) async =>
-      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/proponer-compra', {
-        'puntoCompraWkt': wktDesdePunto(punto), 'detalleCompra': detalle.trim(), 'costoProducto': costo,
-      }));
-
-  Future<Viaje> registrarCompra(int id, LatLng punto, String detalle, double costo, String? observacion, Uint8List? comprobante) async =>
+  /// Compra hecha (o corregida antes del pago): cada producto del pedido, conseguido con su precio o no.
+  /// El servidor calcula los subtotales y el total; el cliente tiene que aceptar el costo total.
+  Future<Viaje> registrarCompra(int id, LatLng punto, String detalle, List<ProductoComprado> productos,
+          String? observacion, Uint8List? comprobante) async =>
       _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/registrar-compra', 'compra', {
-        'puntoCompraWkt': wktDesdePunto(punto), 'detalleCompra': detalle.trim(), 'costoProducto': costo,
+        'puntoCompraWkt': wktDesdePunto(punto),
+        'detalleCompra': detalle.trim(),
+        'productos': [for (final p in productos) p.aJson()],
         if (observacion != null && observacion.trim().isNotEmpty) 'observacionCompra': observacion.trim(),
       }, [if (comprobante != null) (campo: 'comprobante', bytes: comprobante, nombre: 'comprobante.jpg', tipo: MediaType('image', 'jpeg'))]));
 
@@ -181,8 +181,8 @@ class ConductorApi {
         'longitud': gps.longitude,
       }, [(campo: 'foto', bytes: foto, nombre: 'entrega.jpg', tipo: MediaType('image', 'jpeg'))]));
 
-  Future<Viaje> noSePudoEntregar(int id, String motivo, Uint8List foto) async =>
-      _viaje(await cliente.enviarArchivo('POST', '/api/conductor/viajes/$id/entrega/no-se-pudo-entregar', 'foto', foto, 'falla.jpg', MediaType('image', 'jpeg'), campos: {'motivo': motivo.trim()}));
+  Future<Viaje> noSePudoEntregar(int id, String motivo, Uint8List foto, {MotivoFalla tipo = MotivoFalla.otro}) async =>
+      _viaje(await cliente.enviarArchivo('POST', '/api/conductor/viajes/$id/entrega/no-se-pudo-entregar', 'foto', foto, 'falla.jpg', MediaType('image', 'jpeg'), campos: {'tipo': tipo.codigo, 'motivo': motivo.trim()}));
 
   Future<Viaje> paqueteNoCoincide(int id, String motivo, Uint8List foto) async =>
       _viaje(await cliente.enviarArchivo('POST', '/api/conductor/viajes/$id/entrega/paquete-no-coincide', 'foto', foto, 'paquete.jpg', MediaType('image', 'jpeg'), campos: {'motivo': motivo.trim()}));

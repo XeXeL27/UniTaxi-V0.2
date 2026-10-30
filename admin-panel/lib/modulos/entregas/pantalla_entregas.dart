@@ -23,8 +23,11 @@ const _estadosEntrega = [
 
 /// Estado que se muestra del pedido: si el viaje se cancelo, "Cancelado" (el estado del paquete se
 /// queda donde estaba al cancelar y parecia un pedido todavia en camino).
-String estadoDelPedido(ViajeExpediente viaje) =>
-    viaje.situacion == 'CANCELADO' ? 'CANCELADO' : viaje.entrega?.estadoEntrega ?? '';
+String estadoDelPedido(ViajeExpediente viaje) => viaje.entrega?.estadoEntrega == 'NO_ENTREGADO'
+    ? 'NO_ENTREGADO'
+    : viaje.situacion == 'CANCELADO'
+    ? 'CANCELADO'
+    : viaje.entrega?.estadoEntrega ?? '';
 
 /// Todos los pedidos DELIVERY. El ojo abre el detalle con las confirmaciones y las fotos.
 class PantallaEntregas extends StatelessWidget {

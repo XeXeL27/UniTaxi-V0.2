@@ -47,6 +47,7 @@ import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
+import com.taxiuap.backend.trip.enums.MotivoFallaEntrega;
 import com.taxiuap.backend.trip.enums.SituacionViaje;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
@@ -91,13 +92,13 @@ class EntregaServiceFallaTest {
         when(almacenamientoArchivos.guardarConSello(any(), eq("personas/20_x/entrega"), eq("falla_entrega"),
                 eq("jpg"))).thenReturn("personas/20_x/entrega/falla_1.jpg");
         when(datosEntregaRepository.registrarFallaSiEstadoPermitido(eq(1L), anyCollection(),
-                eq(EstadoEntrega.NO_ENTREGADO), eq("El receptor no estaba"), eq("personas/20_x/entrega/falla_1.jpg")))
+                eq(EstadoEntrega.NO_ENTREGADO), eq(MotivoFallaEntrega.OTRO), eq("El receptor no estaba"), eq("personas/20_x/entrega/falla_1.jpg")))
                         .thenReturn(1);
 
         entregaService.noSePudoEntregar(500L, "El receptor no estaba", foto());
 
         verify(datosEntregaRepository).registrarFallaSiEstadoPermitido(eq(1L), anyCollection(),
-                eq(EstadoEntrega.NO_ENTREGADO), eq("El receptor no estaba"), eq("personas/20_x/entrega/falla_1.jpg"));
+                eq(EstadoEntrega.NO_ENTREGADO), eq(MotivoFallaEntrega.OTRO), eq("El receptor no estaba"), eq("personas/20_x/entrega/falla_1.jpg"));
         org.mockito.ArgumentCaptor<Reporte> reporteCaptor = org.mockito.ArgumentCaptor.forClass(Reporte.class);
         verify(reporteRepository).save(reporteCaptor.capture());
         assertSame(viaje, reporteCaptor.getValue().getViaje());
@@ -113,7 +114,7 @@ class EntregaServiceFallaTest {
         when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
                 .thenReturn("personas/20_x/entrega/falla_1.jpg");
-        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), anyString(),
+        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), any(), anyString(),
                 anyString())).thenReturn(1);
 
         entregaService.noSePudoEntregar(500L, "No respondio", foto());
@@ -159,7 +160,7 @@ class EntregaServiceFallaTest {
         when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
                 .thenReturn("personas/20_x/entrega/falla_1.jpg");
-        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), anyString(),
+        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), any(), anyString(),
                 anyString())).thenReturn(1);
 
         entregaService.noSePudoEntregar(500L, "El receptor no estaba", foto());
@@ -178,7 +179,7 @@ class EntregaServiceFallaTest {
                 () -> entregaService.noSePudoEntregar(500L, "El receptor no estaba", foto()));
 
         assertEquals(true, error.getMessage().contains("manos"));
-        verify(datosEntregaRepository, never()).registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(),
+        verify(datosEntregaRepository, never()).registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), any(),
                 anyString(), anyString());
     }
 
@@ -190,7 +191,7 @@ class EntregaServiceFallaTest {
         NegocioException error = assertThrows(NegocioException.class,
                 () -> entregaService.noSePudoEntregar(500L, "  ", foto()));
 
-        assertEquals(true, error.getMessage().contains("motivo"));
+        assertEquals(true, error.getMessage().contains("qué pasó"));
         verify(almacenamientoArchivos, never()).guardarConSello(any(), anyString(), anyString(), anyString());
     }
 
@@ -203,7 +204,7 @@ class EntregaServiceFallaTest {
                 () -> entregaService.noSePudoEntregar(500L, "El receptor no estaba", null));
 
         assertEquals(true, error.getMessage().contains("foto"));
-        verify(datosEntregaRepository, never()).registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(),
+        verify(datosEntregaRepository, never()).registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), any(),
                 anyString(), anyString());
     }
 
@@ -215,7 +216,7 @@ class EntregaServiceFallaTest {
         when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
                 .thenReturn("personas/20_x/entrega/falla_1.jpg");
         // El pedido ya quedo en NO_ENTREGADO: el UPDATE condicional no actualiza nada.
-        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), anyString(),
+        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(), any(), anyString(),
                 anyString())).thenReturn(0);
         when(datosEntregaRepository.findById(1L)).thenReturn(Optional.of(datosNoEntregado(viaje)));
 
@@ -224,6 +225,53 @@ class EntregaServiceFallaTest {
 
         assertEquals(true, error.getMessage().contains("Transicion de estado no permitida"));
         verify(viajeService, never()).cancelarFallaEntrega(anyLong());
+    }
+
+    @Test
+    void elMotivoElegidoQuedaEnElReporteYSeAvisaAlCliente() {
+        Viaje viaje = viajeEnMano(TipoEnvio.COMPRA_Y_ENTREGA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
+                .thenReturn("personas/20_x/entrega/falla_1.jpg");
+        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(),
+                eq(MotivoFallaEntrega.NO_PAGO), anyString(), anyString())).thenReturn(1);
+
+        entregaService.noSePudoEntregar(500L, MotivoFallaEntrega.NO_PAGO, "Dijo que no tenia dinero", foto());
+
+        org.mockito.ArgumentCaptor<Reporte> reporte = org.mockito.ArgumentCaptor.forClass(Reporte.class);
+        verify(reporteRepository).save(reporte.capture());
+        assertEquals("El cliente no pagó: Dijo que no tenia dinero", reporte.getValue().getDescripcion());
+        verify(viajeService).avisarPasajero(eq(viaje), eq("PEDIDO_NO_ENTREGADO"), anyString(), anyString());
+    }
+
+    @Test
+    void noAprobarElCostoNoSeReportaSiElClienteYaLoAcepto() {
+        Viaje viaje = viajeEnMano(TipoEnvio.COMPRA_Y_ENTREGA);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        NegocioException error = assertThrows(NegocioException.class, () -> entregaService.noSePudoEntregar(500L,
+                MotivoFallaEntrega.NO_APROBO_COSTO, "No acepto", foto()));
+
+        assertEquals(true, error.getMessage().contains("ya aceptó"));
+        verify(datosEntregaRepository, never()).registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(),
+                any(), anyString(), anyString());
+    }
+
+    @Test
+    void noAprobarElCostoSeReportaConElCostoSinAceptar() {
+        Viaje viaje = viajeEnMano(TipoEnvio.COMPRA_Y_ENTREGA);
+        viaje.getSolicitud().getDatosEntrega().setCompraConfirmadaPorCliente(false);
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+        when(almacenamientoArchivos.carpetaEntregaViaje(any(), any())).thenReturn("personas/20_x/entrega");
+        when(almacenamientoArchivos.guardarConSello(any(), anyString(), anyString(), anyString()))
+                .thenReturn("personas/20_x/entrega/falla_1.jpg");
+        when(datosEntregaRepository.registrarFallaSiEstadoPermitido(anyLong(), anyCollection(), any(),
+                eq(MotivoFallaEntrega.NO_APROBO_COSTO), anyString(), anyString())).thenReturn(1);
+
+        entregaService.noSePudoEntregar(500L, MotivoFallaEntrega.NO_APROBO_COSTO, "No respondio al costo", foto());
+
+        verify(viajeService).cancelarFallaEntrega(500L);
     }
 
     private Viaje viajeEnMano(TipoEnvio tipoEnvio) {

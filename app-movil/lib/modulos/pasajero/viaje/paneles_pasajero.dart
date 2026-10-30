@@ -17,6 +17,7 @@ import '../../../widgets/paneles.dart';
 import '../../../widgets/boton_plegar.dart';
 import 'flujo_pasajero.dart';
 import 'modo_servicio.dart';
+import '../../../comun/costo_compra.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/qr_pago.dart';
 import '../../../comun/vista_chat.dart';
@@ -29,7 +30,7 @@ String etiquetaPrecioDelivery(Viaje viaje) {
     return 'Precio fijo del servicio';
   }
   if (datos?.tipoEnvio == TipoEnvio.compraYEntrega) {
-    return viaje.precioEstimado ? 'Precio estimado del servicio' : 'Precio definitivo del servicio';
+    return datos!.costoAceptado ? 'Total aceptado: productos y envío' : 'Precio estimado del servicio';
   }
   return 'Precio del viaje';
 }
@@ -100,6 +101,27 @@ class DetalleSolicitudViaje extends StatelessWidget {
           etiqueta: 'Distancia',
           valor: DatoRuta(icono: Iconos.route, texto: ruta?.distanciaTexto ?? 'A calcular'),
         ),
+        if (flujo.datosEntregaForm case final form? when form.tipoEnvio == TipoEnvio.compraYEntrega) ...[
+          const Divider(height: 18, color: ColoresApp.borde),
+          const Text(
+            'Productos a comprar',
+            style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 4),
+          for (final producto in form.productos)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                producto.indicaciones == null ? producto.resumen : '${producto.resumen} (${producto.indicaciones})',
+                style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
+              ),
+            ),
+          const SizedBox(height: 4),
+          const Text(
+            'Los productos se pagan al precio real. Aceptarás el costo total cuando el repartidor compre.',
+            style: TextStyle(color: ColoresApp.grisTexto, fontSize: 12),
+          ),
+        ],
         if (flujo.paraOtraPersona && flujo.tercero != null) ...[
           const Divider(height: 18, color: ColoresApp.borde),
           _FilaDato(etiqueta: 'Viaja', valor: _Valor(flujo.tercero!.nombre)),
@@ -357,7 +379,10 @@ class PanelViaje extends StatelessWidget {
 
   /// Pide al conductor pagar de otra forma (el conductor acepta o rechaza).
   final ValueChanged<String> onPedirCambioPago;
-  final VoidCallback onConfirmarCompra;
+
+  /// "ACEPTO EL COSTO TOTAL" de una compra, con la version que se ve en pantalla.
+  final ValueChanged<int> onAceptarCosto;
+  final bool aceptandoCosto;
 
   /// "Ya pagué" (taxi para otra persona pagado por quien lo pidio).
   final VoidCallback? onAvisarPago;
@@ -372,7 +397,8 @@ class PanelViaje extends StatelessWidget {
     required this.flujo,
     required this.onCancelar,
     required this.onPedirCambioPago,
-    required this.onConfirmarCompra,
+    required this.onAceptarCosto,
+    this.aceptandoCosto = false,
     this.onAvisarPago,
     this.abierto = true,
     this.onAlternar,
@@ -390,6 +416,10 @@ class PanelViaje extends StatelessWidget {
     );
     final datos = viaje.datosEntrega;
     final pago = viaje.pagaSolicitante ? 'QR (pagas tú)' : MetodoPago.nombre(viaje.metodoPago);
+    // Una compra se paga (y muestra el QR) recien con el costo total aceptado.
+    final cobrable = datos == null || datos.sePuedeCobrar;
+    final total = datos != null && datos.esCompra ? datos.propuestaVigente?.total : viaje.precioFinal;
+    final textoTotal = cobrable ? formatoBs(total) : 'Costo por confirmar';
     final boton = onAlternar == null ? null : BotonPlegarHoja(abierta: abierto, onTap: onAlternar!);
 
     if (!abierto) {
@@ -409,7 +439,7 @@ class PanelViaje extends StatelessWidget {
                 ),
                 Text(
                   // El estado ya lo dice el indicador de arriba: aca solo el precio y como se paga.
-                  '${formatoBs(viaje.precioFinal)} · $pago',
+                  '$textoTotal · $pago',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 13),
@@ -489,13 +519,20 @@ class PanelViaje extends StatelessWidget {
             const SizedBox(height: 12),
             _ResumenEntrega(datos: datos, precioServicio: viaje.precioFinal),
           ],
-          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
-              datos.detalleCompraPropuesto != null &&
-              datos.compraConfirmadaPorCliente != true)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: BotonPrincipal(texto: 'Confirmar comercio y monto', onPressed: onConfirmarCompra),
-            ),
+          if (datos.esCompra) ...[
+            const SizedBox(height: 12),
+            if (datos.propuestaVigente case final propuesta?)
+              MarcaGuia(
+                id: 'pasajero.costoCompra',
+                child: TarjetaCostoCompra(
+                  propuesta: propuesta,
+                  aceptando: aceptandoCosto,
+                  onAceptar: propuesta.pendiente ? () => onAceptarCosto(propuesta.version) : null,
+                ),
+              )
+            else
+              ListaProductosPedido(productos: datos.productos, titulo: 'Tu lista de compras'),
+          ],
         ],
         const SizedBox(height: 16),
         Row(
@@ -505,7 +542,7 @@ class PanelViaje extends StatelessWidget {
                 TextSpan(
                   children: [
                     TextSpan(
-                      text: formatoBs(viaje.precioFinal),
+                      text: textoTotal,
                       style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
                     ),
                     TextSpan(text: ' · $pago'),
@@ -514,7 +551,7 @@ class PanelViaje extends StatelessWidget {
                 style: const TextStyle(color: ColoresApp.tinta, fontSize: 15),
               ),
             ),
-            if (!viaje.pagaSolicitante && viaje.metodoPagoPedido == null)
+            if (cobrable && !viaje.pagaSolicitante && viaje.metodoPagoPedido == null)
               TextButton(
                 onPressed: () => onPedirCambioPago(viaje.pagaConQr ? MetodoPago.efectivo : MetodoPago.qr),
                 style: TextButton.styleFrom(foregroundColor: ColoresApp.azul),
@@ -525,8 +562,13 @@ class PanelViaje extends StatelessWidget {
               ),
           ],
         ),
-        if (datos != null)
-          Text(etiquetaPrecioDelivery(viaje), style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5)),
+        if (datos != null && cobrable)
+          Text(etiquetaPrecioDelivery(viaje), style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5))
+        else if (datos != null)
+          const Text(
+            'El total y el pago aparecen cuando aceptes el costo de tu compra.',
+            style: TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5),
+          ),
         if (!viaje.pagaSolicitante && viaje.metodoPagoPedido != null) ...[
           const SizedBox(height: 8),
           _Aviso(
@@ -536,7 +578,7 @@ class PanelViaje extends StatelessWidget {
                 'Esperando la respuesta del conductor.',
           ),
         ],
-        if (viaje.pagaConQr) ...[
+        if (viaje.pagaConQr && cobrable) ...[
           const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(12),
@@ -545,7 +587,7 @@ class PanelViaje extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 Text(
-                  'Paga ${formatoBs(viaje.precioFinal)} con el QR de ${viaje.primerNombreConductor}',
+                  'Paga ${formatoBs(total)} con el QR de ${viaje.primerNombreConductor}',
                   style: const TextStyle(color: ColoresApp.tinta, fontSize: 15, fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
@@ -940,34 +982,18 @@ class _ResumenEntrega extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final producto = datos.costoProductoReal ?? datos.costoProductoConfirmado ?? datos.costoProductoEstimado;
-    final total = producto == null || precioServicio == null ? null : producto + precioServicio!;
+    final esCompra = datos.tipoEnvio == TipoEnvio.compraYEntrega;
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(color: ColoresApp.gris, borderRadius: BorderRadius.circular(12)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          if (datos.tipoEnvio == TipoEnvio.compraYEntrega)
-            _linea('Producto', producto == null ? 'Pendiente' : formatoBs(producto)),
-          _linea('Servicio', precioServicio == null ? 'Pendiente' : formatoBs(precioServicio)),
-          if (total != null)
-            _linea(
-              datos.costoProductoReal == null ? 'Total estimado' : 'Total a pagar',
-              formatoBs(total),
-              fuerte: true,
-            ),
-          if (datos.tipoEnvio == TipoEnvio.compraYEntrega && datos.detalleCompra != null)
-            _linea('Comercio', datos.detalleCompra!),
-          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
-              datos.detalleCompra == null &&
-              datos.detalleCompraPropuesto != null)
-            _linea('Comercio propuesto', datos.detalleCompraPropuesto!),
-          if (datos.tipoEnvio == TipoEnvio.compraYEntrega &&
-              datos.costoProductoReal == null &&
-              datos.costoProductoConfirmado != null)
-            _linea('Monto confirmado', formatoBs(datos.costoProductoConfirmado!), fuerte: true),
-          if (datos.tipoEnvio == TipoEnvio.compraYEntrega && datos.observacionCompra != null)
+          if (!esCompra) _linea('Servicio', precioServicio == null ? 'Pendiente' : formatoBs(precioServicio)),
+          if (esCompra)
+            _linea('Envío', datos.textoTarifa == null ? 'Se calcula desde el comercio' : '${datos.textoTarifa} desde el comercio'),
+          if (esCompra && datos.detalleCompra != null) _linea('Comercio', datos.detalleCompra!),
+          if (esCompra && datos.observacionCompra != null)
             _linea('Observación del repartidor', datos.observacionCompra!),
           if (datos.tipoEnvio == TipoEnvio.compraYEntrega && datos.montoPagoRecibido != null)
             _linea('Pago confirmado', formatoBs(datos.montoPagoRecibido), fuerte: true),
@@ -1099,17 +1125,18 @@ class _ViajaTercero extends StatelessWidget {
   Widget build(BuildContext context) {
     final tercero = viaje.tercero!;
     final telefono = tercero.telefono;
+    final quien = viaje.datosEntrega != null ? 'repartidor' : 'conductor';
     final String estadoPago;
     if (!viaje.pagaConQr) {
-      estadoPago = '${tercero.primerNombre} paga en efectivo al conductor.';
+      estadoPago = '${tercero.primerNombre} paga en efectivo al $quien.';
     } else if (viaje.pagoRecibidoEn != null) {
-      estadoPago = 'El conductor confirmó que recibió el pago.';
+      estadoPago = 'El $quien confirmó que recibió el pago.';
     } else if (viaje.pagaSolicitante && viaje.pagoAvisadoEn != null) {
-      estadoPago = 'Avisaste que pagaste. Falta que el conductor lo confirme.';
+      estadoPago = 'Avisaste que pagaste. Falta que el $quien lo confirme.';
     } else if (viaje.pagaSolicitante) {
-      estadoPago = 'Pagas tú con el QR del conductor (abajo).';
+      estadoPago = 'Pagas tú con el QR del $quien (abajo).';
     } else {
-      estadoPago = '${tercero.primerNombre} paga por QR al conductor.';
+      estadoPago = '${tercero.primerNombre} paga por QR al $quien.';
     }
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 12, 8, 12),
@@ -1240,7 +1267,10 @@ class TarjetaCodigoEntrega extends StatelessWidget {
         ),
         const SizedBox(height: 4),
         Text(
-          'Dicta este codigo ${nombre == null ? '' : 'a $nombre '}${fase.donde}.',
+          // Quien recibe es otra persona: el que pidio le pasa el codigo (por WhatsApp o como pueda).
+          fase.titulo == 'Código de entrega' && nombre != null
+              ? 'Pásale este código a ${_primerNombre(nombre)}: lo dicta ${fase.donde}.'
+              : 'Dicta este código ${nombre == null ? '' : 'a $nombre '}${fase.donde}.',
           style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
         ),
       ],
@@ -1303,6 +1333,12 @@ class TarjetaCodigoEntrega extends StatelessWidget {
       ],
     );
   }
+}
+
+/// "JUAN PEREZ" -> "Juan".
+String _primerNombre(String nombre) {
+  final primero = nombre.trim().split(RegExp(r'\s+')).first.toLowerCase();
+  return primero.isEmpty ? nombre : primero[0].toUpperCase() + primero.substring(1);
 }
 
 /// Los 6 digitos del codigo, con el tracking abierto para que se lean de uno en uno.

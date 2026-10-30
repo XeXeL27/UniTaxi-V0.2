@@ -274,6 +274,9 @@ class EntregaExpediente {
   final bool pagoConfirmado;
   final double? montoPagoRecibido;
   final String? motivoFalla;
+
+  /// Motivo elegido por el repartidor al reportar que no pudo entregar (codigo del enum).
+  final String? tipoFalla;
   final DateTime? fechaLlegadaRecogida;
   final DateTime? fechaRecogida;
   final DateTime? fechaEntrega;
@@ -284,6 +287,10 @@ class EntregaExpediente {
   final bool fotoComprobante;
   final bool fotoEntrega;
   final bool fotoFalla;
+  final double? tarifaBaseAplicada;
+  final double? precioKmAplicado;
+  final List<ProductoEntregaAdmin> productos;
+  final List<PropuestaCostoAdmin> propuestas;
 
   EntregaExpediente({
     required this.tipoEnvio,
@@ -299,6 +306,7 @@ class EntregaExpediente {
     this.pagoConfirmado = false,
     this.montoPagoRecibido,
     this.motivoFalla,
+    this.tipoFalla,
     this.fechaLlegadaRecogida,
     this.fechaRecogida,
     this.fechaEntrega,
@@ -309,6 +317,10 @@ class EntregaExpediente {
     this.fotoComprobante = false,
     this.fotoEntrega = false,
     this.fotoFalla = false,
+    this.tarifaBaseAplicada,
+    this.precioKmAplicado,
+    this.productos = const [],
+    this.propuestas = const [],
   });
 
   static bool _hay(dynamic ruta) => ruta is String && ruta.trim().isNotEmpty;
@@ -327,6 +339,7 @@ class EntregaExpediente {
     pagoConfirmado: json['pagoConfirmado'] as bool? ?? false,
     montoPagoRecibido: Formato.leerDecimal(json['montoPagoRecibido']),
     motivoFalla: json['motivoFalla'] as String?,
+    tipoFalla: json['tipoFalla'] as String?,
     fechaLlegadaRecogida: Formato.leerFecha(json['fechaLlegadaRecogida']),
     fechaRecogida: Formato.leerFecha(json['fechaRecogida']),
     fechaEntrega: Formato.leerFecha(json['fechaEntrega']),
@@ -337,9 +350,84 @@ class EntregaExpediente {
     fotoComprobante: _hay(json['fotoComprobanteUrl']),
     fotoEntrega: _hay(json['fotoEntregaUrl']),
     fotoFalla: _hay(json['fotoFallaUrl']),
+    tarifaBaseAplicada: Formato.leerDecimal(json['tarifaBaseAplicada']),
+    precioKmAplicado: Formato.leerDecimal(json['precioKmAplicado']),
+    productos: [
+      for (final p in (json['productos'] as List<dynamic>? ?? const []))
+        ProductoEntregaAdmin.desdeJson(p as Map<String, dynamic>),
+    ],
+    propuestas: [
+      for (final p in (json['propuestas'] as List<dynamic>? ?? const []))
+        PropuestaCostoAdmin.desdeJson(p as Map<String, dynamic>),
+    ],
   );
 
   bool get tieneFotos => fotoPaquete || fotoRecogida || fotoComprobante || fotoEntrega || fotoFalla;
+}
+
+/// Producto de una compra: lo que pidio el cliente y lo que registro el repartidor.
+class ProductoEntregaAdmin {
+  final String nombre;
+  final int cantidad;
+  final String? indicaciones;
+  final String situacion;
+  final int? cantidadConseguida;
+  final double? precioUnitario;
+  final double? subtotal;
+  final String? observacion;
+
+  ProductoEntregaAdmin({
+    required this.nombre,
+    required this.cantidad,
+    this.indicaciones,
+    required this.situacion,
+    this.cantidadConseguida,
+    this.precioUnitario,
+    this.subtotal,
+    this.observacion,
+  });
+
+  factory ProductoEntregaAdmin.desdeJson(Map<String, dynamic> json) => ProductoEntregaAdmin(
+    nombre: json['nombre'] as String? ?? '',
+    cantidad: (json['cantidad'] as num?)?.toInt() ?? 1,
+    indicaciones: json['indicaciones'] as String?,
+    situacion: json['situacion'] as String? ?? 'PENDIENTE',
+    cantidadConseguida: (json['cantidadConseguida'] as num?)?.toInt(),
+    precioUnitario: Formato.leerDecimal(json['precioUnitario']),
+    subtotal: Formato.leerDecimal(json['subtotal']),
+    observacion: json['observacion'] as String?,
+  );
+}
+
+/// Una version del costo total presentado al cliente y si la acepto.
+class PropuestaCostoAdmin {
+  final int version;
+  final String situacion;
+  final double? precioServicio;
+  final double? totalProductos;
+  final double? total;
+  final DateTime? fechaPropuesta;
+  final DateTime? fechaRespuesta;
+
+  PropuestaCostoAdmin({
+    required this.version,
+    required this.situacion,
+    this.precioServicio,
+    this.totalProductos,
+    this.total,
+    this.fechaPropuesta,
+    this.fechaRespuesta,
+  });
+
+  factory PropuestaCostoAdmin.desdeJson(Map<String, dynamic> json) => PropuestaCostoAdmin(
+    version: (json['version'] as num?)?.toInt() ?? 1,
+    situacion: json['situacion'] as String? ?? '',
+    precioServicio: Formato.leerDecimal(json['precioServicio']),
+    totalProductos: Formato.leerDecimal(json['totalProductos']),
+    total: Formato.leerDecimal(json['total']),
+    fechaPropuesta: Formato.leerFecha(json['fechaPropuesta']),
+    fechaRespuesta: Formato.leerFecha(json['fechaRespuesta']),
+  );
 }
 
 class CalificacionExpediente {

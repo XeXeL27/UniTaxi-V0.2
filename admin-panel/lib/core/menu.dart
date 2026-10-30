@@ -38,6 +38,7 @@ class Menu {
   static const flota = ItemMenu('Usuarios en línea', Iconos.users, '/flota');
   static const precioViaje = ItemMenu('Precio del viaje', Iconos.route, '/tarifas/precio');
   static const descuentoEstudiante = ItemMenu('Descuento estudiante', Iconos.idBadge, '/tarifas/descuento-estudiante');
+  static const tarifaDelivery = ItemMenu('Tarifa del delivery', Iconos.paquete, '/tarifas/delivery');
   static const carpetaArchivos = ItemMenu('Carpeta de archivos', Iconos.folderOpen, '/sistema/carpeta');
   static const reportesEntrega = ItemMenu('Reportes', Iconos.triangleExclamation, '/reportes-entrega');
   static const entregas = ItemMenu('Entregas', Iconos.paquete, '/entregas');
@@ -46,7 +47,7 @@ class Menu {
   static const grupos = [
     GrupoMenu('Personas', Iconos.users, [personas, usuarios, pasajeros, conductores, carnetsObservados, problemasIngreso, eliminacionPermanente]),
     GrupoMenu('Mapa', Iconos.map, [zonas, mapa, flota]),
-    GrupoMenu('Tarifas', Iconos.layerGroup, [precioViaje, descuentoEstudiante]),
+    GrupoMenu('Tarifas', Iconos.layerGroup, [precioViaje, descuentoEstudiante, tarifaDelivery]),
     GrupoMenu('Viajes y entregas', Iconos.paquete, [viajes, entregas, reportesEntrega]),
     GrupoMenu('Sistema', Iconos.gear, [carpetaArchivos]),
   ];

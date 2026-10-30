@@ -17,7 +17,10 @@ public record ReporteResponse(Long id, Long idViaje, Long idUsuarioReporta, Stri
         String detalleCompra, String observacionCompra,
         /** Pasajero del viaje: para el reporte "no se presento" el admin lo puede suspender desde aqui. */
         Long idUsuarioPasajero, String nombrePasajero, String telefonoPasajero, long vecesNoSePresento,
-        boolean pasajeroSuspendido) {
+        boolean pasajeroSuspendido,
+        /** Falla de entrega: motivo elegido, avisos en el punto de entrega y quien debia recibir. */
+        String tipoFalla, Integer avisosEntrega, LocalDateTime fechaLlegadaEntrega, boolean paraOtraPersona,
+        String nombreReceptor, String telefonoReceptor, Boolean costoAceptado) {
 
     /** Constructor de compatibilidad para consumidores que solo conocían la evidencia básica. */
     public ReporteResponse(Long id, Long idViaje, Long idUsuarioReporta, String motivo, String descripcion,
@@ -26,7 +29,8 @@ public record ReporteResponse(Long id, Long idViaje, Long idUsuarioReporta, Stri
             String fotoFallaUrl, String motivoFalla, BigDecimal costoProductoReal, String destinoDireccion) {
         this(id, idViaje, idUsuarioReporta, motivo, descripcion, situacion, fecha, tipoResolucion,
                 observacionAdmin, fechaResolucion, idUsuarioAdminResolvio, fotoFallaUrl, motivoFalla,
-                costoProductoReal, destinoDireccion, null, null, null, null, null, null, null, null, null, 0, false);
+                costoProductoReal, destinoDireccion, null, null, null, null, null, null, null, null, null, 0, false,
+                null, null, null, false, null, null, null);
     }
 
     public static ReporteResponse de(Reporte reporte) {
@@ -57,7 +61,15 @@ public record ReporteResponse(Long id, Long idViaje, Long idUsuarioReporta, Stri
                 persona == null ? null : persona.getTelefono(),
                 vecesNoSePresento,
                 usuarioPasajero != null
-                        && usuarioPasajero.getEstadoUsuario() == com.taxiuap.backend.shared.enums.EstadoRegistro.S);
+                        && usuarioPasajero.getEstadoUsuario() == com.taxiuap.backend.shared.enums.EstadoRegistro.S,
+                datos == null || datos.getTipoFalla() == null ? null : datos.getTipoFalla().texto(),
+                datos == null ? null : datos.getAvisosEntrega(),
+                datos == null ? null : datos.getFechaLlegadaEntrega(),
+                reporte.getViaje().getSolicitud().esParaOtraPersona(),
+                datos == null ? null : datos.getNombreReceptor(),
+                datos == null ? null : datos.getTelefonoReceptor(),
+                datos == null || datos.getTipoEnvio() != com.taxiuap.backend.trip.enums.TipoEnvio.COMPRA_Y_ENTREGA
+                        ? null : Boolean.TRUE.equals(datos.getCompraConfirmadaPorCliente()));
     }
 
     private static String telefonoContacto(DatosEntrega datos, Reporte reporte) {

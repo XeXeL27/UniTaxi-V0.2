@@ -452,6 +452,27 @@ class FlujoPasajero extends ChangeNotifier {
     enCurso = i < 0 ? [...enCurso, nuevo] : [...enCurso.sublist(0, i), nuevo, ...enCurso.sublist(i + 1)];
   }
 
+  /// Por que ahora no se puede pedir un delivery: hay un taxi en curso o ya un delivery (null: se puede).
+  /// Con un delivery en curso si se puede pedir un taxi.
+  String? get motivoSinEntrega {
+    if (enCurso.any((v) => v.datosEntrega == null && !_terminado(v))) {
+      return 'Estás en un viaje en moto taxi: podrás pedir un delivery cuando termine.';
+    }
+    if (enCurso.any((v) => v.datosEntrega != null && !_terminado(v))) {
+      return 'Ya tienes un delivery en curso: podrás pedir otro cuando termine.';
+    }
+    return null;
+  }
+
+  static String _textoNoEntregado(Viaje v) {
+    final motivo = v.datosEntrega?.tipoFalla?.texto;
+    return '${v.primerNombreConductor} reportó que no pudo entregar tu pedido'
+        '${motivo == null ? '' : ' (${motivo.toLowerCase()})'}. Un administrador lo revisará; '
+        'el pedido queda en tu actividad.';
+  }
+
+  static bool _terminado(Viaje v) => v.situacion == SituacionViaje.completado || v.situacion == SituacionViaje.cancelado;
+
   void _quitarDeEnCurso(int idViaje) => enCurso = [for (final v in enCurso) if (v.id != idViaje) v];
 
   /// Con servicios de fondo se consultan todos cada pocos segundos para dar sus avisos.
@@ -502,7 +523,9 @@ class FlujoPasajero extends ChangeNotifier {
               ? 'Tu pedido con ${final_.primerNombreConductor} fue entregado.'
               : 'Terminó tu viaje con ${final_.primerNombreConductor}.';
         } else if (final_.situacion == SituacionViaje.cancelado) {
-          aviso = 'Se canceló tu servicio con ${final_.primerNombreConductor}.';
+          aviso = final_.datosEntrega?.noEntregado ?? false
+              ? _textoNoEntregado(final_)
+              : 'Se canceló tu servicio con ${final_.primerNombreConductor}.';
         }
       } catch (_) {
         // Sin red: el aviso llega en la proxima vuelta si sigue sin estar.
@@ -695,6 +718,7 @@ class FlujoPasajero extends ChangeNotifier {
   /// taxi que llego y vibracion, una vez por aviso. Tambien al retomar el viaje al abrir la app.
   void _revisarAlertaLlegada(Viaje viaje) {
     _revisarAlertaEntrega(viaje);
+    _revisarCostoPorAceptar(viaje);
     if (viaje.situacion != SituacionViaje.llego) return;
     final aviso = viaje.avisosEspera < 1 ? 1 : viaje.avisosEspera;
     final idAviso = idAvisoLlegada(viaje.id, aviso);
@@ -737,10 +761,12 @@ class FlujoPasajero extends ChangeNotifier {
     final idAviso = idAvisoEntrega(viaje.id, aviso);
     if (!_alertasLlegada.add(idAviso)) return;
     final conductor = viaje.primerNombreConductor;
-    final receptor = datos.tipoEnvio == TipoEnvio.encomienda ? datos.nombreReceptor?.trim() : null;
+    // Recibe otra persona (pedido para otra persona o encomienda con receptor): se le avisa a quien pidio.
+    final receptor = viaje.tercero?.nombre ??
+        (datos.tipoEnvio == TipoEnvio.encomienda ? datos.nombreReceptor?.trim() : null);
     final avisarA = receptor == null || receptor.isEmpty ? null : enTitulo(receptor.split(RegExp(r'\s+')).first);
     final titulo = avisarA != null
-        ? 'Avísale a $avisarA: su paquete llegó'
+        ? 'Avísale a $avisarA: ${datos.tipoEnvio == TipoEnvio.encomienda ? 'su paquete' : 'su pedido'} llegó'
         : aviso == 1
         ? 'Tu repartidor llegó con tu pedido'
         : 'Tu repartidor te está esperando';
@@ -749,6 +775,18 @@ class FlujoPasajero extends ChangeNotifier {
         : '$conductor te espera en el punto de entrega${_textoAviso(aviso)}.';
     _alertaLlegada = (titulo: titulo, mensaje: cuerpo);
     _avisarConId(idAviso, titulo, cuerpo, SonidoAviso.llegoTaxi);
+  }
+
+  /// Compra: el repartidor registro el costo total (o lo corrigio). Suena y vibra una vez por version,
+  /// tambien al retomar el pedido con un costo pendiente.
+  void _revisarCostoPorAceptar(Viaje viaje) {
+    final datos = viaje.datosEntrega;
+    final propuesta = datos?.propuestaVigente;
+    if (datos == null || propuesta == null || !datos.costoPorAceptar) return;
+    final titulo = propuesta.version == 1 ? 'Revisa el costo de tu compra' : 'El costo de tu compra cambió';
+    final cuerpo = '${viaje.primerNombreConductor} registró la compra: ${formatoBs(propuesta.total)} en total. '
+        'Acéptalo para recibir tu pedido.';
+    _avisarConId(idAvisoCosto(viaje.id, propuesta.version), titulo, cuerpo, SonidoAviso.viajeAceptado);
   }
 
   static String _textoAviso(int aviso) => aviso <= 1 ? '' : (aviso <= 3 ? ' (aviso $aviso de 3)' : ' (aviso $aviso)');
@@ -889,7 +927,8 @@ class FlujoPasajero extends ChangeNotifier {
         destinoNombre: esFavorito ? favorito.nombre : null,
         idCategoriaServicio: esEntrega ? idCategoriaDelivery : null,
         datosEntrega: esEntrega ? datosEntregaForm : null,
-        tercero: paraOtraPersona && !esEntrega ? tercero : null);
+        // En una entrega para otra persona, quien recibe (y quien paga) va en el formulario del pedido.
+        tercero: esEntrega ? datosEntregaForm?.receptor : (paraOtraPersona ? tercero : null));
     _entrarBuscando(creada);
   }
 
@@ -909,11 +948,18 @@ class FlujoPasajero extends ChangeNotifier {
     _avisar();
   }
 
-  Future<void> confirmarCompra() async {
+  /// Acepta la version del costo total que el pasajero tiene en pantalla. Si el repartidor la cambio
+  /// mientras tanto (409), se vuelve a consultar el viaje para mostrarle el nuevo total.
+  Future<void> aceptarCosto(int version) async {
     final actual = viaje;
     if (actual == null) return;
-    viaje = await api.confirmarCompra(actual.id);
-    _avisar();
+    try {
+      viaje = await api.aceptarCosto(actual.id, version);
+      _avisar();
+    } on ApiExcepcion {
+      await consultarAhora();
+      rethrow;
+    }
   }
 
   // ---------------------------------------------------------------- buscando conductor
@@ -1171,6 +1217,17 @@ class FlujoPasajero extends ChangeNotifier {
         _avisarUnaVez(nuevo.id, 8, 'Tu viaje fue cancelado', 'El conductor te esperó y no te presentaste.');
         _detenerSeguimientoConductor();
         _quitarDeEnCurso(nuevo.id);
+        _volverAlInicio();
+        return;
+      }
+      if (nuevo.datosEntrega?.noEntregado ?? false) {
+        // El repartidor reporto que no pudo entregar: el pedido se cierra (no se republica) y queda en
+        // el historial; el administrador revisa el reporte.
+        aviso = _textoNoEntregado(nuevo);
+        _avisarUnaVez(nuevo.id, 8, 'Tu pedido se cerró sin entregar', _textoNoEntregado(nuevo));
+        _detenerSeguimientoConductor();
+        _quitarDeEnCurso(nuevo.id);
+        mapa.limpiar();
         _volverAlInicio();
         return;
       }

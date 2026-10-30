@@ -3,8 +3,10 @@ package com.taxiuap.backend.pricing.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.math.BigDecimal;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.springframework.context.annotation.Bean;
@@ -14,6 +16,7 @@ import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import com.taxiuap.backend.pricing.dto.RutaResponse;
+import com.taxiuap.backend.sistema.repository.ConfiguracionSistemaRepository;
 
 class CalculoPrecioDeliveryDefaultsTest {
 
@@ -32,12 +35,20 @@ class CalculoPrecioDeliveryDefaultsTest {
     }
 
     @Configuration(proxyBeanMethods = false)
-    @Import(CalculoPrecioDeliveryService.class)
+    @Import({CalculoPrecioDeliveryService.class, TarifaDeliveryService.class})
     static class Configuracion {
 
         @Bean
         static PropertySourcesPlaceholderConfigurer placeholders() {
             return new PropertySourcesPlaceholderConfigurer();
+        }
+
+        @Bean
+        ConfiguracionSistemaRepository configuracionSistemaRepository() {
+            // Sin nada guardado en el panel: vale la tarifa inicial (8 Bs + 2 Bs por km).
+            ConfiguracionSistemaRepository repositorio = Mockito.mock(ConfiguracionSistemaRepository.class);
+            Mockito.when(repositorio.findByClave(Mockito.any())).thenReturn(Optional.empty());
+            return repositorio;
         }
 
         @Bean

@@ -14,6 +14,7 @@ import 'core/api_excepcion.dart';
 import 'core/chat.dart';
 import 'core/cliente_api.dart';
 import 'core/conexion.dart';
+import 'core/iconos.dart';
 import 'core/config.dart';
 import 'core/navegador.dart';
 import 'core/preferencias_aviso.dart';
@@ -27,6 +28,7 @@ import 'modulos/login/pantalla_login.dart';
 import 'modulos/pasajero/inicio/pantalla_inicio.dart';
 import 'modulos/registro/formulario_conductor.dart';
 import 'widgets/aviso_conexion.dart';
+import 'widgets/notificaciones.dart';
 import 'widgets/requiere_gps.dart';
 import 'widgets/vigilante_inactividad.dart';
 
@@ -121,16 +123,24 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
   /// Navegador de la app: al cerrarse la sesion se quitan las ventanas que quedaron abiertas.
   final _navegador = GlobalKey<NavigatorState>();
 
+  /// Mensajes del chat con la app abierta: globo arriba en cualquier pantalla.
+  StreamSubscription<AvisoChat>? _avisosChat;
+
   @override
   void initState() {
     super.initState();
     _rolAnterior = context.read<Sesion>().autenticado ? context.read<Sesion>().usuario?.rol : null;
     WidgetsBinding.instance.addObserver(this);
     unawaited(_actualizarUsuario());
+    _avisosChat = context.read<ChatEstado>().avisosEnPantalla.listen((aviso) {
+      final overlay = _navegador.currentState?.overlay;
+      if (overlay != null) mostrarMensajeEn(overlay, '${aviso.titulo}: ${aviso.texto}', icono: Iconos.message);
+    });
   }
 
   @override
   void dispose() {
+    unawaited(_avisosChat?.cancel());
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }

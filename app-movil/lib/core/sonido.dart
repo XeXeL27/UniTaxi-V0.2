@@ -9,7 +9,10 @@ enum SonidoAviso {
   llegoTaxi('llego_taxi'),
 
   /// Pasajero al abrirse el cuadro para opinar; conductor al finalizar el viaje.
-  viajeFinalizado('viaje_finalizado');
+  viajeFinalizado('viaje_finalizado'),
+
+  /// Mensaje nuevo del chat del viaje (cliente, conductor y repartidor).
+  mensajeChat('mensaje_chat');
 
   /// Nombre del archivo sin extension (el mismo en assets y en res/raw).
   final String archivo;

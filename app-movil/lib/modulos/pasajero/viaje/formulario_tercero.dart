@@ -116,7 +116,7 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
             style: TextStyle(fontSize: 13, color: ColoresApp.textoSuave, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          _Opcion(
+          OpcionTercero(
             elegida: _pagoYo,
             icono: Iconos.qrcode,
             titulo: 'Pago yo',
@@ -124,7 +124,7 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
             onTap: () => setState(() => _pagoYo = true),
           ),
           const SizedBox(height: 8),
-          _Opcion(
+          OpcionTercero(
             elegida: !_pagoYo,
             icono: Iconos.moneyBill1,
             titulo: 'Paga la persona que viaja',
@@ -139,14 +139,16 @@ class _FormularioTerceroState extends State<_FormularioTercero> {
   }
 }
 
-class _Opcion extends StatelessWidget {
+/// Opcion elegible en tarjeta (quien paga, quien recibe), con check cuando esta elegida.
+class OpcionTercero extends StatelessWidget {
   final bool elegida;
   final IconData icono;
   final String titulo;
   final String detalle;
   final VoidCallback onTap;
 
-  const _Opcion({
+  const OpcionTercero({
+    super.key,
     required this.elegida,
     required this.icono,
     required this.titulo,

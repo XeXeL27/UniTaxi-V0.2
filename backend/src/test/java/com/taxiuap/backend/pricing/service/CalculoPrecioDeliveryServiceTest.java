@@ -2,6 +2,8 @@ package com.taxiuap.backend.pricing.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.math.BigDecimal;
 
@@ -12,6 +14,8 @@ import org.locationtech.jts.geom.Coordinate;
 
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.dto.RutaResponse;
+import com.taxiuap.backend.pricing.dto.TarifaDelivery;
+import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.shared.exception.NegocioException;
 
 class CalculoPrecioDeliveryServiceTest {
@@ -19,10 +23,10 @@ class CalculoPrecioDeliveryServiceTest {
     private static final GeometryFactory GEOMETRIA = new GeometryFactory();
 
     @Test
-    void encomiendaCobraTarifaBaseYRecorridoSinCobrarPorMinuto() {
-        CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
+    void encomiendaCobraTarifaBaseYRecorrido() {
+        CalculoPrecioDeliveryService service = servicio(
                 (origen, destino) -> new RutaResponse(new BigDecimal("2500"), 600),
-                new BigDecimal("8.00"), new BigDecimal("2.00"), new BigDecimal("99.00"));
+                new BigDecimal("8.00"), new BigDecimal("2.00"));
 
         DesglosePrecioDelivery resultado = service.calcularEncomienda(punto(1, 2), punto(3, 4));
 
@@ -34,12 +38,12 @@ class CalculoPrecioDeliveryServiceTest {
 
     @Test
     void compraEstimaGpsBYPrefijaComercioB() {
-        CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
+        CalculoPrecioDeliveryService service = servicio(
                 (origen, destino) -> new RutaResponse(new BigDecimal("1000"), 120),
-                new BigDecimal("4.00"), new BigDecimal("3.00"), BigDecimal.ZERO);
+                new BigDecimal("4.00"), new BigDecimal("3.00"));
 
-        DesglosePrecioDelivery estimado = service.estimarCompra(punto(1, 2), punto(3, 4));
-        DesglosePrecioDelivery fijado = service.fijarPrecioCompra(punto(5, 6), punto(3, 4));
+        DesglosePrecioDelivery estimado = service.estimarCompra(punto(1, 2), punto(3, 4), service.tarifaVigente());
+        DesglosePrecioDelivery fijado = service.fijarPrecioCompra(punto(5, 6), punto(3, 4), service.tarifaVigente());
 
         assertEquals(new BigDecimal("7.00"), estimado.precioServicio());
         assertEquals(true, estimado.estimado());
@@ -48,33 +52,56 @@ class CalculoPrecioDeliveryServiceTest {
 
     @Test
     void falloDeOsrmImpideCalcularSinLineaRecta() {
-        CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
+        CalculoPrecioDeliveryService service = servicio(
                 (origen, destino) -> { throw new NegocioException("OSRM no disponible"); },
-                new BigDecimal("5.00"), BigDecimal.ONE, BigDecimal.ZERO);
+                new BigDecimal("5.00"), BigDecimal.ONE);
 
         assertThrows(NegocioException.class, () -> service.calcularEncomienda(punto(1, 2), punto(3, 4)));
     }
 
     @Test
     void consolidarPagoNoCreaComisionAunqueLlegueUnPorcentajeConfigurado() {
-        CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
+        CalculoPrecioDeliveryService service = servicio(
                 (origen, destino) -> new RutaResponse(new BigDecimal("1000"), 60),
-                BigDecimal.ZERO, BigDecimal.ONE, BigDecimal.ZERO);
+                BigDecimal.ZERO, BigDecimal.ONE);
 
         DesglosePrecioDelivery resultado = service.consolidarPago(
-                service.fijarPrecioCompra(punto(1, 2), punto(3, 4)), new BigDecimal("30.00"));
+                service.fijarPrecioCompra(punto(1, 2), punto(3, 4), service.tarifaVigente()), new BigDecimal("30.00"));
 
         assertEquals(new BigDecimal("31.00"), resultado.totalCliente());
     }
 
     @Test
     void compraSoloEsVisibleSiElMontoNoSuperaElLimite() {
-        CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
+        CalculoPrecioDeliveryService service = servicio(
                 (origen, destino) -> new RutaResponse(BigDecimal.ONE, 1),
-                BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO);
+                BigDecimal.ZERO, BigDecimal.ZERO);
 
         assertEquals(true, service.puedeAdelantar(new BigDecimal("50.00"), new BigDecimal("50.00")));
         assertEquals(false, service.puedeAdelantar(new BigDecimal("50.01"), new BigDecimal("50.00")));
+    }
+
+    @Test
+    void pedidoUsaLaTarifaCopiadaAunqueElPanelLaCambie() {
+        CalculoPrecioDeliveryService service = servicio(
+                (origen, destino) -> new RutaResponse(new BigDecimal("1000"), 60),
+                new BigDecimal("10.00"), new BigDecimal("3.00"));
+        DatosEntrega datos = new DatosEntrega();
+        datos.setTarifaBaseAplicada(new BigDecimal("8.00"));
+        datos.setPrecioKmAplicado(new BigDecimal("2.00"));
+
+        DesglosePrecioDelivery conCopia = service.fijarPrecioCompra(punto(1, 2), punto(3, 4), service.tarifaDe(datos));
+        DesglosePrecioDelivery sinCopia = service.fijarPrecioCompra(punto(1, 2), punto(3, 4),
+                service.tarifaDe(new DatosEntrega()));
+
+        assertEquals(new BigDecimal("10.00"), conCopia.precioServicio());
+        assertEquals(new BigDecimal("13.00"), sinCopia.precioServicio());
+    }
+
+    private CalculoPrecioDeliveryService servicio(ClienteRutas rutas, BigDecimal base, BigDecimal km) {
+        TarifaDeliveryService tarifas = mock(TarifaDeliveryService.class);
+        when(tarifas.actual()).thenReturn(new TarifaDelivery(base, km));
+        return new CalculoPrecioDeliveryService(rutas, tarifas);
     }
 
     private Point punto(double x, double y) {

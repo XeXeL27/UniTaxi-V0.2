@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../comun/modelos_viaje.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
@@ -35,6 +36,9 @@ class EsperaConCronometro extends StatefulWidget {
   /// Lo que se reporta, para las indicaciones ("no se presentó", "no pudiste entregar").
   final String queSeReporta;
 
+  /// El reporte queda a mano apenas se da el tercer aviso, sin esperar el minuto (el reparto en B).
+  final bool reportarAlTercerAviso;
+
   const EsperaConCronometro({
     super.key,
     required this.quien,
@@ -46,6 +50,7 @@ class EsperaConCronometro extends StatefulWidget {
     required this.onReportar,
     this.textoReportar = 'Reportar: no se presentó',
     this.queSeReporta = 'que no se presentó',
+    this.reportarAlTercerAviso = false,
   });
 
   static const maximo = 3;
@@ -94,7 +99,7 @@ class _EsperaConCronometroState extends State<EsperaConCronometro> {
     final ocupado = widget.ocupado;
     final siguiendo = avisos > maximo;
     // Reportar: un minuto despues del tercer aviso, o en cualquier momento si ya siguio esperando.
-    final puedeReportar = siguiendo || (avisos == maximo && faltan == 0);
+    final puedeReportar = siguiendo || (avisos == maximo && (faltan == 0 || widget.reportarAlTercerAviso));
     final puedeAvisar = avisos < limite && faltan == 0;
     final eligiendo = avisos >= maximo;
 
@@ -105,7 +110,9 @@ class _EsperaConCronometroState extends State<EsperaConCronometro> {
       indicacion = siguiendo
           ? 'Podrás avisarle de nuevo cuando termine el tiempo, o reportar ya.'
           : avisos == maximo
-          ? 'Llámalo. Al terminar el tiempo podrás seguir esperando o reportar.'
+          ? (widget.reportarAlTercerAviso
+                ? 'Llámalo. Puedes reportar ya o seguir esperando cuando termine el tiempo.'
+                : 'Llámalo. Al terminar el tiempo podrás seguir esperando o reportar.')
           : 'Podrás avisarle de nuevo cuando termine el tiempo.';
     } else if (eligiendo) {
       indicacion = '¿No aparece? Sigue esperando y avísale de nuevo, o reporta ${widget.queSeReporta}.';
@@ -320,6 +327,75 @@ Future<String?> pedirMotivo(
           ),
         ],
       ),
+    ),
+  );
+}
+
+/// Reporte de un pedido que no se pudo entregar: el motivo (el cliente no lo recibio, no pago, no
+/// acepto el costo total u otro) y lo que paso, ambos obligatorios. [conCosto]: ofrece "no acepto el
+/// costo total" (una compra con el costo sin aceptar). Despues se toma la foto.
+Future<({MotivoFalla tipo, String mensaje})?> pedirReporteEntrega(BuildContext context, {bool conCosto = false}) {
+  final controlador = TextEditingController();
+  MotivoFalla? elegido;
+  final opciones = [
+    MotivoFalla.noRecibio,
+    MotivoFalla.noPago,
+    if (conCosto) MotivoFalla.noAproboCosto,
+    MotivoFalla.otro,
+  ];
+  return mostrarDialogo<({MotivoFalla tipo, String mensaje})>(
+    context: context,
+    builder: (contexto) => StatefulBuilder(
+      builder: (contexto, actualizar) {
+        final listo = elegido != null && controlador.text.trim().isNotEmpty;
+        return AlertDialog(
+          title: const Text('No pudiste entregar'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Elige qué pasó, cuéntalo y después toma una foto del lugar. El pedido se cerrará para ti y '
+                  'para el cliente, y el administrador lo revisará.',
+                  style: TextStyle(color: ColoresApp.textoSuave, fontSize: 13),
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final opcion in opciones)
+                      ChoiceChip(
+                        label: Text(opcion.texto),
+                        selected: elegido == opcion,
+                        onSelected: (_) => actualizar(() => elegido = opcion),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: controlador,
+                  maxLines: 3,
+                  maxLength: 500,
+                  onChanged: (_) => actualizar(() {}),
+                  decoration: const InputDecoration(labelText: 'Qué pasó', hintText: 'Por ejemplo, si llamaste'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(contexto).pop(), child: const Text('Volver')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: ColoresApp.rojo),
+              onPressed: listo
+                  ? () => Navigator.of(contexto).pop((tipo: elegido!, mensaje: controlador.text.trim()))
+                  : null,
+              child: const Text('Tomar la foto'),
+            ),
+          ],
+        );
+      },
     ),
   );
 }

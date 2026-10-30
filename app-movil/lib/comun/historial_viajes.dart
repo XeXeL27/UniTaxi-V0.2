@@ -12,6 +12,7 @@ import '../widgets/pagina_seccion.dart';
 import '../widgets/paneles.dart';
 import '../widgets/selector_pestanas.dart';
 import 'foto_entrega.dart';
+import 'costo_compra.dart';
 import 'modelos_viaje.dart';
 
 /// Barra superior azul de las pantallas secundarias.
@@ -21,13 +22,17 @@ PreferredSizeWidget barraSecundaria(String titulo) => AppBar(
   title: Text(titulo, style: const TextStyle(fontWeight: FontWeight.w600)),
 );
 
+/// "No entregado" para el pedido que el repartidor reporto (el viaje queda cancelado); si no, la situacion.
+String textoSituacionViaje(Viaje viaje) =>
+    viaje.datosEntrega?.noEntregado ?? false ? 'No entregado' : SituacionViaje.nombre(viaje.situacion);
+
 Color colorSituacion(String situacion) => switch (situacion) {
   SituacionViaje.completado => ColoresApp.exito,
   SituacionViaje.cancelado => ColoresApp.rojo,
   _ => ColoresApp.ruta,
 };
 
-/// Seccion Historial de la barra inferior: solo los viajes completados del conductor (los que
+/// Seccion Historial de la barra inferior: los viajes completados (y los pedidos no entregados) del conductor (los que
 /// acepto) o del pasajero (los que pidio), del mas reciente al mas antiguo. Al entrar se ven los
 /// ultimos 10; arriba se puede elegir el mes actual o el anterior, paginados de a 10. Tocar un viaje
 /// abre su ruta en el mapa.
@@ -222,7 +227,7 @@ class PantallaHistorialState extends State<PantallaHistorial> {
           ),
           const SizedBox(height: 16),
           Text(
-            recientes ? 'Tus últimos viajes completados' : _nombreMes(_periodo),
+            recientes ? 'Tus últimos viajes' : _nombreMes(_periodo),
             style: const TextStyle(color: ColoresApp.azul, fontSize: 15.5, fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
@@ -451,7 +456,7 @@ class _TarjetaViaje extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Text(
-                      SituacionViaje.nombre(viaje.situacion),
+                      textoSituacionViaje(viaje),
                       style: TextStyle(color: color, fontSize: 12, fontWeight: FontWeight.w700),
                     ),
                   ),
@@ -547,7 +552,7 @@ class _PantallaDetalleViajeState extends State<PantallaDetalleViaje> {
                       ),
                     ),
                     Text(
-                      SituacionViaje.nombre(viaje.situacion),
+                      textoSituacionViaje(viaje),
                       style: TextStyle(color: color, fontWeight: FontWeight.w700),
                     ),
                   ],
@@ -568,7 +573,7 @@ class _PantallaDetalleViajeState extends State<PantallaDetalleViaje> {
                 const SizedBox(height: 8),
                 _Linea(etiqueta: 'Inicio', valor: formatoFechaHora(viaje.fechaInicio)),
                 _Linea(etiqueta: 'Fin', valor: formatoFechaHora(viaje.fechaFin)),
-                if (viaje.canceladoPor != null)
+                if (viaje.canceladoPor != null && !(viaje.datosEntrega?.noEntregado ?? false))
                   _Linea(etiqueta: 'Cancelado por', valor: viaje.canceladoPor == 'PASAJERO' ? 'Pasajero' : 'Conductor'),
                 if (viaje.datosEntrega != null) _DetalleEntrega(
                   datos: viaje.datosEntrega!,
@@ -610,7 +615,11 @@ class _DetalleEntrega extends StatelessWidget {
           style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
-        _Linea(etiqueta: 'Contenido', valor: datos.descripcion),
+        if (datos.esCompra && datos.productos.isNotEmpty) ...[
+          ListaProductosPedido(productos: datos.productos),
+          const SizedBox(height: 6),
+        ] else
+          _Linea(etiqueta: 'Contenido', valor: datos.descripcion),
         if (datos.nombreRemitente != null)
           _Linea(etiqueta: 'Remitente', valor: datos.nombreRemitente!),
         if (datos.nombreReceptor != null)
@@ -618,9 +627,20 @@ class _DetalleEntrega extends StatelessWidget {
         if (datos.receptorIdentificado != null)
           _Linea(etiqueta: 'Recibió', valor: datos.receptorIdentificado!),
         if (datos.detalleCompra != null) _Linea(etiqueta: 'Comercio', valor: datos.detalleCompra!),
-        if (datos.costoProductoReal != null)
+        if (datos.esCompra && datos.propuestaVigente != null) ...[
+          _Linea(etiqueta: 'Productos', valor: formatoBs(datos.propuestaVigente!.totalProductos)),
+          _Linea(etiqueta: 'Envío', valor: formatoBs(datos.propuestaVigente!.precioServicio)),
+          _Linea(
+            etiqueta: datos.propuestaVigente!.aceptada ? 'Total aceptado' : 'Total sin aceptar',
+            valor: formatoBs(datos.propuestaVigente!.total),
+          ),
+          if (datos.propuestaVigente!.fechaRespuesta != null)
+            _Linea(etiqueta: 'Aceptado', valor: formatoFechaHora(datos.propuestaVigente!.fechaRespuesta)),
+        ] else if (datos.costoProductoReal != null)
           _Linea(etiqueta: 'Producto', valor: formatoBs(datos.costoProductoReal)),
         _Linea(etiqueta: 'Estado', valor: EstadoEntrega.nombre(datos.estadoEntrega)),
+        // Solo el motivo elegido: el mensaje del repartidor es para el administrador.
+        if (datos.noEntregado && datos.tipoFalla != null) _Linea(etiqueta: 'Motivo', valor: datos.tipoFalla!.texto),
         if (datos.fechaLlegadaRecogida != null)
           _Linea(etiqueta: 'Llegada a recoger', valor: formatoFechaHora(datos.fechaLlegadaRecogida)),
         if (datos.fechaRecogida != null) _Linea(etiqueta: 'Recogido', valor: formatoFechaHora(datos.fechaRecogida)),

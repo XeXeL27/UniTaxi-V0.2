@@ -1,5 +1,7 @@
 package com.taxiuap.backend.trip.service;
 
+import static org.mockito.ArgumentMatchers.eq;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -173,7 +175,8 @@ class ViajeDeliveryPricingTest {
                 calculoPrecioDeliveryService,
                 historialViajeService, mensajeriaTemplate, calificacionRepository, qrPagoConductorService,
                 solicitudViajeRepository, datosEntregaRepository, ofertaViajeRepository,
-                ubicacionConductorRepository, notificacionPushService);
+                ubicacionConductorRepository, notificacionPushService,
+                org.mockito.Mockito.mock(com.taxiuap.backend.trip.repository.ProductoEntregaRepository.class));
     }
 
     @AfterEach
@@ -244,7 +247,7 @@ class ViajeDeliveryPricingTest {
         ubicacion.setUbicacion(gpsActual);
         when(vehiculoRepository.findByConductorId(40L)).thenReturn(List.of(motoDelivery));
         when(ubicacionConductorRepository.findByConductorId(40L)).thenReturn(Optional.of(ubicacion));
-        when(calculoPrecioDeliveryService.estimarCompra(gpsActual, destino))
+        when(calculoPrecioDeliveryService.estimarCompra(eq(gpsActual), eq(destino), any()))
                 .thenReturn(new DesglosePrecioDelivery(new BigDecimal("21.25"), new BigDecimal("3.20"), 12, true));
         lenient().doReturn(new CalculoPrecio(new BigDecimal("5.00"), BigDecimal.ZERO, new BigDecimal("5.00"),
                 tarifa, null, null, new BigDecimal("1.00"), 4))
@@ -258,7 +261,7 @@ class ViajeDeliveryPricingTest {
         assertEquals(new BigDecimal("3.20"), viaje.getDistanciaKm());
         assertEquals(12, viaje.getDuracionMin());
         assertTrue(viajeService.aRespuesta(viaje).toString().contains("precioEstimado=true"));
-        verify(calculoPrecioDeliveryService).estimarCompra(gpsActual, destino);
+        verify(calculoPrecioDeliveryService).estimarCompra(eq(gpsActual), eq(destino), any());
         verify(calculoPrecioService, never()).calcular(solicitud, oferta, pasajero);
 
         var respuesta = viajeService.aRespuesta(viaje);
@@ -282,7 +285,7 @@ class ViajeDeliveryPricingTest {
         ubicacion.setUbicacion(gpsActual);
         when(vehiculoRepository.findByConductorId(40L)).thenReturn(List.of(motoDelivery));
         when(ubicacionConductorRepository.findByConductorId(40L)).thenReturn(Optional.of(ubicacion));
-        when(calculoPrecioDeliveryService.estimarCompra(gpsActual, destino))
+        when(calculoPrecioDeliveryService.estimarCompra(eq(gpsActual), eq(destino), any()))
                 .thenThrow(new NegocioException("OSRM no disponible"));
 
         assertThrows(NegocioException.class, () -> viajeService.crearDesdeOferta(solicitud, oferta));

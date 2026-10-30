@@ -53,11 +53,13 @@ import com.taxiuap.backend.trip.dto.PersonaViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
 import com.taxiuap.backend.trip.dto.ViajesActivosResponse;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
+import com.taxiuap.backend.trip.entity.ProductoEntrega;
 import com.taxiuap.backend.trip.entity.OfertaViaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
 import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.trip.repository.DatosEntregaRepository;
+import com.taxiuap.backend.trip.repository.ProductoEntregaRepository;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.CanceladoPor;
@@ -114,6 +116,7 @@ public class ViajeService {
     private final OfertaViajeRepository ofertaViajeRepository;
     private final UbicacionConductorRepository ubicacionConductorRepository;
     private final NotificacionPushService notificacionPushService;
+    private final ProductoEntregaRepository productoEntregaRepository;
 
     @Value("${taxiuap.comision.porcentaje:0}")
     private BigDecimal porcentajeComision;
@@ -152,7 +155,8 @@ public class ViajeService {
                         .filter(u -> u.getUbicacion() != null)
                         .orElseThrow(() -> new NegocioException(
                                 "El repartidor debe reportar su ubicacion antes de aceptar una compra"));
-                estimado = calculoPrecioDeliveryService.estimarCompra(ubicacion.getUbicacion(), solicitud.getDestino());
+                estimado = calculoPrecioDeliveryService.estimarCompra(ubicacion.getUbicacion(), solicitud.getDestino(),
+                        calculoPrecioDeliveryService.tarifaDe(datos));
                 precioDelivery = estimado.precioServicio();
                 solicitud.setPrecioSugerido(precioDelivery);
             } else {
@@ -239,6 +243,16 @@ public class ViajeService {
         datos.put("titulo", titulo);
         datos.put("cuerpo", primerNombre + resto);
         notificacionPushService.enviar(viaje.getPasajero().getUsuario().getId(), datos);
+    }
+
+    /** Push al telefono del conductor o repartidor del viaje ([cuerpo] completo, sin el nombre delante). */
+    void avisarConductor(Viaje viaje, String tipo, String titulo, String cuerpo) {
+        Map<String, String> datos = new java.util.HashMap<>();
+        datos.put("tipo", tipo);
+        datos.put("idViaje", String.valueOf(viaje.getId()));
+        datos.put("titulo", titulo);
+        datos.put("cuerpo", cuerpo);
+        notificacionPushService.enviar(viaje.getConductor().getUsuario().getId(), datos);
     }
 
     /** Aviso "te estoy esperando" numero [aviso] (1 = "Llegue"): push con el sonido del taxi que llego. */
@@ -410,7 +424,7 @@ public class ViajeService {
             viaje.setPagoRecibidoEn(LocalDateTime.now());
         }
         procesarPagoYComision(viaje, metodoPago);
-        if (viaje.getSolicitud().esParaOtraPersona()) {
+        if (viaje.getSolicitud().esParaOtraPersona() && !esDelivery(viaje)) {
             avisarPasajero(viaje, "VIAJE_COMPLETADO", primerNombre(viaje.getSolicitud().getNombrePasajeroTercero())
                     + " llegó a su destino", " completó el viaje.");
         } else if (!esDelivery(viaje)) {
@@ -557,6 +571,8 @@ public class ViajeService {
         }
         viaje.setSituacionViaje(SituacionViaje.CANCELADO);
         viaje.setCanceladoPor(CanceladoPor.CONDUCTOR);
+        // Con fecha de cierre: el pedido no entregado queda en el historial de los dos.
+        viaje.setFechaFin(LocalDateTime.now());
         viaje.getSolicitud().setSituacionSolicitud(SituacionSolicitud.CANCELADA);
         viaje = viajeRepository.save(viaje);
         return registrarYNotificar(viaje);
@@ -614,6 +630,7 @@ public class ViajeService {
         if (anterior.getDatosEntrega() != null) {
             DatosEntrega datos = copiarDatosEntregaParaRepublicar(anterior.getDatosEntrega(), nueva);
             nueva.setDatosEntrega(datosEntregaRepository.save(datos));
+            copiarProductosParaRepublicar(anterior.getDatosEntrega(), nueva.getDatosEntrega());
         }
 
         OfertaViaje rechazo = new OfertaViaje();
@@ -654,6 +671,9 @@ public class ViajeService {
         Page<Viaje> pagina(LocalDateTime desde, LocalDateTime hasta, PageRequest pagina);
 
         BigDecimal monto(LocalDateTime desde, LocalDateTime hasta);
+
+        /** Solo los completados: la lista trae tambien los pedidos no entregados, el total no. */
+        long completados(LocalDateTime desde, LocalDateTime hasta);
     }
 
     /**
@@ -670,6 +690,10 @@ public class ViajeService {
             public BigDecimal monto(LocalDateTime desde, LocalDateTime hasta) {
                 return viajeRepository.montoHistorialDePasajero(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta);
             }
+
+            public long completados(LocalDateTime desde, LocalDateTime hasta) {
+                return viajeRepository.contarHistorialDePasajero(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta);
+            }
         });
     }
 
@@ -682,6 +706,10 @@ public class ViajeService {
 
             public BigDecimal monto(LocalDateTime desde, LocalDateTime hasta) {
                 return viajeRepository.montoHistorialDeConductor(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta);
+            }
+
+            public long completados(LocalDateTime desde, LocalDateTime hasta) {
+                return viajeRepository.contarHistorialDeConductor(id, SituacionViaje.COMPLETADO, EstadoRegistro.A, desde, hasta);
             }
         });
     }
@@ -706,7 +734,7 @@ public class ViajeService {
                 resultado.getContent().stream().map(this::aRespuesta).toList(),
                 numero,
                 totalPaginas,
-                resultado.getTotalElements(),
+                consulta.completados(rango.desde(), rango.hasta()),
                 consulta.monto(rango.desde(), rango.hasta()));
     }
 
@@ -717,6 +745,11 @@ public class ViajeService {
             case MES_ANTERIOR -> new Rango(inicioMes.minusMonths(1).atStartOfDay(), inicioMes.atStartOfDay());
             case RECIENTES -> new Rango(SIN_LIMITE_DESDE, SIN_LIMITE_HASTA);
         };
+    }
+
+    /** Un viaje o pedido para el panel (por ejemplo, el de un reporte), con lo mismo que la lista. */
+    public ViajeResponse obtenerRespuestaParaAdmin(Long idViaje) {
+        return aRespuesta(obtenerParaAdmin(idViaje));
     }
 
     /** Todos los pedidos DELIVERY, del mas reciente al mas antiguo (panel admin, Entregas). */
@@ -917,6 +950,29 @@ public class ViajeService {
                 < MAXIMO_SERVICIOS_PASAJERO;
     }
 
+    public static final String MENSAJE_DELIVERY_CON_TAXI =
+            "Estás en un viaje en moto taxi: podrás pedir un delivery cuando termine";
+    public static final String MENSAJE_OTRO_DELIVERY =
+            "Ya tienes un delivery en curso: podrás pedir otro cuando termine";
+
+    /**
+     * Reglas de los servicios a la vez: un solo delivery en curso; con un delivery puede pedir un taxi
+     * (el limite de {@link #MAXIMO_SERVICIOS_PASAJERO} lo revisa {@link #pasajeroPuedePedirOtro}), pero
+     * con un taxi en curso no puede pedir un delivery.
+     */
+    public void validarNuevoServicio(Long idPasajero, boolean delivery) {
+        if (!delivery) {
+            return;
+        }
+        List<Viaje> activos = viajeRepository.findByPasajeroIdAndSituacionViajeNotInOrderByIdAsc(idPasajero, ESTADOS_FINALES);
+        if (activos.stream().anyMatch(v -> !esDelivery(v))) {
+            throw new NegocioException(MENSAJE_DELIVERY_CON_TAXI);
+        }
+        if (activos.stream().anyMatch(ViajeService::esDelivery)) {
+            throw new NegocioException(MENSAJE_OTRO_DELIVERY);
+        }
+    }
+
     /** Servicios en curso del pasajero autenticado, del mas antiguo al mas nuevo. */
     public ViajesActivosResponse activosDelPasajero() {
         Long idUsuario = UsuarioActual.idUsuario();
@@ -1064,7 +1120,31 @@ public class ViajeService {
         datos.setMontoPagoRecibido(null);
         datos.setFotoFallaUrl(null);
         datos.setMotivoFalla(null);
+        // La tarifa con la que se pidio sigue valiendo para el pedido publicado de nuevo.
+        datos.setTarifaBaseAplicada(anterior.getTarifaBaseAplicada());
+        datos.setPrecioKmAplicado(anterior.getPrecioKmAplicado());
         return datos;
+    }
+
+    /**
+     * Compra publicada de nuevo: la misma lista que escribio el cliente, sin nada de lo que registro el
+     * repartidor que cancelo (cada producto vuelve a PENDIENTE). Sin la lista el siguiente repartidor no
+     * podria registrar la compra.
+     */
+    private void copiarProductosParaRepublicar(DatosEntrega anterior, DatosEntrega nueva) {
+        if (anterior.getTipoEnvio() != TipoEnvio.COMPRA_Y_ENTREGA) {
+            return;
+        }
+        for (ProductoEntrega original : productoEntregaRepository
+                .findByDatosEntregaIdAndEstadoProductoEntregaOrderByOrdenAscIdAsc(anterior.getId(), EstadoRegistro.A)) {
+            ProductoEntrega copia = new ProductoEntrega();
+            copia.setDatosEntrega(nueva);
+            copia.setOrden(original.getOrden());
+            copia.setNombre(original.getNombre());
+            copia.setCantidad(original.getCantidad());
+            copia.setIndicaciones(original.getIndicaciones());
+            nueva.getProductos().add(productoEntregaRepository.save(copia));
+        }
     }
 
     /**

@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.taxiuap.backend.pricing.dto.TarifaDelivery;
+import com.taxiuap.backend.pricing.service.TarifaDeliveryService;
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.trip.dto.CotizacionViajeResponse;
 import com.taxiuap.backend.trip.dto.OfertaViajeResponse;
@@ -32,6 +34,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SolicitudViajeController {
 
+    private final TarifaDeliveryService tarifaDeliveryService;
     private final SolicitudViajeService solicitudViajeService;
     private final OfertaViajeService ofertaViajeService;
 
@@ -51,6 +54,12 @@ public class SolicitudViajeController {
     @GetMapping("/precio")
     public ResponseEntity<ApiResponse<PrecioViajeResponse>> precio() {
         return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.precioVigente()));
+    }
+
+    /** Tarifa del delivery (base y por km) que se le cobra a un pedido nuevo de encomienda o compra. */
+    @GetMapping("/tarifa-delivery")
+    public ResponseEntity<ApiResponse<TarifaDelivery>> tarifaDelivery() {
+        return ResponseEntity.ok(ApiResponse.exito(tarifaDeliveryService.actual()));
     }
 
     /** Precio del viaje de origen a destino, con el descuento de estudiante, antes de pedirlo (entrega: el de la encomienda). */

@@ -59,6 +59,7 @@ class MainActivity : FlutterFragmentActivity() {
         val recurso = when (sonido) {
             "llego_taxi" -> R.raw.llego_taxi
             "viaje_finalizado" -> R.raw.viaje_finalizado
+            "mensaje_chat" -> R.raw.mensaje_chat
             else -> R.raw.viaje_aceptado
         }
         try {

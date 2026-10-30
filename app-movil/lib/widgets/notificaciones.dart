@@ -10,10 +10,15 @@ import '../core/tema.dart';
 /// Las ventanas (dialogos.dart) quedan solo para confirmar algo o para lo que no se puede perder
 /// ("llego tu conductor", los avisos de espera).
 void mostrarMensaje(BuildContext context, String texto, {bool error = false, IconData? icono, Duration? duracion}) {
-  // Unos 3 s; los textos largos se quedan mas (hasta 7 s) para alcanzar a leerlos.
-  final ms = (texto.length * 60).clamp(3000, 7000);
   final overlay = Overlay.maybeOf(context, rootOverlay: true);
   if (overlay == null) return;
+  mostrarMensajeEn(overlay, texto, error: error, icono: icono, duracion: duracion);
+}
+
+/// El mismo globo sobre [overlay], para avisos que no salen de una pantalla (los mensajes del chat).
+void mostrarMensajeEn(OverlayState overlay, String texto, {bool error = false, IconData? icono, Duration? duracion}) {
+  // Unos 3 s; los textos largos se quedan mas (hasta 7 s) para alcanzar a leerlos.
+  final ms = (texto.length * 60).clamp(3000, 7000);
   _quitarActual();
   late final OverlayEntry entrada;
   entrada = OverlayEntry(

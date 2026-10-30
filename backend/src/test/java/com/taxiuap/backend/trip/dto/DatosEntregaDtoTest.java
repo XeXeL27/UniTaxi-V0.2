@@ -49,7 +49,13 @@ class DatosEntregaDtoTest {
                 null,
                 null,
                 null,
-                null);
+                null,
+                "Sin boleta",
+                new BigDecimal("8.00"),
+                new BigDecimal("2.00"),
+                java.util.List.of(),
+                java.util.List.of(),
+                com.taxiuap.backend.trip.enums.MotivoFallaEntrega.NO_PAGO);
 
         String json = new ObjectMapper().writeValueAsString(response);
         var node = new ObjectMapper().readTree(json);
@@ -60,5 +66,8 @@ class DatosEntregaDtoTest {
         assertEquals(25.00, node.get("costoProductoConfirmado").asDouble());
         assertEquals(false, node.get("compraConfirmadaPorCliente").asBoolean());
         assertEquals(false, node.get("pagoConfirmado").asBoolean());
+        assertEquals(8.00, node.get("tarifaBaseAplicada").asDouble());
+        assertEquals(true, node.get("productos").isArray());
+        assertEquals("NO_PAGO", node.get("tipoFalla").asText());
     }
 }

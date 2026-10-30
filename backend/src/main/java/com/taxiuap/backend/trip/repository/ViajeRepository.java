@@ -100,10 +100,13 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
             @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 
-    // ------------------------------------------------ historial de la app (viajes completados)
+    // ------------------------------------------------ historial de la app (completados y pedidos no entregados;
+    // los montos y el conteo del dia, solo completados)
 
     @Query("""
-            select v from Viaje v where v.pasajero.id = :id and v.situacionViaje = :situacion
+            select v from Viaje v where v.pasajero.id = :id
+            and (v.situacionViaje = :situacion or exists (select 1 from DatosEntrega d
+                 where d.solicitud = v.solicitud and d.estadoEntrega = com.taxiuap.backend.trip.enums.EstadoEntrega.NO_ENTREGADO))
             and v.estadoViaje = :estado and v.fechaFin >= :desde and v.fechaFin < :hasta
             order by v.fechaFin desc, v.id desc""")
     Page<Viaje> historialDePasajero(@Param("id") Long idPasajero, @Param("situacion") SituacionViaje situacion,
@@ -111,7 +114,9 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
             @Param("hasta") LocalDateTime hasta, Pageable pagina);
 
     @Query("""
-            select v from Viaje v where v.conductor.id = :id and v.situacionViaje = :situacion
+            select v from Viaje v where v.conductor.id = :id
+            and (v.situacionViaje = :situacion or exists (select 1 from DatosEntrega d
+                 where d.solicitud = v.solicitud and d.estadoEntrega = com.taxiuap.backend.trip.enums.EstadoEntrega.NO_ENTREGADO))
             and v.estadoViaje = :estado and v.fechaFin >= :desde and v.fechaFin < :hasta
             order by v.fechaFin desc, v.id desc""")
     Page<Viaje> historialDeConductor(@Param("id") Long idConductor, @Param("situacion") SituacionViaje situacion,
@@ -123,6 +128,13 @@ public interface ViajeRepository extends JpaRepository<Viaje, Long> {
             and v.situacionViaje = :situacion and v.estadoViaje = :estado
             and v.fechaFin >= :desde and v.fechaFin < :hasta""")
     BigDecimal montoHistorialDePasajero(@Param("id") Long idPasajero, @Param("situacion") SituacionViaje situacion,
+            @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
+            @Param("hasta") LocalDateTime hasta);
+
+    @Query("""
+            select count(v) from Viaje v where v.pasajero.id = :id and v.situacionViaje = :situacion
+            and v.estadoViaje = :estado and v.fechaFin >= :desde and v.fechaFin < :hasta""")
+    long contarHistorialDePasajero(@Param("id") Long idPasajero, @Param("situacion") SituacionViaje situacion,
             @Param("estado") EstadoRegistro estado, @Param("desde") LocalDateTime desde,
             @Param("hasta") LocalDateTime hasta);
 

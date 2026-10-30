@@ -13,6 +13,7 @@ import '../../widgets/listado_remoto.dart';
 import '../../widgets/modal_registro.dart';
 import '../../widgets/modal_formulario.dart';
 import '../../widgets/tabla/columna_tabla.dart';
+import '../entregas/detalle_entrega.dart';
 import '../expediente/vista_expediente.dart';
 import '../personas/personas_api.dart';
 import 'modelos.dart';
@@ -101,6 +102,23 @@ class _DetalleReporte extends StatefulWidget {
 
 class _DetalleReporteState extends State<_DetalleReporte> {
   late final Future<Uint8List>? _foto = widget.reporte.fotoFallaUrl == null ? null : widget.api.foto(widget.reporte.id);
+  late final Future<List<MensajeChatReporte>> _chat = widget.api.mensajes(widget.reporte.idViaje);
+  bool _abriendoEntrega = false;
+
+  /// Abre el detalle completo del pedido (productos, costo aceptado, pasos y fotos).
+  Future<void> _verEntrega() async {
+    setState(() => _abriendoEntrega = true);
+    try {
+      final viaje = await widget.api.viaje(widget.reporte.idViaje);
+      if (mounted) await mostrarEntrega(context, viaje);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo abrir el pedido: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _abriendoEntrega = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -136,6 +154,67 @@ class _DetalleReporteState extends State<_DetalleReporte> {
         ]),
         const SizedBox(height: 14),
         Text(r.descripcion, style: const TextStyle(fontWeight: FontWeight.w600)),
+        if (r.esFallaEntrega) ...[
+          const SizedBox(height: 14),
+          const Text('Falla de entrega', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+          const SizedBox(height: 6),
+          DatosEnGrilla([
+            ('Motivo elegido', r.tipoFalla ?? 'Sin motivo elegido (app anterior)'),
+            ('Avisos en el punto de entrega', r.avisosEntrega == null ? 'Ninguno' : '${r.avisosEntrega}'),
+            ('Llegó al punto de entrega', r.fechaLlegadaEntrega == null ? 'No marcó la llegada' : Formato.fechaHora(r.fechaLlegadaEntrega)),
+            (
+              'Debía recibir',
+              r.nombreReceptor == null
+                  ? 'El cliente (${r.nombrePasajero ?? ''})'
+                  : '${r.nombreReceptor}${r.telefonoReceptor == null ? '' : ' (${r.telefonoReceptor})'}'
+                        '${r.paraOtraPersona ? ', pedido para otra persona' : ''}',
+            ),
+            if (r.costoAceptado != null) ('Costo total', r.costoAceptado! ? 'Aceptado por el cliente' : 'Sin aceptar'),
+          ]),
+          const SizedBox(height: 10),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: OutlinedButton.icon(
+              onPressed: _abriendoEntrega ? null : _verEntrega,
+              icon: _abriendoEntrega
+                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Iconos.paquete, size: 16),
+              label: const Text('Ver el pedido completo'),
+            ),
+          ),
+        ],
+        const SizedBox(height: 14),
+        const Text('Chat del viaje', style: TextStyle(fontWeight: FontWeight.w700, color: ColoresApp.azul)),
+        const SizedBox(height: 6),
+        FutureBuilder<List<MensajeChatReporte>>(
+          future: _chat,
+          builder: (_, estado) {
+            if (estado.hasError) return const Text('No se pudo cargar el chat');
+            final mensajes = estado.data;
+            if (mensajes == null) return const LinearProgressIndicator();
+            if (mensajes.isEmpty) return const Text('No se escribieron mensajes.', style: TextStyle(color: ColoresApp.textoSuave));
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final m in mensajes)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: '${m.nombreEmisor} (${Formato.fechaHora(m.fecha)}): ',
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                          TextSpan(text: m.contenido),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
         if (r.esPasajeroAusente) ...[
           const SizedBox(height: 14),
           const Text(

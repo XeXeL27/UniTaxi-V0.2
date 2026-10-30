@@ -16,28 +16,60 @@ enum TipoEnvio {
   static TipoEnvio? desde(String? codigo) => values.where((tipo) => tipo.codigo == codigo).firstOrNull;
 }
 
+/// Producto que el pasajero pide comprar (compra y entrega).
+class ProductoPedido {
+  final String nombre;
+  final int cantidad;
+  final String? indicaciones;
+
+  const ProductoPedido({required this.nombre, required this.cantidad, this.indicaciones});
+
+  Map<String, dynamic> aJson() => {
+    'nombre': nombre.trim(),
+    'cantidad': cantidad,
+    if (indicaciones != null && indicaciones!.trim().isNotEmpty) 'indicaciones': indicaciones!.trim(),
+  };
+
+  /// "2 x Pan", como lo arma el servidor en la descripcion del pedido.
+  String get resumen => '$cantidad x ${nombre.trim()}';
+}
+
 /// Datos que el pasajero completa antes de crear una solicitud DELIVERY.
 class DatosEntregaForm {
   final TipoEnvio tipoEnvio;
   final String descripcion;
+
+  /// Compra: lo que el repartidor tiene que comprar, uno por fila.
+  final List<ProductoPedido> productos;
   final double? costoProductoEstimado;
   final String? nombreReceptor;
   final String? telefonoReceptor;
   final String? fotoPaqueteUrl;
   final bool aceptaPoliticaArticulos;
 
+  /// Pedido para otra persona: quien recibe (nombre y celular) y si paga quien pide, por QR. null: lo
+  /// recibe quien pide.
+  final PasajeroTercero? receptor;
+
   const DatosEntregaForm({
     required this.tipoEnvio,
     required this.descripcion,
+    this.productos = const [],
     this.costoProductoEstimado,
     this.nombreReceptor,
     this.telefonoReceptor,
     this.fotoPaqueteUrl,
     required this.aceptaPoliticaArticulos,
+    this.receptor,
   });
 
   String? get error {
-    if (descripcion.trim().isEmpty) {
+    if (tipoEnvio == TipoEnvio.compraYEntrega) {
+      if (productos.isEmpty) return 'Agrega al menos un producto';
+      if (productos.length > maximoProductos) return 'Puedes pedir hasta $maximoProductos productos';
+      if (productos.any((p) => p.nombre.trim().isEmpty)) return 'Escribe el nombre de cada producto';
+      if (productos.any((p) => p.cantidad < 1 || p.cantidad > 99)) return 'La cantidad va de 1 a 99';
+    } else if (descripcion.trim().isEmpty) {
       return tipoEnvio == TipoEnvio.compraYEntrega
           ? 'Describe el producto que quieres comprar'
           : 'Describe el contenido del paquete';
@@ -46,30 +78,189 @@ class DatosEntregaForm {
       return 'Acepta la política de artículos prohibidos';
     }
     if (tipoEnvio == TipoEnvio.compraYEntrega && (costoProductoEstimado ?? 0) <= 0) {
-      return 'Indica el monto estimado del producto';
+      return 'Indica cuánto crees que costarán los productos';
     }
-    if (tipoEnvio == TipoEnvio.encomienda) {
-      if (nombreReceptor?.trim().isEmpty ?? true) {
-        return 'Indica el nombre del receptor';
-      }
-      if (telefonoReceptor?.trim().isEmpty ?? true) {
-        return 'Indica el teléfono del receptor';
+    final otra = receptor;
+    if (otra != null) {
+      if (otra.nombre.trim().length < 3) return 'Escribe el nombre de quien recibe';
+      if (!RegExp(r'^[67]\d{7}$').hasMatch(otra.telefono?.trim() ?? '')) {
+        return 'El celular de quien recibe debe tener 8 dígitos y empezar con 6 o 7';
       }
     }
     return null;
   }
 
+  static const maximoProductos = 20;
+
+  /// Descripcion del pedido: en una compra, la lista resumida ("2 x Pan, 1 x Leche").
+  String get descripcionPedido =>
+      tipoEnvio == TipoEnvio.compraYEntrega ? productos.map((p) => p.resumen).join(', ') : descripcion.trim();
+
   Map<String, dynamic> aJson() => {
     'tipoEnvio': tipoEnvio.codigo,
-    'descripcion': descripcion.trim(),
+    'descripcion': descripcionPedido,
+    if (tipoEnvio == TipoEnvio.compraYEntrega) 'productos': [for (final p in productos) p.aJson()],
     'costoProductoEstimado': tipoEnvio == TipoEnvio.compraYEntrega ? costoProductoEstimado : null,
     'aceptaPoliticaArticulos': aceptaPoliticaArticulos,
-    if (tipoEnvio == TipoEnvio.encomienda) ...{
+    if (receptor != null) ...{
+      'nombreReceptor': receptor!.nombre.trim(),
+      'telefonoReceptor': ?receptor!.telefono?.trim(),
+    } else if (tipoEnvio == TipoEnvio.encomienda && (nombreReceptor?.trim().isNotEmpty ?? false)) ...{
       'nombreReceptor': nombreReceptor!.trim(),
-      'telefonoReceptor': telefonoReceptor!.trim(),
-      if (fotoPaqueteUrl != null) 'fotoPaqueteUrl': fotoPaqueteUrl,
+      'telefonoReceptor': ?telefonoReceptor?.trim(),
     },
+    if (tipoEnvio == TipoEnvio.encomienda && fotoPaqueteUrl != null) 'fotoPaqueteUrl': fotoPaqueteUrl,
   };
+}
+
+/// Lo que el repartidor registra de cada producto al comprar (conseguido con cantidad y precio, o no).
+class ProductoComprado {
+  final int idProducto;
+  final bool conseguido;
+  final int? cantidad;
+  final double? precioUnitario;
+  final String? observacion;
+
+  const ProductoComprado({
+    required this.idProducto,
+    required this.conseguido,
+    this.cantidad,
+    this.precioUnitario,
+    this.observacion,
+  });
+
+  Map<String, dynamic> aJson() => {
+    'idProducto': idProducto,
+    'conseguido': conseguido,
+    if (conseguido) 'cantidad': cantidad,
+    if (conseguido) 'precioUnitario': precioUnitario,
+    if (observacion != null && observacion!.trim().isNotEmpty) 'observacion': observacion!.trim(),
+  };
+
+  /// Subtotal como lo calcula el servidor (redondeado a centavos).
+  double get subtotal => conseguido ? (((precioUnitario ?? 0) * (cantidad ?? 0)) * 100).round() / 100 : 0;
+}
+
+/// Situacion de un producto de la compra.
+abstract final class SituacionProducto {
+  static const pendiente = 'PENDIENTE';
+  static const conseguido = 'CONSEGUIDO';
+  static const noConseguido = 'NO_CONSEGUIDO';
+}
+
+/// Producto de una compra: lo que pidio el cliente y, despues de comprar, lo que registro el repartidor.
+class ProductoEntrega {
+  final int id;
+  final String nombre;
+  final int cantidad;
+  final String? indicaciones;
+  final String situacion;
+  final int? cantidadConseguida;
+  final double? precioUnitario;
+  final double? subtotal;
+  final String? observacion;
+
+  const ProductoEntrega({
+    required this.id,
+    required this.nombre,
+    required this.cantidad,
+    this.indicaciones,
+    this.situacion = SituacionProducto.pendiente,
+    this.cantidadConseguida,
+    this.precioUnitario,
+    this.subtotal,
+    this.observacion,
+  });
+
+  factory ProductoEntrega.desdeJson(Map<String, dynamic> json) => ProductoEntrega(
+    id: (json['id'] as num).toInt(),
+    nombre: json['nombre'] as String? ?? '',
+    cantidad: (json['cantidad'] as num?)?.toInt() ?? 1,
+    indicaciones: json['indicaciones'] as String?,
+    situacion: json['situacion'] as String? ?? SituacionProducto.pendiente,
+    cantidadConseguida: (json['cantidadConseguida'] as num?)?.toInt(),
+    precioUnitario: numeroDesdeJson(json['precioUnitario']),
+    subtotal: numeroDesdeJson(json['subtotal']),
+    observacion: json['observacion'] as String?,
+  );
+
+  bool get conseguido => situacion == SituacionProducto.conseguido;
+  bool get noConseguido => situacion == SituacionProducto.noConseguido;
+}
+
+/// Un producto tal como se presento al cliente en una version del costo total.
+class LineaCosto {
+  final String nombre;
+  final int cantidad;
+  final double? precioUnitario;
+  final double subtotal;
+  final bool conseguido;
+  final String? observacion;
+
+  const LineaCosto({
+    required this.nombre,
+    required this.cantidad,
+    this.precioUnitario,
+    required this.subtotal,
+    required this.conseguido,
+    this.observacion,
+  });
+
+  factory LineaCosto.desdeJson(Map<String, dynamic> json) => LineaCosto(
+    nombre: json['nombre'] as String? ?? '',
+    cantidad: (json['cantidad'] as num?)?.toInt() ?? 1,
+    precioUnitario: numeroDesdeJson(json['precioUnitario']),
+    subtotal: numeroDesdeJson(json['subtotal']) ?? 0,
+    conseguido: json['conseguido'] as bool? ?? false,
+    observacion: json['observacion'] as String?,
+  );
+}
+
+/// Situacion del costo total presentado al cliente.
+abstract final class SituacionPropuesta {
+  static const pendiente = 'PENDIENTE';
+  static const aceptada = 'ACEPTADA';
+  static const reemplazada = 'REEMPLAZADA';
+}
+
+/// Costo total de una compra en una version: servicio + productos, el detalle y si el cliente lo acepto.
+class PropuestaCosto {
+  final int version;
+  final String situacion;
+  final double precioServicio;
+  final double totalProductos;
+  final double total;
+  final List<LineaCosto> detalle;
+  final DateTime? fechaPropuesta;
+  final DateTime? fechaRespuesta;
+
+  const PropuestaCosto({
+    required this.version,
+    required this.situacion,
+    required this.precioServicio,
+    required this.totalProductos,
+    required this.total,
+    this.detalle = const [],
+    this.fechaPropuesta,
+    this.fechaRespuesta,
+  });
+
+  factory PropuestaCosto.desdeJson(Map<String, dynamic> json) => PropuestaCosto(
+    version: (json['version'] as num).toInt(),
+    situacion: json['situacion'] as String? ?? SituacionPropuesta.pendiente,
+    precioServicio: numeroDesdeJson(json['precioServicio']) ?? 0,
+    totalProductos: numeroDesdeJson(json['totalProductos']) ?? 0,
+    total: numeroDesdeJson(json['total']) ?? 0,
+    detalle: [
+      for (final linea in (json['detalle'] as List<dynamic>? ?? const []))
+        LineaCosto.desdeJson(linea as Map<String, dynamic>),
+    ],
+    fechaPropuesta: fechaDesdeJson(json['fechaPropuesta']),
+    fechaRespuesta: fechaDesdeJson(json['fechaRespuesta']),
+  );
+
+  bool get pendiente => situacion == SituacionPropuesta.pendiente;
+  bool get aceptada => situacion == SituacionPropuesta.aceptada;
 }
 
 /// Datos de entrega que devuelve el backend. Los códigos solo llegan al pasajero cuando corresponden.
@@ -97,6 +288,9 @@ class DatosEntrega {
   final String? observacionCompra;
   final String? fotoFallaUrl;
   final String? motivoFalla;
+
+  /// Motivo elegido por el repartidor al reportar que no pudo entregar (null si no hubo falla).
+  final MotivoFalla? tipoFalla;
   final String estadoEntrega;
 
   /// Cuando el repartidor marco que llego al punto de recogida (A).
@@ -114,6 +308,14 @@ class DatosEntrega {
   final DateTime? fechaLlegadaEntrega;
   final int avisosEntrega;
   final DateTime? ultimoAvisoEntrega;
+
+  /// Tarifa del delivery con la que se pidio (base y por km).
+  final double? tarifaBaseAplicada;
+  final double? precioKmAplicado;
+
+  /// Compra: los productos del pedido y los costos totales presentados, del mas nuevo al mas viejo.
+  final List<ProductoEntrega> productos;
+  final List<PropuestaCosto> propuestas;
 
   /// Ya esta en el punto de entrega esperando a quien recibe.
   bool get esperandoEnEntrega => fechaLlegadaEntrega != null && estadoEntrega == EstadoEntrega.enMano;
@@ -142,6 +344,7 @@ class DatosEntrega {
     this.observacionCompra,
     this.fotoFallaUrl,
     this.motivoFalla,
+    this.tipoFalla,
     this.estadoEntrega = 'PENDIENTE_RECOGIDA',
     this.fechaLlegadaRecogida,
     this.fechaRecogida,
@@ -151,6 +354,10 @@ class DatosEntrega {
     this.fechaLlegadaEntrega,
     this.avisosEntrega = 0,
     this.ultimoAvisoEntrega,
+    this.tarifaBaseAplicada,
+    this.precioKmAplicado,
+    this.productos = const [],
+    this.propuestas = const [],
   });
 
   factory DatosEntrega.desdeJson(Map<String, dynamic> json) => DatosEntrega(
@@ -177,6 +384,7 @@ class DatosEntrega {
     observacionCompra: json['observacionCompra'] as String?,
     fotoFallaUrl: json['fotoFallaUrl'] as String?,
     motivoFalla: json['motivoFalla'] as String?,
+    tipoFalla: MotivoFalla.desdeCodigo(json['tipoFalla'] as String?),
     estadoEntrega: json['estadoEntrega'] as String? ?? 'PENDIENTE_RECOGIDA',
     fechaLlegadaRecogida: fechaDesdeJson(json['fechaLlegadaRecogida']),
     fechaRecogida: fechaDesdeJson(json['fechaRecogida']),
@@ -186,11 +394,43 @@ class DatosEntrega {
     fechaLlegadaEntrega: fechaDesdeJson(json['fechaLlegadaEntrega']),
     avisosEntrega: (json['avisosEntrega'] as num?)?.toInt() ?? 0,
     ultimoAvisoEntrega: fechaDesdeJson(json['ultimoAvisoEntrega']),
+    tarifaBaseAplicada: numeroDesdeJson(json['tarifaBaseAplicada']),
+    precioKmAplicado: numeroDesdeJson(json['precioKmAplicado']),
+    productos: [
+      for (final p in (json['productos'] as List<dynamic>? ?? const []))
+        ProductoEntrega.desdeJson(p as Map<String, dynamic>),
+    ],
+    propuestas: [
+      for (final p in (json['propuestas'] as List<dynamic>? ?? const []))
+        PropuestaCosto.desdeJson(p as Map<String, dynamic>),
+    ],
   );
 
   double get totalProducto => costoProductoReal ?? costoProductoEstimado ?? 0;
+
+  bool get esCompra => tipoEnvio == TipoEnvio.compraYEntrega;
+
+  /// El costo total vigente (el mas nuevo), o null si todavia no se registro la compra.
+  PropuestaCosto? get propuestaVigente => propuestas.isEmpty ? null : propuestas.first;
+
+  /// Compra con un costo total que el cliente todavia no acepto.
+  bool get costoPorAceptar => esCompra && (propuestaVigente?.pendiente ?? false);
+
+  /// Compra con el costo total vigente aceptado: recien ahi se cobra (y se ve el QR).
+  bool get costoAceptado => esCompra && compraConfirmadaPorCliente && (propuestaVigente?.aceptada ?? false);
+
+  /// Una encomienda siempre se puede cobrar; una compra, solo con el costo total aceptado.
+  bool get sePuedeCobrar => !esCompra || costoAceptado;
+
+  /// "8 Bs + 2 Bs por km" (null si el pedido es de antes de guardar la tarifa).
+  String? get textoTarifa => tarifaBaseAplicada == null || precioKmAplicado == null
+      ? null
+      : '${formatoBs(tarifaBaseAplicada)} + ${formatoBs(precioKmAplicado)} por km';
   bool get tieneFotoEntrega => fotoEntregaUrl?.trim().isNotEmpty ?? false;
   bool get muestraCancelacion => EstadoEntrega.puedeCancelar(estadoEntrega);
+  /// El repartidor reporto que no pudo entregarlo: el viaje quedo cerrado.
+  bool get noEntregado => estadoEntrega == EstadoEntrega.noEntregado;
+
   bool get tieneReporte => (fotoFallaUrl?.trim().isNotEmpty ?? false) || (motivoFalla?.trim().isNotEmpty ?? false);
   String? get resumenReporte => motivoFalla?.trim().isEmpty ?? true ? null : motivoFalla!.trim();
   String? get informacionReporte =>
@@ -285,6 +525,25 @@ typedef FaseCodigoEntrega = ({
   String? telefono,
   bool faseActual,
 });
+
+/// Por que el repartidor no pudo entregar (enum MotivoFallaEntrega del backend).
+enum MotivoFalla {
+  noRecibio('NO_RECIBIO', 'El cliente no recibió el pedido'),
+  noPago('NO_PAGO', 'El cliente no pagó'),
+  noAproboCosto('NO_APROBO_COSTO', 'El cliente no aceptó el costo total'),
+  otro('OTRO', 'Otro motivo');
+
+  final String codigo;
+  final String texto;
+  const MotivoFalla(this.codigo, this.texto);
+
+  static MotivoFalla? desdeCodigo(String? codigo) {
+    for (final motivo in values) {
+      if (motivo.codigo == codigo) return motivo;
+    }
+    return null;
+  }
+}
 
 class EstadoEntrega {
   static const pendienteRecogida = 'PENDIENTE_RECOGIDA';

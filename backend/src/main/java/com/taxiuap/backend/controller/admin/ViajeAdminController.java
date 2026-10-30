@@ -6,10 +6,13 @@ import java.util.List;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.taxiuap.backend.communication.dto.MensajeResponse;
+import com.taxiuap.backend.communication.service.ChatService;
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.trip.dto.PersonaViajesResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
@@ -24,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class ViajeAdminController {
 
     private final ViajeService viajeService;
+    private final ChatService chatService;
 
     /**
      * servicio: TODOS, TAXI o DELIVERY. tipoUsuario: TODOS, PASAJERO, CONDUCTOR (taxi) o REPARTIDOR; con
@@ -44,5 +48,17 @@ public class ViajeAdminController {
     @GetMapping("/personas")
     public ResponseEntity<ApiResponse<List<PersonaViajesResponse>>> personas(@RequestParam String tipoUsuario) {
         return ResponseEntity.ok(ApiResponse.exito(viajeService.personasConViajes(tipoUsuario)));
+    }
+
+    /** Un viaje o pedido por su id (lo abre el reporte de entrega). */
+    @GetMapping("/{id}")
+    public ResponseEntity<ApiResponse<ViajeResponse>> obtener(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito(viajeService.obtenerRespuestaParaAdmin(id)));
+    }
+
+    /** Chat del viaje entre el cliente y el conductor o repartidor (para revisar reportes). */
+    @GetMapping("/{id}/mensajes")
+    public ResponseEntity<ApiResponse<List<MensajeResponse>>> mensajes(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito(chatService.historialParaAdmin(id)));
     }
 }

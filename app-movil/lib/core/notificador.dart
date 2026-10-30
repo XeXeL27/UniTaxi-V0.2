@@ -56,6 +56,7 @@ class Notificador {
       SonidoAviso.viajeAceptado => ('Viaje aceptado', 'Cuando un conductor acepta tu viaje'),
       SonidoAviso.llegoTaxi => ('Tu taxi llegó', 'Cuando el conductor llega y te espera'),
       SonidoAviso.viajeFinalizado => ('Viaje finalizado', 'Cuando termina el viaje'),
+      SonidoAviso.mensajeChat => ('Chat del viaje', 'Mensajes del viaje'),
       null => ('Avisos del viaje', 'Otros avisos del viaje'),
     };
     return AndroidNotificationDetails(
@@ -75,15 +76,26 @@ class Notificador {
     );
   }
 
-  static const _canalChat = AndroidNotificationDetails(
-    'chat_viaje',
-    'Chat del viaje',
-    channelDescription: 'Mensajes del pasajero o el conductor durante el viaje',
-    importance: Importance.max,
-    priority: Priority.high,
-    category: AndroidNotificationCategory.message,
-    visibility: NotificationVisibility.public,
-  );
+  /// Mensajes del chat: el audio mensaje_chat y la vibracion de los avisos, segun Perfil > Sonido y
+  /// vibracion (v2: el canal de antes no tenia patron de vibracion ni sonido propio). Un canal por
+  /// combinacion porque el sonido de un canal no cambia despues de creado.
+  static AndroidNotificationDetails _canalChat() {
+    final sufijo = _sufijo();
+    return AndroidNotificationDetails(
+      'chat_viaje_v2_${sufijo.isEmpty ? 'mudo' : sufijo}',
+      'Chat del viaje',
+      channelDescription: 'Mensajes del cliente, el conductor o el repartidor durante el viaje',
+      importance: Importance.max,
+      priority: Priority.high,
+      category: AndroidNotificationCategory.message,
+      visibility: NotificationVisibility.public,
+      playSound: PreferenciasAviso.sonido.value,
+      sound: const RawResourceAndroidNotificationSound('mensaje_chat'),
+      enableVibration: PreferenciasAviso.vibracion.value,
+      vibrationPattern: PreferenciasAviso.vibracion.value ? _vibracionCorta : null,
+      autoCancel: true,
+    );
+  }
 
   /// Prepara el plugin y pide permiso para mostrar notificaciones (Android 13+ y navegador).
   /// [pedirPermiso] en false para el aviso que llega por push con la app cerrada (no hay pantalla).
@@ -241,7 +253,7 @@ class Notificador {
         id: id,
         title: titulo,
         body: contenido,
-        notificationDetails: const NotificationDetails(android: _canalChat, web: WebNotificationDetails()),
+        notificationDetails: NotificationDetails(android: _canalChat(), web: const WebNotificationDetails()),
       );
     } catch (e) {
       debugPrint('No se pudo mostrar la notificacion de chat: $e');

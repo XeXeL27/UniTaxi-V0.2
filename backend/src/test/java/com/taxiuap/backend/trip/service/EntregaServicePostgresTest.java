@@ -33,6 +33,7 @@ import com.taxiuap.backend.pricing.repository.PagoRepository;
 import com.taxiuap.backend.pricing.repository.TarifaRepository;
 import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.testsupport.DatosPruebaDelivery;
+import com.taxiuap.backend.trip.dto.AceptarCostoRequest;
 import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
@@ -135,13 +136,13 @@ class EntregaServicePostgresTest {
     }
 
     @Test
-    void pasajeroDistintoNoPuedeConfirmarCompra() {
+    void pasajeroDistintoNoPuedeAceptarElCostoDeLaCompra() {
         Escenario escenario = crearEscenarioCompra();
         Pasajero otro = datos.crearPasajero();
         autenticar(otro.getUsuario().getId(), "PASAJERO");
 
         assertThrows(RecursoNoEncontradoException.class,
-                () -> entregaService.confirmarCompra(escenario.viaje().getId()));
+                () -> entregaService.aceptarCosto(escenario.viaje().getId(), new AceptarCostoRequest(1)));
     }
 
     private Escenario crearEscenarioEncomienda() {

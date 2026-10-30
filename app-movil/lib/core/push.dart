@@ -131,6 +131,18 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
     );
     return;
   }
+  // Compra: el repartidor registro (o corrigio) el costo total, o el cliente lo acepto.
+  if (idViaje != null && (datos['tipo'] == 'COSTO_POR_APROBAR' || datos['tipo'] == 'COSTO_ACEPTADO')) {
+    final version = int.tryParse('${datos['version'] ?? ''}') ?? 0;
+    await Notificador.avisoViaje(
+      '${datos['titulo'] ?? 'UNITAXI'}',
+      '${datos['cuerpo'] ?? ''}',
+      id: datos['tipo'] == 'COSTO_ACEPTADO' ? idCostoAceptado(idViaje) : idAvisoCosto(idViaje, version),
+      pedirPermiso: false,
+      sonido: SonidoAviso.viajeAceptado,
+    );
+    return;
+  }
   final evento = switch (datos['tipo']) {
     'VIAJE_ACEPTADO' => 1,
     'VIAJE_COMPLETADO' => 5,
@@ -139,6 +151,8 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
     'PAQUETE_RECOGIDO' => 3,
     'PAQUETE_ENTREGADO' => 4,
     'VIAJE_CANCELADO' => 8,
+    // El repartidor reporto que no pudo entregar: el pedido se cerro (el mismo id que la app abierta).
+    'PEDIDO_NO_ENTREGADO' => 8,
     _ => null,
   };
   if (idViaje == null || evento == null) return;
@@ -166,6 +180,12 @@ SonidoAviso? sonidoDeEvento(int evento) => switch (evento) {
 
 /// Id de la notificacion de un aviso del viaje: el mismo en la app y en el push.
 int idNotificacionViaje(int idViaje, int evento) => 100000 + (idViaje % 100000) * 10 + evento;
+
+/// Id del aviso "revisa el costo de tu compra" de la version [version] (cada correccion vuelve a sonar).
+int idAvisoCosto(int idViaje, int version) => 4000000 + (idViaje % 100000) * 10 + version % 10;
+
+/// Id del aviso al repartidor de que el cliente acepto el costo total.
+int idCostoAceptado(int idViaje) => 5000000 + (idViaje % 100000) * 10;
 
 /// Id de la notificacion del aviso [aviso] del repartidor en el punto de entrega (1 = llego): uno
 /// propio por aviso (hasta 10), para que cada uno vuelva a sonar.

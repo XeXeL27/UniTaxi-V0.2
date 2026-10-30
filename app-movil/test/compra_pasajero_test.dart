@@ -70,6 +70,7 @@ void main() {
       flujo.datosEntregaForm = const DatosEntregaForm(
         tipoEnvio: TipoEnvio.compraYEntrega,
         descripcion: 'Pan',
+        productos: [ProductoPedido(nombre: 'Pan', cantidad: 1)],
         costoProductoEstimado: 12,
         aceptaPoliticaArticulos: true,
       );
@@ -333,38 +334,104 @@ void main() {
   });
 
   group('el panel de una compra asignada', () {
-    testWidgets('muestra la propuesta de comercio y monto antes de confirmar', (tester) async {
+    Map<String, dynamic> compra(Map<String, dynamic> extra) => {
+      'idViaje': 12,
+      'situacionViaje': 'EN_CURSO',
+      'nombreConductor': 'Carlos',
+      'nombrePasajero': 'Ana',
+      'origenDireccion': 'Punto de partida',
+      'destinoDireccion': 'Punto de entrega',
+      'precioFinal': 9.8,
+      'metodoPago': 'QR',
+      'datosEntrega': {
+        'tipoEnvio': TipoEnvio.compraYEntrega.codigo,
+        'descripcion': '2 x Pan, 1 x Leche',
+        'productos': [
+          {'id': 1, 'nombre': 'Pan', 'cantidad': 2, 'situacion': 'PENDIENTE'},
+          {'id': 2, 'nombre': 'Leche', 'cantidad': 1, 'situacion': 'PENDIENTE'},
+        ],
+        ...extra,
+      },
+    };
+
+    final propuesta = {
+      'version': 1,
+      'precioServicio': 9.8,
+      'totalProductos': 10,
+      'total': 19.8,
+      'detalle': [
+        {'nombre': 'Pan', 'cantidad': 2, 'precioUnitario': 5, 'subtotal': 10, 'conseguido': true},
+        {'nombre': 'Leche', 'cantidad': 1, 'subtotal': 0, 'conseguido': false, 'observacion': 'No habia'},
+      ],
+    };
+
+    Future<int?> mostrar(WidgetTester tester, Map<String, dynamic> extra) async {
+      int? aceptada;
       final flujo = _flujo(_ApiEspia())
         ..etapa = EtapaPasajero.enViaje
-        ..viaje = Viaje.desdeJson({
-          'idViaje': 12,
-          'situacionViaje': 'CONFIRMADO',
-          'nombreConductor': 'Carlos',
-          'nombrePasajero': 'Ana',
-          'origenDireccion': 'Punto de partida',
-          'destinoDireccion': 'Punto de entrega',
-          'precioFinal': 18,
-          'datosEntrega': {
-            'tipoEnvio': TipoEnvio.compraYEntrega.codigo,
-            'descripcion': 'Medicamentos',
-            'estadoEntrega': EstadoEntrega.enCaminoRecogida,
-            'detalleCompraPropuesto': 'Farmacia Central',
-            'costoProductoConfirmado': 25,
-          },
-        });
-
+        ..viaje = Viaje.desdeJson(compra(extra));
       await tester.pumpWidget(
         ChangeNotifierProvider<ChatEstado>.value(
           value: ChatSinSocket(),
           child: _envolver(
-            PanelViaje(flujo: flujo, onCancelar: () {}, onPedirCambioPago: (_) {}, onConfirmarCompra: () {}),
+            SingleChildScrollView(
+              child: PanelViaje(
+                flujo: flujo,
+                onCancelar: () {},
+                onPedirCambioPago: (_) {},
+                onAceptarCosto: (version) => aceptada = version,
+              ),
+            ),
           ),
         ),
       );
+      if (find.text('ACEPTO EL COSTO TOTAL').evaluate().isNotEmpty) {
+        await tester.ensureVisible(find.text('ACEPTO EL COSTO TOTAL'));
+        await tester.tap(find.text('ACEPTO EL COSTO TOTAL'));
+        await tester.pump();
+      }
+      return aceptada;
+    }
 
-      expect(find.text('Farmacia Central'), findsOneWidget);
-      expect(find.text('25 Bs'), findsWidgets);
-      expect(find.text('Confirmar comercio y monto'), findsOneWidget);
+    testWidgets('antes de comprar muestra la lista y no el total ni el QR', (tester) async {
+      await mostrar(tester, {'estadoEntrega': EstadoEntrega.enCaminoRecogida});
+
+      expect(find.text('Tu lista de compras'), findsOneWidget);
+      expect(find.text('2 x Pan'), findsOneWidget);
+      expect(find.textContaining('Costo por confirmar'), findsOneWidget);
+      expect(find.text('Pagar en efectivo'), findsNothing);
+      expect(find.textContaining('con el QR de'), findsNothing);
+    });
+
+    testWidgets('con el costo registrado pide aceptarlo con la version que se ve', (tester) async {
+      final aceptada = await mostrar(tester, {
+        'estadoEntrega': EstadoEntrega.enMano,
+        'costoProductoReal': 10,
+        'propuestas': [
+          {...propuesta, 'situacion': 'PENDIENTE'},
+        ],
+      });
+
+      expect(find.text('Revisa el costo total de tu compra'), findsOneWidget);
+      expect(find.text('19,80 Bs'), findsWidgets);
+      expect(find.textContaining('No lo consiguió'), findsOneWidget);
+      expect(find.textContaining('con el QR de'), findsNothing);
+      expect(aceptada, 1);
+    });
+
+    testWidgets('aceptado muestra el total y el QR', (tester) async {
+      await mostrar(tester, {
+        'estadoEntrega': EstadoEntrega.enMano,
+        'costoProductoReal': 10,
+        'compraConfirmadaPorCliente': true,
+        'propuestas': [
+          {...propuesta, 'situacion': 'ACEPTADA', 'fechaRespuesta': '2026-10-29T15:30:00'},
+        ],
+      });
+
+      expect(find.text('ACEPTO EL COSTO TOTAL'), findsNothing);
+      expect(find.textContaining('Costo total aceptado a las 15:30'), findsOneWidget);
+      expect(find.textContaining('Paga 19,80 Bs con el QR de'), findsOneWidget);
     });
   });
 }

@@ -22,7 +22,6 @@ import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
 import com.taxiuap.backend.trip.dto.ViajesHoyResponse;
 import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
-import com.taxiuap.backend.trip.dto.ProponerCompraRequest;
 import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
 import com.taxiuap.backend.trip.dto.RespuestaCambioPagoRequest;
@@ -161,14 +160,16 @@ public class ViajeConductorController {
                 entregaService.validarRecogida(id, request, foto)));
     }
 
-    /** COMPRA_Y_ENTREGA: propone donde comprar. El cliente tiene que confirmarlo antes de comprar. */
+    /** Proponer la compra ya no existe (apps viejas): responde que hay que actualizar UNITAXI. */
     @PostMapping("/{id}/entrega/proponer-compra")
-    public ResponseEntity<ApiResponse<ViajeResponse>> proponerCompra(
-            @PathVariable Long id, @Valid @RequestBody ProponerCompraRequest request) {
-        return ResponseEntity.ok(ApiResponse.exito("Compra propuesta", entregaService.proponerCompra(id, request)));
+    public ResponseEntity<ApiResponse<ViajeResponse>> proponerCompra(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.exito(entregaService.compraConFlujoAnterior()));
     }
 
-    /** COMPRA_Y_ENTREGA: registra la compra ya hecha. El comprobante es opcional. */
+    /**
+     * COMPRA_Y_ENTREGA: registra la compra ya hecha, producto por producto (o corrige los precios antes
+     * del pago). El comprobante es opcional. El cliente tiene que aceptar el costo total.
+     */
     @PostMapping("/{id}/entrega/registrar-compra")
     public ResponseEntity<ApiResponse<ViajeResponse>> registrarCompra(
             @PathVariable Long id,
@@ -223,14 +224,18 @@ public class ViajeConductorController {
         return ResponseEntity.ok(ApiResponse.exito("Aviso enviado", entregaService.avisarDeNuevoEnEntrega(id)));
     }
 
-    /** No se pudo entregar: exige foto y motivo, cancela el viaje y no republica el pedido. */
+    /**
+     * No se pudo entregar: motivo elegido (tipo, opcional para apps de antes), mensaje y foto obligatorios;
+     * cierra el viaje para el repartidor y el cliente y no republica el pedido.
+     */
     @PostMapping("/{id}/entrega/no-se-pudo-entregar")
     public ResponseEntity<ApiResponse<ViajeResponse>> noSePudoEntregar(
             @PathVariable Long id,
+            @RequestParam(value = "tipo", required = false) com.taxiuap.backend.trip.enums.MotivoFallaEntrega tipo,
             @RequestParam("motivo") String motivo,
             @RequestPart("foto") MultipartFile foto) {
         return ResponseEntity.ok(ApiResponse.exito("Falla de entrega registrada",
-                entregaService.noSePudoEntregar(id, motivo, foto)));
+                entregaService.noSePudoEntregar(id, tipo, motivo, foto)));
     }
 
     /** Rechaza un paquete que no coincide con lo declarado; solo deja advertencia, sin suspension automatica. */

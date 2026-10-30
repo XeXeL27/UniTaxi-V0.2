@@ -95,15 +95,32 @@ class _DetalleEntrega extends StatelessWidget {
                 ('Receptor', _contacto(entrega.nombreReceptor, entrega.telefonoReceptor)),
                 ('Recibió', entrega.receptorIdentificado),
                 ('Comercio', entrega.detalleCompra),
-                ('Costo del producto', entrega.costoProductoReal == null ? null : monedaBs(entrega.costoProductoReal)),
+                ('Costo de los productos', entrega.costoProductoReal == null ? null : monedaBs(entrega.costoProductoReal)),
+                (
+                  'Tarifa del pedido',
+                  entrega.tarifaBaseAplicada == null
+                      ? null
+                      : '${monedaBs(entrega.tarifaBaseAplicada)} + ${monedaBs(entrega.precioKmAplicado)} por km',
+                ),
                 ('Pago recibido', entrega.pagoConfirmado ? monedaBs(entrega.montoPagoRecibido) : 'Sin confirmar'),
                 ('Precio del servicio', monedaBs(viaje.precioFinal)),
                 ('Recoger en (A)', viaje.origenDireccion),
                 ('Entregar en (B)', viaje.destinoDireccion),
               ]),
+              if (entrega.productos.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const _Titulo('Productos de la compra'),
+                for (final producto in entrega.productos) _FilaProducto(producto),
+              ],
+              if (entrega.propuestas.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                const _Titulo('Costo total presentado al cliente'),
+                for (final propuesta in entrega.propuestas) _FilaPropuesta(propuesta),
+              ],
               const SizedBox(height: 18),
               const _Titulo('Confirmaciones del repartidor'),
-              _Paso(texto: 'Llegó al punto de recogida', fecha: entrega.fechaLlegadaRecogida),
+              if (entrega.tipoEnvio != 'COMPRA_Y_ENTREGA')
+                _Paso(texto: 'Llegó al punto de recogida', fecha: entrega.fechaLlegadaRecogida),
               _Paso(
                 texto: entrega.tipoEnvio == 'COMPRA_Y_ENTREGA'
                     ? 'Compra registrada'
@@ -112,9 +129,9 @@ class _DetalleEntrega extends StatelessWidget {
                 ubicacion: entrega.ubicacionRecogida,
               ),
               _Paso(
-                texto: entrega.receptorIdentificado == null
-                    ? 'Paquete entregado con el código del receptor'
-                    : 'Paquete entregado al cliente identificado',
+                texto: entrega.tipoEnvio == 'COMPRA_Y_ENTREGA'
+                    ? 'Compra entregada a quien recibe, identificado'
+                    : 'Paquete entregado con el código del receptor',
                 fecha: entrega.fechaEntrega,
                 ubicacion: entrega.ubicacionEntrega,
               ),
@@ -123,7 +140,7 @@ class _DetalleEntrega extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
                   child: Text(
-                    'Incidente: ${entrega.motivoFalla}',
+                    'Incidente${_motivoFalla(entrega.tipoFalla)}: ${entrega.motivoFalla}',
                     style: const TextStyle(color: ColoresApp.rojo, fontWeight: FontWeight.w600),
                   ),
                 ),
@@ -150,6 +167,92 @@ class _DetalleEntrega extends StatelessWidget {
   static String? _contacto(String? nombre, String? telefono) {
     if (nombre == null && telefono == null) return null;
     return [?nombre, ?telefono].join(' - ');
+  }
+}
+
+/// Producto: lo pedido y lo que registro el repartidor (precio y subtotal, o no conseguido).
+class _FilaProducto extends StatelessWidget {
+  final ProductoEntregaAdmin producto;
+
+  const _FilaProducto(this.producto);
+
+  @override
+  Widget build(BuildContext context) {
+    final conseguido = producto.situacion == 'CONSEGUIDO';
+    final resultado = switch (producto.situacion) {
+      'CONSEGUIDO' => '${producto.cantidadConseguida} x ${monedaBs(producto.precioUnitario)} = ${monedaBs(producto.subtotal)}',
+      'NO_CONSEGUIDO' => 'No lo consiguió',
+      _ => 'Sin comprar',
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('${producto.cantidad} x ${producto.nombre}', style: const TextStyle(fontWeight: FontWeight.w600)),
+                if (producto.indicaciones != null)
+                  Text(producto.indicaciones!, style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+                if (producto.observacion != null)
+                  Text('Nota: ${producto.observacion}', style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5)),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            resultado,
+            style: TextStyle(
+              color: conseguido ? ColoresApp.texto : ColoresApp.rojo,
+              fontWeight: conseguido ? FontWeight.w600 : FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Una version del costo total: servicio + productos = total, y si el cliente la acepto y cuando.
+class _FilaPropuesta extends StatelessWidget {
+  final PropuestaCostoAdmin propuesta;
+
+  const _FilaPropuesta(this.propuesta);
+
+  @override
+  Widget build(BuildContext context) {
+    final estado = switch (propuesta.situacion) {
+      'ACEPTADA' => 'Aceptada por el cliente${propuesta.fechaRespuesta == null ? '' : ' el ${Formato.fechaHora(propuesta.fechaRespuesta)}'}',
+      'PENDIENTE' => 'Esperando que el cliente la acepte',
+      _ => 'Reemplazada por una corrección',
+    };
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Text.rich(
+        TextSpan(
+          children: [
+            TextSpan(text: 'Versión ${propuesta.version}: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+            TextSpan(
+              text: 'envío ${monedaBs(propuesta.precioServicio)} + productos ${monedaBs(propuesta.totalProductos)} = '
+                  '${monedaBs(propuesta.total)}. ',
+            ),
+            TextSpan(
+              text: estado,
+              style: TextStyle(
+                color: propuesta.situacion == 'ACEPTADA'
+                    ? ColoresApp.exito
+                    : propuesta.situacion == 'PENDIENTE'
+                    ? const Color(0xFFE67E22)
+                    : ColoresApp.textoSuave,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -284,3 +387,12 @@ class _TarjetaFotoState extends State<_TarjetaFoto> {
     ),
   );
 }
+
+/// " (el cliente no pagó)": el motivo que eligio el repartidor, para el incidente.
+String _motivoFalla(String? tipo) => switch (tipo) {
+  'NO_RECIBIO' => ' (el cliente no recibió el pedido)',
+  'NO_PAGO' => ' (el cliente no pagó)',
+  'NO_APROBO_COSTO' => ' (el cliente no aceptó el costo total)',
+  'OTRO' => ' (otro motivo)',
+  _ => '',
+};

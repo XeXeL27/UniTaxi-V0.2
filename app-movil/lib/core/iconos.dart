@@ -111,6 +111,7 @@ class Iconos {
   // Acciones y navegacion.
   static const IconData xmark = CupertinoIcons.xmark;
   static const IconData plus = CupertinoIcons.plus;
+  static const IconData minus = CupertinoIcons.minus;
   static const IconData pen = CupertinoIcons.pencil;
   static const IconData trashCan = CupertinoIcons.trash;
   static const IconData copy = CupertinoIcons.doc_on_doc;

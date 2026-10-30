@@ -18,6 +18,7 @@ import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import 'espera_cronometro.dart';
 import 'flujo_conductor.dart';
+import '../../../comun/costo_compra.dart';
 import '../../../comun/modelos_viaje.dart';
 import '../../../comun/vista_chat.dart';
 import '../../login/ayuda_ingreso.dart';
@@ -336,7 +337,7 @@ class PanelDetalleSolicitud extends StatelessWidget {
     final cliente = solicitud.tercero?.nombre ?? solicitud.nombrePasajero;
     final detalleCliente = [
       if (solicitud.tercero != null) 'Lo pidió ${enTitulo(solicitud.nombrePasajero.split(' ').first)}',
-      if (esEntrega) solicitud.datosEntrega!.descripcion,
+      if (esEntrega && !esCompra) solicitud.datosEntrega!.descripcion,
       if (solicitud.descuentoEstudiante > 0) 'Estudiante UAP',
     ].join(' · ');
     return Column(
@@ -390,10 +391,20 @@ class PanelDetalleSolicitud extends StatelessWidget {
         ],
         if (esCompra && solicitud.precio == null) ...[
           const SizedBox(height: 4),
-          const Text(
-            'El precio del envío se calcula con el comercio y el monto de la compra.',
-            style: TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5),
+          Text(
+            'El envío se calcula desde el comercio'
+            '${solicitud.datosEntrega!.textoTarifa == null ? '' : ' (${solicitud.datosEntrega!.textoTarifa})'}.',
+            style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5),
           ),
+        ],
+        if (esCompra && solicitud.datosEntrega!.productos.isNotEmpty) ...[
+          const SizedBox(height: 12),
+          ListaProductosPedido(productos: solicitud.datosEntrega!.productos, titulo: 'Qué hay que comprar'),
+          if (solicitud.datosEntrega!.costoProductoEstimado case final estimado?)
+            Text(
+              'El cliente calcula unos ${formatoBs(estimado)} en productos.',
+              style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5),
+            ),
         ],
         const SizedBox(height: 12),
         Row(

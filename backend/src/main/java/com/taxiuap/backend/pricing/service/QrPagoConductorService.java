@@ -200,9 +200,16 @@ public class QrPagoConductorService {
         Long idPasajero = pasajeroRepository.findByUsuarioId(idUsuario)
                 .orElseThrow(() -> new NegocioException("El usuario no tiene perfil de pasajero"))
                 .getId();
-        return viajeRepository.findById(idViaje)
+        Viaje viaje = viajeRepository.findById(idViaje)
                 .filter(v -> v.getPasajero().getId().equals(idPasajero))
                 .filter(v -> v.getSituacionViaje() != SituacionViaje.CANCELADO)
                 .orElseThrow(() -> RecursoNoEncontradoException.de("Viaje", idViaje));
+        // En una compra el QR (y el pago) aparecen recien con el costo total aceptado.
+        com.taxiuap.backend.trip.entity.DatosEntrega datos = viaje.getSolicitud().getDatosEntrega();
+        if (datos != null && datos.getTipoEnvio() == com.taxiuap.backend.trip.enums.TipoEnvio.COMPRA_Y_ENTREGA
+                && !Boolean.TRUE.equals(datos.getCompraConfirmadaPorCliente())) {
+            throw new NegocioException("El QR del repartidor aparece cuando aceptes el costo total de tu compra");
+        }
+        return viaje;
     }
 }

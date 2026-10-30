@@ -72,6 +72,42 @@ class VariosServiciosTest {
     }
 
     @Test
+    void conUnTaxiEnCursoNoSePideUnDelivery() {
+        when(viajeRepository.findByPasajeroIdAndSituacionViajeNotInOrderByIdAsc(eq(4L), anyList()))
+                .thenReturn(List.of(viajeConCategoria("ESTANDAR")));
+
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.taxiuap.backend.shared.exception.NegocioException.class,
+                () -> viajeService.validarNuevoServicio(4L, true));
+        assertEquals(ViajeService.MENSAJE_DELIVERY_CON_TAXI, error.getMessage());
+    }
+
+    @Test
+    void soloUnDeliveryALaVez() {
+        when(viajeRepository.findByPasajeroIdAndSituacionViajeNotInOrderByIdAsc(eq(4L), anyList()))
+                .thenReturn(List.of(viajeConCategoria("DELIVERY")));
+
+        var error = org.junit.jupiter.api.Assertions.assertThrows(
+                com.taxiuap.backend.shared.exception.NegocioException.class,
+                () -> viajeService.validarNuevoServicio(4L, true));
+        assertEquals(ViajeService.MENSAJE_OTRO_DELIVERY, error.getMessage());
+    }
+
+    @Test
+    void conUnDeliveryEnCursoSePuedePedirUnTaxi() {
+        // El taxi no se revisa contra los servicios en curso (solo el limite de 2).
+        viajeService.validarNuevoServicio(4L, false);
+        verify(viajeRepository, times(0)).findByPasajeroIdAndSituacionViajeNotInOrderByIdAsc(eq(4L), anyList());
+    }
+
+    @Test
+    void sinServiciosEnCursoSePideUnDelivery() {
+        when(viajeRepository.findByPasajeroIdAndSituacionViajeNotInOrderByIdAsc(eq(4L), anyList())).thenReturn(List.of());
+
+        viajeService.validarNuevoServicio(4L, true);
+    }
+
+    @Test
     void laPosicionDelRepartidorLlegaACadaClienteUnaVez() {
         SeguimientoViajePublisher publicador = new SeguimientoViajePublisher(mensajeria, viajeRepository);
         when(viajeRepository.findByConductorIdAndSituacionViajeNotInOrderByIdAsc(eq(15L), anyList()))
@@ -94,6 +130,12 @@ class VariosServiciosTest {
         vehiculo.setCategoriaServicio(cat);
         vehiculo.setEstadoVehiculo(EstadoRegistro.A);
         return vehiculo;
+    }
+
+    private static Viaje viajeConCategoria(String categoria) {
+        Viaje viaje = new Viaje();
+        viaje.setCategoriaServicio(moto(categoria).getCategoriaServicio());
+        return viaje;
     }
 
     private static Viaje viajeDe(Long idUsuarioPasajero) {

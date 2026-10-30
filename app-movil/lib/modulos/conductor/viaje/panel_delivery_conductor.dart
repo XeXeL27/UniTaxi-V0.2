@@ -14,7 +14,9 @@ import '../../../comun/modelos_viaje.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
+import '../../../comun/costo_compra.dart';
 import 'acciones_delivery.dart';
+import 'registro_compra.dart';
 import 'espera_cronometro.dart';
 import 'flujo_conductor.dart';
 
@@ -106,7 +108,10 @@ class ResumenEntregaConductor extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        Text(datos.descripcion, style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
+        if (esCompra && datos.productos.isNotEmpty)
+          ListaProductosPedido(productos: datos.productos, titulo: 'Lista de compras')
+        else
+          Text(datos.descripcion, style: const TextStyle(color: ColoresApp.texto, fontSize: 14)),
         const SizedBox(height: 12),
         _ContactosEntrega(datos: datos),
         const SizedBox(height: 12),
@@ -119,12 +124,18 @@ class ResumenEntregaConductor extends StatelessWidget {
         const SizedBox(height: 12),
         RecuadroPrecio(
           etiqueta: esCompra ? 'Total a cobrar' : MetodoPago.frase('Cobra', viaje.metodoPago),
-          monto: esCompra
-              ? formatoBs(datos.totalProducto + (viaje.precioFinal ?? 0))
-              : formatoBs(viaje.precioFinal ?? 0),
-          detalle: esCompra
-              ? '${formatoBs(datos.totalProducto)} del producto y ${formatoBs(viaje.precioFinal ?? 0)} del envío'
-              : null,
+          monto: !esCompra
+              ? formatoBs(viaje.precioFinal ?? 0)
+              : datos.propuestaVigente == null
+              ? 'Por confirmar'
+              : formatoBs(datos.propuestaVigente!.total),
+          detalle: !esCompra
+              ? null
+              : datos.propuestaVigente == null
+              ? 'Productos al precio real + envío ${datos.textoTarifa ?? 'según la tarifa'} desde el comercio'
+              : '${formatoBs(datos.propuestaVigente!.totalProductos)} de productos y '
+                    '${formatoBs(datos.propuestaVigente!.precioServicio)} del envío'
+                    '${datos.costoAceptado ? ' (aceptado)' : ' (falta que lo acepte)'}',
         ),
         if (cancelar) ...[
           const SizedBox(height: 4),
@@ -226,11 +237,11 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   final _codigo = TextEditingController();
   final _nombre = TextEditingController();
   final _telefono = TextEditingController();
-  final _detalle = TextEditingController();
-  final _monto = TextEditingController();
-  final _observacion = TextEditingController();
   final _motivo = TextEditingController();
   bool _pagoRecibido = false;
+
+  /// Compra con el pedido en mano: el repartidor abrio "Corregir precios".
+  bool _corrigiendo = false;
 
   /// Foto del paquete al recogerlo (A) o de la persona con su paquete al entregarlo (B).
   Uint8List? _fotoEvidencia;
@@ -241,12 +252,14 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   /// Lo que hay que cobrar con el pedido en mano: el costo del producto (0 en ENCOMIENDA) más el
   /// precio del servicio. El repartidor no escribe el monto, solo confirma que lo recibió.
-  double get _totalACobrar =>
-      totalAPagarEntrega(costoProducto: datos?.totalProducto ?? 0, precioServicio: viaje?.precioFinal ?? 0);
+  /// En una compra es el total que acepto el cliente (productos + envio, calculado por el servidor).
+  double get _totalACobrar => datos?.esCompra ?? false
+      ? datos?.propuestaVigente?.total ?? 0
+      : totalAPagarEntrega(costoProducto: datos?.totalProducto ?? 0, precioServicio: viaje?.precioFinal ?? 0);
 
   @override
   void dispose() {
-    for (final c in [_codigo, _nombre, _telefono, _detalle, _monto, _observacion, _motivo]) {
+    for (final c in [_codigo, _nombre, _telefono, _motivo]) {
       c.dispose();
     }
     super.dispose();
@@ -330,7 +343,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
         if (conPaquete)
           _enMano(entrega, actual)
         else if (esCompra)
-          _compraPanel(entrega, propuesta: !entrega.compraConfirmadaPorCliente)
+          _compraPanel(entrega)
         else if (!llegoAlPunto)
           _irARecoger(actual)
         else
@@ -440,59 +453,69 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   // ------------------------------------------------------------------ compra y entrega
 
-  Widget _compraPanel(DatosEntrega entrega, {required bool propuesta}) => Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      Text(
-        propuesta ? 'Coordina la compra' : 'Registra la compra',
-        style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
-      ),
-      if (entrega.detalleCompraPropuesto != null) Text('Comercio propuesto: ${entrega.detalleCompraPropuesto}'),
-      TextField(
-        controller: _detalle,
-        decoration: const InputDecoration(labelText: 'Comercio'),
-      ),
-      TextField(
-        controller: _monto,
-        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-        decoration: const InputDecoration(labelText: 'Monto en Bs'),
-      ),
-      if (!propuesta) ...[
-        TextField(
-          controller: _observacion,
-          decoration: const InputDecoration(labelText: 'Observación (opcional)'),
-        ),
-      ],
-      const SizedBox(height: 8),
-      FilledButton(
-        onPressed: flujo.ocupado || flujo.mapa.miUbicacion == null
-            ? null
-            : () async {
-                final monto = double.tryParse(_monto.text.replaceAll(',', '.'));
-                final punto = flujo.mapa.miUbicacion;
-                if (monto == null || monto <= 0 || punto == null || _detalle.text.trim().isEmpty) {
-                  _mensaje('Completa comercio, monto y ubicación GPS.');
-                  return;
-                }
-                if (propuesta) {
-                  await _ejecutar(() => flujo.proponerCompra(punto, _detalle.text, monto));
-                } else {
-                  await _ejecutar(() => flujo.registrarCompra(punto, _detalle.text, monto, _observacion.text, null));
-                }
-              },
-        child: Text(propuesta ? 'Proponer al cliente' : 'Ya tengo el pedido'),
-      ),
-    ],
+  Widget _compraPanel(DatosEntrega entrega) => RegistroCompra(
+    key: const ValueKey('registro-compra'),
+    productos: entrega.productos,
+    ocupado: flujo.ocupado,
+    onRegistrar: _registrarCompra,
   );
+
+  /// Registra la compra (o corrige los precios) con el GPS de donde compro: el servidor calcula los
+  /// subtotales y el total y se lo presenta al cliente para que lo acepte.
+  Future<void> _registrarCompra(DatosRegistroCompra datos) async {
+    final punto = flujo.mapa.miUbicacion;
+    if (punto == null) return _mensaje('Activa el GPS: la compra se registra con tu ubicación.');
+    await _ejecutar(() async {
+      await flujo.registrarCompra(punto, datos.comercio, datos.productos, datos.observacion, null);
+      if (mounted) setState(() => _corrigiendo = false);
+      if (mounted) _mensaje('Le enviamos el costo total al cliente para que lo acepte.');
+    });
+  }
+
+  /// Compra con el pedido en mano: el costo total presentado (esperando o aceptado) y "Corregir precios"
+  /// mientras no se haya cobrado.
+  Widget _costoCompra(DatosEntrega entrega, Viaje actual) {
+    final propuesta = entrega.propuestaVigente;
+    if (_corrigiendo) {
+      return RegistroCompra(
+        key: const ValueKey('correccion-compra'),
+        productos: entrega.productos,
+        comercio: entrega.detalleCompra,
+        correccion: true,
+        ocupado: flujo.ocupado,
+        onRegistrar: _registrarCompra,
+        onCancelar: () => setState(() => _corrigiendo = false),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (propuesta != null)
+          TarjetaCostoCompra(
+            propuesta: propuesta,
+            tituloPendiente: 'Esperando que ${enTitulo(actual.nombrePasajero.split(' ').first)} acepte el costo',
+          ),
+        if (!entrega.pagoConfirmado)
+          TextButton.icon(
+            onPressed: flujo.ocupado ? null : () => setState(() => _corrigiendo = true),
+            icon: const Icon(Iconos.pen, size: 14),
+            label: const Text('Corregir precios'),
+          ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
 
   // ------------------------------------------------------------------ etapa 2: entregar en B
 
   Widget _enMano(DatosEntrega entrega, Viaje actual) {
     final metros = flujo.metrosAlDestino;
     final cerca = flujo.cercaDelDestino;
+    if (entrega.esCompra && _corrigiendo) return _costoCompra(entrega, actual);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        if (entrega.esCompra) _costoCompra(entrega, actual),
         const Text(
           'Pedido en tus manos',
           style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
@@ -511,7 +534,15 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           ),
         ),
         const SizedBox(height: 8),
-        if (!entrega.pagoConfirmado) ...[
+        if (!entrega.pagoConfirmado && !entrega.sePuedeCobrar)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text(
+              'Cobras y entregas cuando el cliente acepte el costo total.',
+              style: TextStyle(color: Color(0xFFE67E22), fontWeight: FontWeight.w600),
+            ),
+          )
+        else if (!entrega.pagoConfirmado) ...[
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
@@ -521,7 +552,11 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
               'Recibí ${formatoBs(_totalACobrar)}',
               style: const TextStyle(color: ColoresApp.texto, fontWeight: FontWeight.w600),
             ),
-            subtitle: Text(MetodoPago.frase('El cliente paga', actual.metodoPago)),
+            subtitle: Text(
+              actual.pagaSolicitante
+                  ? 'Paga quien lo pidió, por QR desde su app: no le cobres a ${actual.tercero?.primerNombre ?? 'quien recibe'}.'
+                  : MetodoPago.frase(actual.tercero == null ? 'El cliente paga' : 'Quien recibe paga', actual.metodoPago),
+            ),
           ),
           FilledButton(
             onPressed: flujo.ocupado || !_pagoRecibido
@@ -544,14 +579,23 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
             const SizedBox(height: 12),
             _campoCodigo(),
           ] else ...[
+            if (actual.tercero != null)
+              Text(
+                'Recibe ${actual.tercero!.nombre}: escribe su nombre y su celular.',
+                style: const TextStyle(color: ColoresApp.textoSuave),
+              ),
             TextField(
               controller: _nombre,
-              decoration: const InputDecoration(labelText: 'Nombre del cliente'),
+              decoration: InputDecoration(
+                labelText: actual.tercero == null ? 'Nombre del cliente' : 'Nombre de quien recibe',
+              ),
             ),
             TextField(
               controller: _telefono,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(labelText: 'Teléfono del cliente'),
+              decoration: InputDecoration(
+                labelText: actual.tercero == null ? 'Teléfono del cliente' : 'Celular de quien recibe',
+              ),
             ),
           ],
           const SizedBox(height: 12),
@@ -587,42 +631,28 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     }
   }
 
-  /// "No se pudo entregar" solo se usa cuando algo sale mal, asi que su campo de motivo queda
-  /// escondido hasta que el repartidor decide usarlo.
+  /// "No se pudo entregar" solo se usa cuando algo sale mal: queda plegado y abre el reporte con el
+  /// motivo, el mensaje y la foto.
   Widget _seccionFalla() => SeccionDesplegable(
     titulo: 'No se pudo entregar',
-    ayuda: 'Explica qué pasó y toma una foto del lugar. Se envía al administrador.',
+    ayuda: 'Elige el motivo, explica qué pasó y toma una foto del lugar. Se envía al administrador.',
     icono: Iconos.triangleExclamation,
     color: ColoresApp.rojo,
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _motivo,
-          maxLines: 2,
-          decoration: const InputDecoration(labelText: 'Motivo', alignLabelWithHint: true),
-        ),
-        const SizedBox(height: 12),
-        OutlinedButton.icon(
-          onPressed: flujo.ocupado ? null : _reportarFalla,
-          icon: const Icon(Iconos.camera, size: 15),
-          label: const Text('Registrar la falla'),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: ColoresApp.rojo,
-            side: const BorderSide(color: ColoresApp.rojo),
-            minimumSize: const Size.fromHeight(46),
-          ),
-        ),
-      ],
+    child: OutlinedButton.icon(
+      onPressed: flujo.ocupado ? null : _reportarFalla,
+      icon: const Icon(Iconos.camera, size: 15),
+      label: const Text('Reportar: no pude entregar'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: ColoresApp.rojo,
+        side: const BorderSide(color: ColoresApp.rojo),
+        minimumSize: const Size.fromHeight(46),
+      ),
     ),
   );
 
-  /// El motivo primero y la foto recien tomada: si se cancela la camara no se reenvia una foto vieja.
   Future<void> _reportarFalla() async {
-    if (_motivo.text.trim().isEmpty) return _mensaje('Escribe el motivo y luego toma la foto.');
-    final foto = await _tomarFoto();
-    if (foto == null) return _mensaje('La foto es obligatoria.');
-    await _ejecutar(() => flujo.noSePudoEntregar(_motivo.text, foto));
+    final entrega = flujo.viaje?.datosEntrega;
+    await _ejecutar(() => reportarNoEntregado(context, flujo, entrega));
   }
 
   Future<void> _reportarPaquete() async {
@@ -701,36 +731,43 @@ class EsperaDelivery extends StatelessWidget {
   /// tercer aviso puede reportar que no pudo entregar (motivo y foto, como "No se pudo entregar").
   Widget _esperaEnEntrega(BuildContext context, DatosEntrega entrega, Viaje actual) {
     final esEncomienda = entrega.tipoEnvio == TipoEnvio.encomienda;
+    // Recibe otra persona (pedido para otra persona) o el receptor de la encomienda; si no, el cliente.
+    final tercero = actual.tercero;
     return EsperaConCronometro(
-      quien: (esEncomienda ? _primerNombre(entrega.nombreReceptor) : null) ?? actual.primerNombrePasajero,
+      quien: tercero?.primerNombre ??
+          (esEncomienda ? _primerNombre(entrega.nombreReceptor) : null) ??
+          actual.primerNombrePasajero,
       avisos: entrega.avisosEntrega,
       ultimoAviso: entrega.ultimoAvisoEntrega,
-      telefono: (esEncomienda ? _conTexto(entrega.telefonoReceptor) : null) ?? actual.telefonoPasajero,
+      telefono: _conTexto(tercero?.telefono) ??
+          (esEncomienda ? _conTexto(entrega.telefonoReceptor) : null) ??
+          actual.telefonoPasajero,
       ocupado: flujo.ocupado,
       onAvisar: flujo.avisarEsperaEntrega,
       textoReportar: 'Reportar: no pude entregar',
       queSeReporta: 'que no pudiste entregar',
-      onReportar: () async {
-        final motivo = await pedirMotivo(
-          context,
-          titulo: 'No pudiste entregar',
-          explicacion:
-              'Cuenta qué pasó (por ejemplo, si llamaste) y después toma una foto del lugar. '
-              'El pedido se cerrará y el administrador lo revisará.',
-          etiqueta: 'Motivo',
-          textoConfirmar: 'Tomar la foto',
-        );
-        if (motivo == null) return;
-        final tomada = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 2000);
-        if (tomada == null) {
-          if (context.mounted) mostrarMensaje(context, 'La foto es obligatoria.');
-          return;
-        }
-        final foto = await tomada.readAsBytes();
-        await flujo.noSePudoEntregar(motivo, foto);
-      },
+      reportarAlTercerAviso: true,
+      onReportar: () => reportarNoEntregado(context, flujo, entrega),
     );
   }
+}
+
+/// Reporte "no pude entregar": motivo y mensaje (pedirReporteEntrega), la foto con la camara y el envio.
+/// Cierra el pedido para el repartidor y el cliente.
+Future<void> reportarNoEntregado(BuildContext context, FlujoConductor flujo, DatosEntrega? entrega) async {
+  final reporte = await pedirReporteEntrega(
+    context,
+    conCosto: entrega != null && entrega.esCompra && !entrega.costoAceptado,
+  );
+  if (reporte == null) return;
+  final tomada = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 80, maxWidth: 2000);
+  if (tomada == null) {
+    if (context.mounted) mostrarMensaje(context, 'La foto es obligatoria.');
+    return;
+  }
+  final foto = await tomada.readAsBytes();
+  await flujo.noSePudoEntregar(reporte.mensaje, foto, tipo: reporte.tipo);
+  if (context.mounted) mostrarMensaje(context, 'Reporte enviado: el pedido se cerró y lo revisará un administrador.');
 }
 
 String? _conTexto(String? texto) => texto == null || texto.trim().isEmpty ? null : texto.trim();

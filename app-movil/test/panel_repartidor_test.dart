@@ -54,8 +54,14 @@ void main() {
             viaje: _viaje(
               datosEntrega: {
                 'tipoEnvio': TipoEnvio.compraYEntrega.codigo,
-                'descripcion': 'Una pizza',
+                'descripcion': '1 x Pizza',
                 'costoProductoReal': 40,
+                'productos': [
+                  {'id': 1, 'nombre': 'Pizza', 'cantidad': 1, 'situacion': 'CONSEGUIDO', 'subtotal': 40},
+                ],
+                'propuestas': [
+                  {'version': 1, 'situacion': 'PENDIENTE', 'precioServicio': 8, 'totalProductos': 40, 'total': 48},
+                ],
               },
             ),
           ),
@@ -63,7 +69,8 @@ void main() {
       );
 
       expect(find.text('Total a cobrar'), findsOneWidget);
-      expect(find.textContaining('48'), findsOneWidget);
+      expect(find.text('48 Bs'), findsOneWidget);
+      expect(find.textContaining('falta que lo acepte'), findsOneWidget);
     });
 
     testWidgets('en una compra antes de comprar solo muestra el destino del cliente', (tester) async {

@@ -130,7 +130,8 @@ class ViajeServiceEntregaTransicionesTest {
                 mockCalculoPrecioService(), calculoPrecioDeliveryService, historialViajeService,
                 mensajeriaTemplate, calificacionRepository, qrPagoConductorService, solicitudViajeRepository,
                 datosEntregaRepository, ofertaViajeRepository, ubicacionConductorRepository,
-                notificacionPushService);
+                notificacionPushService,
+                org.mockito.Mockito.mock(com.taxiuap.backend.trip.repository.ProductoEntregaRepository.class));
     }
 
     @AfterEach

@@ -395,6 +395,19 @@ class EntregaServiceRecogidaEntregaTest {
     }
 
     @Test
+    void conElPedidoParaOtraPersonaSeLeAvisaAQuienPidioQueLeAvise() {
+        Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
+        viaje.getSolicitud().setParaOtraPersona(true);
+        viaje.getSolicitud().setNombrePasajeroTercero("JUAN PEREZ");
+        when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);
+
+        entregaService.llegadaEntrega(500L, new LlegadaEntregaRequest(-11.0301, -68.7401));
+
+        verify(viajeService).avisarPasajero(eq(viaje), eq("REPARTIDOR_EN_ENTREGA"), eq("Avísale a Juan: su paquete llegó"),
+                anyString(), eq(java.util.Map.of("aviso", "1")));
+    }
+
+    @Test
     void lejosDeBNoSeMarcaLaLlegadaAlPuntoDeEntrega() {
         Viaje viaje = viajeEncomienda(SituacionViaje.EN_CURSO, EstadoEntrega.EN_MANO);
         when(viajeService.obtenerViajeDelConductor(500L)).thenReturn(viaje);

@@ -11,23 +11,27 @@ import com.taxiuap.backend.trip.enums.EstadoEntrega;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 
 /**
- * Invariantes que el servidor no puede dejar pasar: una compra no llega a estar en manos del
- * repartidor sin confirmacion del cliente ni con el punto de compra real, y nada se entrega sin que
- * el repartidor confirme el pago.
+ * Invariantes que el servidor no puede dejar pasar: una compra en manos del repartidor tiene el punto
+ * de compra real, no se entrega sin que el cliente acepte el costo total y nada se entrega sin que el
+ * repartidor confirme el pago.
  */
 class DatosEntregaTransicionTest {
 
     @Test
-    void unaCompraEnManoExigeConfirmacionDelCliente() {
+    void unaCompraEnManoEsperaLaAceptacionPeroNoSeEntregaSinElla() {
         DatosEntrega datos = compra();
         datos.setEstadoEntrega(EstadoEntrega.EN_MANO);
-        datos.setPuntoCompra(null);
+        datos.setPuntoCompra(punto());
         datos.setCostoProductoReal(new BigDecimal("25.00"));
 
-        assertFalse(datos.isCompraConfirmadaParaTenerElPedido());
+        // Ya compro y espera que el cliente acepte el costo total.
+        assertTrue(datos.isCostoAceptadoParaEntregar());
+
+        datos.setEstadoEntrega(EstadoEntrega.ENTREGADO);
+        assertFalse(datos.isCostoAceptadoParaEntregar());
 
         datos.setCompraConfirmadaPorCliente(true);
-        assertTrue(datos.isCompraConfirmadaParaTenerElPedido());
+        assertTrue(datos.isCostoAceptadoParaEntregar());
     }
 
     @Test
@@ -66,7 +70,7 @@ class DatosEntregaTransicionTest {
         DatosEntrega datos = encomienda();
         datos.setEstadoEntrega(EstadoEntrega.ENTREGADO);
 
-        assertTrue(datos.isCompraConfirmadaParaTenerElPedido());
+        assertTrue(datos.isCostoAceptadoParaEntregar());
         assertTrue(datos.isPuntoDeCompraRegistrado());
         assertTrue(datos.isCostoRealRegistradoAntesDeEntregar());
     }

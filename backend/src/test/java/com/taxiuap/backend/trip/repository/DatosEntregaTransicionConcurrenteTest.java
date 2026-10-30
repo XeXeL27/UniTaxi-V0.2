@@ -28,6 +28,7 @@ import com.taxiuap.backend.testsupport.DatosPruebaDelivery;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
+import com.taxiuap.backend.trip.enums.MotivoFallaEntrega;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.vehicle.entity.CategoriaServicio;
 import com.taxiuap.backend.vehicle.repository.CategoriaServicioRepository;
@@ -132,10 +133,10 @@ class DatosEntregaTransicionConcurrenteTest {
             enTransaccion(() -> {
                 Long idDatos = datosEntregaRepository.findBySolicitudId(idSolicitud).orElseThrow().getId();
                 int primera = datosEntregaRepository.registrarFallaSiEstadoPermitido(idDatos,
-                        List.of(EstadoEntrega.EN_MANO), EstadoEntrega.NO_ENTREGADO, "El receptor no estaba",
+                        List.of(EstadoEntrega.EN_MANO), EstadoEntrega.NO_ENTREGADO, MotivoFallaEntrega.OTRO, "El receptor no estaba",
                         "falla_1.jpg");
                 int segunda = datosEntregaRepository.registrarFallaSiEstadoPermitido(idDatos,
-                        List.of(EstadoEntrega.EN_MANO), EstadoEntrega.NO_ENTREGADO, "Se rindio", "falla_2.jpg");
+                        List.of(EstadoEntrega.EN_MANO), EstadoEntrega.NO_ENTREGADO, MotivoFallaEntrega.OTRO, "Se rindio", "falla_2.jpg");
 
                 assertEquals(1, primera);
                 assertEquals(0, segunda);
@@ -158,7 +159,7 @@ class DatosEntregaTransicionConcurrenteTest {
                         EstadoEntrega.ENTREGADO);
 
                 int filas = datosEntregaRepository.registrarFallaSiEstadoPermitido(idDatos,
-                        List.of(EstadoEntrega.EN_MANO), EstadoEntrega.NO_ENTREGADO, "Tarde", "falla_1.jpg");
+                        List.of(EstadoEntrega.EN_MANO), EstadoEntrega.NO_ENTREGADO, MotivoFallaEntrega.OTRO, "Tarde", "falla_1.jpg");
 
                 assertEquals(0, filas);
                 assertEquals(EstadoEntrega.ENTREGADO,

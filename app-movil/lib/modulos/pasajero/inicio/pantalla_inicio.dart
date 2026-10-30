@@ -1016,6 +1016,12 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   /// buscador); una compra se entrega donde esta el pasajero y pasa directo a "Elige tu servicio".
   Future<void> _elegirEntrega() async {
     _cerrarMenu();
+    // Un delivery a la vez, y nunca con un taxi en curso (el servidor tambien lo rechaza).
+    final sinEntrega = _flujo.motivoSinEntrega;
+    if (sinEntrega != null) {
+      mostrarMensaje(context, sinEntrega, error: true);
+      return;
+    }
     if (_flujo.servicio == ServicioActivo.entrega && _flujo.modo.tipo != null) return;
     await _elegirTipoEnvio();
   }
@@ -1121,7 +1127,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (_flujo.servicio == ServicioActivo.entrega && _flujo.datosEntregaForm == null) {
       final tipo = _flujo.modo.tipo;
       if (tipo == null) return;
-      final datos = await abrirFormularioEntrega(context, tipo);
+      final datos = await abrirFormularioEntrega(context, tipo, tarifa: _flujo.api.tarifaDelivery);
       if (datos == null || !mounted) return;
       _flujo.guardarDatosEntrega(datos);
     }
@@ -1209,12 +1215,20 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     }
   }
 
-  Future<void> _confirmarCompra() async {
+  bool _aceptandoCosto = false;
+
+  /// "ACEPTO EL COSTO TOTAL": se acepta la version que el pasajero tiene en pantalla. Si el repartidor
+  /// la cambio, el servidor responde 409 y el panel ya muestra el nuevo total (el flujo lo reconsulta).
+  Future<void> _aceptarCosto(int version) async {
+    if (_aceptandoCosto) return;
+    setState(() => _aceptandoCosto = true);
     try {
-      await _flujo.confirmarCompra();
-      if (mounted) mostrarMensaje(context, 'Compra confirmada. El repartidor puede comprar el producto.');
+      await _flujo.aceptarCosto(version);
+      if (mounted) mostrarMensaje(context, 'Aceptaste el costo total. Ya puedes pagar cuando llegue tu pedido.');
     } on ApiExcepcion catch (e) {
       if (mounted) mostrarMensaje(context, e.mensaje, error: true);
+    } finally {
+      if (mounted) setState(() => _aceptandoCosto = false);
     }
   }
 
@@ -1689,7 +1703,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     onAlternar: _alternarPanel,
     onCancelar: _cancelarViaje,
     onPedirCambioPago: _pedirCambioPago,
-    onConfirmarCompra: _confirmarCompra,
+    onAceptarCosto: _aceptarCosto,
+    aceptandoCosto: _aceptandoCosto,
     onAvisarPago: _avisarPago,
   );
 }

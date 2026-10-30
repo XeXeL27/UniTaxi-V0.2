@@ -92,6 +92,25 @@ void main() {
     expect(chat.avisos.length, 1);
   });
 
+  test('con la app a la vista el mensaje nuevo sale en el globo (sin notificacion del sistema)', () async {
+    final api = _ApiFalsa()..mensajes[5] = [_mensaje(1, leido: true)];
+    final chat = ChatEstado(sesion: api.sesion, api: api, conSocket: false);
+    addTearDown(chat.dispose);
+    final globos = <AvisoChat>[];
+    final escucha = chat.avisosEnPantalla.listen(globos.add);
+    addTearDown(escucha.cancel);
+
+    await chat.vincular(5, 'RENE');
+    api.mensajes[5]!.add(_mensaje(2, texto: 'Estoy afuera'));
+    await chat.sincronizar();
+    await Future<void>.delayed(Duration.zero);
+
+    expect(globos.length, 1);
+    expect(globos.single.titulo, 'Mensaje de Rene');
+    expect(globos.single.texto, 'Estoy afuera');
+    expect(globos.single.idViaje, 5);
+  });
+
   test('sin red no se pierde lo que ya estaba y el estado dice sin conexion', () async {
     final api = _ApiFalsa()..mensajes[5] = [_mensaje(1)];
     final chat = _ChatDePrueba(api);

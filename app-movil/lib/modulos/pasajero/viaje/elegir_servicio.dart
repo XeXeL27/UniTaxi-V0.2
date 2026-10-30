@@ -139,8 +139,9 @@ class PanelElegirServicio extends StatelessWidget {
           child: TarjetaServicio(
             icono: Iconos.boxOpen,
             titulo: 'Entrega',
-            detalle: tipo?.nombre ?? 'Encomienda o compra',
-            libres: repartidoresLibres,
+            detalle: flujo.motivoSinEntrega ?? tipo?.nombre ?? 'Encomienda o compra',
+            bloqueada: flujo.motivoSinEntrega != null,
+            libres: flujo.motivoSinEntrega != null ? null : repartidoresLibres,
             textoLibres: textoLibresCorto(repartidoresLibres, ServicioActivo.entrega),
             precio: flujo.textoPrecioDe(ServicioActivo.entrega),
             elegida: !esTaxi,
@@ -247,6 +248,9 @@ class TarjetaServicio extends StatelessWidget {
   final bool elegida;
   final VoidCallback onTap;
 
+  /// No se puede pedir ahora (el detalle dice por que): se ve apagada.
+  final bool bloqueada;
+
   const TarjetaServicio({
     super.key,
     required this.icono,
@@ -259,11 +263,12 @@ class TarjetaServicio extends StatelessWidget {
     this.descuento,
     this.libres,
     this.textoLibres = '',
+    this.bloqueada = false,
   });
 
   @override
   Widget build(BuildContext context) {
-    return Semantics(
+    final tarjeta = Semantics(
       selected: elegida,
       button: true,
       child: Material(
@@ -300,9 +305,9 @@ class TarjetaServicio extends StatelessWidget {
                       const SizedBox(height: 4),
                       Text(
                         detalle,
-                        maxLines: 1,
+                        maxLines: bloqueada ? 2 : 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 13),
+                        style: TextStyle(color: bloqueada ? const Color(0xFFE67E22) : ColoresApp.grisTexto, fontSize: 13),
                       ),
                       if (libres != null)
                         Text(
@@ -348,6 +353,7 @@ class TarjetaServicio extends StatelessWidget {
         ),
       ),
     );
+    return bloqueada ? Opacity(opacity: 0.75, child: tarjeta) : tarjeta;
   }
 }
 

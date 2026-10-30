@@ -8,9 +8,12 @@ import 'cliente_api.dart';
 import 'config.dart';
 import 'formato.dart';
 import 'notificador.dart';
+import 'preferencias_aviso.dart';
 import 'push.dart';
 import 'servidores.dart';
 import 'sesion.dart';
+import 'sonido.dart';
+import 'vibracion.dart';
 
 enum EstadoConexionChat { conectando, conectado, desconectado }
 
@@ -119,7 +122,18 @@ class ChatEstado extends ChangeNotifier {
   ChatEstado({required this.sesion, required this.api, this.conSocket = true}) {
     _cuenta = _cuentaActual;
     sesion.addListener(_revisarSesion);
+    // Con la app abierta el push de un mensaje no se muestra: adelanta la consulta para avisarlo ya.
+    _push = Push.mensajes.listen((datos) {
+      if (datos['tipo'] == 'CHAT_MENSAJE' && _conversaciones.isNotEmpty) unawaited(_sincronizarTodo());
+    });
   }
+
+  StreamSubscription<Map<String, dynamic>>? _push;
+  final _avisos = StreamController<AvisoChat>.broadcast();
+
+  /// Mensajes que llegan con la app a la vista y el chat cerrado: la app muestra el globo arriba
+  /// (main.dart); el sonido y la vibracion ya los dio [avisarMensaje].
+  Stream<AvisoChat> get avisosEnPantalla => _avisos.stream;
 
   /// Viaje cuyo chat esta abierto en pantalla (null si ninguno).
   int? get idViaje => _abierto;
@@ -283,15 +297,18 @@ class ChatEstado extends ChangeNotifier {
   /// da el push del servidor (el mismo id): asi no suena dos veces.
   @protected
   void avisarMensaje(MensajeChat mensaje) {
-    if (!_enPrimerPlano && Push.token != null) return;
     final primerNombre = enTitulo(mensaje.nombreEmisor.trim().split(RegExp(r'\s+')).first);
-    unawaited(
-      Notificador.mensajeChat(
-        primerNombre.isEmpty ? 'Nuevo mensaje' : 'Mensaje de $primerNombre',
-        mensaje.contenido,
-        id: idNotificacionChat(mensaje.idViaje),
-      ),
-    );
+    final titulo = primerNombre.isEmpty ? 'Nuevo mensaje' : 'Mensaje de $primerNombre';
+    if (_enPrimerPlano) {
+      // A la vista: sonido y vibracion de la app (segun Perfil > Sonido y vibracion) y el globo arriba,
+      // sin la notificacion del sistema (sonaria dos veces).
+      if (PreferenciasAviso.sonido.value) unawaited(Sonido.aviso(SonidoAviso.mensajeChat));
+      unawaited(Vibracion.corta());
+      if (!_avisos.isClosed) _avisos.add((idViaje: mensaje.idViaje, titulo: titulo, texto: mensaje.contenido));
+      return;
+    }
+    if (Push.token != null) return;
+    unawaited(Notificador.mensajeChat(titulo, mensaje.contenido, id: idNotificacionChat(mensaje.idViaje)));
   }
 
   /// Trae lo nuevo de todos los chats vinculados (la consulta periodica, a mano).
@@ -389,10 +406,15 @@ class ChatEstado extends ChangeNotifier {
   void dispose() {
     _desechado = true;
     sesion.removeListener(_revisarSesion);
+    unawaited(_push?.cancel());
+    unawaited(_avisos.close());
     _apagar();
     super.dispose();
   }
 }
+
+/// Mensaje del chat para el globo de la app abierta.
+typedef AvisoChat = ({int idViaje, String titulo, String texto});
 
 /// Conexion STOMP del chat: envia a /app/chat/enviar y escucha la cola /user/queue/chat.
 ///

@@ -22,6 +22,7 @@ import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
+import com.taxiuap.backend.pricing.dto.TarifaDelivery;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
@@ -31,6 +32,9 @@ import com.taxiuap.backend.shared.exception.RecursoNoEncontradoException;
 import com.taxiuap.backend.pricing.dto.CotizacionViaje;
 import com.taxiuap.backend.trip.dto.CotizacionViajeResponse;
 import com.taxiuap.backend.trip.dto.DatosEntregaRequest;
+import com.taxiuap.backend.trip.dto.ProductoSolicitadoRequest;
+import com.taxiuap.backend.trip.entity.ProductoEntrega;
+import com.taxiuap.backend.trip.repository.ProductoEntregaRepository;
 import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
 import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
@@ -69,6 +73,7 @@ public class SolicitudViajeService {
     private final CategoriaServicioRepository categoriaServicioRepository;
     private final VehiculoRepository vehiculoRepository;
     private final DatosEntregaRepository datosEntregaRepository;
+    private final ProductoEntregaRepository productoEntregaRepository;
     private final DocumentoConductorService documentoConductorService;
     private final ViajeEventPublisher viajeEventPublisher;
     private final ViajeService viajeService;
@@ -110,9 +115,10 @@ public class SolicitudViajeService {
 
         CategoriaServicio categoriaServicio = resolverCategoria(request.idCategoriaServicio());
         validarDatosEntrega(categoriaServicio, request.datosEntrega());
+        viajeService.validarNuevoServicio(pasajero.getId(), categoriaServicio.esDeliveryCompatible());
         boolean paraOtra = request.esParaOtraPersona();
         if (paraOtra) {
-            validarPasajeroTercero(categoriaServicio, request);
+            validarPasajeroTercero(request);
         }
         Point origen = PuntoDesdeWkt.convertir(request.origenWkt());
         Point destino = PuntoDesdeWkt.convertir(request.destinoWkt());
@@ -121,10 +127,12 @@ public class SolicitudViajeService {
                 && request.datosEntrega().tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
         BigDecimal precioSolicitud;
         CotizacionViaje cotizacion = null;
+        // La tarifa del delivery que vale ahora queda copiada en el pedido (datos_entrega).
+        TarifaDelivery tarifaDelivery = esDelivery ? calculoPrecioDeliveryService.tarifaVigente() : null;
         if (esDelivery) {
             // El precio de ENCOMIENDA queda fijado sobre A -> B; en compra lo estima el repartidor al aceptar.
             precioSolicitud = esCompra ? null
-                    : calculoPrecioDeliveryService.calcularEncomienda(origen, destino).precioServicio();
+                    : calculoPrecioDeliveryService.calcularEncomienda(origen, destino, tarifaDelivery).precioServicio();
         } else {
             // Taxi: el precio lo pone la plataforma (por tramos de km, con el descuento de estudiante).
             cotizacion = calculoPrecioService.cotizar(pasajero, origen, destino);
@@ -151,9 +159,9 @@ public class SolicitudViajeService {
         solicitud.setMetodoPago(pagaSolicitante ? MetodoPago.QR : metodoPagoPermitido(request.metodoPago()));
         solicitud.setParaOtraPersona(paraOtra);
         if (paraOtra) {
-            solicitud.setNombrePasajeroTercero(request.nombrePasajeroTercero().trim().replaceAll("\\s+", " ")
+            solicitud.setNombrePasajeroTercero(nombreTercero(request).trim().replaceAll("\\s+", " ")
                     .toUpperCase(java.util.Locale.forLanguageTag("es")));
-            solicitud.setTelefonoPasajeroTercero(request.telefonoPasajeroTercero().trim());
+            solicitud.setTelefonoPasajeroTercero(telefonoTercero(request).trim());
         }
         solicitud.setPagaSolicitante(pagaSolicitante);
         solicitud.setSituacionSolicitud(SituacionSolicitud.PENDIENTE);
@@ -162,7 +170,9 @@ public class SolicitudViajeService {
 
         solicitud = solicitudViajeRepository.save(solicitud);
         if (request.datosEntrega() != null) {
-            solicitud.setDatosEntrega(datosEntregaRepository.save(crearDatosEntrega(solicitud, request.datosEntrega())));
+            solicitud.setDatosEntrega(datosEntregaRepository.save(
+                    crearDatosEntrega(solicitud, request.datosEntrega(), tarifaDelivery)));
+            guardarProductos(solicitud.getDatosEntrega(), request.datosEntrega());
         }
         SolicitudViajeResponse creada = aResponse(solicitud);
         log.info("Solicitud {} creada por el pasajero {} ({}, pago {}{})", solicitud.getId(), pasajero.getId(),
@@ -209,19 +219,37 @@ public class SolicitudViajeService {
                 cotizacion.precioNormal(), cotizacion.descuentoEstudiante(), cotizacion.precioFinal(), "Bs");
     }
 
-    /** Viaje para otra persona: solo taxi, con el nombre y el celular de quien viaja. */
-    private static void validarPasajeroTercero(CategoriaServicio categoria, SolicitudViajeRequest request) {
-        if (categoria.esDeliveryCompatible()) {
-            throw new NegocioException("Un pedido de entrega no se pide para otra persona");
-        }
-        String nombre = request.nombrePasajeroTercero();
+    /**
+     * Servicio para otra persona: en un taxi, quien viaja; en un delivery, quien recibe el pedido (su
+     * nombre y celular pueden llegar tambien como receptor de los datos de entrega).
+     */
+    private static void validarPasajeroTercero(SolicitudViajeRequest request) {
+        boolean delivery = request.datosEntrega() != null;
+        String nombre = nombreTercero(request);
         if (nombre == null || nombre.isBlank() || !nombre.trim().matches("[\\p{L} ]{3,150}")) {
-            throw new NegocioException("Escribe el nombre de la persona que va a viajar");
+            throw new NegocioException(delivery ? "Escribe el nombre de la persona que va a recibir el pedido"
+                    : "Escribe el nombre de la persona que va a viajar");
         }
-        String telefono = request.telefonoPasajeroTercero();
+        String telefono = telefonoTercero(request);
         if (telefono == null || !telefono.trim().matches(ReglasRegistro.PATRON_CELULAR)) {
             throw new NegocioException(ReglasRegistro.MENSAJE_CELULAR);
         }
+    }
+
+    private static String nombreTercero(SolicitudViajeRequest request) {
+        String nombre = request.nombrePasajeroTercero();
+        if ((nombre == null || nombre.isBlank()) && request.datosEntrega() != null) {
+            nombre = request.datosEntrega().nombreReceptor();
+        }
+        return nombre;
+    }
+
+    private static String telefonoTercero(SolicitudViajeRequest request) {
+        String telefono = request.telefonoPasajeroTercero();
+        if ((telefono == null || telefono.isBlank()) && request.datosEntrega() != null) {
+            telefono = request.datosEntrega().telefonoReceptor();
+        }
+        return telefono;
     }
 
     public List<SolicitudViajeResponse> listarPropias() {
@@ -310,17 +338,26 @@ public class SolicitudViajeService {
         }
     }
 
-    private DatosEntrega crearDatosEntrega(SolicitudViaje solicitud, DatosEntregaRequest request) {
+    private DatosEntrega crearDatosEntrega(SolicitudViaje solicitud, DatosEntregaRequest request,
+            TarifaDelivery tarifa) {
         DatosEntrega datos = new DatosEntrega();
+        datos.setTarifaBaseAplicada(tarifa.tarifaBase());
+        datos.setPrecioKmAplicado(tarifa.precioKm());
         datos.setSolicitud(solicitud);
         datos.setTipoEnvio(request.tipoEnvio());
-        datos.setDescripcion(request.descripcion());
+        datos.setDescripcion(conLista(request) ? resumenProductos(request.productos()) : request.descripcion());
         datos.setCostoProductoEstimado(request.costoProductoEstimado());
         Persona personaRemitente = solicitud.getPasajero().getUsuario().getPersona();
         datos.setNombreRemitente(nombreCompleto(personaRemitente));
         datos.setTelefonoRemitente(personaRemitente.getTelefono());
-        datos.setNombreReceptor(request.nombreReceptor());
-        datos.setTelefonoReceptor(request.telefonoReceptor());
+        if (solicitud.esParaOtraPersona()) {
+            // Para otra persona: recibe el pedido la persona indicada (en la encomienda, tambien el codigo).
+            datos.setNombreReceptor(solicitud.getNombrePasajeroTercero());
+            datos.setTelefonoReceptor(solicitud.getTelefonoPasajeroTercero());
+        } else {
+            datos.setNombreReceptor(request.nombreReceptor());
+            datos.setTelefonoReceptor(request.telefonoReceptor());
+        }
         datos.setFotoPaqueteUrl(request.fotoPaqueteUrl());
         datos.setAceptaPoliticaArticulos(Boolean.TRUE.equals(request.aceptaPoliticaArticulos()));
         if (request.tipoEnvio() == TipoEnvio.ENCOMIENDA) {
@@ -332,6 +369,50 @@ public class SolicitudViajeService {
             datos.setCodigoEntrega(entrega);
         }
         return datos;
+    }
+
+    private static boolean conLista(DatosEntregaRequest request) {
+        return request.tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA && request.productos() != null
+                && !request.productos().isEmpty();
+    }
+
+    /**
+     * Compra: un producto por fila, en el orden en que el cliente los escribio. Una app de antes de la
+     * lista manda solo la descripcion: queda como un producto con cantidad 1.
+     */
+    private void guardarProductos(DatosEntrega datos, DatosEntregaRequest request) {
+        if (request.tipoEnvio() != TipoEnvio.COMPRA_Y_ENTREGA) {
+            return;
+        }
+        List<ProductoSolicitadoRequest> pedidos = conLista(request) ? request.productos()
+                : List.of(new ProductoSolicitadoRequest(recortar(espacios(request.descripcion()), 150), 1, null));
+        int orden = 1;
+        for (ProductoSolicitadoRequest pedido : pedidos) {
+            ProductoEntrega producto = new ProductoEntrega();
+            producto.setDatosEntrega(datos);
+            producto.setOrden(orden++);
+            producto.setNombre(espacios(pedido.nombre()));
+            producto.setCantidad(pedido.cantidad());
+            String indicaciones = espacios(pedido.indicaciones());
+            producto.setIndicaciones(indicaciones.isEmpty() ? null : indicaciones);
+            datos.getProductos().add(productoEntregaRepository.save(producto));
+        }
+    }
+
+    /** "2 x Pan, 1 x Leche": la descripcion del pedido, para las vistas que no muestran la lista. */
+    private static String resumenProductos(List<ProductoSolicitadoRequest> productos) {
+        String resumen = productos.stream()
+                .map(p -> p.cantidad() + " x " + espacios(p.nombre()))
+                .collect(java.util.stream.Collectors.joining(", "));
+        return recortar(resumen, 500);
+    }
+
+    private static String espacios(String texto) {
+        return texto == null ? "" : texto.trim().replaceAll("\\s+", " ");
+    }
+
+    private static String recortar(String texto, int maximo) {
+        return texto.length() <= maximo ? texto : texto.substring(0, maximo - 3).trim() + "...";
     }
 
     private String nombreCompleto(Persona persona) {

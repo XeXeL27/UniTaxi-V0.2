@@ -36,6 +36,57 @@ void main() {
     expect(datos.aJson()['aceptaPoliticaArticulos'], true);
   });
 
+  test('una encomienda que recibe quien la pide no lleva receptor', () {
+    const datos = DatosEntregaForm(
+      tipoEnvio: TipoEnvio.encomienda,
+      descripcion: 'Documentos',
+      aceptaPoliticaArticulos: true,
+    );
+
+    expect(datos.error, isNull);
+    expect(datos.aJson().containsKey('nombreReceptor'), isFalse);
+  });
+
+  test('para otra persona pide un celular valido y lo manda como receptor', () {
+    const sinCelular = DatosEntregaForm(
+      tipoEnvio: TipoEnvio.compraYEntrega,
+      descripcion: '',
+      productos: [ProductoPedido(nombre: 'Pan', cantidad: 2)],
+      costoProductoEstimado: 10,
+      aceptaPoliticaArticulos: true,
+      receptor: PasajeroTercero(nombre: 'JUAN PEREZ', telefono: '123'),
+    );
+    expect(sinCelular.error, contains('celular'));
+
+    const datos = DatosEntregaForm(
+      tipoEnvio: TipoEnvio.compraYEntrega,
+      descripcion: '',
+      productos: [ProductoPedido(nombre: 'Pan', cantidad: 2)],
+      costoProductoEstimado: 10,
+      aceptaPoliticaArticulos: true,
+      receptor: PasajeroTercero(nombre: 'JUAN PEREZ', telefono: '71234567', pagaSolicitante: true),
+    );
+    expect(datos.error, isNull);
+    expect(datos.aJson()['nombreReceptor'], 'JUAN PEREZ');
+    expect(datos.aJson()['telefonoReceptor'], '71234567');
+    // Quien paga va con los datos de la otra persona en la solicitud.
+    expect(datos.receptor!.aJson()['pagaSolicitante'], isTrue);
+  });
+
+  test('el pedido no entregado trae el motivo elegido por el repartidor', () {
+    final datos = DatosEntrega.desdeJson({
+      'tipoEnvio': 'COMPRA_Y_ENTREGA',
+      'descripcion': '1 x Pan',
+      'estadoEntrega': 'NO_ENTREGADO',
+      'tipoFalla': 'NO_PAGO',
+      'motivoFalla': 'No tenia dinero',
+    });
+
+    expect(datos.noEntregado, isTrue);
+    expect(datos.tipoFalla, MotivoFalla.noPago);
+    expect(datos.tipoFalla!.texto, 'El cliente no pagó');
+  });
+
   test('rechaza compra sin producto, monto o confirmacion de prohibiciones', () {
     const datos = DatosEntregaForm(
       tipoEnvio: TipoEnvio.compraYEntrega,
@@ -44,7 +95,42 @@ void main() {
       aceptaPoliticaArticulos: false,
     );
 
-    expect(datos.error, 'Describe el producto que quieres comprar');
+    expect(datos.error, 'Agrega al menos un producto');
+  });
+
+  test('una compra solo se cobra con la ultima version del costo aceptada', () {
+    Map<String, dynamic> compra(String situacion, {bool confirmada = false}) => {
+      'tipoEnvio': 'COMPRA_Y_ENTREGA',
+      'descripcion': '2 x Pan',
+      'estadoEntrega': 'EN_MANO',
+      'compraConfirmadaPorCliente': confirmada,
+      'productos': [
+        {'id': 7, 'nombre': 'Pan', 'cantidad': 2, 'situacion': 'CONSEGUIDO', 'precioUnitario': 5, 'subtotal': 10},
+      ],
+      'propuestas': [
+        {'version': 2, 'situacion': situacion, 'precioServicio': 9.8, 'totalProductos': 10, 'total': 19.8},
+        {'version': 1, 'situacion': 'REEMPLAZADA', 'precioServicio': 9.8, 'totalProductos': 8, 'total': 17.8},
+      ],
+    };
+
+    final pendiente = DatosEntrega.desdeJson(compra('PENDIENTE'));
+    expect(pendiente.propuestaVigente!.version, 2);
+    expect(pendiente.costoPorAceptar, isTrue);
+    expect(pendiente.sePuedeCobrar, isFalse);
+    expect(pendiente.productos.single.subtotal, 10);
+
+    final aceptada = DatosEntrega.desdeJson(compra('ACEPTADA', confirmada: true));
+    expect(aceptada.costoAceptado, isTrue);
+    expect(aceptada.sePuedeCobrar, isTrue);
+  });
+
+  test('el subtotal de lo comprado se redondea como en el servidor', () {
+    const comprado = ProductoComprado(idProducto: 1, conseguido: true, cantidad: 3, precioUnitario: 0.1);
+    const faltante = ProductoComprado(idProducto: 2, conseguido: false, observacion: 'No habia');
+
+    expect(comprado.subtotal, 0.3);
+    expect(faltante.subtotal, 0);
+    expect(faltante.aJson(), {'idProducto': 2, 'conseguido': false, 'observacion': 'No habia'});
   });
 
   test('solo permite cancelar un delivery antes de tenerlo en mano', () {
@@ -72,7 +158,7 @@ void main() {
     expect(datos.codigoEntrega, isNull);
   });
 
-  test('etiqueta precio fijo, estimado y definitivo según tipo y respuesta', () {
+  test('etiqueta precio fijo, estimado y total aceptado según tipo y respuesta', () {
     expect(
       etiquetaPrecioDelivery(
         _viaje({
@@ -94,11 +180,17 @@ void main() {
     expect(
       etiquetaPrecioDelivery(
         _viaje({
-          'datosEntrega': {'tipoEnvio': 'COMPRA_Y_ENTREGA'},
+          'datosEntrega': {
+            'tipoEnvio': 'COMPRA_Y_ENTREGA',
+            'compraConfirmadaPorCliente': true,
+            'propuestas': [
+              {'version': 1, 'situacion': 'ACEPTADA', 'precioServicio': 9.8, 'totalProductos': 18, 'total': 27.8},
+            ],
+          },
           'precioEstimado': false,
         }),
       ),
-      'Precio definitivo del servicio',
+      'Total aceptado: productos y envío',
     );
   });
 

@@ -144,9 +144,17 @@ class ViajeApi {
   /// Categoria publica DELIVERY. No se fija un id en la app porque el administrador puede cambiarlo.
   Future<int?> categoriaDelivery() => categoriaRepartoId(cliente);
 
-  Future<Viaje> confirmarCompra(int idViaje) async => Viaje.desdeJson(
-    await cliente.post('/api/pasajero/viajes/$idViaje/entrega/confirmar-compra', const {}) as Map<String, dynamic>,
+  /// "ACEPTO EL COSTO TOTAL" de la compra, con la version que se vio (409 si el repartidor la cambio).
+  Future<Viaje> aceptarCosto(int idViaje, int version) async => Viaje.desdeJson(
+    await cliente.post('/api/pasajero/viajes/$idViaje/entrega/aceptar-costo', {'version': version})
+        as Map<String, dynamic>,
   );
+
+  /// Tarifa del delivery (base y por km) que se cobra a un pedido nuevo.
+  Future<({double base, double km})> tarifaDelivery() async {
+    final json = await cliente.get('/api/pasajero/solicitudes/tarifa-delivery') as Map<String, dynamic>;
+    return (base: (json['tarifaBase'] as num).toDouble(), km: (json['precioKm'] as num).toDouble());
+  }
 
   /// Viaje activo del pasajero, o null si no tiene.
   /// Servicios en curso y cuantos se pueden tener a la vez.

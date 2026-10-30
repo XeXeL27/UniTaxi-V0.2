@@ -1,9 +1,11 @@
 package com.taxiuap.backend.trip.dto;
 
 import java.math.BigDecimal;
+import java.util.List;
 
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
@@ -20,7 +22,21 @@ public record DatosEntregaRequest(
         @Size(max = 150) String nombreReceptor,
         @Size(max = 30) String telefonoReceptor,
         @Size(max = 500) String fotoPaqueteUrl,
-        Boolean aceptaPoliticaArticulos) {
+        Boolean aceptaPoliticaArticulos,
+        @Size(max = 20, message = "Puedes pedir hasta 20 productos") List<@Valid ProductoSolicitadoRequest> productos) {
+
+    /** Sin lista de productos (apps de antes de la lista: la compra va como un solo producto). */
+    public DatosEntregaRequest(TipoEnvio tipoEnvio, String descripcion, BigDecimal costoProductoEstimado,
+            String nombreRemitente, String telefonoRemitente, String nombreReceptor, String telefonoReceptor,
+            String fotoPaqueteUrl, Boolean aceptaPoliticaArticulos) {
+        this(tipoEnvio, descripcion, costoProductoEstimado, nombreRemitente, telefonoRemitente, nombreReceptor,
+                telefonoReceptor, fotoPaqueteUrl, aceptaPoliticaArticulos, null);
+    }
+
+    @AssertTrue(message = "La lista de productos es solo para una compra")
+    public boolean isProductosSoloEnCompra() {
+        return tipoEnvio == TipoEnvio.COMPRA_Y_ENTREGA || productos == null || productos.isEmpty();
+    }
 
     @AssertTrue(message = "La compra requiere un costo estimado mayor que cero")
     public boolean isCostoEstimadoValido() {

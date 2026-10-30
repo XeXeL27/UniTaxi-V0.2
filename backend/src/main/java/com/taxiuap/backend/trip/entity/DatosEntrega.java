@@ -2,12 +2,17 @@ package com.taxiuap.backend.trip.entity;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
+
+import org.hibernate.annotations.BatchSize;
 
 import org.locationtech.jts.geom.Point;
 
 import com.taxiuap.backend.config.EntidadAuditable;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
+import com.taxiuap.backend.trip.enums.MotivoFallaEntrega;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
 
 import jakarta.persistence.Column;
@@ -19,6 +24,8 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OneToMany;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.OneToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.AssertTrue;
@@ -89,6 +96,28 @@ public class DatosEntrega extends EntidadAuditable {
     @DecimalMin(value = "0.00")
     private BigDecimal costoProductoReal;
 
+    /** Productos de una compra, en el orden en que el cliente los escribio. */
+    @OneToMany(mappedBy = "datosEntrega", fetch = FetchType.LAZY)
+    @OrderBy("orden ASC, id ASC")
+    @BatchSize(size = 50)
+    private List<ProductoEntrega> productos = new ArrayList<>();
+
+    /** Costos totales presentados al cliente, del mas nuevo al mas viejo. */
+    @OneToMany(mappedBy = "datosEntrega", fetch = FetchType.LAZY)
+    @OrderBy("version DESC")
+    @BatchSize(size = 50)
+    private List<PropuestaCostoEntrega> propuestas = new ArrayList<>();
+
+    // Tarifa del delivery que valia al pedir (copia): un cambio posterior en el panel no la toca.
+    // Null en los pedidos de antes de que existiera: se usa la vigente.
+    @Column(name = "tarifa_base_aplicada", precision = 10, scale = 2)
+    @DecimalMin(value = "0.00")
+    private BigDecimal tarifaBaseAplicada;
+
+    @Column(name = "precio_km_aplicado", precision = 10, scale = 2)
+    @DecimalMin(value = "0.00")
+    private BigDecimal precioKmAplicado;
+
     @Column(name = "punto_compra_propuesto", columnDefinition = "geography(Point,4326)")
     private Point puntoCompraPropuesto;
 
@@ -119,6 +148,11 @@ public class DatosEntrega extends EntidadAuditable {
     @Column(name = "motivo_falla", length = 500)
     @Size(max = 500)
     private String motivoFalla;
+
+    /** Motivo elegido al reportar la falla (el mensaje del repartidor va en motivo_falla). */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "tipo_falla", length = 30)
+    private MotivoFallaEntrega tipoFalla;
 
     // El "default false" en la definicion permite que ddl-auto=update agregue la columna tambien
     // en bases que ya tienen pedidos: sin el, no se puede anadir NOT NULL a una tabla con filas.
@@ -229,12 +263,12 @@ public class DatosEntrega extends EntidadAuditable {
     }
 
     /**
-     * Regla 1: el repartidor nunca compra por su cuenta. En COMPRA_Y_ENTREGA el pedido solo pasa a
-     * estar en sus manos (o se entrega) si el cliente confirmo antes el comercio y el monto.
+     * Regla 1: una compra no se entrega sin que el cliente haya aceptado el costo total. Con el pedido en
+     * mano todavia puede faltar (el repartidor ya compro y espera la aceptacion o corrige precios).
      */
-    @AssertTrue(message = "Una compra no puede estar en manos del repartidor sin la confirmacion del cliente")
-    public boolean isCompraConfirmadaParaTenerElPedido() {
-        if (!requiereCompra()) {
+    @AssertTrue(message = "Una compra no se entrega sin que el cliente acepte el costo total")
+    public boolean isCostoAceptadoParaEntregar() {
+        if (tipoEnvio != TipoEnvio.COMPRA_Y_ENTREGA || estadoEntrega != EstadoEntrega.ENTREGADO) {
             return true;
         }
         return Boolean.TRUE.equals(compraConfirmadaPorCliente);
@@ -246,8 +280,8 @@ public class DatosEntrega extends EntidadAuditable {
         return !requiereCompra() || puntoCompra != null;
     }
 
-    /** Sin el costo real del producto no se puede calcular el total a cobrar ni resolver un incidente. */
-    @AssertTrue(message = "Una compra en manos del repartidor necesita el costo real del producto")
+    /** Sin el costo real de los productos no se puede calcular el total a cobrar ni resolver un incidente. */
+    @AssertTrue(message = "Una compra en manos del repartidor necesita el costo real de los productos")
     public boolean isCostoRealRegistradoAntesDeEntregar() {
         return !requiereCompra() || costoProductoReal != null && costoProductoReal.signum() > 0;
     }

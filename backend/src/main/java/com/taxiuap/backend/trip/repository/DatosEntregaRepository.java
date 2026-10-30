@@ -75,6 +75,7 @@ public interface DatosEntregaRepository extends JpaRepository<DatosEntrega, Long
             update DatosEntrega d
                set d.estadoEntrega = :nuevo,
                    d.motivoFalla = :motivo,
+                   d.tipoFalla = :tipo,
                    d.fotoFallaUrl = :foto
              where d.id = :id
                and d.estadoEntrega in :permitidos
@@ -82,11 +83,13 @@ public interface DatosEntregaRepository extends JpaRepository<DatosEntrega, Long
     int registrarFallaSiEstadoPermitido(@Param("id") Long id,
             @Param("permitidos") Collection<EstadoEntrega> permitidos,
             @Param("nuevo") EstadoEntrega nuevo,
+            @Param("tipo") com.taxiuap.backend.trip.enums.MotivoFallaEntrega tipo,
             @Param("motivo") String motivo,
             @Param("foto") String foto);
 
     /**
-     * Confirma el pago solo si el pedido sigue en estado EN_MANO y no estaba ya pagado. El monto
+     * Confirma el pago solo si el pedido sigue en estado EN_MANO, no estaba ya pagado y, en una compra, el
+     * cliente acepto el costo total vigente (una correccion del repartidor al mismo tiempo lo impide). El monto
      * recibido se guarda exactamente para evitar que una escritura posterior borre lo que se registro.
      */
     @Modifying(clearAutomatically = true, flushAutomatically = true)
@@ -97,8 +100,34 @@ public interface DatosEntregaRepository extends JpaRepository<DatosEntrega, Long
              where d.id_datos_entrega = :id
                and d.estado_entrega = :#{#estado.name()}
                and (d.pago_confirmado is false or d.pago_confirmado is null)
+               and (d.tipo_envio <> 'COMPRA_Y_ENTREGA' or d.compra_confirmada_por_cliente is true)
             """, nativeQuery = true)
     int confirmarPagoSiEnMano(@Param("id") Long id,
             @Param("estado") EstadoEntrega estado,
             @Param("monto") java.math.BigDecimal monto);
+
+    /**
+     * El repartidor corrigio los precios de una compra: la aceptacion anterior deja de valer. Solo antes
+     * del pago; con el pago confirmado no toca ninguna fila y la correccion se rechaza.
+     */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update datos_entrega d
+               set compra_confirmada_por_cliente = false,
+                   costo_producto_confirmado = null
+             where d.id_datos_entrega = :id
+               and (d.pago_confirmado is false or d.pago_confirmado is null)
+            """, nativeQuery = true)
+    int invalidarAprobacionSiSinPago(@Param("id") Long id);
+
+    /** El cliente acepto el costo total: queda aprobado el total de productos de esa version. */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query(value = """
+            update datos_entrega d
+               set compra_confirmada_por_cliente = true,
+                   costo_producto_confirmado = :totalProductos
+             where d.id_datos_entrega = :id
+               and (d.pago_confirmado is false or d.pago_confirmado is null)
+            """, nativeQuery = true)
+    int marcarCostoAprobado(@Param("id") Long id, @Param("totalProductos") java.math.BigDecimal totalProductos);
 }

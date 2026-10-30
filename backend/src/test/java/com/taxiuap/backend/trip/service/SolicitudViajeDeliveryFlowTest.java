@@ -40,11 +40,16 @@ import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.pricing.dto.CotizacionViaje;
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
+import com.taxiuap.backend.pricing.dto.TarifaDelivery;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.dto.DatosEntregaRequest;
+import com.taxiuap.backend.shared.exception.NegocioException;
+import com.taxiuap.backend.trip.dto.ProductoSolicitadoRequest;
+import com.taxiuap.backend.trip.entity.ProductoEntrega;
+import com.taxiuap.backend.trip.repository.ProductoEntregaRepository;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.entity.SolicitudViaje;
@@ -69,6 +74,7 @@ class SolicitudViajeDeliveryFlowTest {
     @Mock private CategoriaServicioRepository categoriaRepository;
     @Mock private VehiculoRepository vehiculoRepository;
     @Mock private DatosEntregaRepository datosRepository;
+    @Mock private ProductoEntregaRepository productoRepository;
     @Mock private DocumentoConductorService documentoService;
     @Mock private ViajeEventPublisher publisher;
     @Mock private ViajeService viajeService;
@@ -81,6 +87,9 @@ class SolicitudViajeDeliveryFlowTest {
 
     @BeforeEach
     void setUp() {
+        lenient().when(productoRepository.save(any(ProductoEntrega.class))).thenAnswer(i -> i.getArgument(0));
+        lenient().when(precioDeliveryService.tarifaVigente())
+                .thenReturn(new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")));
         Persona persona = new Persona();
         persona.setId(20L);
         persona.setNombres("Ana");
@@ -133,7 +142,7 @@ class SolicitudViajeDeliveryFlowTest {
     @Test
     void creaEncomiendaConPrecioYCodigosIndependientes() {
         when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
-        lenient().when(precioDeliveryService.calcularEncomienda(any(Point.class), any(Point.class)))
+        lenient().when(precioDeliveryService.calcularEncomienda(any(Point.class), any(Point.class), any()))
                 .thenReturn(new DesglosePrecioDelivery(new BigDecimal("17.50"), new BigDecimal("4.25"), 13, false));
         SolicitudViajeRequest request = request(new DatosEntregaRequest(TipoEnvio.ENCOMIENDA,
                 "Documentos", BigDecimal.ZERO, null, null, "Luis", "71111111", null, true),
@@ -152,7 +161,59 @@ class SolicitudViajeDeliveryFlowTest {
         assertEquals("ANA REMITENTE", solicitudGuardada.getValue().getDatosEntrega().getNombreRemitente());
         assertEquals("70000000", solicitudGuardada.getValue().getDatosEntrega().getTelefonoRemitente());
         assertEquals("Luis", solicitudGuardada.getValue().getDatosEntrega().getNombreReceptor());
-        verify(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class));
+        verify(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class), any());
+        // La tarifa que valia al pedir queda copiada en el pedido.
+        assertEquals(new BigDecimal("8.00"), solicitudGuardada.getValue().getDatosEntrega().getTarifaBaseAplicada());
+        assertEquals(new BigDecimal("2.00"), solicitudGuardada.getValue().getDatosEntrega().getPrecioKmAplicado());
+    }
+
+    @Test
+    void unaCompraParaOtraPersonaLaRecibeEsaPersonaYPagaQuienPidePorQr() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+        DatosEntregaRequest datos = new DatosEntregaRequest(TipoEnvio.COMPRA_Y_ENTREGA, "Pan",
+                new BigDecimal("20.00"), null, null, "juan  perez", "71234567", null, null,
+                List.of(new ProductoSolicitadoRequest("Pan", 2, null)));
+
+        var respuesta = service.crear(new SolicitudViajeRequest(7, "POINT (-68.75 -11.02)", "POINT (-68.74 -11.03)",
+                "A", "B", null, null, MetodoPago.EFECTIVO, datos, true, null, null, true));
+
+        ArgumentCaptor<SolicitudViaje> captor = ArgumentCaptor.forClass(SolicitudViaje.class);
+        verify(solicitudRepository).save(captor.capture());
+        SolicitudViaje guardada = captor.getValue();
+        assertTrue(guardada.esParaOtraPersona());
+        assertEquals("JUAN PEREZ", guardada.getNombrePasajeroTercero());
+        assertEquals(MetodoPago.QR, guardada.getMetodoPago());
+        assertEquals("JUAN PEREZ", guardada.getDatosEntrega().getNombreReceptor());
+        assertEquals("71234567", guardada.getDatosEntrega().getTelefonoReceptor());
+        assertTrue(respuesta.pagaSolicitante());
+    }
+
+    @Test
+    void unDeliveryParaOtraPersonaSinCelularNoSePide() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+        DatosEntregaRequest datos = new DatosEntregaRequest(TipoEnvio.ENCOMIENDA, "Documentos", BigDecimal.ZERO,
+                null, null, "Juan Perez", "", null, true);
+
+        var error = org.junit.jupiter.api.Assertions.assertThrows(NegocioException.class,
+                () -> service.crear(new SolicitudViajeRequest(7, "POINT (-68.75 -11.02)", "POINT (-68.74 -11.03)",
+                        "A", "B", null, null, MetodoPago.EFECTIVO, datos, true, null, null, false)));
+
+        assertTrue(error.getMessage().contains("celular"));
+        verify(solicitudRepository, never()).save(any());
+    }
+
+    @Test
+    void conUnTaxiEnCursoNoSeCreaElDelivery() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+        org.mockito.Mockito.doThrow(new NegocioException(ViajeService.MENSAJE_DELIVERY_CON_TAXI))
+                .when(viajeService).validarNuevoServicio(any(), org.mockito.ArgumentMatchers.eq(true));
+
+        var error = org.junit.jupiter.api.Assertions.assertThrows(NegocioException.class,
+                () -> service.crear(request(new DatosEntregaRequest(TipoEnvio.ENCOMIENDA,
+                        "Documentos", BigDecimal.ZERO, null, null, null, null, null, true))));
+
+        assertEquals(ViajeService.MENSAJE_DELIVERY_CON_TAXI, error.getMessage());
+        verify(solicitudRepository, never()).save(any());
     }
 
     @Test
@@ -181,7 +242,7 @@ class SolicitudViajeDeliveryFlowTest {
     void falloDeRutaImpideCrearLaSolicitudEncomienda() {
         when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
         doThrow(new IllegalStateException("OSRM no disponible"))
-                .when(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class));
+                .when(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class), any());
 
         assertThrows(IllegalStateException.class, () -> service.crear(request(
                 new DatosEntregaRequest(TipoEnvio.ENCOMIENDA, "Documentos", BigDecimal.ZERO,
@@ -202,6 +263,42 @@ class SolicitudViajeDeliveryFlowTest {
         assertNull(respuesta.precioSugerido());
         assertEquals(new BigDecimal("25.00"), respuesta.datosEntrega().costoProductoEstimado());
         assertNull(respuesta.datosEntrega().codigoRecogida());
+    }
+
+    @Test
+    void laCompraGuardaCadaProductoYArmaLaDescripcion() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+        SolicitudViajeRequest request = request(new DatosEntregaRequest(TipoEnvio.COMPRA_Y_ENTREGA,
+                "Pan y leche", new BigDecimal("30.00"), null, null, null, null, null, true,
+                List.of(new ProductoSolicitadoRequest("  Pan   integral ", 2, "Del grande"),
+                        new ProductoSolicitadoRequest("Leche", 1, " "))),
+                new BigDecimal("99.00"));
+
+        var respuesta = service.crear(request);
+
+        ArgumentCaptor<ProductoEntrega> guardados = ArgumentCaptor.forClass(ProductoEntrega.class);
+        verify(productoRepository, org.mockito.Mockito.times(2)).save(guardados.capture());
+        ProductoEntrega pan = guardados.getAllValues().get(0);
+        assertEquals("Pan integral", pan.getNombre());
+        assertEquals(2, pan.getCantidad());
+        assertEquals(1, pan.getOrden());
+        assertEquals("Del grande", pan.getIndicaciones());
+        assertNull(guardados.getAllValues().get(1).getIndicaciones());
+        assertEquals("2 x Pan integral, 1 x Leche", respuesta.datosEntrega().descripcion());
+        assertEquals(2, respuesta.datosEntrega().productos().size());
+    }
+
+    @Test
+    void unaCompraDeUnaAppViejaQuedaComoUnSoloProducto() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+
+        service.crear(request(new DatosEntregaRequest(TipoEnvio.COMPRA_Y_ENTREGA,
+                "Medicamento para la tos", new BigDecimal("25.00"), null, null, null, null, null, null)));
+
+        ArgumentCaptor<ProductoEntrega> guardado = ArgumentCaptor.forClass(ProductoEntrega.class);
+        verify(productoRepository).save(guardado.capture());
+        assertEquals("Medicamento para la tos", guardado.getValue().getNombre());
+        assertEquals(1, guardado.getValue().getCantidad());
     }
 
     @Test

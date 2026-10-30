@@ -28,6 +28,17 @@ class ReporteEntrega {
   final int vecesNoSePresento;
   final bool pasajeroSuspendido;
 
+  /// Falla de entrega: motivo elegido por el repartidor, avisos dados en el punto de entrega, quien
+  /// debia recibir (otra persona o el receptor de la encomienda) y si el cliente acepto el costo total
+  /// (null si no es una compra).
+  final String? tipoFalla;
+  final int? avisosEntrega;
+  final DateTime? fechaLlegadaEntrega;
+  final bool paraOtraPersona;
+  final String? nombreReceptor;
+  final String? telefonoReceptor;
+  final bool? costoAceptado;
+
   const ReporteEntrega({
     required this.id,
     required this.idViaje,
@@ -53,6 +64,13 @@ class ReporteEntrega {
     this.fotoComprobanteUrl,
     this.detalleCompra,
     this.observacionCompra,
+    this.tipoFalla,
+    this.avisosEntrega,
+    this.fechaLlegadaEntrega,
+    this.paraOtraPersona = false,
+    this.nombreReceptor,
+    this.telefonoReceptor,
+    this.costoAceptado,
   });
 
   factory ReporteEntrega.desdeJson(Map<String, dynamic> json) => ReporteEntrega(
@@ -80,8 +98,43 @@ class ReporteEntrega {
     telefonoPasajero: json['telefonoPasajero'] as String?,
     vecesNoSePresento: Formato.leerEntero(json['vecesNoSePresento']) ?? 0,
     pasajeroSuspendido: json['pasajeroSuspendido'] as bool? ?? false,
+    tipoFalla: json['tipoFalla'] as String?,
+    avisosEntrega: Formato.leerEntero(json['avisosEntrega']),
+    fechaLlegadaEntrega: Formato.leerFecha(json['fechaLlegadaEntrega']),
+    paraOtraPersona: json['paraOtraPersona'] as bool? ?? false,
+    nombreReceptor: json['nombreReceptor'] as String?,
+    telefonoReceptor: json['telefonoReceptor'] as String?,
+    costoAceptado: json['costoAceptado'] as bool?,
   );
 
   /// Reporte del conductor: el pasajero no se presento tras los 3 avisos.
   bool get esPasajeroAusente => motivo == 'PASAJERO_NO_SE_PRESENTO';
+
+  /// Reporte del repartidor: no pudo entregar el pedido.
+  bool get esFallaEntrega => motivo == 'FALLA_ENTREGA';
+}
+
+/// Mensaje del chat del viaje (entre el cliente y el conductor o repartidor).
+class MensajeChatReporte {
+  final int id;
+  final int? idUsuarioEmisor;
+  final String nombreEmisor;
+  final String contenido;
+  final DateTime? fecha;
+
+  const MensajeChatReporte({
+    required this.id,
+    this.idUsuarioEmisor,
+    required this.nombreEmisor,
+    required this.contenido,
+    this.fecha,
+  });
+
+  factory MensajeChatReporte.desdeJson(Map<String, dynamic> json) => MensajeChatReporte(
+    id: Formato.leerEntero(json['idMensaje']) ?? 0,
+    idUsuarioEmisor: Formato.leerEntero(json['idUsuarioEmisor']),
+    nombreEmisor: json['nombreEmisor'] as String? ?? '',
+    contenido: json['contenido'] as String? ?? '',
+    fecha: Formato.leerFecha(json['fecha']),
+  );
 }
