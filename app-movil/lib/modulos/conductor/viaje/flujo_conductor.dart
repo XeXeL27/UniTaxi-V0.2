@@ -669,7 +669,7 @@ class FlujoConductor extends ChangeNotifier {
       aviso = nuevo.pasajeroNoSePresento
           ? 'Viaje cancelado. El administrador revisará tu reporte del pasajero.'
           : nuevo.datosEntrega?.estadoEntrega == EstadoEntrega.noEntregado
-              ? 'La entrega fue reportada como no entregada.'
+              ? 'El pedido fue reportado como no entregado.'
               : 'El pedido fue reportado y cancelado.';
       _trasCerrar(nuevo.id);
     } else {

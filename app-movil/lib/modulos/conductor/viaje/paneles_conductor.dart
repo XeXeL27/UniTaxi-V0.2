@@ -67,7 +67,7 @@ class PanelSolicitudes extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             flujo.esRepartidor
-                ? 'Conéctate para aparecer en el mapa y recibir pedidos de entrega.'
+                ? 'Conéctate para aparecer en el mapa y recibir pedidos de delivery.'
                 : 'Conéctate para aparecer en el mapa y recibir solicitudes.',
             style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 14),
           ),
@@ -124,7 +124,7 @@ class PanelSolicitudes extends StatelessWidget {
             _Mensaje(
               icono: Iconos.hourglassHalf,
               texto: flujo.esRepartidor
-                  ? 'No hay pedidos por ahora. Cuando un cliente pida una entrega te aparecerá aquí.'
+                  ? 'No hay pedidos por ahora. Cuando un cliente pida un paquete o un delivery te aparecerá aquí.'
                   : 'No hay solicitudes por ahora. Cuando un pasajero pida un taxi te aparecerá aquí.',
               color: ColoresApp.textoSuave,
             )
@@ -400,11 +400,6 @@ class PanelDetalleSolicitud extends StatelessWidget {
         if (esCompra && solicitud.datosEntrega!.productos.isNotEmpty) ...[
           const SizedBox(height: 12),
           ListaProductosPedido(productos: solicitud.datosEntrega!.productos, titulo: 'Qué hay que comprar'),
-          if (solicitud.datosEntrega!.costoProductoEstimado case final estimado?)
-            Text(
-              'El cliente calcula unos ${formatoBs(estimado)} en productos.',
-              style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 12.5),
-            ),
         ],
         const SizedBox(height: 12),
         Row(

@@ -35,7 +35,7 @@ void main() {
     );
 
     expect(find.byKey(const ValueKey('tipo-envio-solicitud')), findsOneWidget);
-    expect(find.text('Encomienda'), findsOneWidget);
+    expect(find.text('Paquete'), findsOneWidget);
     expect(find.text('ANA FLORES'), findsOneWidget);
   });
 }

@@ -71,7 +71,6 @@ void main() {
         tipoEnvio: TipoEnvio.compraYEntrega,
         descripcion: 'Pan',
         productos: [ProductoPedido(nombre: 'Pan', cantidad: 1)],
-        costoProductoEstimado: 12,
         aceptaPoliticaArticulos: true,
       );
       expect(flujo.puedeSolicitar, isTrue);
@@ -318,7 +317,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('11,76 Bs'), findsOneWidget);
-      expect(find.text('Encomienda'), findsOneWidget);
+      expect(find.text('Paquete'), findsOneWidget);
       // El delivery no tiene precio hasta que el repartidor registra la compra.
       expect(find.text('A calcular'), findsOneWidget);
       expect(find.text('1 repartidor libre'), findsNWidgets(2));
@@ -335,7 +334,7 @@ void main() {
         onEncomienda: () => tocados.add('encomienda'),
         onDelivery: () => tocados.add('delivery'),
       )));
-      await tester.tap(find.text('Encomienda'));
+      await tester.tap(find.text('Paquete'));
       await tester.tap(find.text('Delivery'));
       await tester.tap(find.text('Moto taxi'));
 
@@ -352,7 +351,7 @@ void main() {
       await tester.pump();
 
       expect(find.text('Elige tu servicio'), findsNothing);
-      expect(find.text('Encomienda · 11,76 Bs'), findsOneWidget);
+      expect(find.text('Paquete · 11,76 Bs'), findsOneWidget);
       expect(find.byTooltip('Ver el detalle'), findsOneWidget);
     });
   });

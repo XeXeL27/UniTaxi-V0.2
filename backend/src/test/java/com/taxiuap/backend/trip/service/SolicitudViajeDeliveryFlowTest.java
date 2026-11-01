@@ -330,9 +330,10 @@ class SolicitudViajeDeliveryFlowTest {
     }
 
     @Test
-    void noListaCompraSobreElLimiteDelRepartidor() {
-        Conductor conductor = conductor(40L, new BigDecimal("20.00"));
-        SolicitudViaje solicitud = solicitudCompra(new BigDecimal("25.00"));
+    void elRepartidorVeElDeliveryAunqueSuLimiteSeaCero() {
+        // El cliente ya no estima el costo: el repartidor ve la lista y decide si puede adelantarlo.
+        Conductor conductor = conductor(40L, BigDecimal.ZERO);
+        SolicitudViaje solicitud = solicitudCompra(null);
         Vehiculo motoDelivery = vehiculo(delivery, delivery.getTipoVehiculo());
         when(conductorRepository.findByUsuarioId(10L)).thenReturn(Optional.of(conductor));
         when(documentoService.puedeOperar(40L)).thenReturn(true);
@@ -340,7 +341,18 @@ class SolicitudViajeDeliveryFlowTest {
         when(ofertaRepository.existsBySolicitudIdAndConductorIdAndSituacionOferta(any(), any(), any())).thenReturn(false);
         when(vehiculoRepository.findByConductorId(40L)).thenReturn(List.of(motoDelivery));
 
-        assertTrue(service.listarDisponiblesParaConductor().isEmpty());
+        assertFalse(service.listarDisponiblesParaConductor().isEmpty());
+    }
+
+    @Test
+    void unaCompraSinCostoEstimadoSeCrea() {
+        when(categoriaRepository.findById(7)).thenReturn(Optional.of(delivery));
+        var respuesta = service.crear(request(new DatosEntregaRequest(TipoEnvio.COMPRA_Y_ENTREGA,
+                "Pan", null, null, null, null, null, null, true,
+                List.of(new ProductoSolicitadoRequest("Pan", 2, null)))));
+
+        assertNull(respuesta.precioSugerido());
+        assertNull(respuesta.datosEntrega().costoProductoEstimado());
     }
 
     @Test

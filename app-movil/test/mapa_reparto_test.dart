@@ -150,7 +150,6 @@ void main() {
       flujo.datosEntregaForm = const DatosEntregaForm(
         tipoEnvio: TipoEnvio.compraYEntrega,
         descripcion: 'Pan',
-        costoProductoEstimado: 12,
         aceptaPoliticaArticulos: true,
       );
       mapa.ponerA(const PuntoRuta(_pasajero, 'Mi ubicación actual'));
@@ -258,7 +257,6 @@ void main() {
       flujo.guardarDatosEntrega(const DatosEntregaForm(
         tipoEnvio: TipoEnvio.compraYEntrega,
         descripcion: 'Pan',
-        costoProductoEstimado: 12,
         aceptaPoliticaArticulos: true,
       ));
 

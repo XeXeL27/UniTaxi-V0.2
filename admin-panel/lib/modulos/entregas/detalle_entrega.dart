@@ -15,6 +15,13 @@ import 'entregas_api.dart';
 import 'pantalla_entregas.dart';
 import '../../widgets/dialogo_animado.dart';
 
+/// Nombre del tipo de envio como lo ven el cliente y el repartidor: Paquete o Delivery.
+String textoTipoEnvio(String? tipo) => switch (tipo) {
+  'ENCOMIENDA' => 'Paquete',
+  'COMPRA_Y_ENTREGA' => 'Delivery',
+  _ => tipo ?? '',
+};
+
 /// Detalle de un pedido DELIVERY: datos, cada confirmacion del repartidor con su hora y GPS, y las
 /// fotos que confirman la recogida y la entrega. Bajo 600 px ocupa toda la pantalla.
 Future<void> mostrarEntrega(BuildContext context, ViajeExpediente viaje) {
@@ -86,7 +93,7 @@ class _DetalleEntrega extends StatelessWidget {
             padding: const EdgeInsets.all(20),
             children: [
               DatosEnGrilla([
-                ('Tipo de envío', Formato.enumTexto(entrega.tipoEnvio)),
+                ('Tipo de envío', textoTipoEnvio(entrega.tipoEnvio)),
                 ('Contenido', entrega.descripcion),
                 ('Cliente', viaje.nombrePasajero),
                 ('Repartidor', viaje.nombreConductor),

@@ -59,12 +59,12 @@ ServicioActivo servicioDe(TipoEnvio? tipoEnvio) => tipoEnvio == null ? ServicioA
 /// taxistas: son otros vehículos y otro trabajo.
 String textoSolicitar(ServicioActivo servicio, [TipoEnvio? tipo]) => switch (servicio) {
   ServicioActivo.viaje => 'Solicitar moto taxi',
-  ServicioActivo.entrega when tipo == TipoEnvio.compraYEntrega => 'Solicitar compra',
-  ServicioActivo.entrega => 'Solicitar envío',
+  ServicioActivo.entrega when tipo == TipoEnvio.compraYEntrega => 'Solicitar delivery',
+  ServicioActivo.entrega => 'Solicitar paquete',
 };
 
 String textoConfirmacion(ServicioActivo servicio) =>
-    servicio == ServicioActivo.entrega ? '¿Confirmas tu entrega?' : '¿Confirmas tu viaje?';
+    servicio == ServicioActivo.entrega ? '¿Confirmas tu pedido?' : '¿Confirmas tu viaje?';
 
 String textoBuscando(ServicioActivo servicio) =>
     servicio == ServicioActivo.entrega ? 'Buscando repartidor...' : 'Buscando conductor...';
@@ -87,7 +87,7 @@ String textoSinLibresAntes(ServicioActivo servicio) => servicio == ServicioActiv
 
 /// Confirmacion de cancelar mientras se busca: quienes dejan de ver el pedido.
 String textoCancelarBusqueda(ServicioActivo servicio) => servicio == ServicioActivo.entrega
-    ? 'Los repartidores dejarán de ver tu pedido de entrega.'
+    ? 'Los repartidores dejarán de ver tu pedido.'
     : 'Los conductores dejarán de ver tu pedido de taxi.';
 
 /// "3 repartidores libres cerca de ti", con el singular y el plural correctos.

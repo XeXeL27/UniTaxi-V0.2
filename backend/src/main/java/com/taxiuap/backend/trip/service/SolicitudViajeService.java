@@ -421,17 +421,12 @@ public class SolicitudViajeService {
 
     /**
      * Cada conductor ve solo las solicitudes de la categoria de su moto: el taxista los viajes y el
-     * repartidor (moto DELIVERY) las entregas que puede adelantar.
+     * repartidor (moto DELIVERY) los paquetes y los delivery. El cliente ya no estima el costo de los
+     * productos: el repartidor ve la lista antes de aceptar y decide si puede adelantarlo.
      */
     boolean puedeVer(Conductor conductor, SolicitudViaje solicitud) {
         boolean repartidor = tieneMotoDelivery(conductor.getId());
-        if (!solicitud.getCategoriaServicio().esDeliveryCompatible()) return !repartidor;
-        if (!repartidor) return false;
-        DatosEntrega datos = solicitud.getDatosEntrega();
-        return datos == null || datos.getTipoEnvio() != TipoEnvio.COMPRA_Y_ENTREGA
-                || (datos.getCostoProductoEstimado() != null
-                        && conductor.getLimiteAdelantoCompra() != null
-                        && datos.getCostoProductoEstimado().compareTo(conductor.getLimiteAdelantoCompra()) <= 0);
+        return solicitud.getCategoriaServicio().esDeliveryCompatible() == repartidor;
     }
 
     boolean tieneMotoDelivery(Long idConductor) {

@@ -347,7 +347,7 @@ class _PuntoResumen extends StatelessWidget {
     _ when quien != null && situacion == SituacionViaje.llego => 'El taxi está esperando a $quien',
     _ when quien != null && situacion == SituacionViaje.enCurso => '$quien va en viaje a su destino',
     SituacionViaje.confirmado || SituacionViaje.enCamino when compra => 'Tu repartidor va a comprar tu pedido',
-    SituacionViaje.enCurso when compra => 'Tu repartidor ya tiene tu compra: va en camino',
+    SituacionViaje.enCurso when compra => 'Tu repartidor ya tiene tu pedido: va en camino',
     SituacionViaje.confirmado || SituacionViaje.enCamino =>
       servicio == ServicioActivo.entrega
           ? 'Tu repartidor va a recoger tu paquete'

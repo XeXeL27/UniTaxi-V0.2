@@ -928,7 +928,7 @@ class FlujoPasajero extends ChangeNotifier {
     final esEntrega = tipoEnvio != null;
     if (esEntrega && idCategoriaDelivery == null) {
       idCategoriaDelivery = await api.categoriaDelivery();
-      if (idCategoriaDelivery == null) throw ApiExcepcion('No está disponible el servicio de entregas');
+      if (idCategoriaDelivery == null) throw ApiExcepcion('No está disponible el servicio de delivery');
     }
     // La categoria DELIVERY y los datos del paquete van SOLO en una entrega: antes la categoria
     // guardada de una entrega anterior se mandaba tambien en los taxis y el servidor los rechazaba
@@ -1021,7 +1021,7 @@ class FlujoPasajero extends ChangeNotifier {
     // ACEPTADA sin viaje en la lista todavia: aparece en la proxima vuelta.
     if (nueva.situacion != 'ACEPTADA' && !nueva.activa) {
       aviso = servicio == ServicioActivo.entrega
-          ? 'Tu pedido de entrega ya no está activo. Puedes hacer otro.'
+          ? 'Tu pedido ya no está activo. Puedes hacer otro.'
           : 'Tu solicitud ya no está activa. Puedes pedir otro taxi.';
       _volverAlInicio();
     }

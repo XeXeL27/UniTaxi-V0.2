@@ -34,12 +34,12 @@ class DatosEntregaTest {
     }
 
     @Test
-    void rechazaCompraSinCostoEstimadoYEncomiendaConCosto() {
+    void aceptaCompraSinCostoEstimadoYRechazaPaqueteConCosto() {
         DatosEntrega compra = new DatosEntrega();
         compra.setSolicitud(new SolicitudViaje());
         compra.setTipoEnvio(TipoEnvio.COMPRA_Y_ENTREGA);
         compra.setDescripcion("Medicamento");
-        assertFalse(validator.validate(compra).isEmpty());
+        assertTrue(validator.validate(compra).isEmpty());
 
         DatosEntrega encomienda = new DatosEntrega();
         encomienda.setSolicitud(new SolicitudViaje());

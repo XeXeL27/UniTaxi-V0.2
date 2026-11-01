@@ -24,7 +24,6 @@ import com.taxiuap.backend.trip.entity.SolicitudViaje;
 import com.taxiuap.backend.trip.entity.Viaje;
 import com.taxiuap.backend.trip.enums.SituacionOferta;
 import com.taxiuap.backend.trip.enums.SituacionSolicitud;
-import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.repository.OfertaViajeRepository;
 import com.taxiuap.backend.trip.repository.SolicitudViajeRepository;
 import com.taxiuap.backend.vehicle.entity.Vehiculo;
@@ -310,14 +309,6 @@ public class OfertaViajeService {
         }
         if (!tieneMotoDelivery) {
             throw new NegocioException("Solo una moto DELIVERY puede aceptar esta solicitud");
-        }
-        if (solicitud.getDatosEntrega() != null
-                && solicitud.getDatosEntrega().getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA
-                && (conductor.getLimiteAdelantoCompra() == null
-                        || solicitud.getDatosEntrega().getCostoProductoEstimado() == null
-                        || solicitud.getDatosEntrega().getCostoProductoEstimado()
-                                .compareTo(conductor.getLimiteAdelantoCompra()) > 0)) {
-            throw new NegocioException("El costo estimado supera el limite de adelanto del repartidor");
         }
     }
 }

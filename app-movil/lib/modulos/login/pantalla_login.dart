@@ -217,7 +217,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   icono: repartidor ? Iconos.box : Iconos.motorcycle,
                   titulo: repartidor ? 'Repartidor (delivery)' : conGoogle ? 'Conductor' : 'Conductor de taxi',
                   detalle: repartidor
-                      ? 'Recibe pedidos de entrega'
+                      ? 'Recibe pedidos de delivery'
                       : conGoogle
                       ? 'Llevo pasajeros y recibo solicitudes de viaje'
                       : 'Recibe solicitudes de viaje',

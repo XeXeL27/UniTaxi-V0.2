@@ -29,7 +29,6 @@ void main() {
     const datos = DatosEntregaForm(
       tipoEnvio: TipoEnvio.compraYEntrega,
       descripcion: 'Pan',
-      costoProductoEstimado: 12,
       aceptaPoliticaArticulos: true,
     );
 
@@ -52,7 +51,6 @@ void main() {
       tipoEnvio: TipoEnvio.compraYEntrega,
       descripcion: '',
       productos: [ProductoPedido(nombre: 'Pan', cantidad: 2)],
-      costoProductoEstimado: 10,
       aceptaPoliticaArticulos: true,
       receptor: PasajeroTercero(nombre: 'JUAN PEREZ', telefono: '123'),
     );
@@ -62,7 +60,6 @@ void main() {
       tipoEnvio: TipoEnvio.compraYEntrega,
       descripcion: '',
       productos: [ProductoPedido(nombre: 'Pan', cantidad: 2)],
-      costoProductoEstimado: 10,
       aceptaPoliticaArticulos: true,
       receptor: PasajeroTercero(nombre: 'JUAN PEREZ', telefono: '71234567', pagaSolicitante: true),
     );
@@ -87,11 +84,22 @@ void main() {
     expect(datos.tipoFalla!.texto, 'El cliente no pagó');
   });
 
-  test('rechaza compra sin producto, monto o confirmacion de prohibiciones', () {
+  test('una compra no pide ni envia un costo estimado: el precio lo registra el repartidor', () {
     const datos = DatosEntregaForm(
       tipoEnvio: TipoEnvio.compraYEntrega,
       descripcion: '',
-      costoProductoEstimado: 0,
+      productos: [ProductoPedido(nombre: 'Pan', cantidad: 2)],
+      aceptaPoliticaArticulos: true,
+    );
+
+    expect(datos.error, isNull);
+    expect(datos.aJson().containsKey('costoProductoEstimado'), isFalse);
+  });
+
+  test('rechaza compra sin producto o sin confirmacion de prohibiciones', () {
+    const datos = DatosEntregaForm(
+      tipoEnvio: TipoEnvio.compraYEntrega,
+      descripcion: '',
       aceptaPoliticaArticulos: false,
     );
 
@@ -143,7 +151,6 @@ void main() {
     final datos = DatosEntrega.desdeJson({
       'tipoEnvio': 'COMPRA_Y_ENTREGA',
       'descripcion': 'Pan',
-      'costoProductoEstimado': 12,
       'costoProductoReal': 11.5,
       'costoProductoConfirmado': 12,
       'estadoEntrega': 'EN_MANO',

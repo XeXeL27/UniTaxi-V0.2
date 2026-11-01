@@ -44,7 +44,7 @@ class PantallaEntregas extends StatelessWidget {
       columnas: [
         ColumnaTabla(titulo: 'Viaje', tipo: TipoColumna.numero, valor: (v) => v.id),
         ColumnaTabla(titulo: 'Fecha', tipo: TipoColumna.fechaHora, valor: (v) => v.fecha),
-        ColumnaTabla(titulo: 'Tipo', valor: (v) => _tipo(v.entrega?.tipoEnvio)),
+        ColumnaTabla(titulo: 'Tipo', valor: (v) => textoTipoEnvio(v.entrega?.tipoEnvio)),
         ColumnaTabla(titulo: 'Contenido', proporcion: 1.4, valor: (v) => v.entrega?.descripcion ?? ''),
         ColumnaTabla(titulo: 'Cliente', valor: (v) => v.nombrePasajero),
         ColumnaTabla(titulo: 'Repartidor', valor: (v) => v.nombreConductor),
@@ -71,10 +71,4 @@ class PantallaEntregas extends StatelessWidget {
       ],
     );
   }
-
-  static String _tipo(String? tipo) => switch (tipo) {
-    'ENCOMIENDA' => 'Encomienda',
-    'COMPRA_Y_ENTREGA' => 'Compra y entrega',
-    _ => tipo ?? '',
-  };
 }

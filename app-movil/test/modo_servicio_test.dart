@@ -106,11 +106,11 @@ void main() {
   group('copy por servicio', () {
     test('el botón y la confirmación cambian con el servicio', () {
       expect(textoSolicitar(ServicioActivo.viaje), 'Solicitar moto taxi');
-      expect(textoSolicitar(ServicioActivo.entrega), 'Solicitar envío');
-      expect(textoSolicitar(ServicioActivo.entrega, TipoEnvio.encomienda), 'Solicitar envío');
-      expect(textoSolicitar(ServicioActivo.entrega, TipoEnvio.compraYEntrega), 'Solicitar compra');
+      expect(textoSolicitar(ServicioActivo.entrega), 'Solicitar paquete');
+      expect(textoSolicitar(ServicioActivo.entrega, TipoEnvio.encomienda), 'Solicitar paquete');
+      expect(textoSolicitar(ServicioActivo.entrega, TipoEnvio.compraYEntrega), 'Solicitar delivery');
       expect(textoConfirmacion(ServicioActivo.viaje), '¿Confirmas tu viaje?');
-      expect(textoConfirmacion(ServicioActivo.entrega), '¿Confirmas tu entrega?');
+      expect(textoConfirmacion(ServicioActivo.entrega), '¿Confirmas tu pedido?');
     });
 
     test('mientras busca cambia el nombre de quien busca', () {

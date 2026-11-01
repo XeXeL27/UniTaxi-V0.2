@@ -38,11 +38,12 @@ public record DatosEntregaRequest(
         return tipoEnvio == TipoEnvio.COMPRA_Y_ENTREGA || productos == null || productos.isEmpty();
     }
 
-    @AssertTrue(message = "La compra requiere un costo estimado mayor que cero")
+    /**
+     * El cliente ya no estima el costo de los productos: lo registra el repartidor al comprar. Las apps
+     * de antes lo siguen mandando en el delivery (se guarda, no se usa); el paquete nunca lo lleva.
+     */
+    @AssertTrue(message = "El paquete no lleva costo de productos")
     public boolean isCostoEstimadoValido() {
-        if (tipoEnvio == TipoEnvio.COMPRA_Y_ENTREGA) {
-            return costoProductoEstimado != null && costoProductoEstimado.signum() > 0;
-        }
         return tipoEnvio != TipoEnvio.ENCOMIENDA
                 || costoProductoEstimado == null || costoProductoEstimado.signum() == 0;
     }

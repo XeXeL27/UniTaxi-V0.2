@@ -214,7 +214,7 @@ class _PantallaMasState extends State<PantallaMas> {
               detalle: esConductor
                   ? 'Pide un taxi con tu cuenta de pasajero'
                   : sesion.conductorRepartidor
-                  ? 'Recibe pedidos de entrega'
+                  ? 'Recibe pedidos de delivery'
                   : 'Recibe solicitudes de viaje',
               color: ColoresApp.rojo,
               onTap: widget.onCambiarModo,

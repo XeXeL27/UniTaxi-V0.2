@@ -111,7 +111,7 @@ class OfertaViajeDeliveryAcceptanceTest {
     }
 
     @Test
-    void aceptaSolicitudDeliveryConMotoCompatibleConLimiteSuficiente() {
+    void aceptaSolicitudDeliveryConMotoCompatible() {
         when(documentoService.puedeOperar(20L)).thenReturn(true);
         when(viajeService.conductorPuedeTomarOtro(20L)).thenReturn(true);
         when(solicitudRepository.existsById(30L)).thenReturn(true);
@@ -180,18 +180,31 @@ class OfertaViajeDeliveryAcceptanceTest {
     }
 
     @Test
-    void rechazaCompraQueSuperaElLimiteDeAdelantoActual() {
-        conductor.setLimiteAdelantoCompra(new BigDecimal("24.99"));
+    void aceptaCompraAunqueElLimiteDeAdelantoSeaMenor() {
+        // El limite ya no filtra: el repartidor ve la lista antes de aceptar y decide.
+        conductor.setLimiteAdelantoCompra(BigDecimal.ZERO);
+        compra.getDatosEntrega().setCostoProductoEstimado(null);
         when(documentoService.puedeOperar(20L)).thenReturn(true);
         when(viajeService.conductorPuedeTomarOtro(20L)).thenReturn(true);
         when(solicitudRepository.existsById(30L)).thenReturn(true);
         when(solicitudRepository.findById(30L)).thenReturn(Optional.of(compra));
+        when(solicitudRepository.aceptarSiDisponible(30L)).thenAnswer(invocacion -> {
+            compra.setSituacionSolicitud(SituacionSolicitud.ACEPTADA);
+            return 1;
+        });
+        when(conductorRepository.findById(20L)).thenReturn(Optional.of(conductor));
+        when(ofertaRepository.findBySolicitudIdAndSituacionOferta(any(), any())).thenReturn(List.of());
         when(vehiculoRepository.findByConductorId(20L)).thenReturn(List.of(motoDelivery));
+        when(viajeService.crearDesdeOferta(any(), any())).thenAnswer(invocacion -> {
+            com.taxiuap.backend.trip.entity.Viaje viaje = new com.taxiuap.backend.trip.entity.Viaje();
+            viaje.setId(41L);
+            return viaje;
+        });
 
-        assertThrows(NegocioException.class, () -> service.aceptarDirecto(30L));
+        service.aceptarDirecto(30L);
 
-        verify(solicitudRepository, never()).aceptarSiDisponible(30L);
-        verify(viajeService, never()).crearDesdeOferta(any(), any());
+        assertEquals(SituacionSolicitud.ACEPTADA, compra.getSituacionSolicitud());
+        verify(viajeService).crearDesdeOferta(any(), any());
     }
 
     @Test

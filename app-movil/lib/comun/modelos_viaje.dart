@@ -6,15 +6,16 @@ import '../mapa/servicios_mapa.dart';
 
 /// Modalidad de pedido DELIVERY soportada por el backend.
 enum TipoEnvio {
-  encomienda('ENCOMIENDA', 'Encomienda'),
-  compraYEntrega('COMPRA_Y_ENTREGA', 'Compra y entrega');
+  encomienda('ENCOMIENDA', 'Paquete'),
+  compraYEntrega('COMPRA_Y_ENTREGA', 'Delivery');
 
   final String codigo;
   final String nombre;
   const TipoEnvio(this.codigo, this.nombre);
 
-  /// Nombre de la opcion que elige el pasajero (Moto taxi, Encomienda o Delivery).
-  String get nombreServicio => this == compraYEntrega ? 'Delivery' : nombre;
+  /// Nombre de la opcion que elige el pasajero (Moto taxi, Paquete o Delivery); es el mismo que ve el
+  /// repartidor.
+  String get nombreServicio => nombre;
 
   static TipoEnvio? desde(String? codigo) => values.where((tipo) => tipo.codigo == codigo).firstOrNull;
 }
@@ -44,7 +45,6 @@ class DatosEntregaForm {
 
   /// Compra: lo que el repartidor tiene que comprar, uno por fila.
   final List<ProductoPedido> productos;
-  final double? costoProductoEstimado;
   final String? nombreReceptor;
   final String? telefonoReceptor;
   final String? fotoPaqueteUrl;
@@ -58,7 +58,6 @@ class DatosEntregaForm {
     required this.tipoEnvio,
     required this.descripcion,
     this.productos = const [],
-    this.costoProductoEstimado,
     this.nombreReceptor,
     this.telefonoReceptor,
     this.fotoPaqueteUrl,
@@ -80,9 +79,6 @@ class DatosEntregaForm {
     if (!aceptaPoliticaArticulos) {
       return 'Acepta la política de artículos prohibidos';
     }
-    if (tipoEnvio == TipoEnvio.compraYEntrega && (costoProductoEstimado ?? 0) <= 0) {
-      return 'Indica cuánto crees que costarán los productos';
-    }
     final otra = receptor;
     if (otra != null) {
       if (otra.nombre.trim().length < 3) return 'Escribe el nombre de quien recibe';
@@ -103,7 +99,6 @@ class DatosEntregaForm {
     'tipoEnvio': tipoEnvio.codigo,
     'descripcion': descripcionPedido,
     if (tipoEnvio == TipoEnvio.compraYEntrega) 'productos': [for (final p in productos) p.aJson()],
-    'costoProductoEstimado': tipoEnvio == TipoEnvio.compraYEntrega ? costoProductoEstimado : null,
     'aceptaPoliticaArticulos': aceptaPoliticaArticulos,
     if (receptor != null) ...{
       'nombreReceptor': receptor!.nombre.trim(),
@@ -270,7 +265,6 @@ class PropuestaCosto {
 class DatosEntrega {
   final TipoEnvio tipoEnvio;
   final String descripcion;
-  final double? costoProductoEstimado;
   final double? costoProductoReal;
   final double? costoProductoConfirmado;
   final bool compraConfirmadaPorCliente;
@@ -326,7 +320,6 @@ class DatosEntrega {
   const DatosEntrega({
     required this.tipoEnvio,
     required this.descripcion,
-    this.costoProductoEstimado,
     this.costoProductoReal,
     this.costoProductoConfirmado,
     this.compraConfirmadaPorCliente = false,
@@ -366,7 +359,6 @@ class DatosEntrega {
   factory DatosEntrega.desdeJson(Map<String, dynamic> json) => DatosEntrega(
     tipoEnvio: TipoEnvio.desde(json['tipoEnvio'] as String?) ?? TipoEnvio.encomienda,
     descripcion: json['descripcion'] as String? ?? '',
-    costoProductoEstimado: numeroDesdeJson(json['costoProductoEstimado']),
     costoProductoReal: numeroDesdeJson(json['costoProductoReal']),
     costoProductoConfirmado: numeroDesdeJson(json['costoProductoConfirmado']),
     compraConfirmadaPorCliente: json['compraConfirmadaPorCliente'] as bool? ?? false,
@@ -409,7 +401,7 @@ class DatosEntrega {
     ],
   );
 
-  double get totalProducto => costoProductoReal ?? costoProductoEstimado ?? 0;
+  double get totalProducto => costoProductoReal ?? 0;
 
   bool get esCompra => tipoEnvio == TipoEnvio.compraYEntrega;
 

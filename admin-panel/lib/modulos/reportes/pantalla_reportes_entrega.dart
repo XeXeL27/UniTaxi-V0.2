@@ -48,7 +48,7 @@ class PantallaReportesEntrega extends StatelessWidget {
         ColumnaTabla(titulo: 'Viaje', tipo: TipoColumna.numero, valor: (r) => r.idViaje),
         ColumnaTabla(titulo: 'Incidente', valor: (r) => Formato.enumTexto(r.motivo)),
         ColumnaTabla(titulo: 'Pasajero', valor: (r) => r.nombrePasajero ?? ''),
-        ColumnaTabla(titulo: 'Tipo', valor: (r) => r.tipoEnvio ?? ''),
+        ColumnaTabla(titulo: 'Tipo', valor: (r) => textoTipoEnvio(r.tipoEnvio)),
         ColumnaTabla(titulo: 'Situación', tipo: TipoColumna.estado, opciones: _situaciones, valor: (r) => r.situacion),
         ColumnaTabla(titulo: 'Fecha', tipo: TipoColumna.fechaHora, valor: (r) => r.fecha),
         ColumnaTabla(
@@ -144,7 +144,7 @@ class _DetalleReporteState extends State<_DetalleReporte> {
         DatosEnGrilla([
           ('Viaje', '#${r.idViaje}'),
           ('Situación', Formato.enumTexto(r.situacion)),
-          ('Tipo de envío', r.tipoEnvio),
+          ('Tipo de envío', textoTipoEnvio(r.tipoEnvio)),
           ('Motivo', r.motivo),
           ('Contacto', r.telefonoContacto),
           ('Destino', r.destinoDireccion),

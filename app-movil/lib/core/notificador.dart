@@ -137,8 +137,8 @@ class Notificador {
     // Al repartidor le llegan pedidos de entrega; al taxista, solicitudes de viaje.
     final entregas = nuevas.every((s) => s.datosEntrega != null);
     final titulo = una != null
-        ? (entregas ? 'Nuevo pedido de entrega' : 'Nueva solicitud de viaje')
-        : (entregas ? '${nuevas.length} pedidos de entrega nuevos' : '${nuevas.length} solicitudes de viaje nuevas');
+        ? (entregas ? 'Nuevo pedido de delivery' : 'Nueva solicitud de viaje')
+        : (entregas ? '${nuevas.length} pedidos de delivery nuevos' : '${nuevas.length} solicitudes de viaje nuevas');
     final cuerpo = una != null
         ? 'Hacia ${una.destinoDireccion}${una.precio != null ? ' - ${formatoBs(una.precio)}' : ''}'
         : (entregas ? 'Abre UNITAXI para ver los pedidos y aceptar uno' : 'Abre UNITAXI para ver las solicitudes y aceptar un viaje');

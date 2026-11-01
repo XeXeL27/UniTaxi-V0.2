@@ -86,7 +86,6 @@ class _FilaProducto {
 
 class _FormularioEntregaState extends State<_FormularioEntrega> {
   final _descripcion = TextEditingController();
-  final _monto = TextEditingController();
   final _receptor = TextEditingController();
   final _telefonoReceptor = TextEditingController();
   final List<_FilaProducto> _productos = [_FilaProducto()];
@@ -113,7 +112,7 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
 
   @override
   void dispose() {
-    for (final controller in [_descripcion, _monto, _receptor, _telefonoReceptor]) {
+    for (final controller in [_descripcion, _receptor, _telefonoReceptor]) {
       controller.dispose();
     }
     for (final fila in _productos) {
@@ -143,7 +142,6 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
       tipoEnvio: widget.tipo,
       descripcion: _descripcion.text,
       productos: _compra ? [for (final fila in _productos) fila.producto] : const [],
-      costoProductoEstimado: double.tryParse(_monto.text.replaceAll(',', '.')),
       aceptaPoliticaArticulos: _acepta,
       receptor: _paraOtra
           ? PasajeroTercero(
@@ -203,16 +201,6 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
                   ),
                 ),
                 const SizedBox(height: 12),
-                TextField(
-                  controller: _monto,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: const InputDecoration(
-                    labelText: 'Cuánto crees que costarán (Bs)',
-                    helperText: 'Solo es una referencia: pagas el precio real que registre el repartidor.',
-                    helperMaxLines: 2,
-                  ),
-                ),
-                const SizedBox(height: 12),
                 _ResumenPrecio(textoTarifa: _textoTarifa),
               ] else ...[
                 TextField(
@@ -243,7 +231,7 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
 extension on _FormularioEntregaState {
   /// "¿Quién recibe?": quien pide o otra persona (nombre, celular y quién paga).
   Widget _quienRecibe() {
-    final queRecibe = _compra ? 'la compra' : 'el paquete';
+    final queRecibe = _compra ? 'tu pedido' : 'el paquete';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -431,7 +419,7 @@ class _ResumenPrecio extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           linea('Envío', textoTarifa == null ? 'Tarifa base + por km' : textoTarifa!),
-          linea('Productos', 'Por confirmar'),
+          linea('Productos', 'Lo registra el repartidor'),
           linea('Total', 'Lo aceptas cuando el repartidor compre'),
           const SizedBox(height: 4),
           const Text(

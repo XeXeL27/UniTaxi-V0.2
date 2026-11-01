@@ -231,16 +231,14 @@ public class DatosEntrega extends EntidadAuditable {
     @Column(name = "estado_datos_entrega", length = 20, nullable = false)
     private EstadoRegistro estadoDatosEntrega = EstadoRegistro.A;
 
-    @AssertTrue(message = "La compra requiere un costo estimado positivo y la encomienda no lo permite")
+    /** El costo estimado es opcional en el delivery (apps de antes) y el paquete no lo lleva. */
+    @AssertTrue(message = "El paquete no lleva costo de productos")
     public boolean isCostoEstimadoValido() {
-        if (tipoEnvio == TipoEnvio.COMPRA_Y_ENTREGA) {
-            return costoProductoEstimado != null && costoProductoEstimado.signum() > 0;
-        }
         return tipoEnvio != TipoEnvio.ENCOMIENDA
                 || costoProductoEstimado == null || costoProductoEstimado.signum() == 0;
     }
 
-    @AssertTrue(message = "La encomienda requiere códigos de recogida y entrega válidos")
+    @AssertTrue(message = "El paquete requiere códigos de recogida y entrega válidos")
     public boolean isTieneCodigosRequeridos() {
         if (tipoEnvio != TipoEnvio.ENCOMIENDA) {
             return true;
@@ -248,7 +246,7 @@ public class DatosEntrega extends EntidadAuditable {
         return codigoRecogida != null && codigoEntrega != null;
     }
 
-    @AssertTrue(message = "La encomienda requiere aceptar la politica de articulos")
+    @AssertTrue(message = "El paquete requiere aceptar la politica de articulos")
     public boolean isPoliticaAceptada() {
         return tipoEnvio != TipoEnvio.ENCOMIENDA || Boolean.TRUE.equals(aceptaPoliticaArticulos);
     }

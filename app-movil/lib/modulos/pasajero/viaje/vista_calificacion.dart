@@ -103,7 +103,7 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                       children: [
                         Text(
                           viaje.datosEntrega != null
-                              ? '¿Cómo fue tu entrega con ${viaje.primerNombreConductor}?'
+                              ? '¿Cómo fue tu ${viaje.datosEntrega!.tipoEnvio.nombre.toLowerCase()} con ${viaje.primerNombreConductor}?'
                               : viaje.tercero != null
                                   ? '¿Cómo fue el viaje de ${viaje.tercero!.primerNombre} con ${viaje.primerNombreConductor}?'
                                   : '¿Cómo fue tu viaje con ${viaje.primerNombreConductor}?',
@@ -111,7 +111,7 @@ class _CuadroCalificacionState extends State<_CuadroCalificacion> {
                         ),
                         Text(
                           viaje.datosEntrega != null
-                              ? 'Servicio de entrega: ${formatoBs(viaje.precioFinal)}.'
+                              ? '${viaje.datosEntrega!.tipoEnvio.nombre}: ${formatoBs(viaje.precioFinal)}.'
                               : viaje.tercero != null
                                   ? '${viaje.tercero!.primerNombre} llegó a su destino. Viaje de ${formatoBs(viaje.precioFinal)}.'
                                   : 'Llegaste a tu destino. ${MetodoPago.frase('Pagas ${formatoBs(viaje.precioFinal)}', viaje.metodoPago)}.',

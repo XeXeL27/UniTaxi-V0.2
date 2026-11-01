@@ -83,11 +83,7 @@ class _TarjetaEnCurso extends StatelessWidget {
   Widget build(BuildContext context) {
     final entrega = viaje.datosEntrega;
     final esEntrega = entrega != null;
-    final tipo = !esEntrega
-        ? 'Taxi'
-        : entrega.tipoEnvio == TipoEnvio.compraYEntrega
-        ? 'Compra y entrega'
-        : 'Encomienda';
+    final tipo = esEntrega ? entrega.tipoEnvio.nombre : 'Taxi';
     final quien = esConductor ? viaje.primerNombrePasajero : viaje.primerNombreConductor;
     final estado = estadoServicio(viaje);
     return Material(

@@ -92,7 +92,7 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Guardar la tarifa?',
-      mensaje: 'Los pedidos nuevos de encomienda y compra cobrarán ${base.toStringAsFixed(2)} Bs más '
+      mensaje: 'Los pedidos nuevos de paquete y delivery cobrarán ${base.toStringAsFixed(2)} Bs más '
           '${km.toStringAsFixed(2)} Bs por km. Los pedidos que ya se hicieron conservan su tarifa.',
       textoConfirmar: 'Sí, guardar',
       tono: TonoBoton.verde,
@@ -150,7 +150,7 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
                       const SizedBox(height: 8),
                       Text(
                         'Vigente: ${actual.tarifaBase.toStringAsFixed(2)} Bs + ${actual.precioKm.toStringAsFixed(2)} Bs por km. '
-                        'Se cobra en la encomienda y en la compra; los productos de una compra van aparte. '
+                        'Se cobra en el paquete y en el delivery; los productos de un delivery van aparte. '
                         'Cada pedido conserva la tarifa con la que se pidió.',
                         style: const TextStyle(color: ColoresApp.textoSuave),
                       ),

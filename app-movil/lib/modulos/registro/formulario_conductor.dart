@@ -473,7 +473,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
         _avisoCategorias = categorias.isEmpty
             ? 'No hay categorías de servicio para motos disponibles. Te registraremos como mototaxi.'
             : categoriaReparto(categorias) == null
-            ? 'Por ahora no hay categoría de reparto de entregas. Te registraremos como mototaxi.'
+            ? 'Por ahora no hay categoría de delivery. Te registraremos como mototaxi.'
             : null;
       });
     } catch (_) {

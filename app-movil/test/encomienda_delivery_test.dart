@@ -21,11 +21,11 @@ const _usuario = {
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
 
-  test('la compra se ofrece al pasajero como Delivery y la encomienda con su nombre', () {
+  test('la compra se llama Delivery y la encomienda Paquete, para el pasajero y el repartidor', () {
     expect(TipoEnvio.compraYEntrega.nombreServicio, 'Delivery');
-    expect(TipoEnvio.encomienda.nombreServicio, 'Encomienda');
-    // Por dentro (repartidor, historial) el nombre no cambia.
-    expect(TipoEnvio.compraYEntrega.nombre, 'Compra y entrega');
+    expect(TipoEnvio.encomienda.nombreServicio, 'Paquete');
+    // El repartidor y el historial usan el mismo nombre.
+    expect(TipoEnvio.compraYEntrega.nombre, 'Delivery');
   });
 
   testWidgets('el menu del inicio ofrece moto taxi, encomienda y delivery por separado', (tester) async {
@@ -52,7 +52,7 @@ void main() {
 
     expect(find.text('Entrega'), findsNothing);
     await tester.tap(find.text('Delivery'));
-    await tester.tap(find.text('Encomienda'));
+    await tester.tap(find.text('Paquete'));
     await tester.tap(find.text('Moto taxi'));
     expect(tocados, ['delivery', 'encomienda', 'taxi']);
   });

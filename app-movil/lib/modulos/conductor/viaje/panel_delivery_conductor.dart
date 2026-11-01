@@ -28,7 +28,8 @@ import 'flujo_conductor.dart';
     return ('Esperando a quien recibe en el punto de entrega', const Color(0xFFE67E22), '', ColoresApp.azul);
   }
   if (datos.estadoEntrega == EstadoEntrega.enMano) {
-    return ('Lleva el paquete al punto de entrega', ColoresApp.exito, '', ColoresApp.azul);
+    final que = datos.esCompra ? 'el pedido' : 'el paquete';
+    return ('Lleva $que al punto de entrega', ColoresApp.exito, '', ColoresApp.azul);
   }
   final irARecoger =
       datos.tipoEnvio == TipoEnvio.encomienda &&
@@ -99,7 +100,7 @@ class ResumenEntregaConductor extends StatelessWidget {
                     style: const TextStyle(color: ColoresApp.azul, fontSize: 16, fontWeight: FontWeight.w700),
                   ),
                   Text(
-                    esCompra ? 'Compra y entrega' : 'Encomienda',
+                    datos.tipoEnvio.nombre,
                     style: const TextStyle(color: ColoresApp.textoSuave, fontSize: 12.5),
                   ),
                 ],
@@ -297,7 +298,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           : 'Revisa la foto antes de recoger el paquete. Debe verse:',
       requisitos: entrega
           ? const [
-              'La persona que recibe con el paquete en la mano',
+              'La persona que recibe con su pedido en la mano',
               'Nítida y con buena luz',
               'Derecha (gírala si salió de costado)',
             ]
@@ -529,7 +530,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
           metros == null
               ? 'Activa el GPS: la entrega se confirma a ${FlujoConductor.metrosEntrega.round()} m o menos del destino.'
               : cerca
-              ? 'Estás en el destino. Ya puedes entregar el paquete.'
+              ? 'Estás en el destino. Ya puedes entregar el pedido.'
               : 'Estás a ${_distancia(metros)} del destino. La entrega se confirma a ${FlujoConductor.metrosEntrega.round()} m o menos.',
           style: TextStyle(
             color: cerca ? ColoresApp.exito : ColoresApp.textoSuave,

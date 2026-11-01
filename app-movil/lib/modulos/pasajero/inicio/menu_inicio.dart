@@ -184,7 +184,7 @@ class MenuInicio extends StatelessWidget {
               Expanded(
                 child: MarcaGuia(
                   id: 'pasajero.menuEncomienda',
-                  child: _AccesoServicio(icono: Iconos.boxOpen, texto: 'Encomienda', onTap: onEncomienda),
+                  child: _AccesoServicio(icono: Iconos.boxOpen, texto: 'Paquete', onTap: onEncomienda),
                 ),
               ),
               const SizedBox(width: 8),

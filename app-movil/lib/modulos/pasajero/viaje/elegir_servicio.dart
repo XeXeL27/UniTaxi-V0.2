@@ -86,7 +86,7 @@ class PanelElegirServicio extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '${esTaxi ? 'Moto taxi' : (tipo?.nombreServicio ?? 'Encomienda')} · ${flujo.textoPrecio}',
+                  '${esTaxi ? 'Moto taxi' : (tipo?.nombreServicio ?? 'Paquete')} · ${flujo.textoPrecio}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: ColoresApp.tinta, fontSize: 16, fontWeight: FontWeight.w700),
@@ -145,7 +145,7 @@ class PanelElegirServicio extends StatelessWidget {
           id: 'pasajero.encomienda',
           child: TarjetaServicio(
             icono: Iconos.boxOpen,
-            titulo: 'Encomienda',
+            titulo: 'Paquete',
             detalle: sinEntrega ??
                 (tipo == TipoEnvio.encomienda && conDestino ? detalleTaxi : 'Envía un paquete a otro lugar'),
             bloqueada: sinEntrega != null,

@@ -350,7 +350,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         clave: _guiaServicio,
         titulo: 'Lugares y servicios',
         texto:
-            'Toca aquí para ver tus lugares guardados y elegir moto taxi, encomienda o delivery. Con el destino '
+            'Toca aquí para ver tus lugares guardados y elegir moto taxi, paquete o delivery. Con el destino '
             'elegido verás el precio y pedirás tu servicio.',
       ),
       PasoGuia(
@@ -464,8 +464,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   static const _pasoUnDelivery = PasoGuia(
     icono: Iconos.circleInfo,
     titulo: 'Un envío a la vez',
-    texto: 'Puedes tener una sola encomienda o delivery en curso. Con un delivery en curso igual puedes pedir un '
-        'moto taxi, pero con un moto taxi en curso no puedes pedir encomienda ni delivery.',
+    texto: 'Puedes tener un solo paquete o delivery en curso. Con un paquete o delivery en curso igual puedes '
+        'pedir un moto taxi, pero con un moto taxi en curso no puedes pedir paquete ni delivery.',
   );
 
   /// "Elige tu servicio": cada servicio y cada opcion, la primera vez que se pide algo.
@@ -475,8 +475,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       const PasoGuia(
         icono: Iconos.motorcycle,
         titulo: 'Elige tu servicio',
-        texto: 'En UNITAXI puedes pedir un moto taxi para ti o para otra persona, enviar un paquete (Encomienda) o '
-            'pedir que te compren algo (Delivery). Te mostramos cada opción.',
+        texto: 'En UNITAXI puedes pedir un moto taxi para ti o para otra persona, enviar algo de un lugar a otro '
+            '(Paquete) o pedir que te compren algo (Delivery). Te mostramos cada opción.',
       ),
       const PasoGuia(
         marca: 'pasajero.motoTaxi',
@@ -486,7 +486,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       ),
       const PasoGuia(
         marca: 'pasajero.encomienda',
-        titulo: 'Encomienda',
+        titulo: 'Paquete',
         texto: 'Un repartidor recoge tu paquete en el punto de partida y lo lleva al destino. Al recoger y al '
             'entregar se confirma con un código de 6 dígitos y una foto.',
       ),
@@ -546,14 +546,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     return [
       const PasoGuia(
         icono: Iconos.boxOpen,
-        titulo: 'Nuevo: Encomienda y Delivery',
-        texto: 'Ahora Encomienda y Delivery son opciones separadas: eliges directamente lo que necesitas, sin '
+        titulo: 'Nuevo: Paquete y Delivery',
+        texto: 'Ahora Paquete y Delivery son opciones separadas: eliges directamente lo que necesitas, sin '
             'pasar por "Entrega".',
       ),
       PasoGuia(
         marca: enMenu ? 'pasajero.menuEncomienda' : 'pasajero.encomienda',
         icono: Iconos.boxOpen,
-        titulo: 'Encomienda',
+        titulo: 'Paquete',
         texto: 'Para enviar un paquete de un lugar a otro: eliges a dónde va y un repartidor lo recoge y lo lleva.',
       ),
       PasoGuia(
@@ -578,14 +578,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     PasoGuia(
       icono: Iconos.listUl,
       titulo: 'Tu lista de productos',
-      texto: 'Al tocar Solicitar compra escribes cada producto con su cantidad y, si quieres, indicaciones como la '
+      texto: 'Al tocar Solicitar delivery escribes cada producto con su cantidad y, si quieres, indicaciones como la '
           'marca o el tamaño.',
     ),
     PasoGuia(
       icono: Iconos.moneyBill1,
-      titulo: 'Cuánto crees que costarán',
-      texto: 'Es solo una referencia para que lo tome un repartidor que pueda adelantar ese monto. Pagas el precio '
-          'real que él registre.',
+      titulo: 'El repartidor pone el precio',
+      texto: 'No tienes que calcular nada: el repartidor compra y registra el precio real de cada producto. Tú '
+          'solo revisas el total y lo aceptas.',
     ),
     PasoGuia(
       icono: Iconos.userGroup,
@@ -601,7 +601,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     ),
     PasoGuia(
       marca: 'pasajero.solicitar',
-      titulo: 'Solicitar compra',
+      titulo: 'Solicitar delivery',
       texto: 'Cuando estés listo, toca aquí para escribir tu lista.',
     ),
   ];
@@ -1297,7 +1297,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     _revisarGuiaDelPaso();
   }
 
-  /// Boton "Solicitar moto taxi" / "Solicitar envío". Se pide directo, como en Uber: la hoja ya muestra
+  /// Boton "Solicitar moto taxi" / "Solicitar paquete". Se pide directo, como en Uber: la hoja ya muestra
   /// todo. Solo una entrega o un viaje para otra persona, que llevan mas datos, pasan antes por el
   /// modal con el detalle.
   Future<void> _solicitar() async {
@@ -1845,7 +1845,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     final indicacion = switch (_mapa.a) {
       null when _mapa.gpsDisponible == false => 'No pudimos obtener tu ubicación: toca el mapa donde te recogen.',
       null => 'Obteniendo tu ubicación...',
-      _ when _flujo.servicio == ServicioActivo.entrega => 'Encomienda: busca a dónde va tu paquete o tócalo en el mapa.',
+      _ when _flujo.servicio == ServicioActivo.entrega => 'Paquete: busca a dónde va tu paquete o tócalo en el mapa.',
       _ => 'Toca el botón azul para ver tus lugares y los servicios.',
     };
     return MenuInicio(

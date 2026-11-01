@@ -209,7 +209,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         context,
         titulo: '¡Ya estás habilitado!',
         mensaje: _flujo.esRepartidor
-            ? 'La administración aprobó tu cuenta de repartidor. Desde ahora recibes pedidos de entrega.'
+            ? 'La administración aprobó tu cuenta de repartidor. Desde ahora recibes pedidos de delivery.'
             : 'La administración aprobó tu cuenta de conductor. Desde ahora recibes solicitudes de viaje.',
       );
       _revisarGuia();
@@ -275,7 +275,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
       _irA(_seccionInicio);
       mostrarMensaje(
         context,
-        _flujo.esRepartidor ? 'Estás en línea: recibirás los pedidos de entrega.' : 'Estás en línea: recibirás las solicitudes de viaje.',
+        _flujo.esRepartidor ? 'Estás en línea: recibirás los pedidos de delivery.' : 'Estás en línea: recibirás las solicitudes de viaje.',
       );
     }
   }
@@ -371,7 +371,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         ),
         PasoGuia(
           clave: _guiaSolicitudes,
-          titulo: _flujo.esRepartidor ? 'Solicitudes de entrega' : 'Solicitudes de viaje',
+          titulo: _flujo.esRepartidor ? 'Solicitudes de delivery' : 'Solicitudes de viaje',
           texto: 'Aquí llegan los pedidos. Cuando llega uno nuevo se abre solo con 15 segundos para '
               'responder; también puedes tocarlo en la lista para ver la ruta y cuánto cobras.',
         ),
@@ -396,19 +396,19 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     _guiaIniciada = false;
   }
 
-  /// Inicio del repartidor: lo mismo que el del conductor con los pedidos de entrega, los 3 pedidos a la
-  /// vez y el limite de adelanto de las compras.
+  /// Inicio del repartidor: lo mismo que el del conductor con los pedidos de delivery, los 3 pedidos a la
+  /// vez y lo que adelanta en un delivery.
   List<PasoGuia> _pasosInicioRepartidor() => [
     PasoGuia(
       clave: _guiaConectar,
       titulo: 'En línea o desconectado',
-      texto: 'Conéctate para recibir pedidos de entrega y aparecer en el mapa de los clientes; desconectado no '
+      texto: 'Conéctate para recibir pedidos de delivery y aparecer en el mapa de los clientes; desconectado no '
           'te llega ninguno.',
     ),
     PasoGuia(
       clave: _guiaSolicitudes,
-      titulo: 'Solicitudes de entrega',
-      texto: 'Aquí llegan las encomiendas (llevar un paquete de un lugar a otro) y las compras (comprar algo y llevarlo). '
+      titulo: 'Solicitudes de delivery',
+      texto: 'Aquí llegan los paquetes (llevar algo de un lugar a otro) y los delivery (comprar algo y llevarlo). '
           'Cada pedido nuevo se abre solo con 15 segundos para responder; también puedes tocarlo en la lista.',
     ),
     const PasoGuia(
@@ -424,9 +424,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     ),
     const PasoGuia(
       icono: Iconos.moneyBill1,
-      titulo: 'Compras y tu límite',
-      texto: 'Solo ves las compras que entran en tu límite de adelanto (lo que puedes pagar de tu bolsillo antes '
-          'de cobrar). Puedes cambiarlo en Perfil.',
+      titulo: 'Delivery y lo que adelantas',
+      texto: 'En un delivery pagas los productos de tu bolsillo y cobras al entregar. Antes de aceptarlo ves la lista '
+          'de productos: acepta solo los que puedas adelantar.',
     ),
     PasoGuia(
       clave: _guiaHistorial,
@@ -556,7 +556,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     PasoGuia(
       icono: Iconos.boxOpen,
       titulo: 'Recoger',
-      texto: 'En una encomienda pide el código de recogida y toma la foto del paquete. En una compra compra lo de la '
+      texto: 'En un paquete pide el código de recogida y toma la foto del paquete. En un delivery compra lo de la '
           'lista y registra el precio de cada producto: el cliente tiene que aceptar el costo total.',
     ),
     _pasoParaOtraPersona,
@@ -587,8 +587,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   static const _pasosNovedadesPedido = [
     PasoGuia(
       icono: Iconos.listUl,
-      titulo: 'Nuevo: compras con lista',
-      texto: 'En una compra ves la lista de productos antes de aceptarla. Al comprar registras el precio de cada '
+      titulo: 'Nuevo: delivery con lista',
+      texto: 'En un delivery ves la lista de productos antes de aceptarla. Al comprar registras el precio de cada '
           'producto o que no lo conseguiste.',
     ),
     PasoGuia(
