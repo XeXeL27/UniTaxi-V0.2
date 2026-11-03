@@ -76,7 +76,8 @@ class DatosEntregaForm {
           ? 'Describe el producto que quieres comprar'
           : 'Describe el contenido del paquete';
     }
-    if (!aceptaPoliticaArticulos) {
+    // Solo el paquete confirma que cabe en la moto (el servidor tambien lo exige solo ahi).
+    if (tipoEnvio == TipoEnvio.encomienda && !aceptaPoliticaArticulos) {
       return 'Acepta la política de artículos prohibidos';
     }
     final otra = receptor;

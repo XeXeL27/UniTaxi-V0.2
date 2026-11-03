@@ -38,6 +38,12 @@ public record DatosEntregaRequest(
         return tipoEnvio == TipoEnvio.COMPRA_Y_ENTREGA || productos == null || productos.isEmpty();
     }
 
+    /** Solo el paquete confirma que cabe en una moto y no lleva articulos prohibidos (el delivery no). */
+    @AssertTrue(message = "Confirma que el paquete cabe en una moto y no contiene articulos prohibidos")
+    public boolean isPoliticaAceptadaEnPaquete() {
+        return tipoEnvio != TipoEnvio.ENCOMIENDA || Boolean.TRUE.equals(aceptaPoliticaArticulos);
+    }
+
     /**
      * El cliente ya no estima el costo de los productos: lo registra el repartidor al comprar. Las apps
      * de antes lo siguen mandando en el delivery (se guarda, no se usa); el paquete nunca lo lleva.

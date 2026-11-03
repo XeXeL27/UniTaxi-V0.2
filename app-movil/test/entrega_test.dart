@@ -106,6 +106,24 @@ void main() {
     expect(datos.error, 'Agrega al menos un producto');
   });
 
+  test('la confirmacion de que cabe en la moto solo se pide en el paquete', () {
+    const paquete = DatosEntregaForm(
+      tipoEnvio: TipoEnvio.encomienda,
+      descripcion: 'Documentos',
+      aceptaPoliticaArticulos: false,
+    );
+    expect(paquete.error, 'Acepta la política de artículos prohibidos');
+
+    const delivery = DatosEntregaForm(
+      tipoEnvio: TipoEnvio.compraYEntrega,
+      descripcion: '',
+      productos: [ProductoPedido(nombre: 'Pan', cantidad: 2)],
+      aceptaPoliticaArticulos: false,
+    );
+    expect(delivery.error, isNull);
+    expect(delivery.aJson()['aceptaPoliticaArticulos'], isFalse);
+  });
+
   test('una compra solo se cobra con la ultima version del costo aceptada', () {
     Map<String, dynamic> compra(String situacion, {bool confirmada = false}) => {
       'tipoEnvio': 'COMPRA_Y_ENTREGA',

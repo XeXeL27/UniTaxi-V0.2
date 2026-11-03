@@ -212,12 +212,13 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
               const SizedBox(height: 16),
               _quienRecibe(),
               const SizedBox(height: 8),
-              CheckboxListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _acepta,
-                onChanged: (valor) => setState(() => _acepta = valor ?? false),
-                title: const Text('Confirmo que cabe en una moto y no contiene artículos prohibidos.'),
-              ),
+              if (!_compra)
+                CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _acepta,
+                  onChanged: (valor) => setState(() => _acepta = valor ?? false),
+                  title: const Text('Confirmo que cabe en una moto y no contiene artículos prohibidos.'),
+                ),
               const SizedBox(height: 8),
               BotonPrincipal(texto: 'Continuar', onPressed: _enviar),
             ],

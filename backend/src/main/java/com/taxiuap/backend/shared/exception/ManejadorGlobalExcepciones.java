@@ -26,6 +26,8 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 import com.taxiuap.backend.shared.response.ApiResponse;
 
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -61,6 +63,23 @@ public class ManejadorGlobalExcepciones {
     public ResponseEntity<ApiResponse<Void>> datosInvalidos(HandlerMethodValidationException e) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(ApiResponse.error("Datos de entrada invalidos"));
+    }
+
+    /**
+     * Una regla de una entidad (@AssertTrue, @NotNull...) que no se cumplio al guardar. Lo normal es que el
+     * request la valide antes; si algo se escapa, responde 422 con el motivo en vez de "Error interno".
+     */
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiResponse<Void>> reglaDeEntidad(ConstraintViolationException e,
+            HttpServletRequest peticion) {
+        Map<String, String> errores = new LinkedHashMap<>();
+        for (ConstraintViolation<?> violacion : e.getConstraintViolations()) {
+            errores.putIfAbsent(String.valueOf(violacion.getPropertyPath()), violacion.getMessage());
+        }
+        String mensaje = errores.isEmpty() ? "Datos invalidos" : String.join(". ", errores.values());
+        log.warn("422 en {} {}: regla de entidad no cumplida: {}", peticion.getMethod(), peticion.getRequestURI(),
+                errores);
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(ApiResponse.error(mensaje, errores));
     }
 
     @ExceptionHandler({
@@ -142,6 +161,11 @@ public class ManejadorGlobalExcepciones {
                     e.getMessage());
             return null;
         }
+        // La regla puede fallar al confirmar la transaccion: llega envuelta (TransactionSystemException).
+        ConstraintViolationException violacion = violacionDeEntidad(e);
+        if (violacion != null) {
+            return reglaDeEntidad(violacion, peticion);
+        }
         log.error("Fallo no controlado en {} {}", peticion.getMethod(), peticion.getRequestURI(), e);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(ApiResponse.error("Error interno procesando la peticion"));
@@ -149,6 +173,15 @@ public class ManejadorGlobalExcepciones {
 
     private static void registrar(int codigo, HttpServletRequest peticion, Exception e) {
         log.info("{} en {} {}: {}", codigo, peticion.getMethod(), peticion.getRequestURI(), e.getMessage());
+    }
+
+    /** La ConstraintViolationException de una entidad en alguna causa, o null. */
+    static ConstraintViolationException violacionDeEntidad(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof ConstraintViolationException violacion) return violacion;
+            if (t.getCause() == t) break;
+        }
+        return null;
     }
 
     /** ClientAbortException de Tomcat o "Broken pipe" / "Connection reset" en alguna causa. */
