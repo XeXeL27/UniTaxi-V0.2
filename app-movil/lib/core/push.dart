@@ -139,7 +139,8 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
       '${datos['cuerpo'] ?? ''}',
       id: datos['tipo'] == 'COSTO_ACEPTADO' ? idCostoAceptado(idViaje) : idAvisoCosto(idViaje, version),
       pedirPermiso: false,
-      sonido: SonidoAviso.viajeAceptado,
+      // El cliente tiene que revisar el costo; el repartidor ya puede salir con el pedido (la moto).
+      sonido: datos['tipo'] == 'COSTO_ACEPTADO' ? SonidoAviso.viajeAceptado : SonidoAviso.nuevoServicio,
     );
     return;
   }
@@ -170,11 +171,13 @@ Future<void> mostrarAvisoPush(Map<String, dynamic> datos) async {
 /// conductor espera, 8 cancelado porque el pasajero no se presento.
 int eventoLlegada(int aviso) => aviso <= 1 ? 2 : 4 + aviso.clamp(2, 3);
 
-/// Audio de cada evento: aceptado, el taxi llego (cada aviso) y viaje finalizado.
+/// Audio de cada evento: aceptado (la moto encendiendo), el taxi llego (cada aviso), paquete recogido,
+/// paquete entregado y viaje finalizado. Cancelado (8) solo vibra (minimizada, sonido del telefono).
 SonidoAviso? sonidoDeEvento(int evento) => switch (evento) {
       1 => SonidoAviso.viajeAceptado,
       2 || 6 || 7 => SonidoAviso.llegoTaxi,
-      5 => SonidoAviso.viajeFinalizado,
+      3 => SonidoAviso.confirmacion,
+      4 || 5 => SonidoAviso.viajeFinalizado,
       _ => null,
     };
 

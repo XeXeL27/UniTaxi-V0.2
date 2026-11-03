@@ -30,22 +30,31 @@ class Notificador {
   static String _sufijo() =>
       '${PreferenciasAviso.sonido.value ? 's' : ''}${PreferenciasAviso.vibracion.value ? 'v' : ''}';
 
-  static AndroidNotificationDetails _canalSolicitudes() {
-    final sufijo = _sufijo();
+  /// Solicitudes nuevas del taxista y del repartidor (v3: con el audio nuevo_servicio; v2 usaba el
+  /// sonido del telefono). [muda]: la app esta a la vista y el sonido y la vibracion ya los dio la app,
+  /// asi que la notificacion sale en un canal sin sonido ni vibracion (no suena dos veces).
+  static AndroidNotificationDetails _canalSolicitudes({required bool muda}) {
+    final sufijo = muda ? 'app' : _sufijo();
     return AndroidNotificationDetails(
-      // v2: los canales anteriores no tenian patron de vibracion y en algunos telefonos no vibraban.
-      'solicitudes_viaje_v2_${sufijo.isEmpty ? 'mudo' : sufijo}',
-      'Solicitudes de viaje',
-      channelDescription: 'Aviso cuando un pasajero pide un taxi',
+      'solicitudes_viaje_v3_${sufijo.isEmpty ? 'mudo' : sufijo}',
+      muda ? 'Solicitudes con la app abierta' : 'Solicitudes de viaje y delivery',
+      channelDescription: 'Aviso cuando un pasajero pide un taxi o un delivery',
       importance: Importance.max,
       priority: Priority.high,
       category: AndroidNotificationCategory.message,
       visibility: NotificationVisibility.public,
-      playSound: PreferenciasAviso.sonido.value,
-      enableVibration: PreferenciasAviso.vibracion.value,
-      vibrationPattern: PreferenciasAviso.vibracion.value ? _vibracionCorta : null,
+      playSound: !muda && PreferenciasAviso.sonido.value,
+      sound: muda ? null : RawResourceAndroidNotificationSound(SonidoAviso.nuevoServicio.archivo),
+      enableVibration: !muda && PreferenciasAviso.vibracion.value,
+      vibrationPattern: !muda && PreferenciasAviso.vibracion.value ? _vibracionCorta : null,
     );
   }
+
+  /// Canales de antes que ya no se usan (sus audios cambiaron): se borran para que no queden repetidos
+  /// en los ajustes de notificaciones del telefono.
+  static final _canalesViejos = [
+    for (final s in ['s', 'v', 'sv', 'mudo']) ...['solicitudes_viaje_v2_$s', 'aviso_v3_viaje_aceptado_$s'],
+  ];
 
   /// Aviso del viaje. Con [sonido], el audio de la app (res/raw, mismo nombre); sin el, el sonido de
   /// notificacion del telefono. Cada audio tiene su canal (v3; "tel" = sonido del telefono) porque el
@@ -53,9 +62,11 @@ class Notificador {
   static AndroidNotificationDetails _canalViaje(SonidoAviso? sonido) {
     final sufijo = _sufijo();
     final (nombre, descripcion) = switch (sonido) {
-      SonidoAviso.viajeAceptado => ('Viaje aceptado', 'Cuando un conductor acepta tu viaje'),
+      SonidoAviso.viajeAceptado => ('Viaje aceptado', 'Cuando un conductor acepta tu viaje o tu pedido'),
+      SonidoAviso.nuevoServicio => ('Avisos para revisar', 'Cuando tienes que revisar el costo de tu compra'),
+      SonidoAviso.confirmacion => ('Pedido en marcha', 'Cuando el repartidor recoge tu paquete'),
       SonidoAviso.llegoTaxi => ('Tu taxi llegó', 'Cuando el conductor llega y te espera'),
-      SonidoAviso.viajeFinalizado => ('Viaje finalizado', 'Cuando termina el viaje'),
+      SonidoAviso.viajeFinalizado => ('Viaje finalizado', 'Cuando termina el viaje o se entrega tu paquete'),
       SonidoAviso.mensajeChat => ('Chat del viaje', 'Mensajes del viaje'),
       null => ('Avisos del viaje', 'Otros avisos del viaje'),
     };
@@ -110,6 +121,7 @@ class Notificador {
         ),
       );
       _listo = listo ?? false;
+      if (_listo && !kIsWeb) unawaited(_borrarCanalesViejos());
       if (!_listo || !pedirPermiso) return;
       if (kIsWeb) {
         await _plugin.resolvePlatformSpecificImplementation<WebFlutterLocalNotificationsPlugin>()
@@ -124,13 +136,27 @@ class Notificador {
     }
   }
 
+  static Future<void> _borrarCanalesViejos() async {
+    final android = _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>();
+    for (final id in _canalesViejos) {
+      try {
+        await android?.deleteNotificationChannel(channelId: id);
+      } catch (_) {
+        // Si no existe o el telefono no deja borrarlo, no pasa nada.
+      }
+    }
+  }
+
   /// Una notificacion por tanda: con una sola solicitud muestra su destino y precio; con varias,
-  /// cuantas son. Reemplaza a la anterior (mismo id) para no amontonarlas.
+  /// cuantas son. Reemplaza a la anterior (mismo id) para no amontonarlas. Suena una sola vez por
+  /// tanda (quien llama solo pasa las solicitudes que no se habian visto).
   static Future<void> solicitudesNuevas(List<Solicitud> nuevas) async {
     if (nuevas.isEmpty) return;
-    // Vibra directo (como notificacion, ver MainActivity) aunque la app este a la vista: ahi Android
-    // a veces no hace vibrar la notificacion. Si tambien vibra el canal, se pisan y se siente una vez.
-    unawaited(Vibracion.corta());
+    final aLaVista = kIsWeb || WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+    // A la vista suena y vibra la app (la notificacion sale muda). Minimizada el canal trae el audio y
+    // la vibracion; ademas vibra directo (como notificacion, ver MainActivity) porque Android a veces no
+    // hace vibrar la notificacion: las dos vibraciones se pisan y se siente una vez.
+    unawaited(aLaVista ? Sonido.conVibracion(SonidoAviso.nuevoServicio) : Vibracion.corta());
     await iniciar();
     if (!_listo) return;
     final una = nuevas.length == 1 ? nuevas.first : null;
@@ -147,7 +173,7 @@ class Notificador {
         id: 7001,
         title: titulo,
         body: cuerpo,
-        notificationDetails: NotificationDetails(android: _canalSolicitudes(), web: const WebNotificationDetails()),
+        notificationDetails: NotificationDetails(android: _canalSolicitudes(muda: aLaVista), web: const WebNotificationDetails()),
       );
     } catch (e) {
       debugPrint('No se pudo mostrar la notificacion: $e');

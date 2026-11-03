@@ -9,9 +9,7 @@ import '../../../core/chat.dart';
 import '../../../core/formato.dart';
 import '../../../core/push.dart';
 import '../../../core/notificador.dart';
-import '../../../core/vibracion.dart';
 import '../../../core/sonido.dart';
-import '../../../core/preferencias_aviso.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../../../mapa/controlador_mapa.dart';
 import 'conductor_api.dart';
@@ -232,19 +230,23 @@ class FlujoConductor extends ChangeNotifier {
   }
 
   Future<void> _consultarLista() async {
+    var cargada = false;
     try {
       final lista = await api.solicitudes();
       if (_cerrado) return;
       _ocultas.retainAll({for (final s in lista) s.id});
       solicitudes = [for (final s in lista) if (!_ocultas.contains(s.id)) s];
       errorLista = null;
+      cargada = true;
     } on ApiExcepcion catch (e) {
       if (_cerrado) return;
       errorLista = e.mensaje;
       solicitudes = const [];
     }
     listaCargada = true;
-    _notificarNuevas();
+    // Con error la lista queda vacia: no se toma como "ya no hay ninguna", asi al volver la red las
+    // que ya se habian avisado no suenan otra vez.
+    if (cargada) _notificarNuevas();
     // Solo cuentan las disponibles: las que otro tomo o se cancelaron salen del contador.
     _vistas.retainAll({for (final s in solicitudes) s.id});
     _marcarVistas();
@@ -658,8 +660,7 @@ class FlujoConductor extends ChangeNotifier {
   void _aplicar(Viaje nuevo) {
     if (nuevo.situacion == SituacionViaje.completado) {
       // Viaje finalizado (con el boton o solo, a 50 m del destino): su audio y vibracion.
-      if (PreferenciasAviso.sonido.value) unawaited(Sonido.aviso(SonidoAviso.viajeFinalizado));
-      unawaited(Vibracion.corta());
+      unawaited(Sonido.conVibracion(SonidoAviso.viajeFinalizado));
       chat?.cerrar(nuevo.id);
       finalizado = nuevo;
       unawaited(cargarViajesHoy());

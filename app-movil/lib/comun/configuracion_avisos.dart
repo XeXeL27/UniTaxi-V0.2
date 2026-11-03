@@ -4,11 +4,10 @@ import '../core/iconos.dart';
 import '../core/preferencias_aviso.dart';
 import '../core/sonido.dart';
 import '../core/tema.dart';
-import '../core/vibracion.dart';
 
-/// Mas > Sonido y vibracion: dos interruptores separados. Vale para toda la app en este telefono.
-/// El sonido de la app suena solo cuando aceptan el viaje; los demas avisos vibran y, minimizada,
-/// usan el sonido de notificacion del telefono.
+/// Perfil > Sonido y vibracion: dos interruptores separados. Vale para toda la app en este telefono.
+/// Cada aviso tiene su audio (SonidoAviso) y vibra junto con el; minimizada, la notificacion trae los
+/// dos.
 Future<void> abrirConfiguracionAvisos(BuildContext context) {
   return showModalBottomSheet<void>(
     context: context,
@@ -21,10 +20,8 @@ Future<void> abrirConfiguracionAvisos(BuildContext context) {
 class _ConfiguracionAvisos extends StatelessWidget {
   const _ConfiguracionAvisos();
 
-  Future<void> _probar() async {
-    if (PreferenciasAviso.sonido.value) await Sonido.aviso();
-    await Vibracion.corta();
-  }
+  // La moto encendiendo, el sonido del viaje aceptado.
+  Future<void> _probar() => Sonido.conVibracion(SonidoAviso.viajeAceptado);
 
   @override
   Widget build(BuildContext context) {
@@ -41,7 +38,7 @@ class _ConfiguracionAvisos extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             const Text(
-              'Te avisamos cuando el conductor acepta tu viaje y cuando llega, también con la app minimizada.',
+              'Te avisamos de cada novedad de tus viajes y pedidos, también con la app minimizada.',
               style: TextStyle(color: ColoresApp.grisTexto, fontSize: 13.5),
             ),
             const SizedBox(height: 10),
@@ -54,7 +51,7 @@ class _ConfiguracionAvisos extends StatelessWidget {
                 secondary: Icon(activo ? Iconos.volumeHigh : Iconos.volumeXmark,
                     color: ColoresApp.tinta, size: 18),
                 title: const Text('Sonido', style: TextStyle(fontWeight: FontWeight.w600)),
-                subtitle: Text(activo ? 'Suena una vez cuando un conductor acepta tu viaje' : 'Los avisos no suenan'),
+                subtitle: Text(activo ? 'Suena en cada aviso: viaje aceptado, servicio nuevo, llegada y mensajes' : 'Los avisos no suenan'),
               ),
             ),
             ValueListenableBuilder<bool>(

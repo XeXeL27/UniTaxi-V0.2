@@ -17,8 +17,9 @@ class MainActivity : FlutterFragmentActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
-        // Vibracion y sonidos de aviso: viaje aceptado, el taxi llego (puede repetirse) y viaje
-        // finalizado (pasajero al opinar, conductor al finalizar). "sonar" recibe el nombre del audio.
+        // Vibracion y sonidos de aviso (SonidoAviso en lib/core/sonido.dart): viaje aceptado (la moto
+        // encendiendo), servicio nuevo, el taxi llego, viaje finalizado, confirmacion y chat. "sonar"
+        // recibe el nombre del audio; la app decide cual suena y cual no (prioridades).
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "unitaxi/vibracion").setMethodCallHandler { llamada, resultado ->
             when (llamada.method) {
                 "vibrar" -> {
@@ -26,7 +27,7 @@ class MainActivity : FlutterFragmentActivity() {
                     resultado.success(null)
                 }
                 "sonar" -> {
-                    sonar(llamada.argument<String>("sonido") ?: "viaje_aceptado")
+                    sonar(llamada.argument<String>("sonido") ?: "moto_encendiendo")
                     resultado.success(null)
                 }
                 else -> resultado.notImplemented()
@@ -54,13 +55,16 @@ class MainActivity : FlutterFragmentActivity() {
     private var reproductor: MediaPlayer? = null
 
     // Sonido de aviso una sola vez (sin bucle). Como sonido de notificacion: respeta el modo silencio.
-    // Si ya estaba sonando se corta, asi nunca se superponen.
+    // Si ya estaba sonando se corta, asi nunca se superponen (la app no pide cortar un aviso importante
+    // por uno menor).
     private fun sonar(sonido: String) {
         val recurso = when (sonido) {
+            "nuevo_servicio" -> R.raw.nuevo_servicio
             "llego_taxi" -> R.raw.llego_taxi
             "viaje_finalizado" -> R.raw.viaje_finalizado
+            "confirmacion" -> R.raw.confirmacion
             "mensaje_chat" -> R.raw.mensaje_chat
-            else -> R.raw.viaje_aceptado
+            else -> R.raw.moto_encendiendo
         }
         try {
             reproductor?.release()

@@ -4,7 +4,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
 import 'notificador.dart';
-import 'preferencias_aviso.dart';
 import 'sonido.dart';
 import 'vibracion.dart';
 
@@ -23,8 +22,7 @@ class AvisoViaje {
   }) async {
     final aLaVista = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     if (aLaVista || kIsWeb) {
-      if (sonido != null && PreferenciasAviso.sonido.value) unawaited(Sonido.aviso(sonido));
-      unawaited(Vibracion.corta());
+      unawaited(sonido != null ? Sonido.conVibracion(sonido) : Vibracion.corta());
     }
     if (!aLaVista) await Notificador.avisoViaje(titulo, cuerpo, id: idNotificacion, sonido: sonido);
   }

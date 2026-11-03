@@ -1,4 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Los sonidos de aviso se usan por nombre (canales de notificacion y MainActivity): que R8 no los quite. -->
 <resources xmlns:tools="http://schemas.android.com/tools"
-    tools:keep="@raw/viaje_aceptado,@raw/llego_taxi,@raw/viaje_finalizado,@raw/mensaje_chat" />
+    tools:keep="@raw/moto_encendiendo,@raw/nuevo_servicio,@raw/llego_taxi,@raw/viaje_finalizado,@raw/confirmacion,@raw/mensaje_chat" />

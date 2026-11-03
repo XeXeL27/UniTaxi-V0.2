@@ -797,7 +797,7 @@ class FlujoPasajero extends ChangeNotifier {
     final titulo = propuesta.version == 1 ? 'Revisa el costo de tu compra' : 'El costo de tu compra cambió';
     final cuerpo = '${viaje.primerNombreConductor} registró la compra: ${formatoBs(propuesta.total)} en total. '
         'Acéptalo para recibir tu pedido.';
-    _avisarConId(idAvisoCosto(viaje.id, propuesta.version), titulo, cuerpo, SonidoAviso.viajeAceptado);
+    _avisarConId(idAvisoCosto(viaje.id, propuesta.version), titulo, cuerpo, SonidoAviso.nuevoServicio);
   }
 
   static String _textoAviso(int aviso) => aviso <= 1 ? '' : (aviso <= 3 ? ' (aviso $aviso de 3)' : ' (aviso $aviso)');
@@ -806,6 +806,8 @@ class FlujoPasajero extends ChangeNotifier {
   void avisarFinDelViaje() {
     final actual = viaje;
     if (actual == null) return;
+    // Un pedido ya sono al entregarse ("Tu paquete fue entregado"): el cuadro no vuelve a sonar.
+    if (actual.datosEntrega != null && _avisados.contains(idNotificacionViaje(actual.id, 4))) return;
     _avisarUnaVez(actual.id, 5, 'Tu viaje terminó', 'Cuéntanos cómo te fue con ${actual.primerNombreConductor}.');
   }
 
@@ -940,6 +942,8 @@ class FlujoPasajero extends ChangeNotifier {
         datosEntrega: esEntrega ? datosEntregaForm : null,
         // En una entrega para otra persona, quien recibe (y quien paga) va en el formulario del pedido.
         tercero: esEntrega ? datosEntregaForm?.receptor : (paraOtraPersona ? tercero : null));
+    // Solicitud enviada (moto taxi, paquete o delivery): un "listo" corto con vibracion.
+    unawaited(Sonido.conVibracion(SonidoAviso.confirmacion));
     _entrarBuscando(creada);
   }
 
@@ -979,7 +983,7 @@ class FlujoPasajero extends ChangeNotifier {
   final Set<int> _avisados = {};
 
   /// [evento]: 1 viaje aceptado, 2 conductor llego (el mismo codigo que el push del backend).
-  // Aceptado, el taxi llego (cada aviso) y viaje terminado tienen su audio; el resto solo vibra.
+  // El audio de cada evento sale de sonidoDeEvento; sin audio (cancelado) solo vibra.
   void _avisarUnaVez(int idViaje, int evento, String titulo, String cuerpo) =>
       _avisarConId(idNotificacionViaje(idViaje, evento), titulo, cuerpo, sonidoDeEvento(evento));
 
@@ -1176,10 +1180,8 @@ class FlujoPasajero extends ChangeNotifier {
     _revisarAlertaLlegada(nuevo);
     if (nuevo.situacion != actual.situacion) {
       final entrega = nuevo.datosEntrega != null;
-      if (entrega && nuevo.situacion == SituacionViaje.llego) {
-        _avisarUnaVez(nuevo.id, 2, 'Tu repartidor llegó',
-            '${nuevo.primerNombreConductor} llegó al punto de recogida de tu paquete.');
-      } else if (entrega && nuevo.situacion == SituacionViaje.enCurso) {
+      // La llegada del repartidor (y del taxi) la avisa _revisarAlertaLlegada, arriba: aqui sonaba dos veces.
+      if (entrega && nuevo.situacion == SituacionViaje.enCurso) {
         _avisarUnaVez(nuevo.id, 3, 'Tu paquete fue recogido',
             '${nuevo.primerNombreConductor} ya tiene tu paquete y va en camino al destino.');
       } else if (entrega && nuevo.situacion == SituacionViaje.completado) {

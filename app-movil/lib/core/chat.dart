@@ -8,12 +8,10 @@ import 'cliente_api.dart';
 import 'config.dart';
 import 'formato.dart';
 import 'notificador.dart';
-import 'preferencias_aviso.dart';
 import 'push.dart';
 import 'servidores.dart';
 import 'sesion.dart';
 import 'sonido.dart';
-import 'vibracion.dart';
 
 enum EstadoConexionChat { conectando, conectado, desconectado }
 
@@ -302,8 +300,7 @@ class ChatEstado extends ChangeNotifier {
     if (_enPrimerPlano) {
       // A la vista: sonido y vibracion de la app (segun Perfil > Sonido y vibracion) y el globo arriba,
       // sin la notificacion del sistema (sonaria dos veces).
-      if (PreferenciasAviso.sonido.value) unawaited(Sonido.aviso(SonidoAviso.mensajeChat));
-      unawaited(Vibracion.corta());
+      unawaited(Sonido.conVibracion(SonidoAviso.mensajeChat));
       if (!_avisos.isClosed) _avisos.add((idViaje: mensaje.idViaje, titulo: titulo, texto: mensaje.contenido));
       return;
     }
