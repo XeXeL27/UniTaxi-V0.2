@@ -16,8 +16,8 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
 /**
- * Tarifas > Tarifa del delivery: tarifa base y precio por km de la encomienda y la compra. Vale para los
- * pedidos nuevos; los anteriores conservan la que tenian al pedirlos.
+ * Tarifas > Tarifa del delivery: tarifa base y precio por km de la compra (el paquete tiene la suya,
+ * TarifaPaqueteAdminController). Vale para los pedidos nuevos; los anteriores conservan la que tenian.
  */
 @RestController
 @RequestMapping("/api/admin/precio-delivery")

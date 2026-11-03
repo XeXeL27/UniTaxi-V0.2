@@ -1,7 +1,7 @@
 import '../../core/cliente_api.dart';
 import 'modelos.dart';
 
-/// Tarifas > Precio del viaje, Descuento estudiante y Tarifa del delivery. Todas las llamadas devuelven los parametros vigentes.
+/// Tarifas > Precio del viaje, Descuento estudiante, Tarifa del paquete y Tarifa del delivery. Todas las llamadas devuelven los parametros vigentes.
 class TarifasApi {
   final ClienteApi _api;
 
@@ -31,12 +31,12 @@ class TarifasApi {
     }),
   );
 
-  static const _rutaDelivery = '/api/admin/precio-delivery';
+  /// Tarifa del paquete (/api/admin/precio-paquete) o del delivery (/api/admin/precio-delivery).
+  Future<TarifaDelivery> tarifaDe(ServicioTarifa servicio) async =>
+      TarifaDelivery.desdeJson(await _api.get(servicio.ruta) as Map<String, dynamic>);
 
-  Future<TarifaDelivery> tarifaDelivery() async =>
-      TarifaDelivery.desdeJson(await _api.get(_rutaDelivery) as Map<String, dynamic>);
-
-  Future<TarifaDelivery> guardarTarifaDelivery(double tarifaBase, double precioKm) async => TarifaDelivery.desdeJson(
-    await _api.put(_rutaDelivery, {'tarifaBase': tarifaBase, 'precioKm': precioKm}) as Map<String, dynamic>,
-  );
+  Future<TarifaDelivery> guardarTarifa(ServicioTarifa servicio, double tarifaBase, double precioKm) async =>
+      TarifaDelivery.desdeJson(
+        await _api.put(servicio.ruta, {'tarifaBase': tarifaBase, 'precioKm': precioKm}) as Map<String, dynamic>,
+      );
 }

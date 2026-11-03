@@ -1307,7 +1307,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     if (_flujo.servicio == ServicioActivo.entrega && _flujo.datosEntregaForm == null) {
       final tipo = _flujo.modo.tipo;
       if (tipo == null) return;
-      final datos = await abrirFormularioEntrega(context, tipo, tarifa: _flujo.api.tarifaDelivery);
+      final datos = await abrirFormularioEntrega(context, tipo, tarifa: () => _flujo.api.tarifaDelivery(tipo));
       if (datos == null || !mounted) return;
       _flujo.guardarDatosEntrega(datos);
     }

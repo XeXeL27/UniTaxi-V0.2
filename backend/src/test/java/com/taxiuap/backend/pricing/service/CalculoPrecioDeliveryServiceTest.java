@@ -2,6 +2,7 @@ package com.taxiuap.backend.pricing.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -16,6 +17,7 @@ import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.dto.RutaResponse;
 import com.taxiuap.backend.pricing.dto.TarifaDelivery;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
+import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.shared.exception.NegocioException;
 
 class CalculoPrecioDeliveryServiceTest {
@@ -98,9 +100,31 @@ class CalculoPrecioDeliveryServiceTest {
         assertEquals(new BigDecimal("13.00"), sinCopia.precioServicio());
     }
 
+    @Test
+    void elPaqueteSeCotizaConSuTarifaYLaCompraConLaDelDelivery() {
+        TarifaDeliveryService tarifas = mock(TarifaDeliveryService.class);
+        TarifaDelivery delivery = new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00"));
+        TarifaDelivery paquete = new TarifaDelivery(new BigDecimal("5.00"), new BigDecimal("1.00"));
+        when(tarifas.actual()).thenReturn(delivery);
+        when(tarifas.de(TipoEnvio.COMPRA_Y_ENTREGA)).thenReturn(delivery);
+        when(tarifas.de(TipoEnvio.ENCOMIENDA)).thenReturn(paquete);
+        CalculoPrecioDeliveryService service = new CalculoPrecioDeliveryService(
+                (origen, destino) -> new RutaResponse(new BigDecimal("3000"), 300), tarifas);
+
+        assertEquals(new BigDecimal("8.00"), service.calcularEncomienda(punto(1, 2), punto(3, 4)).precioServicio());
+        DatosEntrega paqueteViejo = new DatosEntrega();
+        paqueteViejo.setTipoEnvio(TipoEnvio.ENCOMIENDA);
+        DatosEntrega compraVieja = new DatosEntrega();
+        compraVieja.setTipoEnvio(TipoEnvio.COMPRA_Y_ENTREGA);
+        // Pedidos de antes de copiar la tarifa: la vigente de su tipo.
+        assertEquals(paquete, service.tarifaDe(paqueteViejo));
+        assertEquals(delivery, service.tarifaDe(compraVieja));
+    }
+
     private CalculoPrecioDeliveryService servicio(ClienteRutas rutas, BigDecimal base, BigDecimal km) {
         TarifaDeliveryService tarifas = mock(TarifaDeliveryService.class);
         when(tarifas.actual()).thenReturn(new TarifaDelivery(base, km));
+        when(tarifas.de(any())).thenReturn(new TarifaDelivery(base, km));
         return new CalculoPrecioDeliveryService(rutas, tarifas);
     }
 

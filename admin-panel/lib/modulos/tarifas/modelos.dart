@@ -44,7 +44,34 @@ class ParametrosPrecio {
   );
 }
 
-/// Tarifa del delivery (encomienda y compra): servicio = tarifa base + precio por km por calles.
+/// Servicio con tarifa base + precio por km: cada uno se cambia en su opcion de Tarifas.
+enum ServicioTarifa {
+  paquete(
+    titulo: 'Tarifa del paquete',
+    ruta: '/api/admin/precio-paquete',
+    detalle: 'Se cobra en el paquete (la encomienda). Cada pedido conserva la tarifa con la que se pidió.',
+    pedidos: 'Los paquetes nuevos',
+  ),
+  delivery(
+    titulo: 'Tarifa del delivery',
+    ruta: '/api/admin/precio-delivery',
+    detalle:
+        'Se cobra el envío del delivery (la compra); los productos van aparte. Cada pedido conserva la '
+        'tarifa con la que se pidió.',
+    pedidos: 'Los pedidos de delivery nuevos',
+  );
+
+  final String titulo;
+  final String ruta;
+  final String detalle;
+
+  /// Sujeto de la confirmacion: "Los paquetes nuevos cobraran...".
+  final String pedidos;
+
+  const ServicioTarifa({required this.titulo, required this.ruta, required this.detalle, required this.pedidos});
+}
+
+/// Tarifa del paquete o del delivery: servicio = tarifa base + precio por km por calles.
 class TarifaDelivery {
   final double tarifaBase;
   final double precioKm;

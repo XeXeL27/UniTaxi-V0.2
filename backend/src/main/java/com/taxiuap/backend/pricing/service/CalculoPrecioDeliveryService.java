@@ -10,10 +10,12 @@ import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
 import com.taxiuap.backend.pricing.dto.RutaResponse;
 import com.taxiuap.backend.pricing.dto.TarifaDelivery;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
+import com.taxiuap.backend.trip.enums.TipoEnvio;
 
 /**
  * Calcula precios DELIVERY usando exclusivamente distancias por calles: tarifa base + precio por km. La
- * tarifa es la del panel (TarifaDeliveryService) al pedir; despues se usa la copia guardada en el pedido.
+ * tarifa es la del panel (TarifaDeliveryService: la del paquete para la encomienda, la del delivery para
+ * la compra) al pedir; despues se usa la copia guardada en el pedido.
  */
 @Service
 public class CalculoPrecioDeliveryService {
@@ -28,21 +30,27 @@ public class CalculoPrecioDeliveryService {
         this.tarifaDeliveryService = tarifaDeliveryService;
     }
 
-    /** La tarifa que vale ahora, la que se copia a un pedido nuevo. */
+    /** La tarifa del delivery (la compra) que vale ahora. */
     public TarifaDelivery tarifaVigente() {
         return tarifaDeliveryService.actual();
     }
 
-    /** La tarifa con la que se pidio el pedido; los pedidos de antes de guardarla usan la vigente. */
+    /** La tarifa que vale ahora para ese tipo de pedido, la que se copia a un pedido nuevo. */
+    public TarifaDelivery tarifaVigente(TipoEnvio tipo) {
+        return tarifaDeliveryService.de(tipo);
+    }
+
+    /** La tarifa con la que se pidio el pedido; los pedidos de antes de guardarla usan la vigente de su tipo. */
     public TarifaDelivery tarifaDe(DatosEntrega datos) {
         if (datos != null && datos.getTarifaBaseAplicada() != null && datos.getPrecioKmAplicado() != null) {
             return new TarifaDelivery(datos.getTarifaBaseAplicada(), datos.getPrecioKmAplicado());
         }
-        return tarifaVigente();
+        return tarifaVigente(datos == null ? TipoEnvio.COMPRA_Y_ENTREGA : datos.getTipoEnvio());
     }
 
+    /** Cotizacion del paquete con la tarifa del paquete que vale ahora. */
     public DesglosePrecioDelivery calcularEncomienda(Point origen, Point destino) {
-        return calcularEncomienda(origen, destino, tarifaVigente());
+        return calcularEncomienda(origen, destino, tarifaVigente(TipoEnvio.ENCOMIENDA));
     }
 
     public DesglosePrecioDelivery calcularEncomienda(Point origen, Point destino, TarifaDelivery tarifa) {

@@ -11,11 +11,13 @@ import '../../widgets/dialogos.dart';
 import 'modelos.dart';
 import 'tarifas_api.dart';
 
-/// Tarifas > Tarifa del delivery: tarifa base y precio por km por calles de la encomienda y la compra.
-/// Vale para los pedidos nuevos; cada pedido conserva la tarifa que tenia al pedirlo. El repartidor no
-/// la cambia: los productos de una compra se cobran aparte.
+/// Tarifas > Tarifa del paquete y Tarifa del delivery (la misma pantalla con [servicio]): tarifa base y
+/// precio por km por calles. Vale para los pedidos nuevos; cada pedido conserva la tarifa que tenia al
+/// pedirlo. El repartidor no la cambia: los productos de una compra se cobran aparte.
 class PantallaTarifaDelivery extends StatefulWidget {
-  const PantallaTarifaDelivery({super.key});
+  final ServicioTarifa servicio;
+
+  const PantallaTarifaDelivery({super.key, required this.servicio});
 
   @override
   State<PantallaTarifaDelivery> createState() => _PantallaTarifaDeliveryState();
@@ -51,7 +53,7 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
 
   Future<void> _cargar() async {
     try {
-      _llenar(await _api.tarifaDelivery());
+      _llenar(await _api.tarifaDe(widget.servicio));
     } on ApiExcepcion catch (e) {
       if (mounted) setState(() => _error = e.mensaje);
     }
@@ -92,7 +94,8 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
     final confirmado = await confirmarAccion(
       context,
       titulo: '¿Guardar la tarifa?',
-      mensaje: 'Los pedidos nuevos de paquete y delivery cobrarán ${base.toStringAsFixed(2)} Bs más '
+      mensaje:
+          '${widget.servicio.pedidos} cobrarán ${base.toStringAsFixed(2)} Bs más '
           '${km.toStringAsFixed(2)} Bs por km. Los pedidos que ya se hicieron conservan su tarifa.',
       textoConfirmar: 'Sí, guardar',
       tono: TonoBoton.verde,
@@ -100,9 +103,13 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
     if (!confirmado || !mounted) return;
     setState(() => _guardando = true);
     try {
-      _llenar(await _api.guardarTarifaDelivery(base, km));
+      _llenar(await _api.guardarTarifa(widget.servicio, base, km));
       if (mounted) {
-        await mostrarExito(context, titulo: '¡Tarifa guardada!', mensaje: 'Los próximos pedidos de delivery usan la nueva tarifa.');
+        await mostrarExito(
+          context,
+          titulo: '¡Tarifa guardada!',
+          mensaje: '${widget.servicio.pedidos} usan la nueva tarifa.',
+        );
       }
     } on ApiExcepcion catch (e) {
       if (mounted) await mostrarErrorDialogo(context, titulo: 'No se pudo guardar', mensaje: e.mensaje);
@@ -135,14 +142,18 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Row(
+                      Row(
                         children: [
-                          Icon(Iconos.paquete, color: ColoresApp.rojo, size: 20),
-                          SizedBox(width: 12),
+                          Icon(
+                            widget.servicio == ServicioTarifa.paquete ? Iconos.paquete : Iconos.cartShopping,
+                            color: ColoresApp.rojo,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 12),
                           Expanded(
                             child: Text(
-                              'Tarifa del delivery',
-                              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: ColoresApp.azul),
+                              widget.servicio.titulo,
+                              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: ColoresApp.azul),
                             ),
                           ),
                         ],
@@ -150,8 +161,7 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
                       const SizedBox(height: 8),
                       Text(
                         'Vigente: ${actual.tarifaBase.toStringAsFixed(2)} Bs + ${actual.precioKm.toStringAsFixed(2)} Bs por km. '
-                        'Se cobra en el paquete y en el delivery; los productos de un delivery van aparte. '
-                        'Cada pedido conserva la tarifa con la que se pidió.',
+                        '${widget.servicio.detalle}',
                         style: const TextStyle(color: ColoresApp.textoSuave),
                       ),
                       const SizedBox(height: 20),
@@ -178,7 +188,9 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
                           for (final km in const [1.0, 3.0, 5.0])
                             Chip(
                               avatar: const Icon(Iconos.route, size: 14, color: ColoresApp.azul),
-                              label: Text('${km.toStringAsFixed(0)} km: ${escrita.precioPara(km).toStringAsFixed(2)} Bs'),
+                              label: Text(
+                                '${km.toStringAsFixed(0)} km: ${escrita.precioPara(km).toStringAsFixed(2)} Bs',
+                              ),
                             ),
                         ],
                       ),

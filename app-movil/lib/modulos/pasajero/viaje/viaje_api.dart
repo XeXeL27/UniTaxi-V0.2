@@ -161,9 +161,11 @@ class ViajeApi {
         as Map<String, dynamic>,
   );
 
-  /// Tarifa del delivery (base y por km) que se cobra a un pedido nuevo.
-  Future<({double base, double km})> tarifaDelivery() async {
-    final json = await cliente.get('/api/pasajero/solicitudes/tarifa-delivery') as Map<String, dynamic>;
+  /// Tarifa (base y por km) que se cobra a un pedido nuevo de ese tipo: el paquete tiene la suya y el
+  /// delivery (la compra) la suya, las dos se cambian en el panel.
+  Future<({double base, double km})> tarifaDelivery(TipoEnvio tipo) async {
+    final json = await cliente.get('/api/pasajero/solicitudes/tarifa-delivery?tipo=${tipo.codigo}')
+        as Map<String, dynamic>;
     return (base: (json['tarifaBase'] as num).toDouble(), km: (json['precioKm'] as num).toDouble());
   }
 

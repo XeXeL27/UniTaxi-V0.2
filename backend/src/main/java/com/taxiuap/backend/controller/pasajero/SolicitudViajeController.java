@@ -22,6 +22,7 @@ import com.taxiuap.backend.trip.dto.PrecioViajeResponse;
 import com.taxiuap.backend.trip.dto.SolicitudViajeRequest;
 import com.taxiuap.backend.trip.dto.SolicitudViajeResponse;
 import com.taxiuap.backend.trip.dto.ViajeResponse;
+import com.taxiuap.backend.trip.enums.TipoEnvio;
 import com.taxiuap.backend.trip.service.OfertaViajeService;
 import com.taxiuap.backend.trip.service.SolicitudViajeService;
 
@@ -56,10 +57,13 @@ public class SolicitudViajeController {
         return ResponseEntity.ok(ApiResponse.exito(solicitudViajeService.precioVigente()));
     }
 
-    /** Tarifa del delivery (base y por km) que se le cobra a un pedido nuevo de encomienda o compra. */
+    /**
+     * Tarifa (base y por km) que se le cobra a un pedido nuevo: con tipo ENCOMIENDA la del paquete; sin
+     * tipo (apps de antes) o COMPRA_Y_ENTREGA la del delivery.
+     */
     @GetMapping("/tarifa-delivery")
-    public ResponseEntity<ApiResponse<TarifaDelivery>> tarifaDelivery() {
-        return ResponseEntity.ok(ApiResponse.exito(tarifaDeliveryService.actual()));
+    public ResponseEntity<ApiResponse<TarifaDelivery>> tarifaDelivery(@RequestParam(required = false) TipoEnvio tipo) {
+        return ResponseEntity.ok(ApiResponse.exito(tarifaDeliveryService.de(tipo)));
     }
 
     /** Precio del viaje de origen a destino, con el descuento de estudiante, antes de pedirlo (entrega: el de la encomienda). */

@@ -127,8 +127,11 @@ public class SolicitudViajeService {
                 && request.datosEntrega().tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
         BigDecimal precioSolicitud;
         CotizacionViaje cotizacion = null;
-        // La tarifa del delivery que vale ahora queda copiada en el pedido (datos_entrega).
-        TarifaDelivery tarifaDelivery = esDelivery ? calculoPrecioDeliveryService.tarifaVigente() : null;
+        // La tarifa que vale ahora queda copiada en el pedido (datos_entrega): la del paquete en una
+        // encomienda, la del delivery en una compra.
+        TarifaDelivery tarifaDelivery = esDelivery
+                ? calculoPrecioDeliveryService.tarifaVigente(esCompra ? TipoEnvio.COMPRA_Y_ENTREGA : TipoEnvio.ENCOMIENDA)
+                : null;
         if (esDelivery) {
             // El precio de ENCOMIENDA queda fijado sobre A -> B; en compra lo estima el repartidor al aceptar.
             precioSolicitud = esCompra ? null
@@ -197,8 +200,8 @@ public class SolicitudViajeService {
     }
 
     /**
-     * Con entrega: el precio de una encomienda de A a B con la tarifa DELIVERY, el mismo que se fija al
-     * pedirla (sin descuento de estudiante).
+     * Con entrega: el precio de un paquete de A a B con la tarifa del paquete, el mismo que se fija al
+     * pedirlo (sin descuento de estudiante).
      */
     public CotizacionViajeResponse cotizar(double origenLat, double origenLng, double destinoLat, double destinoLng,
             boolean paraOtraPersona, boolean entrega) {

@@ -90,6 +90,8 @@ class SolicitudViajeDeliveryFlowTest {
         lenient().when(productoRepository.save(any(ProductoEntrega.class))).thenAnswer(i -> i.getArgument(0));
         lenient().when(precioDeliveryService.tarifaVigente())
                 .thenReturn(new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")));
+        lenient().when(precioDeliveryService.tarifaVigente(any()))
+                .thenReturn(new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")));
         Persona persona = new Persona();
         persona.setId(20L);
         persona.setNombres("Ana");

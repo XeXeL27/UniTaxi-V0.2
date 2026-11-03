@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../layout/layout_admin.dart';
 import '../modulos/sistema/pantalla_carpeta.dart';
+import '../modulos/tarifas/modelos.dart';
 import '../modulos/tarifas/pantalla_descuento_estudiante.dart';
 import '../modulos/tarifas/pantalla_tarifa_delivery.dart';
 import '../modulos/tarifas/pantalla_precio_viaje.dart';
@@ -65,7 +66,16 @@ GoRouter crearRutas(Sesion sesion) {
             path: Menu.descuentoEstudiante.ruta,
             pageBuilder: (_, _) => pagina(const PantallaDescuentoEstudiante()),
           ),
-          GoRoute(path: Menu.tarifaDelivery.ruta, pageBuilder: (_, _) => pagina(const PantallaTarifaDelivery())),
+          GoRoute(
+            path: Menu.tarifaPaquete.ruta,
+            pageBuilder: (_, _) =>
+                pagina(const PantallaTarifaDelivery(key: ValueKey('paquete'), servicio: ServicioTarifa.paquete)),
+          ),
+          GoRoute(
+            path: Menu.tarifaDelivery.ruta,
+            pageBuilder: (_, _) =>
+                pagina(const PantallaTarifaDelivery(key: ValueKey('delivery'), servicio: ServicioTarifa.delivery)),
+          ),
           GoRoute(path: Menu.carpetaArchivos.ruta, pageBuilder: (_, _) => pagina(const PantallaCarpeta())),
           GoRoute(path: Menu.reportesEntrega.ruta, pageBuilder: (_, _) => pagina(const PantallaReportesEntrega())),
           GoRoute(path: Menu.entregas.ruta, pageBuilder: (_, _) => pagina(const PantallaEntregas())),
