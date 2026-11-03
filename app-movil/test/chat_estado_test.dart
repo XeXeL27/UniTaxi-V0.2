@@ -22,6 +22,9 @@ class _ApiFalsa extends ClienteApi {
   final List<String> rutas = [];
   bool sinRed = false;
 
+  /// El viaje termino: el servidor rechaza los mensajes nuevos.
+  bool terminado = false;
+
   int _idDe(String ruta) => int.parse(RegExp(r'viajes/(\d+)/').firstMatch(ruta)!.group(1)!);
 
   @override
@@ -37,6 +40,7 @@ class _ApiFalsa extends ClienteApi {
     rutas.add('POST $ruta');
     if (sinRed) throw ApiExcepcion('No se pudo conectar con el servidor');
     if (ruta.endsWith('/leidos')) return null;
+    if (terminado) throw ApiExcepcion('El viaje ya termino y el chat esta cerrado', codigo: 422);
     final lista = mensajes.putIfAbsent(_idDe(ruta), () => []);
     final nuevo = _mensaje(100 + lista.length, idViaje: _idDe(ruta), emisor: 1, texto: cuerpo['contenido'] as String);
     lista.add(nuevo);
@@ -179,5 +183,63 @@ void main() {
 
     chat.cerrar(6);
     expect(chat.viajes, isEmpty);
+  });
+
+  test('el chat de un servicio terminado no se vuelve a vincular ni a consultar', () async {
+    final api = _ApiFalsa()..mensajes[5] = [_mensaje(1)];
+    final chat = _ChatDePrueba(api);
+    addTearDown(chat.dispose);
+    await chat.vincular(5, 'RENE');
+    expect(chat.noLeidosDe(5), 1);
+
+    chat.cerrar(5);
+    expect(chat.terminado(5), isTrue);
+    expect(chat.noLeidosDe(5), 0);
+    expect(chat.viajes, isEmpty);
+
+    // Un boton Mensaje que quedo un instante en pantalla (o el panel plegado) intenta vincularlo.
+    final pedidas = api.rutas.length;
+    await chat.vincular(5, 'RENE');
+    chat.mantener({5: 'RENE'});
+    await chat.abrir(5, 'RENE');
+    await chat.sincronizar();
+    expect(chat.viajes, isEmpty);
+    expect(chat.pantallaAbierta, isFalse);
+    expect(api.rutas.length, pedidas);
+  });
+
+  test('si el servicio termino justo al enviar, el chat queda cerrado (no "revisa tu conexion")', () async {
+    final api = _ApiFalsa();
+    final chat = _ChatDePrueba(api);
+    addTearDown(chat.dispose);
+    await chat.vincular(5, 'RENE');
+
+    api.terminado = true;
+    expect(await chat.enviar(5, 'Ya llegue'), isFalse);
+    expect(chat.terminado(5), isTrue);
+    expect(chat.viajes, isEmpty);
+
+    // Un corte de red no cierra el chat.
+    await chat.vincular(6, 'ANA');
+    api
+      ..terminado = false
+      ..sinRed = true;
+    expect(await chat.enviar(6, 'Hola'), isFalse);
+    expect(chat.terminado(6), isFalse);
+    expect(chat.viajes, [6]);
+  });
+
+  test('cerrar sesion olvida tambien los terminados', () async {
+    final chat = _ChatDePrueba(_ApiFalsa());
+    addTearDown(chat.dispose);
+    chat.cerrar(5);
+    chat.cerrar();
+    expect(chat.terminado(5), isFalse);
+  });
+
+  test('el id del aviso del chat no choca con los avisos del costo de la compra', () {
+    for (var viaje = 1; viaje < 3000; viaje++) {
+      expect(idNotificacionChat(viaje), greaterThanOrEqualTo(6000000));
+    }
   });
 }

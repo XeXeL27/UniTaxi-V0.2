@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter/widgets.dart';
 import 'package:stomp_dart_client/stomp_dart_client.dart';
 
+import 'api_excepcion.dart';
 import 'cliente_api.dart';
 import 'config.dart';
 import 'formato.dart';
@@ -50,8 +51,9 @@ class MensajeChat {
 }
 
 /// Id de la notificacion de los mensajes de chat de un viaje: el mismo en la app y en el push, asi el
-/// aviso de un mensaje no aparece dos veces y el siguiente reemplaza al anterior.
-int idNotificacionChat(int idViaje) => 4000000 + idViaje % 100000;
+/// aviso de un mensaje no aparece dos veces y el siguiente reemplaza al anterior. Rango propio (antes
+/// 4000000 + id chocaba con los avisos del costo de la compra, idAvisoCosto).
+int idNotificacionChat(int idViaje) => 6000000 + idViaje % 100000;
 
 /// Mensajes y no leidos del chat de un viaje.
 class ConversacionChat {
@@ -103,6 +105,10 @@ class ChatEstado extends ChangeNotifier {
   final bool conSocket;
 
   final Map<int, ConversacionChat> _conversaciones = {};
+
+  /// Viajes que ya terminaron (o se cancelaron) en esta sesion: su chat no se vuelve a vincular aunque
+  /// un boton Mensaje quede un instante en pantalla (antes lo reabria y lo consultaba para siempre).
+  final Set<int> _terminados = {};
   int? _abierto;
   CanalChat? _canal;
   bool _socketConectado = false;
@@ -144,6 +150,9 @@ class ChatEstado extends ChangeNotifier {
 
   int noLeidosDe(int idViaje) => _conversaciones[idViaje]?.noLeidos ?? 0;
 
+  /// El viaje termino o se cancelo: su chat esta cerrado (la pantalla del chat se cierra sola).
+  bool terminado(int idViaje) => _terminados.contains(idViaje);
+
   String nombreDe(int idViaje) => _conversaciones[idViaje]?.nombreContraparte ?? '';
 
   /// Mensajes del chat abierto en pantalla.
@@ -182,6 +191,7 @@ class ChatEstado extends ChangeNotifier {
   /// Conecta el chat de un viaje sin abrir la pantalla, para contar los mensajes que llegan (la marca
   /// del boton Mensaje) y avisarlos. La primera vez trae el historial con los que estaban sin leer.
   Future<void> vincular(int idViaje, String nombreContraparte) async {
+    if (_terminados.contains(idViaje)) return;
     final existente = _conversaciones[idViaje];
     if (existente != null) {
       if (nombreContraparte.isNotEmpty) existente.nombreContraparte = nombreContraparte;
@@ -196,7 +206,10 @@ class ChatEstado extends ChangeNotifier {
 
   /// Abre la pantalla del chat de un viaje: trae lo nuevo y marca leidos.
   Future<void> abrir(int idViaje, String nombreContraparte) async {
+    if (_terminados.contains(idViaje)) return;
     _abierto = idViaje;
+    // Lo que avisaba la notificacion ya se ve en la pantalla del chat.
+    unawaited(Notificador.quitar(idNotificacionChat(idViaje)));
     final conversacion = _conversaciones[idViaje];
     if (conversacion == null) {
       await vincular(idViaje, nombreContraparte);
@@ -217,14 +230,23 @@ class ChatEstado extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// El viaje termino o se cancelo: se olvida su chat. Sin [idViaje], todos (cierre de sesion).
+  /// El viaje termino o se cancelo: se olvida su chat (mensajes y no leidos), se quita su notificacion
+  /// de la bandeja y no se vuelve a vincular; si su pantalla estaba abierta, se cierra sola
+  /// ([terminado]). Sin [idViaje], todos (cierre de sesion o cambio de cuenta).
   void cerrar([int? idViaje]) {
     if (idViaje == null) {
+      for (final id in _conversaciones.keys) {
+        unawaited(Notificador.quitar(idNotificacionChat(id)));
+      }
       _conversaciones.clear();
+      _terminados.clear();
       _abierto = null;
     } else {
-      if (_conversaciones.remove(idViaje) == null) return;
+      unawaited(Notificador.quitar(idNotificacionChat(idViaje)));
+      final nuevo = _terminados.add(idViaje);
+      final estaba = _conversaciones.remove(idViaje) != null;
       if (_abierto == idViaje) _abierto = null;
+      if (!nuevo && !estaba) return;
     }
     if (_conversaciones.isEmpty) _apagar();
     notifyListeners();
@@ -246,8 +268,18 @@ class ChatEstado extends ChangeNotifier {
       return true;
     } catch (e) {
       debugPrint('No se pudo enviar el mensaje de chat: $e');
+      // El viaje termino justo antes de enviar (el servidor ya cerro el chat): se cierra aqui tambien,
+      // asi la pantalla dice que termino en vez de pedir revisar la conexion.
+      if (e is ApiExcepcion && _chatCerradoEnServidor(e)) cerrar(idViaje);
       return false;
     }
+  }
+
+  static bool _chatCerradoEnServidor(ApiExcepcion e) {
+    final codigo = e.codigo;
+    if (codigo == null || codigo < 400 || codigo >= 500 || codigo == 401) return false;
+    final texto = e.mensaje.toLowerCase();
+    return texto.contains('chat esta cerrado') || texto.contains('ya termino');
   }
 
   void _marcarLeidosEnServidor(int idViaje) =>

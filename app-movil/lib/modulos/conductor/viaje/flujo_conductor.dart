@@ -505,7 +505,10 @@ class FlujoConductor extends ChangeNotifier {
     if (_cerrado || etapa != EtapaConductor.enViaje) return;
     if (nuevo.situacion == SituacionViaje.cancelado) {
       chat?.cerrar(nuevo.id);
-      aviso = nuevo.canceladoPor == 'PASAJERO' ? 'El pasajero canceló el viaje.' : 'El viaje fue cancelado.';
+      final pedido = nuevo.datosEntrega != null;
+      aviso = nuevo.canceladoPor == 'PASAJERO'
+          ? (pedido ? 'El cliente canceló el pedido.' : 'El pasajero canceló el viaje.')
+          : (pedido ? 'El pedido fue cancelado.' : 'El viaje fue cancelado.');
       _trasCerrar(nuevo.id);
       return;
     }

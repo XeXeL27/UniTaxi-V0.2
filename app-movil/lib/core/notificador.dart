@@ -267,6 +267,16 @@ class Notificador {
     return _enCola(() => _seguimiento.invokeMethod<void>('detener'));
   }
 
+  /// Quita una notificacion de la bandeja (el chat de un viaje que termino o que se abrio). Tambien la
+  /// que mostro el push con la app cerrada: no hace falta haber iniciado el plugin aqui.
+  static Future<void> quitar(int id) async {
+    try {
+      await _plugin.cancel(id: id);
+    } catch (_) {
+      // Sin notificaciones (pruebas, navegador sin permiso) no hay nada que quitar.
+    }
+  }
+
   /// Avisa un mensaje de chat ("Mensaje de Rene"). Solo se llama cuando el chat no esta abierto en
   /// pantalla: si esta abierto, el mensaje se ve directo en la conversacion. [id] es el del viaje
   /// (idNotificacionChat), el mismo que usa el push: el siguiente mensaje reemplaza al anterior.

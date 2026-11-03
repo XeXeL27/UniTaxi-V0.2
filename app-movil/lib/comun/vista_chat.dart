@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../core/chat.dart';
 import '../core/iconos.dart';
 import '../core/tema.dart';
+import '../widgets/notificaciones.dart';
 
 /// Botón de chat para el panel del viaje, con badge de mensajes no leidos.
 ///
@@ -79,6 +80,11 @@ class _VinculoChatState extends State<VinculoChat> {
 /// leerlo fallaba con "Null check" y el chat quedaba como abierto, sin contar no leidos).
 Future<void> abrirChat(BuildContext context, {required int idViaje, required String nombreContraparte}) {
   final chat = context.read<ChatEstado>();
+  // El boton puede quedar un instante en pantalla despues de terminar el servicio.
+  if (chat.terminado(idViaje)) {
+    mostrarMensaje(context, 'El servicio terminó y el chat se cerró.', icono: Iconos.message);
+    return Future.value();
+  }
   return mostrarDialogo<void>(
     context: context,
     builder: (_) => Dialog(
@@ -112,6 +118,7 @@ class _VistaChatState extends State<VistaChat> {
   bool _enviando = false;
   String? _avisoEnvio;
   int _mostrados = 0;
+  bool _cerrandoPorFin = false;
 
   @override
   void initState() {
@@ -136,7 +143,8 @@ class _VistaChatState extends State<VistaChat> {
     setState(() => _enviando = true);
     _controladorTexto.clear();
     chat.enviar(widget.idViaje, texto).then((enviado) {
-      if (!mounted) return;
+      // El servicio termino mientras se enviaba: la pantalla se cierra sola con su aviso.
+      if (!mounted || chat.terminado(widget.idViaje)) return;
       setState(() {
         _enviando = false;
         _avisoEnvio = enviado ? null : 'No se envió. Revisa tu conexión e intenta de nuevo.';
@@ -161,9 +169,34 @@ class _VistaChatState extends State<VistaChat> {
     });
   }
 
+  /// El viaje o pedido termino (entregado, no entregado o cancelado) con el chat abierto: la ventana se
+  /// cierra sola y avisa, en vez de quedar en blanco aceptando mensajes que ya no salen.
+  void _cerrarPorFin() {
+    if (!mounted) return;
+    final ruta = ModalRoute.of(context);
+    final navegador = Navigator.of(context);
+    final overlay = Overlay.maybeOf(context, rootOverlay: true);
+    if (ruta != null && ruta.isActive) {
+      // Si otra ventana quedo encima (la calificacion), se quita solo esta.
+      if (ruta.isCurrent) {
+        navegador.pop();
+      } else {
+        navegador.removeRoute(ruta);
+      }
+    }
+    // Sin tapar el aviso de la pantalla (por ejemplo "El cliente cancelo el pedido"): este es secundario.
+    if (overlay != null && overlay.mounted && !hayMensajeEnPantalla()) {
+      mostrarMensajeEn(overlay, 'El servicio terminó y el chat se cerró.', icono: Iconos.message);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chat = context.watch<ChatEstado>();
+    if (chat.terminado(widget.idViaje) && !_cerrandoPorFin) {
+      _cerrandoPorFin = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) => _cerrarPorFin());
+    }
     final idUsuario = chat.sesion.usuario?.idUsuario ?? 0;
     final mensajes = chat.mensajesDe(widget.idViaje);
     // Llego o salio un mensaje: se baja al ultimo.
@@ -186,7 +219,7 @@ class _VistaChatState extends State<VistaChat> {
                       child: Padding(
                         padding: EdgeInsets.all(24),
                         child: Text(
-                          'Escribile para coordinar la recogida.\nEl chat se cierra cuando termina el viaje.',
+                          'Escríbele para coordinar.\nEl chat se cierra cuando termina el servicio.',
                           textAlign: TextAlign.center,
                           style: TextStyle(color: ColoresApp.textoSuave),
                         ),
@@ -204,7 +237,11 @@ class _VistaChatState extends State<VistaChat> {
                     ),
             ),
           ),
-          _BarraEnvio(controlador: _controladorTexto, enviando: _enviando, alEnviar: () => _enviar(chat)),
+          _BarraEnvio(
+            controlador: _controladorTexto,
+            enviando: _enviando || _cerrandoPorFin,
+            alEnviar: () => _enviar(chat),
+          ),
           if (_avisoEnvio != null)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),

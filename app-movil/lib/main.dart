@@ -10,6 +10,7 @@ import 'comun/completar_correo.dart';
 import 'comun/foto_con_carnet.dart';
 import 'comun/presentacion.dart';
 import 'comun/verificar_carnet.dart';
+import 'comun/vista_chat.dart';
 import 'core/api_excepcion.dart';
 import 'core/chat.dart';
 import 'core/cliente_api.dart';
@@ -132,9 +133,20 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
     _rolAnterior = context.read<Sesion>().autenticado ? context.read<Sesion>().usuario?.rol : null;
     WidgetsBinding.instance.addObserver(this);
     unawaited(_actualizarUsuario());
-    _avisosChat = context.read<ChatEstado>().avisosEnPantalla.listen((aviso) {
+    final chat = context.read<ChatEstado>();
+    _avisosChat = chat.avisosEnPantalla.listen((aviso) {
       final overlay = _navegador.currentState?.overlay;
-      if (overlay != null) mostrarMensajeEn(overlay, '${aviso.titulo}: ${aviso.texto}', icono: Iconos.message);
+      if (overlay == null) return;
+      mostrarMensajeEn(
+        overlay,
+        '${aviso.titulo}: ${aviso.texto}',
+        icono: Iconos.message,
+        // Tocar el globo abre el chat de ese viaje o pedido (si no hay otro chat abierto).
+        alTocar: () {
+          if (chat.pantallaAbierta || chat.terminado(aviso.idViaje) || !overlay.mounted) return;
+          unawaited(abrirChat(overlay.context, idViaje: aviso.idViaje, nombreContraparte: chat.nombreDe(aviso.idViaje)));
+        },
+      );
     });
   }
 

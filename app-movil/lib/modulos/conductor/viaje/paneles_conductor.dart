@@ -20,7 +20,6 @@ import 'espera_cronometro.dart';
 import 'flujo_conductor.dart';
 import '../../../comun/costo_compra.dart';
 import '../../../comun/modelos_viaje.dart';
-import '../../../comun/vista_chat.dart';
 import '../../login/ayuda_ingreso.dart';
 import 'panel_delivery_conductor.dart';
 import 'tarjetas_conductor.dart';
@@ -559,17 +558,20 @@ class PanelViajeConductor extends StatelessWidget {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Llegada y espera (A o B) primero y despues la accion del paso (codigo, foto, cobro), a la
-          // vista sin desplazar el panel; el resumen del pedido (con "Cancelar pedido") va al final.
+          // Llegada y espera (A o B) primero, despues el cliente con Llamar y Mensaje (a la vista en
+          // todo el pedido: al comprar, mientras el cliente revisa el costo y al entregar) y la accion
+          // del paso (codigo, foto, cobro); el resumen del pedido (con "Cancelar pedido") va al final.
           EsperaDelivery(flujo: flujo),
+          FilaCliente(
+            nombre: viaje.nombrePasajero,
+            detalle: viaje.datosEntrega!.tipoEnvio.nombre,
+            telefono: viaje.telefonoPasajero,
+            idViaje: viaje.id,
+          ),
+          const SizedBox(height: 16),
           PanelDeliveryConductor(flujo: flujo),
           const Padding(padding: EdgeInsets.symmetric(vertical: 16), child: Divider(height: 1)),
-          ResumenEntregaConductor(
-            viaje: viaje,
-            onCancelar: onCancelar,
-            ocupado: flujo.ocupado,
-            botonChat: BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
-          ),
+          ResumenEntregaConductor(viaje: viaje, onCancelar: onCancelar, ocupado: flujo.ocupado),
         ],
       );
     }

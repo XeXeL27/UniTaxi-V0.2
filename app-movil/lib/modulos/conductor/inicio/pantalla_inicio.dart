@@ -14,6 +14,7 @@ import '../../../comun/modelos_viaje.dart';
 import '../../../comun/pantalla_mas.dart';
 import '../../../comun/perfil_api.dart';
 import '../../../comun/qr_pago.dart';
+import '../../../comun/vista_chat.dart';
 import '../../../core/iconos.dart';
 import '../../../core/push.dart';
 import '../../../core/api_excepcion.dart';
@@ -1006,7 +1007,7 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
                   style: TextStyle(color: color, fontSize: 15.5, fontWeight: FontWeight.w700),
                 ),
                 Text(
-                  '${enTitulo(viaje.nombreQuienViaja.split(' ').first)} · ${formatoBs(viaje.precioFinal)}',
+                  '${enTitulo(viaje.nombreQuienViaja.split(' ').first)} · ${_montoPlegado(viaje)}',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(color: ColoresApp.grisTexto, fontSize: 13),
@@ -1014,7 +1015,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
               ],
             ),
           ),
-          const SizedBox(width: 12),
+          // Bajado el panel, el chat sigue a mano (con los mensajes sin leer).
+          BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombrePasajero),
+          const SizedBox(width: 4),
           boton,
         ],
       );
@@ -1064,6 +1067,15 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         ),
       ],
     );
+  }
+
+  /// Lo que se cobra, en la linea del panel bajado. En una compra es el total (productos + envio) y no
+  /// solo el envio: antes decia 8,48 Bs cuando habia que cobrar 20,48 Bs.
+  static String _montoPlegado(Viaje viaje) {
+    final datos = viaje.datosEntrega;
+    if (datos == null || !datos.esCompra) return formatoBs(viaje.precioFinal);
+    final total = datos.propuestaVigente?.total;
+    return total == null ? 'Compra por registrar' : formatoBs(total);
   }
 
   /// El repartidor lleva mas de un pedido: arriba van las pestanas en lugar de la franja.

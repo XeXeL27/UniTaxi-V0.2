@@ -447,7 +447,9 @@ class PanelViaje extends StatelessWidget {
               ],
             ),
           ),
-          if (boton != null) ...[const SizedBox(width: 12), boton],
+          // Bajado el panel, el chat sigue a mano (con los mensajes sin leer).
+          BotonChat(idViaje: viaje.id, nombreContraparte: viaje.nombreConductor),
+          if (boton != null) ...[const SizedBox(width: 4), boton],
         ],
       );
     }

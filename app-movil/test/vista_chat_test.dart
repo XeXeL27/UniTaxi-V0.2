@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -60,5 +62,69 @@ void main() {
     expect(find.text('JUAN'), findsNothing);
     expect(chat.cerrados, 1);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('si el servicio termina con el chat abierto, la ventana se cierra sola y avisa', (tester) async {
+    final chat = _ChatDePrueba();
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ChatEstado>.value(
+        value: chat,
+        child: MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => abrirChat(context, idViaje: 5, nombreContraparte: 'JUAN'),
+                child: const Text('chat'),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('JUAN'), findsOneWidget);
+
+    chat.cerrar(5);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pump(const Duration(milliseconds: 400));
+    expect(find.text('JUAN'), findsNothing);
+    // El globo dura unos segundos: se mira antes de que se vaya.
+    expect(find.text('El servicio terminó y el chat se cerró.'), findsOneWidget);
+    await tester.pumpAndSettle();
+
+    // Tocar otra vez el boton de un servicio terminado no abre un chat vacio.
+    await tester.tap(find.text('chat'));
+    await tester.pumpAndSettle();
+    expect(find.text('JUAN'), findsNothing);
+    expect(chat.abiertos, 1);
+    await tester.pump(const Duration(seconds: 8));
+  });
+
+  testWidgets('si otra ventana quedo encima del chat, al terminar se quita solo el chat', (tester) async {
+    final chat = _ChatDePrueba();
+    late BuildContext contexto;
+    await tester.pumpWidget(
+      ChangeNotifierProvider<ChatEstado>.value(
+        value: chat,
+        child: MaterialApp(
+          home: Scaffold(body: Builder(builder: (context) {
+            contexto = context;
+            return const SizedBox.expand();
+          })),
+        ),
+      ),
+    );
+    unawaited(abrirChat(contexto, idViaje: 5, nombreContraparte: 'JUAN'));
+    await tester.pumpAndSettle();
+    unawaited(showDialog<void>(context: contexto, builder: (_) => const AlertDialog(content: Text('Califica tu viaje'))));
+    await tester.pumpAndSettle();
+
+    chat.cerrar(5);
+    await tester.pumpAndSettle();
+    expect(find.text('JUAN'), findsNothing);
+    expect(find.text('Califica tu viaje'), findsOneWidget);
+    await tester.pump(const Duration(seconds: 8));
   });
 }

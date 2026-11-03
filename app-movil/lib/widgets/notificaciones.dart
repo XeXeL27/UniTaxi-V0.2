@@ -16,7 +16,15 @@ void mostrarMensaje(BuildContext context, String texto, {bool error = false, Ico
 }
 
 /// El mismo globo sobre [overlay], para avisos que no salen de una pantalla (los mensajes del chat).
-void mostrarMensajeEn(OverlayState overlay, String texto, {bool error = false, IconData? icono, Duration? duracion}) {
+/// [alTocar]: ademas de cerrarlo, tocarlo hace eso (abrir el chat del mensaje).
+void mostrarMensajeEn(
+  OverlayState overlay,
+  String texto, {
+  bool error = false,
+  IconData? icono,
+  Duration? duracion,
+  VoidCallback? alTocar,
+}) {
   // Unos 3 s; los textos largos se quedan mas (hasta 7 s) para alcanzar a leerlos.
   final ms = (texto.length * 60).clamp(3000, 7000);
   _quitarActual();
@@ -27,6 +35,7 @@ void mostrarMensajeEn(OverlayState overlay, String texto, {bool error = false, I
       error: error,
       icono: icono,
       duracion: duracion ?? Duration(milliseconds: ms),
+      alTocar: alTocar,
       alTerminar: () {
         if (identical(_actual, entrada)) _quitarActual();
       },
@@ -37,6 +46,9 @@ void mostrarMensajeEn(OverlayState overlay, String texto, {bool error = false, I
 }
 
 OverlayEntry? _actual;
+
+/// Hay un globo a la vista (para no tapar un aviso importante con uno secundario).
+bool hayMensajeEnPantalla() => _actual?.mounted ?? false;
 
 void _quitarActual() {
   final entrada = _actual;
@@ -49,6 +61,7 @@ class _GloboMensaje extends StatefulWidget {
   final bool error;
   final IconData? icono;
   final Duration duracion;
+  final VoidCallback? alTocar;
   final VoidCallback alTerminar;
 
   const _GloboMensaje({
@@ -56,6 +69,7 @@ class _GloboMensaje extends StatefulWidget {
     required this.error,
     required this.icono,
     required this.duracion,
+    required this.alTocar,
     required this.alTerminar,
   });
 
@@ -135,7 +149,10 @@ class _GloboMensajeState extends State<_GloboMensaje> with SingleTickerProviderS
                 borderRadius: BorderRadius.circular(Redondeo.panel),
                 child: InkWell(
                   borderRadius: BorderRadius.circular(Redondeo.panel),
-                  onTap: _cerrar,
+                  onTap: () {
+                    _cerrar();
+                    widget.alTocar?.call();
+                  },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: Espacio.l, vertical: Espacio.m),
                     child: Row(
