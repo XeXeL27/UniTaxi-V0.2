@@ -143,13 +143,12 @@ class ConductorApi {
   Future<Viaje> avisarEsperaEntrega(int id) async =>
       _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/avisar-espera', {}));
 
-  /// Codigo del remitente con la foto del paquete (obligatoria) y el GPS del telefono.
-  Future<Viaje> validarRecogida(int id, String codigo, Uint8List foto, LatLng? gps) async =>
-      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/validar-recogida', 'datos', {
-        'codigo': codigo,
+  /// Recoge el paquete en A, sin codigo: la foto del paquete es opcional; va el GPS del telefono.
+  Future<Viaje> recogerPaquete(int id, Uint8List? foto, LatLng? gps) async =>
+      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/recoger', 'datos', {
         if (gps != null) 'latitud': gps.latitude,
         if (gps != null) 'longitud': gps.longitude,
-      }, [(campo: 'foto', bytes: foto, nombre: 'recogida.jpg', tipo: MediaType('image', 'jpeg'))]));
+      }, [if (foto != null) (campo: 'foto', bytes: foto, nombre: 'recogida.jpg', tipo: MediaType('image', 'jpeg'))]));
 
   /// Compra hecha (o corregida antes del pago): cada producto del pedido, conseguido con su precio o no.
   /// El servidor calcula los subtotales y el total; el cliente tiene que aceptar el costo total.
@@ -165,21 +164,14 @@ class ConductorApi {
   Future<Viaje> confirmarPago(int id, double monto, String metodoPago) async =>
       _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/confirmar-pago', {'montoRecibido': monto, 'metodoPago': metodoPago}));
 
-  /// Codigo del receptor con la foto de la persona y su paquete y el GPS (a 100 m o menos de B).
-  Future<Viaje> validarEntrega(int id, String codigo, Uint8List foto, LatLng gps) async =>
-      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/validar-entrega', 'datos', {
-        'codigo': codigo,
+  /// Entrega en B (paquete o delivery) con el GPS a 100 m o menos, sin codigo ni foto. Si recibe otra
+  /// persona va el nombre completo que ella dice; el servidor lo compara con el que dio el cliente.
+  Future<Viaje> entregarPedido(int id, String? nombreReceptor, LatLng gps) async =>
+      _viaje(await cliente.post('/api/conductor/viajes/$id/entrega/entregar', {
+        if (nombreReceptor != null && nombreReceptor.trim().isNotEmpty) 'nombreReceptor': nombreReceptor.trim(),
         'latitud': gps.latitude,
         'longitud': gps.longitude,
-      }, [(campo: 'foto', bytes: foto, nombre: 'entrega.jpg', tipo: MediaType('image', 'jpeg'))]));
-
-  Future<Viaje> identificarReceptor(int id, String nombre, String telefono, Uint8List foto, LatLng gps) async =>
-      _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/identificar-receptor', 'datos', {
-        'nombre': nombre,
-        'telefono': telefono,
-        'latitud': gps.latitude,
-        'longitud': gps.longitude,
-      }, [(campo: 'foto', bytes: foto, nombre: 'entrega.jpg', tipo: MediaType('image', 'jpeg'))]));
+      }));
 
   Future<Viaje> noSePudoEntregar(int id, String motivo, Uint8List foto, {MotivoFalla tipo = MotivoFalla.otro}) async =>
       _viaje(await cliente.enviarArchivo('POST', '/api/conductor/viajes/$id/entrega/no-se-pudo-entregar', 'foto', foto, 'falla.jpg', MediaType('image', 'jpeg'), campos: {'tipo': tipo.codigo, 'motivo': motivo.trim()}));

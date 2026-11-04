@@ -8,6 +8,7 @@ import '../../core/sesion.dart';
 import '../../core/relieve.dart';
 import '../../core/tema.dart';
 import '../personas/personas_api.dart';
+import '../../widgets/cargando.dart';
 
 /// Resumen con totales; cada tarjeta lleva a su listado.
 class PantallaInicio extends StatefulWidget {
@@ -126,7 +127,7 @@ class _TarjetaTotal extends StatelessWidget {
                       error
                           ? const Text('Sin datos', style: TextStyle(color: ColoresApp.rojo))
                           : total == null
-                          ? const SizedBox(width: 60, child: LinearProgressIndicator())
+                          ? const CargandoUnitaxi(tamano: 34)
                           : Text(
                               '$total',
                               style: const TextStyle(fontSize: 26, fontWeight: FontWeight.bold, color: ColoresApp.azul),

@@ -12,6 +12,7 @@ import '../core/tema.dart';
 import '../widgets/dialogos.dart';
 import '../widgets/notificaciones.dart';
 import 'modelos_viaje.dart';
+import '../widgets/cargando.dart';
 
 /// Maximo de QR de cobro por conductor (QrPagoConductorService.MAXIMO_QR).
 const maximoQr = 3;
@@ -154,7 +155,7 @@ class _PantallaMisQrState extends State<PantallaMisQr> {
             );
           }
           final qrs = instantanea.data;
-          if (qrs == null) return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
+          if (qrs == null) return const CargaCentrada();
           return Center(
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
@@ -223,10 +224,7 @@ class _BotonAgregarQr extends StatelessWidget {
           ),
           child: Column(
             children: [
-              if (trabajando)
-                const SizedBox(width: 26, height: 26, child: CircularProgressIndicator(color: ColoresApp.azul))
-              else
-                const Icon(Iconos.qrcode, color: ColoresApp.azul, size: 30),
+              VigiaCarga(activa: trabajando, child: const Icon(Iconos.qrcode, color: ColoresApp.azul, size: 30)),
               const SizedBox(height: 12),
               Text(
                 vacio ? 'Agregar mi QR' : 'Agregar otro QR',
@@ -297,7 +295,7 @@ class _TarjetaQrState extends State<_TarjetaQr> {
                   ConnectionState.done => const Center(
                     child: Text('No se pudo cargar la imagen', style: TextStyle(color: ColoresApp.textoSuave)),
                   ),
-                  _ => const Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+                  _ => const CargaCentrada(),
                 },
               ),
               if (acciones.isNotEmpty) ...[
@@ -364,7 +362,7 @@ class _QrDelConductorState extends State<QrDelConductor> {
         if (qrs == null) {
           return const Padding(
             padding: EdgeInsets.all(16),
-            child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+            child: CargaCentrada(),
           );
         }
         if (qrs.isEmpty) {

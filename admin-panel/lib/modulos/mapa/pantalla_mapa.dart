@@ -9,6 +9,7 @@ import '../../core/cliente_api.dart';
 import '../../core/tema.dart';
 import 'mapa_api.dart';
 import 'modelos.dart';
+import '../../widgets/cargando.dart';
 
 /// Mapa de zonas de servicio: poligonos de /api/admin/zonas sobre OpenStreetMap.
 class PantallaMapa extends StatefulWidget {
@@ -96,7 +97,7 @@ class _PantallaMapaState extends State<PantallaMapa> {
 
   Widget _mapa() {
     if (_cargando) {
-      return const Center(child: CircularProgressIndicator(color: ColoresApp.rojo));
+      return const CargaCentrada();
     }
     if (_error != null) {
       return Center(

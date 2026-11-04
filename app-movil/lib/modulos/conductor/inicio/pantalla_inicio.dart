@@ -47,6 +47,7 @@ import '../viaje/flujo_conductor.dart';
 import '../viaje/panel_delivery_conductor.dart';
 import '../viaje/paneles_conductor.dart';
 import '../viaje/tarjetas_conductor.dart';
+import '../../../widgets/cargando.dart';
 
 /// Vista principal del conductor, con la barra inferior Inicio / Historial / Comentarios / Mas y
 /// el boton del centro para conectarse o desconectarse.
@@ -464,9 +465,9 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final datos = _flujo.viaje!.datosEntrega;
     if (datos == null) return Guias.conductorViaje;
     bool pendiente(String guia) => guiaPendiente(context, guia);
-    if (pendiente(Guias.repartidorPedido)) return Guias.repartidorPedido;
-    // Quien ya vio la guia del pedido antes de lo nuevo del delivery.
-    if (pendiente(Guias.repartidorNovedades)) return Guias.repartidorNovedades;
+    // Una guia por servicio, con lo que se hace en ese servicio (tambien para quien vio la de antes).
+    final delServicio = datos.esCompra ? Guias.repartidorDelivery : Guias.repartidorPaquete;
+    if (pendiente(delServicio)) return delServicio;
     // La primera vez que tiene que registrar una compra (el formulario a la vista).
     if (datos.esCompra && marcaEnPantalla('repartidor.registroCompra')) return Guias.repartidorCompra;
     return null;
@@ -494,14 +495,18 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     await mostrarGuiaInicio(
       context,
       switch (guia) {
-        Guias.repartidorPedido => _pasosPedido(),
+        Guias.repartidorPaquete => _pasosPaquete,
+        Guias.repartidorDelivery => _pasosDelivery,
         Guias.repartidorCompra => _pasosCompra,
-        Guias.repartidorNovedades => _pasosNovedadesPedido,
         _ => _pasosViaje(),
       },
       guia: guia,
-      // La guia del pedido ya cuenta lo nuevo: no se ve dos veces.
-      tambien: guia == Guias.repartidorPedido ? const [Guias.repartidorNovedades] : const [],
+      // La del servicio reemplaza a las de antes (y la del delivery ya explica la compra).
+      tambien: switch (guia) {
+        Guias.repartidorPaquete => const [Guias.repartidorPedido, Guias.repartidorNovedades],
+        Guias.repartidorDelivery => const [Guias.repartidorPedido, Guias.repartidorNovedades, Guias.repartidorCompra],
+        _ => const [],
+      },
     );
     // Si falta otra con lo que se ve ahora (solo si esta quedo vista: sin pasos a la vista no se marca).
     if (mounted && !guiaPendiente(context, guia)) unawaited(_revisarGuiaDelViaje());
@@ -540,13 +545,13 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     ),
   ];
 
-  /// Primer pedido del repartidor: recoger en A y entregar en B, con codigo y foto.
-  List<PasoGuia> _pasosPedido() => const [
+  /// Primer paquete del repartidor: recoger en A (sin codigo, foto opcional) y entregar en B.
+  static const _pasosPaquete = [
     PasoGuia(
       marca: 'conductor.arriba',
       titulo: 'A dónde ir',
-      texto: 'Primero ves solo el punto de recogida (azul); cuando tengas el pedido, el mapa pasa al punto de entrega '
-          '(rojo). "Abrir en Maps" abre Google Maps con la ruta.',
+      texto: 'Primero ves solo el punto de recogida (azul); cuando tengas el paquete, el mapa pasa al punto de '
+          'entrega (rojo). "Abrir en Maps" abre Google Maps con la ruta.',
     ),
     PasoGuia(
       marca: 'conductor.pie',
@@ -556,25 +561,55 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     ),
     PasoGuia(
       icono: Iconos.boxOpen,
-      titulo: 'Recoger',
-      texto: 'En un paquete pide el código de recogida y toma la foto del paquete. En un delivery compra lo de la '
-          'lista y registra el precio de cada producto: el cliente tiene que aceptar el costo total.',
+      titulo: 'Recoger el paquete',
+      texto: 'Recibe el paquete y revisa que sea lo que dice el pedido. No hay código; la foto del paquete es '
+          'opcional. Si no coincide, recházalo con el motivo.',
     ),
-    _pasoParaOtraPersona,
     PasoGuia(
       icono: Iconos.flagCheckered,
       titulo: 'Entregar',
-      texto: 'A 100 m o menos del punto de entrega pide el código de entrega y toma la foto de la persona con su pedido. '
-          'Si no sale, avísale con el cronómetro.',
+      texto: 'En el punto de entrega marca Llegué: el cliente recibe un aviso. A 100 m o menos cobras el envío y '
+          'confirmas la entrega. Si no sale, avísale con el cronómetro.',
     ),
+    _pasoParaOtraPersona,
+    _pasoNoSePudoEntregar,
+  ];
+
+  /// Primer delivery del repartidor: comprar la lista, el costo que acepta el cliente y entregar.
+  static const _pasosDelivery = [
+    PasoGuia(
+      marca: 'conductor.arriba',
+      titulo: 'A dónde ir',
+      texto: 'Aquí ves a dónde llevar el pedido. "Abrir en Maps" abre Google Maps con la ruta.',
+    ),
+    PasoGuia(
+      marca: 'repartidor.registroCompra',
+      icono: Iconos.bagShopping,
+      titulo: 'Compra la lista',
+      texto: 'Compra cada producto. Marca "Lo conseguí" con la cantidad y el precio total que pagaste por esas '
+          'unidades, o "No lo conseguí". Escribe también el comercio.',
+    ),
+    PasoGuia(
+      icono: Iconos.circleCheck,
+      titulo: 'El cliente acepta el costo',
+      texto: 'UNITAXI suma tus precios y el envío y se lo manda al cliente. Sin el costo aceptado no puedes cobrar '
+          'ni entregar. Puedes corregir los precios hasta que te paguen.',
+    ),
+    PasoGuia(
+      icono: Iconos.flagCheckered,
+      titulo: 'Entregar',
+      texto: 'En el punto de entrega marca Llegué: el cliente recibe un aviso. A 100 m o menos cobras el total y '
+          'confirmas la entrega. Si no sale, avísale con el cronómetro.',
+    ),
+    _pasoParaOtraPersona,
     _pasoNoSePudoEntregar,
   ];
 
   static const _pasoParaOtraPersona = PasoGuia(
     icono: Iconos.userGroup,
-    titulo: 'Pedidos para otra persona',
-    texto: 'Si el cliente lo pidió para otra persona, verás quién recibe y quién paga: si paga quien lo pidió, no le '
-        'cobres a quien recibe. A quien lo pidió le avisamos cuando llegas.',
+    titulo: 'Si recibe otra persona',
+    texto: 'Pregúntale su nombre completo y escríbelo como te lo dice: tiene que ser el que dio el cliente. Si paga '
+        'quien lo pidió, no le cobres a quien recibe.',
   );
 
   static const _pasoNoSePudoEntregar = PasoGuia(
@@ -584,32 +619,14 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
         'una foto. El pedido se cierra en tu app y en la del cliente.',
   );
 
-  /// Lo nuevo del pedido para el repartidor que ya conocia la guia del pedido.
-  static const _pasosNovedadesPedido = [
-    PasoGuia(
-      icono: Iconos.listUl,
-      titulo: 'Nuevo: delivery con lista',
-      texto: 'En un delivery ves la lista de productos antes de aceptarla. Al comprar registras el precio de cada '
-          'producto o que no lo conseguiste.',
-    ),
-    PasoGuia(
-      icono: Iconos.circleCheck,
-      titulo: 'El cliente acepta el costo',
-      texto: 'El cliente acepta el costo total antes de pagar: sin eso no puedes cobrar ni entregar. Puedes corregir '
-          'los precios hasta que te paguen.',
-    ),
-    _pasoParaOtraPersona,
-    _pasoNoSePudoEntregar,
-  ];
-
   /// La primera vez que registra una compra.
   static const _pasosCompra = [
     PasoGuia(
       marca: 'repartidor.registroCompra',
       icono: Iconos.bagShopping,
       titulo: 'Registra la compra',
-      texto: 'Por cada producto marca "Lo conseguí" con la cantidad y el precio de cada uno, o "No lo conseguí". '
-          'Escribe también el comercio donde compraste.',
+      texto: 'Por cada producto marca "Lo conseguí" con la cantidad y el precio total que pagaste por esas unidades, '
+          'o "No lo conseguí". Escribe también el comercio donde compraste.',
     ),
     PasoGuia(
       icono: Iconos.paperPlane,
@@ -805,7 +822,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     final sesion = context.read<Sesion>();
     await _emisor.desconectar();
     try {
-      await sesion.cambiarModo(Config.rolPasajero);
+      if (!mounted) return;
+      await conCarga(context, () => sesion.cambiarModo(Config.rolPasajero));
     } on ApiExcepcion catch (e) {
       // No se pudo cambiar: sigue como conductor y vuelve a reportar su ubicacion.
       _emisor.iniciar();
@@ -822,8 +840,10 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     );
     if (!confirmado || !mounted) return;
     final sesion = context.read<Sesion>();
-    await _emisor.desconectar();
-    await sesion.cerrar();
+    await conCarga(context, () async {
+      await _emisor.desconectar();
+      await sesion.cerrar();
+    });
   }
 
   @override

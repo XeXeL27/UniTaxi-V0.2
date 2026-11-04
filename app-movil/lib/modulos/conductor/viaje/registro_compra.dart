@@ -11,8 +11,8 @@ import '../../../widgets/notificaciones.dart';
 /// Lo que el repartidor envia al registrar la compra: el comercio, cada producto y una observacion.
 typedef DatosRegistroCompra = ({String comercio, List<ProductoComprado> productos, String? observacion});
 
-/// Registro de la compra: por cada producto del pedido, "Lo conseguí" con cantidad y precio unitario
-/// (el subtotal se ve al escribir) o "No lo conseguí" con una nota. El total que se cobra lo calcula el
+/// Registro de la compra: por cada producto del pedido, "Lo conseguí" con la cantidad y el precio total
+/// que pago por esas unidades, o "No lo conseguí" con una nota. El total que se cobra lo calcula el
 /// servidor; aca solo se muestra como referencia. Sirve tambien para corregir los precios antes del pago
 /// ([correccion]): el cliente tiene que volver a aceptar.
 class RegistroCompra extends StatefulWidget {
@@ -47,16 +47,16 @@ class _FilaCompra {
   _FilaCompra(this.producto)
     : conseguido = !producto.noConseguido,
       cantidad = producto.cantidadConseguida ?? producto.cantidad,
-      precio = TextEditingController(text: producto.precioUnitario?.toStringAsFixed(2) ?? ''),
+      precio = TextEditingController(text: producto.subtotal?.toStringAsFixed(2) ?? ''),
       nota = TextEditingController(text: producto.observacion ?? '');
 
-  double? get precioUnitario => double.tryParse(precio.text.trim().replaceAll(',', '.'));
+  double? get precioTotal => double.tryParse(precio.text.trim().replaceAll(',', '.'));
 
   ProductoComprado get comprado => ProductoComprado(
     idProducto: producto.id,
     conseguido: conseguido,
     cantidad: conseguido ? cantidad : null,
-    precioUnitario: conseguido ? precioUnitario : null,
+    precioTotal: conseguido ? precioTotal : null,
     observacion: nota.text,
   );
 
@@ -89,8 +89,8 @@ class _RegistroCompraState extends State<RegistroCompra> {
   Future<void> _enviar() async {
     if (_comercio.text.trim().isEmpty) return mostrarMensaje(context, 'Escribe el comercio donde compraste.', error: true);
     for (final fila in _filas) {
-      if (fila.conseguido && ((fila.precioUnitario ?? 0) <= 0)) {
-        return mostrarMensaje(context, 'Escribe el precio de ${fila.producto.nombre}.', error: true);
+      if (fila.conseguido && ((fila.precioTotal ?? 0) <= 0)) {
+        return mostrarMensaje(context, 'Escribe el precio total de ${fila.producto.nombre}.', error: true);
       }
     }
     if (_filas.every((f) => !f.conseguido)) {
@@ -224,16 +224,12 @@ class _RegistroCompraState extends State<RegistroCompra> {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     inputFormatters: _formatoPrecio,
                     onChanged: (_) => setState(() {}),
-                    decoration: const InputDecoration(labelText: 'Precio c/u', suffixText: 'Bs', isDense: true),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  width: 72,
-                  child: Text(
-                    formatoBs(fila.comprado.subtotal),
-                    textAlign: TextAlign.end,
-                    style: const TextStyle(color: ColoresApp.tinta, fontWeight: FontWeight.w700),
+                    decoration: InputDecoration(
+                      labelText: 'Precio total',
+                      helperText: fila.cantidad == 1 ? 'Lo que pagaste' : 'Lo que pagaste por las ${fila.cantidad}',
+                      suffixText: 'Bs',
+                      isDense: true,
+                    ),
                   ),
                 ),
               ],

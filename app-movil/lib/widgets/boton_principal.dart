@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 
 import '../core/tema.dart';
+import 'cargando.dart';
 
-/// Boton de accion principal: rojo, ancho completo, con sombra (btn-primary del diseno).
+/// Boton de accion principal: rojo, ancho completo, con sombra (btn-primary del diseno). Mientras
+/// [cargando], la carga de UNITAXI va por encima de todo ([VigiaCarga]).
 class BotonPrincipal extends StatelessWidget {
   final String texto;
   final VoidCallback? onPressed;
@@ -20,36 +22,31 @@ class BotonPrincipal extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activo = onPressed != null && !cargando;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: activo
-            ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))]
-            : const [],
-      ),
-      child: SizedBox(
-        height: 54,
-        width: double.infinity,
-        child: FilledButton(
-          onPressed: activo ? onPressed : null,
-          style: FilledButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: ColoresApp.blanco,
-            disabledBackgroundColor: color.withValues(alpha: 0.45),
-            disabledForegroundColor: ColoresApp.blanco,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-            textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-          ).copyWith(
-            overlayColor: WidgetStatePropertyAll(ColoresApp.rojoOscuro.withValues(alpha: 0.35)),
+    return VigiaCarga(
+      activa: cargando,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: activo
+              ? [BoxShadow(color: color.withValues(alpha: 0.3), blurRadius: 10, offset: const Offset(0, 4))]
+              : const [],
+        ),
+        child: SizedBox(
+          height: 54,
+          width: double.infinity,
+          child: FilledButton(
+            onPressed: activo ? onPressed : null,
+            style: FilledButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: ColoresApp.blanco,
+              disabledBackgroundColor: color.withValues(alpha: 0.45),
+              disabledForegroundColor: ColoresApp.blanco,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+            ).copyWith(overlayColor: WidgetStatePropertyAll(ColoresApp.rojoOscuro.withValues(alpha: 0.35))),
+            child: Text(texto),
           ),
-          child: cargando
-              ? const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2.5, color: ColoresApp.blanco),
-                )
-              : Text(texto),
         ),
       ),
     );

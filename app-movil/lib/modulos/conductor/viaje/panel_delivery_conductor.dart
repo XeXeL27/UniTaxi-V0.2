@@ -16,6 +16,7 @@ import '../../../widgets/boton_principal.dart';
 import '../../../widgets/notificaciones.dart';
 import '../../../widgets/paneles.dart';
 import '../../../comun/costo_compra.dart';
+import '../../../widgets/formatos.dart';
 import 'acciones_delivery.dart';
 import 'registro_compra.dart';
 import 'espera_cronometro.dart';
@@ -221,11 +222,10 @@ class _ContactoEntrega extends StatelessWidget {
 }
 
 /// Acciones del repartidor por etapas (los datos del pedido van debajo, en [ResumenEntregaConductor]):
-/// 1. Encomienda: ir al punto de recogida (en el mapa solo se ve A) y marcar "Llegué al punto de
-///    recogida"; ahi, codigo del remitente y foto del paquete. Compra: coordinar y registrar la compra.
-/// 2. Con el paquete: ir a B (en la encomienda el mapa solo muestra B), confirmar el cobro y entregar
-///    con el codigo o el nombre del cliente y la foto de la persona con su paquete, a 100 m o menos.
-/// Los codigos nunca se leen desde [Viaje]: los dicta la persona.
+/// 1. Paquete: ir al punto de recogida (en el mapa solo se ve A), marcar "Llegué al punto de
+///    recogida" y recibir el paquete (sin codigo; la foto es opcional). Delivery: registrar la compra.
+/// 2. Con el pedido: ir a B (en el paquete el mapa solo muestra B), confirmar el cobro y entregar a 100 m
+///    o menos. Si recibe otra persona se escribe su nombre completo, el que ella dice; si no, nada mas.
 class PanelDeliveryConductor extends StatefulWidget {
   final FlujoConductor flujo;
 
@@ -236,16 +236,15 @@ class PanelDeliveryConductor extends StatefulWidget {
 }
 
 class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
-  final _codigo = TextEditingController();
+  /// Nombre completo que dice quien recibe, cuando no es el cliente.
   final _nombre = TextEditingController();
-  final _telefono = TextEditingController();
   final _motivo = TextEditingController();
   bool _pagoRecibido = false;
 
   /// Compra con el pedido en mano: el repartidor abrio "Corregir precios".
   bool _corrigiendo = false;
 
-  /// Foto del paquete al recogerlo (A) o de la persona con su paquete al entregarlo (B).
+  /// Foto del paquete al recogerlo en A (opcional).
   Uint8List? _fotoEvidencia;
 
   FlujoConductor get flujo => widget.flujo;
@@ -261,7 +260,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   @override
   void dispose() {
-    for (final c in [_codigo, _nombre, _telefono, _motivo]) {
+    for (final c in [_nombre, _motivo]) {
       c.dispose();
     }
     super.dispose();
@@ -270,7 +269,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
   @override
   void didUpdateWidget(covariant PanelDeliveryConductor oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // La foto de A no sirve para B: al cambiar de etapa se vuelve a pedir.
+    // La foto es de la recogida: al pasar a otra etapa se descarta.
     if (_etapaDeLaFoto != null && _etapaDeLaFoto != datos?.estadoEntrega) {
       _fotoEvidencia = null;
       _etapaDeLaFoto = null;
@@ -285,28 +284,20 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     return foto.readAsBytes();
   }
 
-  /// Foto de evidencia solo con la camara, con vista previa para girarla antes de usarla.
-  Future<void> _tomarFotoEvidencia({required bool entrega}) async {
+  /// Foto del paquete solo con la camara, con vista previa para girarla antes de usarla.
+  Future<void> _tomarFotoPaquete() async {
     final tomada = await _tomarFoto();
     if (tomada == null || !mounted) return;
     final lista = await enderezarFoto(
       context,
       tomada,
-      titulo: entrega ? 'Foto de la entrega' : 'Foto del paquete',
-      guia: entrega
-          ? 'Revisa la foto antes de confirmar la entrega. Debe verse:'
-          : 'Revisa la foto antes de recoger el paquete. Debe verse:',
-      requisitos: entrega
-          ? const [
-              'La persona que recibe con su pedido en la mano',
-              'Nítida y con buena luz',
-              'Derecha (gírala si salió de costado)',
-            ]
-          : const [
-              'El paquete completo, como lo recibes',
-              'Nítida y con buena luz',
-              'Derecha (gírala si salió de costado)',
-            ],
+      titulo: 'Foto del paquete',
+      guia: 'Revisa la foto antes de recoger el paquete. Debe verse:',
+      requisitos: const [
+        'El paquete completo, como lo recibes',
+        'Nítida y con buena luz',
+        'Derecha (gírala si salió de costado)',
+      ],
     );
     if (lista == null || !mounted) return;
     setState(() {
@@ -317,10 +308,10 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
 
   /// Aviso corto con el mismo estilo que el resto de la app, que además lo levanta por encima de la
   /// barra inferior flotante: con el Snackbar a secas quedaba escondido justo donde el repartidor
-  /// mira después de confirmar un código.
+  /// mira después de confirmar un paso.
   void _mensaje(String texto) => mostrarMensaje(context, texto);
 
-  /// Acciones contra el servidor: si las rechaza (codigo incorrecto, lejos del destino) se muestra el motivo.
+  /// Acciones contra el servidor: si las rechaza (nombre que no coincide, lejos del destino) se muestra el motivo.
   Future<void> _ejecutar(Future<void> Function() accion) async {
     try {
       await accion();
@@ -373,52 +364,24 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
       const Text(
-        'Código de recogida',
+        'Recoger el paquete',
         style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
       ),
       const Text(
-        'Pide al remitente el código de recogida y toma una foto del paquete.',
+        'Recibe el paquete y revisa que sea lo que dice el pedido. Si quieres, toma una foto del paquete.',
         style: TextStyle(color: ColoresApp.textoSuave),
       ),
       const SizedBox(height: 12),
-      _campoCodigo(),
-      const SizedBox(height: 12),
-      _BotonFoto(
-        foto: _fotoEvidencia,
-        texto: 'Tomar foto del paquete',
-        onTomar: () => _tomarFotoEvidencia(entrega: false),
-      ),
+      _BotonFoto(foto: _fotoEvidencia, texto: 'Tomar foto del paquete (opcional)', onTomar: _tomarFotoPaquete),
       const SizedBox(height: 12),
       BotonPrincipal(
         texto: 'Recoger y empezar la entrega',
         cargando: flujo.ocupado,
-        onPressed: () async {
-          final codigo = _codigo.text.trim();
-          if (!ValidadorCodigoDelivery.esValido(codigo)) return _mensaje('El código debe tener exactamente 6 dígitos.');
-          final foto = _fotoEvidencia;
-          if (foto == null) return _mensaje('La foto del paquete es obligatoria.');
-          await _ejecutar(() => flujo.validarRecogida(codigo, foto));
-          _codigo.clear();
-        },
+        onPressed: () => _ejecutar(() => flujo.recogerPaquete(_fotoEvidencia)),
       ),
       const SizedBox(height: 12),
       _seccionPaqueteIncorrecto(),
     ],
-  );
-
-  /// Campo del codigo de 6 digitos que dicta la persona, grande y centrado.
-  Widget _campoCodigo() => TextField(
-    controller: _codigo,
-    keyboardType: TextInputType.number,
-    maxLength: 6,
-    textAlign: TextAlign.center,
-    style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, letterSpacing: 8, color: ColoresApp.azul),
-    decoration: const InputDecoration(
-      labelText: 'Código dictado',
-      counterText: '',
-      helperText: 'Son 6 dígitos',
-      helperStyle: TextStyle(color: ColoresApp.textoSuave),
-    ),
   );
 
   /// "Rechazar paquete" no es la accion del dia a dia: es una advertencia. Va plegada para no
@@ -575,45 +538,32 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
             style: const TextStyle(color: ColoresApp.texto, fontSize: 14),
           ),
           const SizedBox(height: 12),
-          if (entrega.tipoEnvio == TipoEnvio.encomienda) ...[
-            const Text(
-              'Código de entrega',
-              style: TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
+          if (_otraPersona(actual, entrega) case final recibe?) ...[
+            Text(
+              'Recibe ${_primerNombre(recibe) ?? 'otra persona'}',
+              style: const TextStyle(color: ColoresApp.azul, fontWeight: FontWeight.w700, fontSize: 17),
             ),
-            const Text('Pide el código al receptor en el punto de entrega.', style: TextStyle(color: ColoresApp.textoSuave)),
-            const SizedBox(height: 12),
-            _campoCodigo(),
-          ] else ...[
-            if (actual.tercero != null)
-              Text(
-                'Recibe ${actual.tercero!.nombre}: escribe su nombre y su celular.',
-                style: const TextStyle(color: ColoresApp.textoSuave),
-              ),
+            const Text(
+              'Pregúntale su nombre completo y escríbelo como te lo dice.',
+              style: TextStyle(color: ColoresApp.textoSuave),
+            ),
+            const SizedBox(height: 8),
             TextField(
               controller: _nombre,
-              decoration: InputDecoration(
-                labelText: actual.tercero == null ? 'Nombre del cliente' : 'Nombre de quien recibe',
-              ),
+              textCapitalization: TextCapitalization.characters,
+              inputFormatters: Formatos.letras,
+              decoration: const InputDecoration(labelText: 'Nombre completo de quien recibe'),
             ),
-            TextField(
-              controller: _telefono,
-              keyboardType: TextInputType.phone,
-              decoration: InputDecoration(
-                labelText: actual.tercero == null ? 'Teléfono del cliente' : 'Celular de quien recibe',
-              ),
+          ] else
+            Text(
+              'Entrega el pedido a ${actual.primerNombrePasajero}.',
+              style: const TextStyle(color: ColoresApp.textoSuave),
             ),
-          ],
-          const SizedBox(height: 12),
-          _BotonFoto(
-            foto: _fotoEvidencia,
-            texto: 'Tomar foto de la persona con su paquete',
-            onTomar: () => _tomarFotoEvidencia(entrega: true),
-          ),
           const SizedBox(height: 12),
           BotonPrincipal(
             texto: 'Confirmar entrega',
             cargando: flujo.ocupado,
-            onPressed: !cerca ? null : () => _confirmarEntrega(entrega),
+            onPressed: !cerca ? null : () => _confirmarEntrega(actual, entrega),
           ),
         ],
         const SizedBox(height: 12),
@@ -622,19 +572,18 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     );
   }
 
-  Future<void> _confirmarEntrega(DatosEntrega entrega) async {
-    final foto = _fotoEvidencia;
-    if (entrega.tipoEnvio == TipoEnvio.encomienda) {
-      final codigo = _codigo.text.trim();
-      if (!ValidadorCodigoDelivery.esValido(codigo)) return _mensaje('El código debe tener exactamente 6 dígitos.');
-      if (foto == null) return _mensaje('La foto de la entrega es obligatoria.');
-      await _ejecutar(() => flujo.validarEntrega(codigo, foto));
-    } else {
-      if (_nombre.text.trim().isEmpty) return _mensaje('Ingresa el nombre de quien recibió.');
-      if (foto == null) return _mensaje('La foto de la entrega es obligatoria.');
-      await _ejecutar(() => flujo.identificarReceptor(_nombre.text, _telefono.text, foto));
-    }
+  Future<void> _confirmarEntrega(Viaje actual, DatosEntrega entrega) async {
+    if (_otraPersona(actual, entrega) == null) return _ejecutar(() => flujo.entregarPedido(null));
+    final nombre = _nombre.text.trim();
+    if (nombre.isEmpty) return _mensaje('Pregúntale su nombre completo y escríbelo.');
+    await _ejecutar(() => flujo.entregarPedido(nombre));
   }
+
+  /// Nombre que dio el cliente para quien recibe (pedido para otra persona o, en un paquete de antes, el
+  /// receptor escrito); null si recibe el mismo cliente.
+  static String? _otraPersona(Viaje actual, DatosEntrega entrega) =>
+      _conTexto(actual.tercero?.nombre) ??
+      (entrega.tipoEnvio == TipoEnvio.encomienda ? _conTexto(entrega.nombreReceptor) : null);
 
   /// "No se pudo entregar" solo se usa cuando algo sale mal: queda plegado y abre el reporte con el
   /// motivo, el mensaje y la foto.

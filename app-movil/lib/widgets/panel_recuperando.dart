@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/iconos.dart';
 import '../core/tema.dart';
+import 'cargando.dart';
 
 /// Panel mientras la app recupera el viaje o la solicitud en curso al abrirse. Sin conexion avisa
 /// que sigue intentando: el viaje no se pierde.
@@ -16,13 +17,9 @@ class PanelRecuperando extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       child: Row(
         children: [
-          SizedBox(
-            width: 22,
-            height: 22,
-            child: sinRed
-                ? const Center(child: Icon(Iconos.wifi, size: 16, color: ColoresApp.rojo))
-                : const CircularProgressIndicator(strokeWidth: 2.4),
-          ),
+          sinRed
+              ? const SizedBox(width: 44, height: 44, child: Center(child: Icon(Iconos.wifi, size: 18, color: ColoresApp.rojo)))
+              : const CargandoUnitaxi(tamano: 44),
           const SizedBox(width: 14),
           Expanded(
             child: Text(

@@ -11,6 +11,7 @@ import '../../widgets/modal_formulario.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
 import 'selector_persona.dart';
+import '../../widgets/cargando.dart';
 
 /// Tipo de cuenta que el administrador habilita (TipoRegistroUsuario del backend). Se pueden elegir
 /// varios a la vez; conductor de taxi y delivery no van juntos: la persona tiene una sola cuenta de
@@ -251,7 +252,7 @@ class _FormularioHabilitarUsuarioState extends State<FormularioHabilitarUsuario>
                 );
               }
               final personas = instantanea.data;
-              if (personas == null) return const LinearProgressIndicator();
+              if (personas == null) return const CargaCentrada(tamano: 48);
               // Solo personas a las que aun se les puede habilitar alguno de los tipos permitidos.
               final candidatas = personas
                   .where((p) => TipoRegistro.disponiblesPara(p).any(widget.tiposPermitidos.contains))

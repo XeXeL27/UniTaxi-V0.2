@@ -2,6 +2,21 @@ import 'package:flutter/material.dart';
 
 import '../core/tema.dart';
 
+/// Lugar del logo de [PanelMarca] (pantalla ancha) para la salida de la presentacion: el icono de la
+/// presentacion viaja hasta [claveLogo] y, mientras tanto, el logo de verdad queda oculto.
+class TransicionMarca extends InheritedWidget {
+  final GlobalKey claveLogo;
+  final bool ocultarLogo;
+
+  const TransicionMarca({super.key, required this.claveLogo, required this.ocultarLogo, required super.child});
+
+  static TransicionMarca? de(BuildContext context) => context.dependOnInheritedWidgetOfExactType<TransicionMarca>();
+
+  @override
+  bool updateShouldNotify(TransicionMarca anterior) =>
+      anterior.claveLogo != claveLogo || anterior.ocultarLogo != ocultarLogo;
+}
+
 /// Marca de UNITAXI: a la izquierda en pantallas anchas y como cabecera en el celular. El logo es el
 /// mismo del icono de la app (assets/logo_unitaxi.png) y todo va centrado.
 class PanelMarca extends StatelessWidget {
@@ -13,6 +28,7 @@ class PanelMarca extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final arriba = MediaQuery.paddingOf(context).top;
+    final transicion = compacta ? null : TransicionMarca.de(context);
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -50,16 +66,24 @@ class PanelMarca extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Container(
-                    width: compacta ? 96 : 132,
-                    height: compacta ? 96 : 132,
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(compacta ? 22 : 30),
-                      boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 22, offset: Offset(0, 10))],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(compacta ? 22 : 30),
-                      child: Image.asset('assets/logo_unitaxi.png', fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+                  Opacity(
+                    opacity: transicion?.ocultarLogo ?? false ? 0 : 1,
+                    child: Container(
+                      key: transicion?.claveLogo,
+                      width: compacta ? 96 : 132,
+                      height: compacta ? 96 : 132,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(compacta ? 22 : 30),
+                        boxShadow: const [BoxShadow(color: Color(0x66000000), blurRadius: 22, offset: Offset(0, 10))],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(compacta ? 22 : 30),
+                        child: Image.asset(
+                          'assets/logo_unitaxi.png',
+                          fit: BoxFit.cover,
+                          filterQuality: FilterQuality.medium,
+                        ),
+                      ),
                     ),
                   ),
                   SizedBox(height: compacta ? 14 : 26),
@@ -102,4 +126,3 @@ class PanelMarca extends StatelessWidget {
     );
   }
 }
-

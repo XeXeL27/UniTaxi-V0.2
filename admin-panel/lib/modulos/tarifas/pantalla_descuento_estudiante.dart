@@ -9,6 +9,7 @@ import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 import 'modelos.dart';
 import 'tarifas_api.dart';
+import '../../widgets/cargando.dart';
 
 /// Tarifas > Descuento estudiante: Bs enteros que se restan a cada viaje del estudiante UAP con
 /// matricula vigente (lo pone el conductor: cobra menos) y cuantos viajes por dia llevan descuento.
@@ -97,7 +98,7 @@ class _PantallaDescuentoEstudianteState extends State<PantallaDescuentoEstudiant
           child: _error != null
               ? Text(_error!, style: const TextStyle(color: ColoresApp.rojo))
               : actual == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const CargaCentrada()
               : Form(
                   key: _clave,
                   child: Column(
@@ -150,13 +151,7 @@ class _PantallaDescuentoEstudianteState extends State<PantallaDescuentoEstudiant
                       const SizedBox(height: 22),
                       FilledButton.icon(
                         onPressed: _guardando ? null : _guardar,
-                        icon: _guardando
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Iconos.floppyDisk, size: 14),
+                        icon: VigiaCarga(activa: _guardando, child: const Icon(Iconos.floppyDisk, size: 14)),
                         label: Text(_guardando ? 'Guardando...' : 'Guardar descuento'),
                       ),
                     ],

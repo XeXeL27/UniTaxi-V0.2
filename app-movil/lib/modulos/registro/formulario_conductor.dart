@@ -29,6 +29,7 @@ import '../login/recuperar_cuenta.dart';
 import '../../widgets/boton_principal.dart';
 import '../../widgets/dialogos.dart';
 import '../../widgets/formatos.dart';
+import '../../widgets/cargando.dart';
 
 /// Documento PDF que pide el registro.
 typedef _DocumentoPedido = ({String tipo, String nombre, bool obligatorio});
@@ -812,7 +813,7 @@ class _PantallaFormularioConductorState extends State<PantallaFormularioConducto
   }
 
   Widget _cargandoGoogle() {
-    if (_errorGoogle == null) return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
+    if (_errorGoogle == null) return const CargaCentrada();
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(24),

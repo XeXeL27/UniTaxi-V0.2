@@ -13,6 +13,7 @@ import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../widgets/dialogos.dart';
 import 'editor_foto.dart';
+import '../widgets/cargando.dart';
 
 /// Documento que se fotografia: el carnet de identidad o la licencia de conducir.
 enum DocumentoFoto { carnet, licencia }
@@ -420,11 +421,7 @@ class _SelectorCarnetState extends State<SelectorCarnet> {
                   child: const Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(
-                        width: 26,
-                        height: 26,
-                        child: CircularProgressIndicator(color: ColoresApp.blanco, strokeWidth: 2.5),
-                      ),
+                      CargandoUnitaxi(tamano: 52),
                       SizedBox(height: 8),
                       Text('Leyendo la foto...', style: TextStyle(color: ColoresApp.blanco, fontSize: 12.5)),
                     ],

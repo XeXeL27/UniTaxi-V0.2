@@ -19,6 +19,7 @@ import '../personas/personas_api.dart';
 import 'modelos.dart';
 import 'reportes_api.dart';
 import '../../widgets/dialogo_animado.dart';
+import '../../widgets/cargando.dart';
 
 const _situaciones = ['PENDIENTE', 'EN_REVISION', 'RESUELTO', 'CERRADO'];
 const _resoluciones = [
@@ -176,9 +177,7 @@ class _DetalleReporteState extends State<_DetalleReporte> {
             alignment: Alignment.centerLeft,
             child: OutlinedButton.icon(
               onPressed: _abriendoEntrega ? null : _verEntrega,
-              icon: _abriendoEntrega
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Iconos.paquete, size: 16),
+              icon: VigiaCarga(activa: _abriendoEntrega, child: const Icon(Iconos.paquete, size: 16)),
               label: const Text('Ver el pedido completo'),
             ),
           ),
@@ -191,7 +190,7 @@ class _DetalleReporteState extends State<_DetalleReporte> {
           builder: (_, estado) {
             if (estado.hasError) return const Text('No se pudo cargar el chat');
             final mensajes = estado.data;
-            if (mensajes == null) return const LinearProgressIndicator();
+            if (mensajes == null) return const CargaCentrada(tamano: 48);
             if (mensajes.isEmpty) return const Text('No se escribieron mensajes.', style: TextStyle(color: ColoresApp.textoSuave));
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -272,7 +271,7 @@ class _DetalleReporteState extends State<_DetalleReporte> {
             builder: (_, estado) => estado.hasError
                 ? const Text('No se pudo cargar la evidencia')
                 : estado.data == null
-                ? const LinearProgressIndicator()
+                ? const CargaCentrada(tamano: 48)
                 : Image.memory(estado.data!, height: 260, fit: BoxFit.contain),
           ),
         ],

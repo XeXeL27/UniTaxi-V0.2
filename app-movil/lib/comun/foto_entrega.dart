@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../core/iconos.dart';
 import '../core/tema.dart';
+import '../widgets/cargando.dart';
 
 /// Foto que tomo el repartidor al entregar el paquete (la persona con su paquete). Se carga del
 /// servidor y, al tocarla, se ve en grande.
@@ -50,7 +51,7 @@ class _FotoEntregaState extends State<FotoEntrega> {
         future: _foto,
         builder: (context, estado) {
           if (estado.connectionState != ConnectionState.done) {
-            return SizedBox(height: widget.alto, child: const Center(child: CircularProgressIndicator()));
+            return SizedBox(height: widget.alto, child: const CargaCentrada(tamano: 48));
           }
           final foto = estado.data;
           if (estado.hasError || foto == null) {

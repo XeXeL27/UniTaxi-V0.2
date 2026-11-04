@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 import '../core/iconos.dart';
 import '../core/tema.dart';
 import '../widgets/notificaciones.dart';
+import '../widgets/cargando.dart';
 
 /// Pantalla para enderezar la foto del carnet o de la licencia antes de leerla. Con el telefono sobre
 /// la mesa la camara suele guardar la foto de costado: la persona la gira de a un cuarto de vuelta
@@ -184,13 +185,7 @@ class _EditorFotoState extends State<_EditorFoto> {
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                             textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
                           ),
-                          child: _girando
-                              ? const SizedBox(
-                                  width: 22,
-                                  height: 22,
-                                  child: CircularProgressIndicator(strokeWidth: 2.5, color: ColoresApp.tinta),
-                                )
-                              : const Text('Usar esta foto'),
+                          child: VigiaCarga(activa: _girando, child: const Text('Usar esta foto')),
                         ),
                       ),
                     ],

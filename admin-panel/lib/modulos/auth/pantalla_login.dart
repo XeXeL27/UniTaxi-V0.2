@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/api_excepcion.dart';
 import '../../core/sesion.dart';
 import '../../core/tema.dart';
+import '../../widgets/cargando.dart';
 
 /// Ajuste de los iconos dentro de los campos del login: izquierda, arriba, abajo, derecha.
 /// Un valor positivo acerca el icono hacia ese lado. El tamano se cambia en el size del icono.
@@ -166,13 +167,7 @@ class _PantallaLoginState extends State<PantallaLogin> {
                   const SizedBox(height: 26),
                   FilledButton.icon(
                     onPressed: _cargando ? null : _ingresar,
-                    icon: _cargando
-                        ? const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                          )
-                        : const Icon(Iconos.rightToBracket, size: 16),
+                    icon: VigiaCarga(activa: _cargando, child: const Icon(Iconos.rightToBracket, size: 16)),
                     label: const Text('Iniciar sesión'),
                   ),
                   const SizedBox(height: 24),

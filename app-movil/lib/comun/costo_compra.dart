@@ -4,6 +4,7 @@ import '../core/formato.dart';
 import '../core/iconos.dart';
 import '../core/tema.dart';
 import 'modelos_viaje.dart';
+import '../widgets/cargando.dart';
 
 /// Productos de una compra: lo pedido ("2 x Pan · Del grande") y, si ya se compraron, el precio o
 /// "No lo consiguió".
@@ -94,7 +95,7 @@ class DetalleCosto extends StatelessWidget {
                       ),
                       Text(
                         linea.conseguido
-                            ? '${linea.cantidad} x ${formatoBs(linea.precioUnitario)}'
+                            ? '${linea.cantidad} ${linea.cantidad == 1 ? 'unidad' : 'unidades'}'
                             : 'No lo consiguió${linea.observacion == null ? '' : ': ${linea.observacion}'}',
                         style: TextStyle(color: linea.conseguido ? ColoresApp.grisTexto : ColoresApp.rojo, fontSize: 12.5),
                       ),
@@ -203,13 +204,7 @@ class TarjetaCostoCompra extends StatelessWidget {
             const SizedBox(height: 12),
             FilledButton.icon(
               onPressed: aceptando ? null : onAceptar,
-              icon: aceptando
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
-                  : const Icon(Iconos.circleCheck, size: 18),
+              icon: VigiaCarga(activa: aceptando, child: const Icon(Iconos.circleCheck, size: 18)),
               label: const Text('ACEPTO EL COSTO TOTAL', style: TextStyle(fontWeight: FontWeight.w800, letterSpacing: 0.3)),
               style: FilledButton.styleFrom(
                 backgroundColor: ColoresApp.exito,

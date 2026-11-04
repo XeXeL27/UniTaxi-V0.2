@@ -24,6 +24,8 @@ import com.taxiuap.backend.trip.dto.ViajesHoyResponse;
 import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
 import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
+import com.taxiuap.backend.trip.dto.EntregarPedidoRequest;
+import com.taxiuap.backend.trip.dto.RecogerPaqueteRequest;
 import com.taxiuap.backend.trip.dto.RespuestaCambioPagoRequest;
 import com.taxiuap.backend.trip.dto.HistorialViajesResponse;
 import com.taxiuap.backend.trip.dto.LlegadaEntregaRequest;
@@ -160,6 +162,17 @@ public class ViajeConductorController {
                 entregaService.validarRecogida(id, request, foto)));
     }
 
+    /**
+     * ENCOMIENDA: en A recibe el paquete sin codigo (multipart: parte "datos" con el GPS y parte "foto"
+     * opcional). validar-recogida queda para las apps de antes, que todavia piden el codigo.
+     */
+    @PostMapping(value = "/{id}/entrega/recoger", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiResponse<ViajeResponse>> recogerPaquete(
+            @PathVariable Long id, @Valid @RequestPart(value = "datos", required = false) RecogerPaqueteRequest request,
+            @RequestPart(value = "foto", required = false) MultipartFile foto) {
+        return ResponseEntity.ok(ApiResponse.exito("Paquete recogido", entregaService.recogerPaquete(id, request, foto)));
+    }
+
     /** Proponer la compra ya no existe (apps viejas): responde que hay que actualizar UNITAXI. */
     @PostMapping("/{id}/entrega/proponer-compra")
     public ResponseEntity<ApiResponse<ViajeResponse>> proponerCompra(@PathVariable Long id) {
@@ -208,6 +221,16 @@ public class ViajeConductorController {
             @RequestPart(value = "foto", required = false) MultipartFile foto) {
         return ResponseEntity.ok(ApiResponse.exito("Entrega completada",
                 entregaService.entregarConReceptor(id, request, foto)));
+    }
+
+    /**
+     * Entrega en B del paquete o del delivery, sin codigo ni foto: si recibe otra persona lleva el nombre
+     * completo que ella dice. validar-entrega e identificar-receptor quedan para las apps de antes.
+     */
+    @PostMapping("/{id}/entrega/entregar")
+    public ResponseEntity<ApiResponse<ViajeResponse>> entregarPedido(
+            @PathVariable Long id, @Valid @RequestBody EntregarPedidoRequest request) {
+        return ResponseEntity.ok(ApiResponse.exito("Entrega completada", entregaService.entregarPedido(id, request)));
     }
 
     /** Llego al punto de entrega (B), con el GPS a 100 m o menos: primer aviso al cliente. */

@@ -19,6 +19,7 @@ import '../../../widgets/boton_principal.dart';
 import '../../../widgets/formatos.dart';
 import '../../../widgets/notificaciones.dart';
 import 'documentos_api.dart';
+import '../../../widgets/cargando.dart';
 
 /// Carnet o licencia del conductor en Mis documentos: se ven siempre (fotos del anverso y del
 /// reverso) y se vuelven a tomar solo con un permiso del administrador, confirmando con la huella o
@@ -146,7 +147,7 @@ class TarjetaFotosDocumento extends StatelessWidget {
                         if (foto.connectionState != ConnectionState.done) {
                           return const SizedBox(
                             height: 180,
-                            child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+                            child: CargaCentrada(),
                           );
                         }
                         final bytes = foto.data;

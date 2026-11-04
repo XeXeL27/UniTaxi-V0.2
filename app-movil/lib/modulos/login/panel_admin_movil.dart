@@ -7,6 +7,7 @@ import '../../core/config.dart';
 import '../../core/iconos.dart';
 import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
+import '../../widgets/cargando.dart';
 
 /// Panel de administracion dentro del APK: el mismo panel web (/admin del servidor) en un
 /// WebView, con la sesion ya iniciada.
@@ -137,17 +138,6 @@ class _PantallaPanelAdminState extends State<PantallaPanelAdmin> {
             ),
             const SizedBox(width: 6),
           ],
-          bottom: _progreso < 100
-              ? PreferredSize(
-                  preferredSize: const Size.fromHeight(3),
-                  child: LinearProgressIndicator(
-                    value: _progreso / 100,
-                    minHeight: 3,
-                    color: ColoresApp.rojo,
-                    backgroundColor: ColoresApp.azul,
-                  ),
-                )
-              : null,
         ),
         body: _error != null
             ? Center(
@@ -156,7 +146,13 @@ class _PantallaPanelAdminState extends State<PantallaPanelAdmin> {
                   child: Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: ColoresApp.texto)),
                 ),
               )
-            : WebViewWidget(controller: _web),
+            : Stack(
+                children: [
+                  WebViewWidget(controller: _web),
+                  // Mientras carga la primera vez el panel, la carga de UNITAXI encima.
+                  if (_progreso < 100) const ColoredBox(color: ColoresApp.fondo, child: CargaCentrada()),
+                ],
+              ),
       ),
     );
   }

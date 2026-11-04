@@ -177,7 +177,9 @@ class Sesion extends ChangeNotifier {
     }
   }
 
-  Future<void> cerrar({String? motivo}) async {
+  /// Sin [avisar] solo se borra la sesion, sin redibujar: la usa el cierre que deja el panel para ir
+  /// a la app (asi no se ve el login del panel un instante antes de salir).
+  Future<void> cerrar({String? motivo, bool avisar = true}) async {
     motivoCierre = motivo;
     _tokenAcceso = null;
     _tokenRefresco = null;
@@ -190,8 +192,11 @@ class Sesion extends ChangeNotifier {
     } catch (_) {
       // Si el almacenamiento del navegador no esta disponible, basta con limpiar la memoria.
     }
-    notifyListeners();
+    if (avisar) notifyListeners();
   }
+
+  /// La app web (/app) del mismo servidor: a donde va quien cierra la sesion del panel en el navegador.
+  static String get direccionApp => Uri.parse(Config.apiUrl).resolve('/app/').toString();
 
   Future<void> _guardar(String acceso, String refresco, UsuarioSesion usuario) async {
     motivoCierre = null;

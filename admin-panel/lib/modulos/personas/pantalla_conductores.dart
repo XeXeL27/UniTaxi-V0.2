@@ -26,6 +26,7 @@ import 'formulario_habilitar_usuario.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
 import '../../widgets/dialogo_animado.dart';
+import '../../widgets/cargando.dart';
 
 const _situaciones = ['PENDIENTE', 'APROBADO', 'RECHAZADO', 'SUSPENDIDO'];
 
@@ -204,7 +205,7 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
               }
               final documentos = instantanea.data;
               if (documentos == null) {
-                return const Padding(padding: EdgeInsets.all(20), child: LinearProgressIndicator());
+                return const Padding(padding: EdgeInsets.all(20), child: CargaCentrada(tamano: 48));
               }
               return ListView.separated(
                 shrinkWrap: true,
@@ -274,7 +275,7 @@ class _DialogoDocumentosState extends State<DialogoDocumentos> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (cargando) const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+              VigiaCarga(activa: cargando, child: const SizedBox.shrink()),
               TextButton.icon(
                 onPressed: cargando ? null : () => _abrir(documento, descargar: false),
                 icon: const Icon(Iconos.eye, size: 14),

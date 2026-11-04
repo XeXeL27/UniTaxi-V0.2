@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../core/relieve.dart';
+import 'cargando.dart';
 
 /// Boton del panel con el estilo relieve y el color de su accion ([TonoBoton]). Tiene sombra del
 /// mismo color, se levanta 2 px con el mouse encima y se hunde al presionarlo. Con [cargando] muestra
@@ -97,17 +98,9 @@ class _BotonRelieveState extends State<BotonRelieve> {
   Widget build(BuildContext context) {
     final widget = this.widget;
     final soloIcono = widget.texto == null;
-    final colorTexto = widget.tono.color == null ? null : Colors.white;
     final tamanoIcono = widget.tamano == TamanoBoton.pequeno ? 14.0 : 16.0;
-    final Widget? simbolo = widget.cargando
-        ? SizedBox(
-            width: tamanoIcono,
-            height: tamanoIcono,
-            child: CircularProgressIndicator(strokeWidth: 2, color: colorTexto ?? Relieve.tenue),
-          )
-        : widget.icono == null
-        ? null
-        : Icon(widget.icono, size: tamanoIcono);
+    // Cargando: la carga de UNITAXI va encima de todo (VigiaCarga, abajo) y el boton conserva su icono.
+    final Widget? simbolo = widget.icono == null ? null : Icon(widget.icono, size: tamanoIcono);
     final contenido = soloIcono
         ? (simbolo ?? const SizedBox.shrink())
         : Row(
@@ -138,6 +131,7 @@ class _BotonRelieveState extends State<BotonRelieve> {
       ),
     );
     final mensaje = widget.ayuda;
-    return mensaje == null ? boton : Tooltip(message: mensaje, child: boton);
+    final conCarga = VigiaCarga(activa: widget.cargando, child: boton);
+    return mensaje == null ? conCarga : Tooltip(message: mensaje, child: conCarga);
   }
 }

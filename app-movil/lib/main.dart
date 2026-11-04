@@ -30,6 +30,7 @@ import 'modulos/pasajero/inicio/pantalla_inicio.dart';
 import 'modulos/registro/formulario_conductor.dart';
 import 'widgets/aviso_conexion.dart';
 import 'widgets/notificaciones.dart';
+import 'widgets/panel_marca.dart';
 import 'widgets/requiere_gps.dart';
 import 'widgets/vigilante_inactividad.dart';
 
@@ -106,17 +107,27 @@ class TaxiUap extends StatefulWidget {
   State<TaxiUap> createState() => _TaxiUapState();
 }
 
-class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
+enum _Salida { alLogo, subir, fundido }
+
+class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver, SingleTickerProviderStateMixin {
   late String? _error = widget.vuelta.error;
   late String? _codigoRegistro = widget.vuelta.codigoRegistro;
   late String? _codigoPasajero = widget.vuelta.codigoPasajero;
 
   DateTime? _ultimaConsultaUsuario;
 
-  /// La presentacion animada se ve cada vez que se abre la app (no al volver de segundo plano) y al
-  /// iniciar sesion. La larga solo la primera vez.
+  /// La presentacion animada se ve solo al abrir la app (no al volver de segundo plano ni al iniciar
+  /// sesion: ahi esta la carga de UNITAXI). La larga solo la primera vez.
   bool _presentando = true;
   late bool _presentacionCompleta = widget.primeraVez;
+
+  /// Salida de la presentacion: con el login en pantalla ancha el icono viaja hasta el logo del login;
+  /// en el celular el login sube desde abajo; con la sesion iniciada se funde con el inicio.
+  bool _saliendo = false;
+  _Salida? _modoSalida;
+  Rect? _destinoLogo;
+  final _claveLogo = GlobalKey();
+  late final AnimationController _salida = AnimationController(vsync: this);
 
   /// Rol de la sesion en el build anterior: de ninguno a uno = acaba de iniciar sesion.
   String? _rolAnterior;
@@ -144,7 +155,9 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
         // Tocar el globo abre el chat de ese viaje o pedido (si no hay otro chat abierto).
         alTocar: () {
           if (chat.pantallaAbierta || chat.terminado(aviso.idViaje) || !overlay.mounted) return;
-          unawaited(abrirChat(overlay.context, idViaje: aviso.idViaje, nombreContraparte: chat.nombreDe(aviso.idViaje)));
+          unawaited(
+            abrirChat(overlay.context, idViaje: aviso.idViaje, nombreContraparte: chat.nombreDe(aviso.idViaje)),
+          );
         },
       );
     });
@@ -153,6 +166,7 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
   @override
   void dispose() {
     unawaited(_avisosChat?.cancel());
+    _salida.dispose();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
@@ -193,8 +207,6 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
     );
     // Administrador que entro desde el login del APK: el panel se abre dentro de la app.
     final panelAdmin = context.select<Sesion, Map<String, dynamic>?>((s) => s.panelAdmin);
-    // Acaba de iniciar sesion: la presentacion corta antes del inicio.
-    if (_rolAnterior == null && rol != null && panelAdmin == null) _presentando = true;
     // Se cerro la sesion (por ejemplo, el administrador cambio sus tipos de usuario): los avisos, guias
     // y hojas del inicio no deben quedar encima del login.
     if (_rolAnterior != null && rol == null) {
@@ -220,27 +232,87 @@ class _TaxiUapState extends State<TaxiUap> with WidgetsBindingObserver {
         // En el navegador la sesion se cierra tras 2 horas sin actividad; en el APK nunca.
         return kIsWeb ? VigilanteInactividad(sesion: context.read<Sesion>(), child: contenido) : contenido;
       },
-      // Primero la presentacion; al terminar se funde (400 ms) con el login o el inicio. La clave
-      // 'app' no cambia despues, asi los cambios de pantalla de abajo no se animan.
-      home: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 400),
-        switchInCurve: Curves.easeOut,
-        switchOutCurve: Curves.easeIn,
-        child: _presentando
-            ? PantallaPresentacion(
-                key: const ValueKey('presentacion'),
-                completa: _presentacionCompleta,
-                alTerminar: () => setState(() {
-                  _presentando = false;
-                  _presentacionCompleta = false;
-                }),
-              )
-            : KeyedSubtree(
-                key: const ValueKey('app'),
-                child: _pantalla(rol, motivoCierre, sinCorreo, sinCarnet, carnetObservado, pideFotoCarnet, panelAdmin),
-              ),
+      // Primero la presentacion y despues su salida hacia el login o el inicio. Las claves no cambian,
+      // asi la app no se vuelve a crear al terminar la salida ni se animan sus cambios de pantalla.
+      home: Stack(
+        fit: StackFit.expand,
+        children: _capas(
+          _pantalla(rol, motivoCierre, sinCorreo, sinCarnet, carnetObservado, pideFotoCarnet, panelAdmin),
+        ),
       ),
     );
+  }
+
+  List<Widget> _capas(Widget pantalla) {
+    final modo = _modoSalida;
+    final app = KeyedSubtree(
+      key: const ValueKey('app'),
+      child: SlideTransition(
+        position: modo == _Salida.subir
+            ? Tween(
+                begin: const Offset(0, 1),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(parent: _salida, curve: Curves.easeOutCubic))
+            : const AlwaysStoppedAnimation(Offset.zero),
+        child: TransicionMarca(claveLogo: _claveLogo, ocultarLogo: _presentando, child: pantalla),
+      ),
+    );
+    if (!_presentando) return [app];
+    final presentacion = KeyedSubtree(
+      key: const ValueKey('presentacion'),
+      child: FadeTransition(
+        opacity: modo == _Salida.fundido ? ReverseAnimation(_salida) : const AlwaysStoppedAnimation(1),
+        child: PantallaPresentacion(
+          completa: _presentacionCompleta,
+          alTerminar: _terminarPresentacion,
+          salida: modo == _Salida.alLogo ? _salida : null,
+          destinoLogo: modo == _Salida.alLogo ? _destinoLogo : null,
+          panelDestino: modo == _Salida.alLogo ? _panelDelLogin() : null,
+        ),
+      ),
+    );
+    if (!_saliendo) return [presentacion];
+    // El login sube por encima de la presentacion; en los otros casos la presentacion va encima.
+    return modo == _Salida.subir ? [presentacion, app] : [app, presentacion];
+  }
+
+  /// Panel azul de la izquierda del login ancho (MarcoAcceso: 5 de 11 partes del ancho).
+  Rect _panelDelLogin() {
+    final tamano = MediaQuery.sizeOf(context);
+    return Rect.fromLTWH(0, 0, tamano.width * 5 / 11, tamano.height);
+  }
+
+  /// Termino la presentacion: se dibuja la app debajo, se mira si hay login ancho (el logo de PanelMarca)
+  /// y se hace la salida que corresponde.
+  void _terminarPresentacion() {
+    setState(() => _saliendo = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final caja = _claveLogo.currentContext?.findRenderObject();
+      final logo = caja is RenderBox && caja.attached && caja.hasSize
+          ? caja.localToGlobal(Offset.zero) & caja.size
+          : null;
+      final sinSesion = !context.read<Sesion>().autenticado;
+      final modo = !sinSesion ? _Salida.fundido : (logo != null ? _Salida.alLogo : _Salida.subir);
+      setState(() {
+        _modoSalida = modo;
+        _destinoLogo = logo;
+      });
+      _salida.duration = switch (modo) {
+        _Salida.alLogo => const Duration(milliseconds: 850),
+        _Salida.subir => const Duration(milliseconds: 600),
+        _Salida.fundido => const Duration(milliseconds: 400),
+      };
+      _salida.forward(from: 0).whenCompleteOrCancel(() {
+        if (!mounted) return;
+        setState(() {
+          _presentando = false;
+          _saliendo = false;
+          _modoSalida = null;
+          _presentacionCompleta = false;
+        });
+      });
+    });
   }
 
   Widget _pantalla(

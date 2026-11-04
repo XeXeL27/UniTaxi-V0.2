@@ -12,6 +12,7 @@ import 'columna_tabla.dart';
 import 'exportador.dart';
 import 'filtros.dart';
 import 'iconos_tabla.dart';
+import '../cargando.dart';
 
 /// Tabla de datos reutilizable del panel: busqueda general, filtros por columna segun el tipo
 /// de dato, orden por columna, paginacion y exportacion a Excel, CSV y PDF. Todo se hace sobre
@@ -243,15 +244,8 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
                 ),
               ),
               const SizedBox(height: 12),
-              if (widget.cargando)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 6),
-                  child: LinearProgressIndicator(
-                    color: ColoresApp.rojo,
-                    minHeight: 3,
-                    borderRadius: BorderRadius.all(Radius.circular(2)),
-                  ),
-                ),
+              // Recargando con filas a la vista: la carga encima de todo; sin filas, en el lugar de la tabla.
+              VigiaCarga(activa: widget.cargando && filasPagina.isNotEmpty, child: const SizedBox.shrink()),
               if (widget.error != null)
                 _mensajeError(widget.error!)
               else if (filasPagina.isEmpty)
@@ -428,11 +422,7 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
         boton('Excel', IconosTabla.excel.icon, FormatoExportacion.excel, TonoBoton.excel),
         boton('CSV', IconosTabla.csv.icon, FormatoExportacion.csv, TonoBoton.turquesa),
         boton('PDF', IconosTabla.pdf.icon, FormatoExportacion.pdf, TonoBoton.pdf),
-        if (_exportando)
-          const Padding(
-            padding: EdgeInsets.only(left: 4, top: 12),
-            child: SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)),
-          ),
+        VigiaCarga(activa: _exportando, child: const SizedBox.shrink()),
       ],
     );
   }
@@ -595,14 +585,14 @@ class _TablaDatosState<T> extends State<TablaDatos<T>> {
       padding: const EdgeInsets.symmetric(vertical: 32),
       alignment: Alignment.center,
       decoration: Relieve.panelHundido(radio: 12),
-      child: Text(
-        widget.cargando
-            ? 'Cargando...'
-            : (_busqueda.isNotEmpty || _filtrosActivos > 0
+      child: widget.cargando
+          ? const CargaCentrada(tamano: 56)
+          : Text(
+              _busqueda.isNotEmpty || _filtrosActivos > 0
                   ? 'Ningún registro coincide con la búsqueda o los filtros'
-                  : 'No hay registros'),
-        style: const TextStyle(color: Relieve.tenue),
-      ),
+                  : 'No hay registros',
+              style: const TextStyle(color: Relieve.tenue),
+            ),
     );
   }
 

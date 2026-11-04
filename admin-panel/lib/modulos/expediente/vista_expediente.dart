@@ -21,6 +21,7 @@ import '../entregas/detalle_entrega.dart';
 import 'expediente_api.dart';
 import 'modelos.dart';
 import '../../widgets/dialogo_animado.dart';
+import '../../widgets/cargando.dart';
 
 /// Abre un expediente (conductor o pasajero) en un modal grande; en pantallas angostas ocupa todo.
 /// Con la edicion abierta no se cierra al tocar fuera (se cierra con la X, que avisa si hay cambios).
@@ -255,7 +256,7 @@ class _CargaState<T> extends State<Carga<T>> {
           );
         }
         if (!instantanea.hasData) {
-          return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
+          return const CargaCentrada();
         }
         return widget.builder(instantanea.data as T, _recargar);
       },

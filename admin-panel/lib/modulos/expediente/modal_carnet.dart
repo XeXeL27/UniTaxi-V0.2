@@ -12,6 +12,7 @@ import '../../widgets/archivos_web.dart';
 import '../../widgets/dialogos.dart';
 import 'expediente_api.dart';
 import '../../widgets/dialogo_animado.dart';
+import '../../widgets/cargando.dart';
 
 /// Fotos del carnet (anverso y reverso) y la foto de la persona sosteniendolo, en un solo modal. Las sube
 /// la persona desde la app; solo el administrador puede verlas y cambiarlas.
@@ -238,9 +239,7 @@ class _LadoState extends State<_Lado> {
                   if (widget.cambiar != null)
                     TextButton.icon(
                       onPressed: _subiendo ? null : _cambiar,
-                      icon: _subiendo
-                          ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
-                          : const Icon(Iconos.camera, size: 14),
+                      icon: VigiaCarga(activa: _subiendo, child: const Icon(Iconos.camera, size: 14)),
                       label: const Text('Cambiar foto'),
                     ),
                   IconButton(
@@ -267,7 +266,7 @@ class _LadoState extends State<_Lado> {
                         ),
                       )
                     : bytes == null
-                    ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
+                    ? const CargaCentrada()
                     : InteractiveViewer(maxScale: 4, child: Image.memory(bytes, fit: BoxFit.contain)),
               ),
             ],

@@ -23,6 +23,7 @@ import '../../../comun/modelos_viaje.dart';
 import '../../login/ayuda_ingreso.dart';
 import 'panel_delivery_conductor.dart';
 import 'tarjetas_conductor.dart';
+import '../../../widgets/cargando.dart';
 
 String _km(double? metros) {
   if (metros == null) return '-';
@@ -115,7 +116,7 @@ class PanelSolicitudes extends StatelessWidget {
           if (!flujo.listaCargada)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 16),
-              child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+              child: CargaCentrada(),
             )
           else if (flujo.errorLista != null)
             _Mensaje(icono: Iconos.circleExclamation, texto: flujo.errorLista!, color: ColoresApp.rojo)

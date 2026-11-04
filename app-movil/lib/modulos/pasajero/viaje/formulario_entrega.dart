@@ -262,7 +262,11 @@ extension on _FormularioEntregaState {
             controller: _receptor,
             textCapitalization: TextCapitalization.characters,
             inputFormatters: Formatos.letras,
-            decoration: const InputDecoration(labelText: 'Nombre y apellido de quien recibe'),
+            decoration: const InputDecoration(
+              labelText: 'Nombre completo de quien recibe',
+              helperText: 'El repartidor le pedirá su nombre completo para entregarle.',
+              helperMaxLines: 2,
+            ),
           ),
           const SizedBox(height: 12),
           TextField(

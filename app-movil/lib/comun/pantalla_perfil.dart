@@ -8,6 +8,7 @@ import '../core/tema.dart';
 import '../widgets/foto_perfil.dart';
 import 'datos_perfil.dart';
 import 'perfil_api.dart';
+import '../widgets/cargando.dart';
 
 /// Mi perfil, igual para pasajero y conductor: la foto (galeria o camara) y los datos, que se
 /// editan en el mismo lugar confirmando con la contrasena (ver [DatosPerfil]).
@@ -67,7 +68,7 @@ class _PantallaPerfilState extends State<PantallaPerfil> {
             );
           }
           final perfil = instantanea.data;
-          if (perfil == null) return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
+          if (perfil == null) return const CargaCentrada();
           return ListView(
             children: [
               Container(

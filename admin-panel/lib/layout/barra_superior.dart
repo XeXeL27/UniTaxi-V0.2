@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:web/web.dart' as web;
 
 import '../core/iconos.dart';
 
@@ -119,7 +120,11 @@ Future<void> _confirmarCerrarSesion(BuildContext context, Sesion sesion) async {
     textoConfirmar: 'Sí, cerrar sesión',
     tono: TonoBoton.rojo,
   );
-  if (confirmado) await sesion.cerrar();
+  if (!confirmado) return;
+  // En el navegador se sale del panel a la app (/app); dentro del APK vuelve al login como siempre.
+  if (Sesion.dentroDeApk) return sesion.cerrar();
+  await sesion.cerrar(avisar: false);
+  web.window.location.assign(Sesion.direccionApp);
 }
 
 /// Campana de la barra superior con los mensajes de "Problemas de ingreso" sin atender. Cuando llega uno

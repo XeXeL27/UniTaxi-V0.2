@@ -21,6 +21,7 @@ import '../expediente/expediente_api.dart';
 import '../expediente/modal_carnet.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
+import '../../widgets/cargando.dart';
 
 /// Carnets observados: personas que al registrarse indicaron que el sistema (la IA o el lector del
 /// telefono) leyo mal sus datos, o cuyo nombre parecia falso u ofensivo. Solo el administrador
@@ -404,7 +405,7 @@ class _MiniaturaState extends State<_Miniatura> {
                     }
                     final bytes = instantanea.data;
                     if (bytes == null) {
-                      return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.azul));
+                      return const CargaCentrada(tamano: 48);
                     }
                     return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
                   },
@@ -510,7 +511,7 @@ class _DatosUapState extends State<_DatosUap> {
               style: const TextStyle(color: ColoresApp.rojo),
             );
           }
-          if (d == null) return const LinearProgressIndicator();
+          if (d == null) return const CargaCentrada(tamano: 48);
           final fecha = Formato.leerFecha(d['fechaNacimiento']);
           String texto(String clave) => (d[clave] as String?) ?? '-';
           return Column(

@@ -4,10 +4,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../widgets/notificaciones.dart';
 
-/// Copia un dato al portapapeles y avisa que se copió.
-///
-/// El aviso importa: se copia al tocar los dígitos del código de entrega, sin abrir nada, así que sin
-/// él el pasajero no sabe si el toque entró o no y vuelve a tocar.
+/// Copia un dato al portapapeles y avisa que se copió (sin el aviso no se sabe si el toque entró).
 Future<void> copiarAlPortapapeles(BuildContext contexto, String texto, {String? mensaje}) async {
   await Clipboard.setData(ClipboardData(text: texto));
   if (contexto.mounted) {

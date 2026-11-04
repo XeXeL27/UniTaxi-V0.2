@@ -300,7 +300,7 @@ void main() {
 
       flujo.verSolicitud(_solicitudCompra());
       await flujo.aceptar();
-      await flujo.registrarCompra(_comercio, 'Mercado El Beni', const [ProductoComprado(idProducto: 1, conseguido: true, cantidad: 1, precioUnitario: 40)], null, null);
+      await flujo.registrarCompra(_comercio, 'Mercado El Beni', const [ProductoComprado(idProducto: 1, conseguido: true, cantidad: 1, precioTotal: 40)], null, null);
 
       expect(flujo.viaje, isNotNull);
       expect(flujo.viaje!.situacion, SituacionViaje.enCurso);

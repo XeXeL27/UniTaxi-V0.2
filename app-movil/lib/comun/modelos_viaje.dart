@@ -117,14 +117,16 @@ class ProductoComprado {
   final int idProducto;
   final bool conseguido;
   final int? cantidad;
-  final double? precioUnitario;
+
+  /// Lo que pago por todas las unidades juntas (el servidor saca el precio unitario).
+  final double? precioTotal;
   final String? observacion;
 
   const ProductoComprado({
     required this.idProducto,
     required this.conseguido,
     this.cantidad,
-    this.precioUnitario,
+    this.precioTotal,
     this.observacion,
   });
 
@@ -132,12 +134,12 @@ class ProductoComprado {
     'idProducto': idProducto,
     'conseguido': conseguido,
     if (conseguido) 'cantidad': cantidad,
-    if (conseguido) 'precioUnitario': precioUnitario,
+    if (conseguido) 'precioTotal': precioTotal,
     if (observacion != null && observacion!.trim().isNotEmpty) 'observacion': observacion!.trim(),
   };
 
-  /// Subtotal como lo calcula el servidor (redondeado a centavos).
-  double get subtotal => conseguido ? (((precioUnitario ?? 0) * (cantidad ?? 0)) * 100).round() / 100 : 0;
+  /// Subtotal como lo guarda el servidor: el precio total redondeado a centavos.
+  double get subtotal => conseguido ? ((precioTotal ?? 0) * 100).round() / 100 : 0;
 }
 
 /// Situacion de un producto de la compra.
@@ -262,7 +264,7 @@ class PropuestaCosto {
   bool get aceptada => situacion == SituacionPropuesta.aceptada;
 }
 
-/// Datos de entrega que devuelve el backend. Los códigos solo llegan al pasajero cuando corresponden.
+/// Datos de entrega que devuelve el backend.
 class DatosEntrega {
   final TipoEnvio tipoEnvio;
   final String descripcion;
@@ -275,8 +277,6 @@ class DatosEntrega {
   final String? telefonoRemitente;
   final String? nombreReceptor;
   final String? telefonoReceptor;
-  final String? codigoRecogida;
-  final String? codigoEntrega;
   final String? detalleCompraPropuesto;
   final String? detalleCompra;
   final String? puntoCompraPropuestoWkt;
@@ -330,8 +330,6 @@ class DatosEntrega {
     this.telefonoRemitente,
     this.nombreReceptor,
     this.telefonoReceptor,
-    this.codigoRecogida,
-    this.codigoEntrega,
     this.detalleCompraPropuesto,
     this.detalleCompra,
     this.puntoCompraPropuestoWkt,
@@ -369,8 +367,6 @@ class DatosEntrega {
     telefonoRemitente: json['telefonoRemitente'] as String?,
     nombreReceptor: json['nombreReceptor'] as String?,
     telefonoReceptor: json['telefonoReceptor'] as String?,
-    codigoRecogida: json['codigoRecogida'] as String?,
-    codigoEntrega: json['codigoEntrega'] as String?,
     detalleCompraPropuesto: json['detalleCompraPropuesto'] as String?,
     detalleCompra: json['detalleCompra'] as String?,
     puntoCompraPropuestoWkt: json['puntoCompraPropuestoWkt'] as String?,
@@ -442,61 +438,6 @@ class DatosEntrega {
     final nombre = detalleCompra?.trim() ?? '';
     return PuntoRuta(posicion, nombre.isEmpty ? 'Comercio' : 'Comercio: $nombre');
   }
-
-  /// Códigos de 6 dígitos que el pasajero tiene que dictar, con la persona a quien se lo dicta y su
-  /// teléfono.
-  ///
-  /// Solo hay código en ENCOMIENDA: al de recogida en A (lo dicta el remitente) y al de entrega en B
-  /// (lo dicta el receptor). Desaparece cuando el pedido ya se entregó o falló. El repartidor nunca
-  /// lo ve: por eso el pasajero necesita leerlo, y de ahí que la tarjeta lo muestre en grande.
-  ///
-  /// Mientras el paquete está en camino a A se listan los dos, no solo el de la fase actual: el
-  /// remitente casi nunca es quien recibe en B, y sin ese código no puede avisarle por WhatsApp.
-  List<FaseCodigoEntrega> get codigos {
-    if (tipoEnvio != TipoEnvio.encomienda) return const [];
-    switch (estadoEntrega) {
-      case EstadoEntrega.pendienteRecogida:
-      case EstadoEntrega.enCaminoRecogida:
-        return [
-          if (_hay(codigoRecogida))
-            (
-              titulo: 'Código de recogida',
-              donde: 'en el punto de recogida',
-              codigo: codigoRecogida!.trim(),
-              nombre: _sinVacio(nombreRemitente),
-              telefono: telefonoRemitente,
-              faseActual: true,
-            ),
-          if (_hay(codigoEntrega))
-            (
-              titulo: 'Código de entrega',
-              donde: 'al llegar al punto de entrega',
-              codigo: codigoEntrega!.trim(),
-              nombre: _sinVacio(nombreReceptor),
-              telefono: telefonoReceptor,
-              faseActual: false,
-            ),
-        ];
-      case EstadoEntrega.enMano:
-        if (!_hay(codigoEntrega)) return const [];
-        return [
-          (
-            titulo: 'Código de entrega',
-            donde: 'cuando el repartidor llegue al destino',
-            codigo: codigoEntrega!.trim(),
-            nombre: _sinVacio(nombreReceptor),
-            telefono: telefonoReceptor,
-            faseActual: true,
-          ),
-        ];
-      default:
-        return const [];
-    }
-  }
-
-  static bool _hay(String? codigo) => codigo?.trim().isNotEmpty ?? false;
-
-  static String? _sinVacio(String? valor) => valor == null || valor.trim().isEmpty ? null : valor.trim();
 }
 
 /// Partida real del mapa de un viaje o solicitud: en una COMPRA_Y_ENTREGA, el comercio donde el
@@ -510,17 +451,6 @@ PuntoRuta? _partida(LatLng? origen, String origenDireccion, DatosEntrega? datosE
   }
   return origen == null ? null : PuntoRuta(origen, origenDireccion);
 }
-
-/// Un código de entrega y a quién se lo dicta. [faseActual] marca el que toca dictar en este momento:
-/// el otro se muestra para poder mandárselo antes a quien lo va a necesitar.
-typedef FaseCodigoEntrega = ({
-  String titulo,
-  String donde,
-  String codigo,
-  String? nombre,
-  String? telefono,
-  bool faseActual,
-});
 
 /// Por que el repartidor no pudo entregar (enum MotivoFallaEntrega del backend).
 enum MotivoFalla {

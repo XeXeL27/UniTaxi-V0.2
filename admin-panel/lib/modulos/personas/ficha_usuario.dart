@@ -20,6 +20,7 @@ import '../expediente/modal_carnet.dart';
 import 'modelos.dart';
 import 'personas_api.dart';
 import 'tipos_usuario.dart';
+import '../../widgets/cargando.dart';
 
 const _categoriasLicencia = ['P', 'M', 'A', 'B', 'C'];
 const _situacionesConductor = ['PENDIENTE', 'APROBADO', 'RECHAZADO', 'SUSPENDIDO'];
@@ -298,7 +299,7 @@ class _FichaUsuarioState extends State<FichaUsuario> {
     if (d == null) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 40),
-        child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+        child: CargaCentrada(),
       );
     }
     final e = widget.editando;
@@ -668,7 +669,7 @@ class _FotoFichaState extends State<FotoFicha> {
               }
               final bytes = instantanea.data;
               if (bytes == null) {
-                return const Center(child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.azul));
+                return const CargaCentrada(tamano: 48);
               }
               return Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true);
             },

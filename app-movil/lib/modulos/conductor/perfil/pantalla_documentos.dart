@@ -15,6 +15,7 @@ import '../../../widgets/notificaciones.dart';
 import '../../../widgets/visor_pdf.dart';
 import 'documentos_api.dart';
 import 'fotos_documento.dart';
+import '../../../widgets/cargando.dart';
 
 /// Documentos del conductor: las fotos del carnet y de la licencia y los PDF. Los puede ver siempre
 /// y cambiarlos solo si el administrador le dio permiso, confirmando con la huella o la contrasena.
@@ -120,7 +121,7 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
             );
           }
           final datos = instantanea.data;
-          if (datos == null) return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
+          if (datos == null) return const CargaCentrada();
           final (documentos, permisos, perfil) = datos;
           final permitidos = {
             for (final p in permisos)
@@ -267,13 +268,10 @@ class _PantallaDocumentosState extends State<PantallaDocumentos> {
                                 child: FilledButton.icon(
                                   onPressed: _subiendo == null ? () => _reemplazar(d) : null,
                                   style: FilledButton.styleFrom(backgroundColor: ColoresApp.exito),
-                                  icon: _subiendo == d.id
-                                      ? const SizedBox(
-                                          width: 14,
-                                          height: 14,
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.blanco),
-                                        )
-                                      : const Icon(Iconos.fileArrowUp, size: 14),
+                                  icon: VigiaCarga(
+                                    activa: _subiendo == d.id,
+                                    child: const Icon(Iconos.fileArrowUp, size: 14),
+                                  ),
                                   label: const Text('Reemplazar'),
                                 ),
                               ),
@@ -360,13 +358,7 @@ class _DocumentoFaltante extends StatelessWidget {
           FilledButton.icon(
             onPressed: onAgregar,
             style: FilledButton.styleFrom(backgroundColor: obligatorio ? ColoresApp.rojo : ColoresApp.azul),
-            icon: subiendo
-                ? const SizedBox(
-                    width: 14,
-                    height: 14,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: ColoresApp.blanco),
-                  )
-                : const Icon(Iconos.fileArrowUp, size: 14),
+            icon: VigiaCarga(activa: subiendo, child: const Icon(Iconos.fileArrowUp, size: 14)),
             label: const Text('Agregar PDF'),
           ),
         ],

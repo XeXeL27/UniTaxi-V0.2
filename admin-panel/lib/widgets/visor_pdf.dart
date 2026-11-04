@@ -13,6 +13,7 @@ import 'boton_relieve.dart';
 import 'ventana.dart';
 import 'archivos_web.dart';
 import 'dialogo_animado.dart';
+import 'cargando.dart';
 
 /// Muestra un PDF dentro de un modal (visor del navegador en un iframe), con botones para
 /// descargarlo o abrirlo en otra pestana.
@@ -112,7 +113,7 @@ class _VisorPdfState extends State<_VisorPdf> {
                       child: Text(_error!, style: const TextStyle(color: ColoresApp.rojo)),
                     )
                   : url == null
-                  ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
+                  ? const CargaCentrada()
                   : HtmlElementView.fromTagName(
                       tagName: 'iframe',
                       onElementCreated: (elemento) {

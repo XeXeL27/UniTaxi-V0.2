@@ -16,6 +16,7 @@ import '../widgets/boton_reenviar.dart';
 import '../widgets/cuenta_regresiva.dart';
 import '../widgets/dialogos.dart';
 import 'cuenta_api.dart';
+import '../widgets/cargando.dart';
 
 /// Ancho desde el que el formulario se abre como modal en lugar de pantalla completa.
 const double _anchoModal = 600;
@@ -545,10 +546,10 @@ class _Opcion extends StatelessWidget {
                   ],
                 ),
               ),
-              if (cargando)
-                const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-              else
-                Icon(Iconos.chevronRight, size: 16, color: activa ? ColoresApp.textoSuave : ColoresApp.borde),
+              VigiaCarga(
+                activa: cargando,
+                child: Icon(Iconos.chevronRight, size: 16, color: activa ? ColoresApp.textoSuave : ColoresApp.borde),
+              ),
             ],
           ),
         ),

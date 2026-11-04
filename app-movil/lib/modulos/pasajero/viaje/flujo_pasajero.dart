@@ -564,7 +564,7 @@ class FlujoPasajero extends ChangeNotifier {
           '${nuevo.primerNombreConductor} ya tiene tu paquete y va en camino al destino.');
     } else if (nuevo.situacion == SituacionViaje.completado) {
       _avisarUnaVez(nuevo.id, 4, 'Tu paquete fue entregado',
-          '${nuevo.primerNombreConductor} confirmó la entrega con una foto.');
+          '${nuevo.primerNombreConductor} entregó tu pedido.');
     }
   }
 
@@ -1186,7 +1186,7 @@ class FlujoPasajero extends ChangeNotifier {
             '${nuevo.primerNombreConductor} ya tiene tu paquete y va en camino al destino.');
       } else if (entrega && nuevo.situacion == SituacionViaje.completado) {
         _avisarUnaVez(nuevo.id, 4, 'Tu paquete fue entregado',
-            '${nuevo.primerNombreConductor} confirmó la entrega con una foto.');
+            '${nuevo.primerNombreConductor} entregó tu pedido.');
       }
       // Al cambiar la situacion puede aparecer la partida (el comercio de una compra registrada en
       // este mismo sondeo): se re-traza solo si cambio la posicion de A (H11).

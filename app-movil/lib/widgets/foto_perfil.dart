@@ -7,6 +7,7 @@ import '../core/api_excepcion.dart';
 import '../core/iconos.dart';
 import '../core/tema.dart';
 import 'dialogos.dart';
+import 'cargando.dart';
 
 /// Circulo con la foto de perfil, o las iniciales si no hay foto. La foto llega cuadrada del
 /// servidor, asi que llena el circulo sin deformarse.
@@ -104,10 +105,7 @@ class _FotoPerfilEditableState extends State<FotoPerfilEditable> {
           decoration: const BoxDecoration(color: ColoresApp.blanco, shape: BoxShape.circle),
           child: AvatarFoto(nombre: widget.nombre, foto: widget.foto, radio: 56),
         ),
-        if (_subiendo)
-          const Positioned.fill(
-            child: Center(child: CircularProgressIndicator(color: ColoresApp.blanco)),
-          ),
+        VigiaCarga(activa: _subiendo, child: const SizedBox.shrink()),
         Positioned(
           right: 0,
           bottom: 0,

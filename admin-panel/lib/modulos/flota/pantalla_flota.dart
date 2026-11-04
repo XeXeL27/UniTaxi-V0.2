@@ -25,6 +25,7 @@ import '../personas/personas_api.dart';
 import 'flota_api.dart';
 import 'modelos.dart';
 import 'posiciones_animadas.dart';
+import '../../widgets/cargando.dart';
 
 /// Tipos de usuario del mapa. Cada boton de arriba muestra u oculta los suyos; la figura es la misma
 /// que se dibuja en el mapa (la moto del taxi es la de la app del pasajero).
@@ -837,7 +838,7 @@ class _PantallaFlotaState extends State<PantallaFlota> with TickerProviderStateM
 
   Widget _mapa() {
     if (_cargando) {
-      return const Center(child: CircularProgressIndicator(color: ColoresApp.rojo));
+      return const CargaCentrada();
     }
     if (_error != null) {
       return Center(

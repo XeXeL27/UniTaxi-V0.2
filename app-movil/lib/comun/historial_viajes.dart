@@ -14,6 +14,7 @@ import '../widgets/selector_pestanas.dart';
 import 'foto_entrega.dart';
 import 'costo_compra.dart';
 import 'modelos_viaje.dart';
+import '../widgets/cargando.dart';
 
 /// Barra superior azul de las pantallas secundarias.
 PreferredSizeWidget barraSecundaria(String titulo) => AppBar(
@@ -236,7 +237,7 @@ class PantallaHistorialState extends State<PantallaHistorial> {
           else if (pagina == null || (_cargando && pagina.viajes.isEmpty))
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+              child: CargaCentrada(),
             )
           else if (pagina.viajes.isEmpty)
             Padding(

@@ -8,6 +8,7 @@ import '../../../core/tema.dart';
 import '../../../widgets/pagina_seccion.dart';
 import '../../../widgets/paneles.dart';
 import '../viaje/conductor_api.dart';
+import '../../../widgets/cargando.dart';
 
 /// Seccion Comentarios de la barra inferior: calificaciones que el conductor recibio de sus pasajeros.
 class PantallaComentarios extends StatefulWidget {
@@ -50,7 +51,7 @@ class PantallaComentariosState extends State<PantallaComentarios> {
       constructor: (context, relleno) => _error != null
           ? Center(child: Text(_error!, style: const TextStyle(color: ColoresApp.rojo)))
           : datos == null
-          ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
+          ? const CargaCentrada()
           : RefreshIndicator(
               onRefresh: _cargar,
               child: ListView(

@@ -24,6 +24,7 @@ import '../personas/personas_api.dart';
 import 'expediente_api.dart';
 import 'modelos.dart';
 import 'vista_expediente.dart';
+import '../../widgets/cargando.dart';
 
 const _tiposDocumento = ['CI', 'LICENCIA', 'SOAT', 'RUAT', 'INSPECCION_TECNICA', 'ANTECEDENTES'];
 
@@ -290,7 +291,7 @@ class _TarjetaQrState extends State<_TarjetaQr> {
                         child: Text('No se pudo cargar la imagen', style: TextStyle(color: ColoresApp.rojo)),
                       )
                     : bytes == null
-                    ? const Center(child: CircularProgressIndicator(color: ColoresApp.azul))
+                    ? const CargaCentrada()
                     : Image.memory(bytes, fit: BoxFit.contain),
               ),
             ],

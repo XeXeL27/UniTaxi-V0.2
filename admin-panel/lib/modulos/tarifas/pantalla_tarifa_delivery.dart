@@ -10,6 +10,7 @@ import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 import 'modelos.dart';
 import 'tarifas_api.dart';
+import '../../widgets/cargando.dart';
 
 /// Tarifas > Tarifa del paquete y Tarifa del delivery (la misma pantalla con [servicio]): tarifa base y
 /// precio por km por calles. Vale para los pedidos nuevos; cada pedido conserva la tarifa que tenia al
@@ -136,7 +137,7 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
           child: _error != null
               ? Text(_error!, style: const TextStyle(color: ColoresApp.rojo))
               : actual == null || escrita == null
-              ? const Center(child: CircularProgressIndicator())
+              ? const CargaCentrada()
               : Form(
                   key: _clave,
                   child: Column(
@@ -197,13 +198,7 @@ class _PantallaTarifaDeliveryState extends State<PantallaTarifaDelivery> {
                       const SizedBox(height: 22),
                       FilledButton.icon(
                         onPressed: _guardando ? null : _guardar,
-                        icon: _guardando
-                            ? const SizedBox(
-                                width: 14,
-                                height: 14,
-                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                              )
-                            : const Icon(Iconos.floppyDisk, size: 14),
+                        icon: VigiaCarga(activa: _guardando, child: const Icon(Iconos.floppyDisk, size: 14)),
                         label: Text(_guardando ? 'Guardando...' : 'Guardar tarifa'),
                       ),
                     ],

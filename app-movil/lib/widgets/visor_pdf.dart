@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../core/iconos.dart';
 import '../core/tema.dart';
 import 'cuerpo_pdf_movil.dart' if (dart.library.js_interop) 'cuerpo_pdf_web.dart';
+import 'cargando.dart';
 
 /// Muestra un PDF en un cuadro modal sobre la pantalla.
 Future<void> mostrarPdf(BuildContext context, {required String titulo, required Future<Uint8List?> Function() cargar}) {
@@ -68,7 +69,7 @@ class _VisorPdfState extends State<_VisorPdf> {
                     return Center(child: Text('${instantanea.error}', style: const TextStyle(color: ColoresApp.rojo)));
                   }
                   if (instantanea.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator(color: ColoresApp.azul));
+                    return const CargaCentrada();
                   }
                   final bytes = instantanea.data;
                   if (bytes == null) {

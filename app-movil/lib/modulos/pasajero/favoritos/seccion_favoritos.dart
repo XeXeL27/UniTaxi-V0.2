@@ -5,6 +5,7 @@ import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import 'favoritos_api.dart';
 import 'lugares_frecuentes.dart';
+import '../../../widgets/cargando.dart';
 
 /// Pestaña Favoritos de la sección Viajes: los lugares que el pasajero guardó a mano y los que se
 /// deducen de sus viajes. Ya no lleva cabecera propia (la de la sección la pone PaginaSeccion), así
@@ -87,7 +88,7 @@ class SeccionFavoritos extends StatelessWidget {
       return const [
         Padding(
           padding: EdgeInsets.symmetric(vertical: 24),
-          child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+          child: CargaCentrada(),
         ),
       ];
     }

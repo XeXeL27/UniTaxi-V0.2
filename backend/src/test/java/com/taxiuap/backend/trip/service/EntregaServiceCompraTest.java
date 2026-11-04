@@ -150,6 +150,29 @@ class EntregaServiceCompraTest {
     }
 
     @Test
+    void conElPrecioTotalDelProductoElSubtotalEsEseTotal() {
+        Viaje viaje = viajeCompra(EstadoEntrega.EN_CAMINO_RECOGIDA);
+        prepararRegistro(viaje);
+        when(datosEntregaRepository.avanzarSiEstadoPermitido(eq(1L), anyCollection(), eq(EstadoEntrega.EN_MANO)))
+                .thenReturn(1);
+        DesglosePrecioDelivery precio = new DesglosePrecioDelivery(new BigDecimal("9.80"),
+                new BigDecimal("2.35"), 12, false);
+        when(calculoPrecioDeliveryService.fijarPrecioCompra(any(), eq(viaje.getDestino()), any())).thenReturn(precio);
+        when(propuestaRepository.findFirstByDatosEntregaIdOrderByVersionDesc(1L)).thenReturn(Optional.empty());
+
+        // 3 panes por 10 Bs en total: el subtotal es 10, no 3 x 3.33.
+        entregaService.registrarCompra(500L, compra(
+                new ProductoCompradoRequest(11L, true, 3, null, null, new BigDecimal("10")),
+                new ProductoCompradoRequest(12L, false, null, null, null, null)), null);
+
+        assertEquals(new BigDecimal("10.00"), pan.getSubtotal());
+        assertEquals(new BigDecimal("3.33"), pan.getPrecioUnitario());
+        assertEquals(3, pan.getCantidadConseguida());
+        assertEquals(new BigDecimal("10.00"), enMano.getCostoProductoReal());
+        assertEquals(new BigDecimal("19.80"), propuestaGuardada().getTotal());
+    }
+
+    @Test
     void unaAppViejaQueRegistraSinLaListaRecibeElAvisoDeActualizar() {
         NegocioException error = assertThrows(NegocioException.class, () -> entregaService.registrarCompra(500L,
                 new RegistrarCompraRequest(WKT_COMERCIO, "Tienda Central", null, null), null));

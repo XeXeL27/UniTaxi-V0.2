@@ -9,13 +9,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/tema.dart';
 import 'camino_presentacion.dart';
 
-/// Presentacion animada al abrir la app (si no estaba abierta) y al iniciar sesion, sin opcion de
-/// saltarla. Sobre el azul de la pantalla de arranque se abre un camino a pantalla completa
+/// Presentacion animada al abrir la app (si no estaba abierta), sin opcion de saltarla. Sobre el azul
+/// de la pantalla de arranque se abre un camino a pantalla completa
 /// ([PintorCamino]); el camino se cierra en un circulo dentro de un cuadro blanco (el icono de la app) y
 /// sigue la animacion del logo (assets/presentacion/logo_animado.webp: aparece el guacamayo, cae el pin
 /// y salen las ondas); al final queda el icono con un destello y UNITAXI letra por letra con la linea
 /// roja y la universidad debajo. La primera vez que se abre la app dura unos 5 segundos con el fundido
 /// ([completa]); las demas, unos 3. Al terminar llama a [alTerminar].
+///
+/// Con [salida] (0 a 1, despues de terminar) el icono viaja hasta [destinoLogo] (el logo del login en
+/// pantalla ancha), los textos se apagan y el azul se encoge hasta [panelDestino] y se funde con el login.
 class PantallaPresentacion extends StatefulWidget {
   static const duracionCompleta = Duration(milliseconds: 4600);
   static const duracionCorta = Duration(milliseconds: 2600);
@@ -44,8 +47,18 @@ class PantallaPresentacion extends StatefulWidget {
 
   final bool completa;
   final VoidCallback alTerminar;
+  final Animation<double>? salida;
+  final Rect? destinoLogo;
+  final Rect? panelDestino;
 
-  const PantallaPresentacion({super.key, required this.alTerminar, this.completa = false});
+  const PantallaPresentacion({
+    super.key,
+    required this.alTerminar,
+    this.completa = false,
+    this.salida,
+    this.destinoLogo,
+    this.panelDestino,
+  });
 
   @override
   State<PantallaPresentacion> createState() => _PantallaPresentacionState();
@@ -175,18 +188,34 @@ class _PantallaPresentacionState extends State<PantallaPresentacion> with Single
 
   @override
   Widget build(BuildContext context) {
+    final salida = widget.salida;
     return Scaffold(
-      backgroundColor: ColoresApp.azul,
+      // En la salida se ve el login debajo a medida que el azul se encoge.
+      backgroundColor: salida == null ? ColoresApp.azul : Colors.transparent,
       body: AnimatedBuilder(
-        animation: _control,
+        animation: salida == null ? _control : Listenable.merge([_control, salida]),
         builder: (context, _) {
           final tamano = MediaQuery.sizeOf(context);
           final ancho = tamano.width;
           final alto = tamano.height;
-          final lado = (math.min(ancho, alto) * 0.44).clamp(140.0, 220.0);
+          final ladoFinal = (math.min(ancho, alto) * 0.44).clamp(140.0, 220.0);
           // El icono y los textos (unos 100 px) quedan centrados juntos.
-          final arriba = (alto - (lado + 128)) / 2;
-          final tarjeta = Rect.fromLTWH((ancho - lado) / 2, arriba, lado, lado);
+          final arriba = (alto - (ladoFinal + 128)) / 2;
+          final sale = Curves.easeInOutCubic.transform(salida?.value ?? 0);
+          final centrado = Rect.fromLTWH((ancho - ladoFinal) / 2, arriba, ladoFinal, ladoFinal);
+          final destino = widget.destinoLogo;
+          final tarjeta = destino == null ? centrado : Rect.lerp(centrado, destino, sale)!;
+          final lado = tarjeta.width;
+          final pantallaCompleta = Offset.zero & tamano;
+          // Primero el azul se encoge hasta el panel del login y recien ahi se funde con el (si se fundiera
+          // mientras se encoge, la parte que todavia cubre el formulario se veria gris).
+          final fondo = Rect.lerp(
+            pantallaCompleta,
+            widget.panelDestino ?? pantallaCompleta,
+            const Interval(0, 0.7, curve: Curves.easeInOutCubic).transform(salida?.value ?? 0),
+          )!;
+          final fondoVisible = 1 - const Interval(0.7, 1).transform(salida?.value ?? 0);
+          final textosVisibles = 1 - (sale / 0.35).clamp(0.0, 1.0);
           final circulo = Rect.fromCircle(
             center: tarjeta.topLeft + _centroCirculo * lado,
             radius: _diametroCirculo * lado / 2,
@@ -206,20 +235,27 @@ class _PantallaPresentacionState extends State<PantallaPresentacion> with Single
           // Si la animacion del logo no cargo a tiempo, despues del camino queda el icono.
           final icono = conCuadros || ms < _t.contraerHasta ? _icono.value : 1.0;
           final caminoVisible = 1 - (conCuadros || icono > 0 ? _caminoSale.value : 0.0);
-          final radioTarjeta = lado * 0.235;
+          // Al llegar al login, las esquinas del logo de PanelMarca (30 de 132).
+          final radioTarjeta = lado * (0.235 + (30 / 132 - 0.235) * sale);
           return AnnotatedRegion<SystemUiOverlayStyle>(
             // Mientras el cielo claro llena la pantalla, los iconos de la barra van oscuros.
             value: _abrir.value > 0.3 && contraer < 0.5 ? BarraSistema.sobreClaro : BarraSistema.sobreAzul,
             child: Stack(
               fit: StackFit.expand,
               children: [
-                const DecoratedBox(
-                  decoration: BoxDecoration(
-                    gradient: RadialGradient(
-                      center: Alignment(0, -0.18),
-                      radius: 1.0,
-                      colors: [Color(0xFF1A4178), ColoresApp.azul, Color(0xFF051326)],
-                      stops: [0, 0.55, 1],
+                Positioned.fromRect(
+                  rect: fondo,
+                  child: Opacity(
+                    opacity: fondoVisible,
+                    child: const DecoratedBox(
+                      decoration: BoxDecoration(
+                        gradient: RadialGradient(
+                          center: Alignment(0, -0.18),
+                          radius: 1.0,
+                          colors: [Color(0xFF1A4178), ColoresApp.azul, Color(0xFF051326)],
+                          stops: [0, 0.55, 1],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -228,7 +264,7 @@ class _PantallaPresentacionState extends State<PantallaPresentacion> with Single
                   Positioned.fromRect(
                     rect: tarjeta,
                     child: Opacity(
-                      opacity: _tarjeta.value,
+                      opacity: _tarjeta.value * (1 - sale),
                       child: Transform.scale(
                         scale: 0.94 + 0.06 * _tarjeta.value,
                         child: DecoratedBox(
@@ -304,7 +340,13 @@ class _PantallaPresentacionState extends State<PantallaPresentacion> with Single
                       ),
                     ),
                   ),
-                Positioned(top: tarjeta.bottom + 28, left: 16, right: 16, child: _textos()),
+                if (textosVisibles > 0)
+                  Positioned(
+                    top: tarjeta.bottom + 28,
+                    left: tarjeta.center.dx - ancho / 2 + 16,
+                    width: ancho - 32,
+                    child: Opacity(opacity: textosVisibles, child: _textos()),
+                  ),
               ],
             ),
           );

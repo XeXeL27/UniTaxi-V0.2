@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:provider/provider.dart';
 
 import '../core/cliente_api.dart';
@@ -13,8 +15,14 @@ abstract final class Guias {
   /// "Elige tu servicio": moto taxi para mi o para otra persona, encomienda, compra y pago.
   static const pasajeroServicios = 'PASAJERO_SERVICIOS';
 
-  /// Primer viaje o pedido aceptado del pasajero.
+  /// Primer moto taxi aceptado del pasajero (antes tambien el primer pedido).
   static const pasajeroViaje = 'PASAJERO_VIAJE';
+
+  /// Primer paquete aceptado del pasajero: recogida sin codigo, quien recibe y pago.
+  static const pasajeroPaquete = 'PASAJERO_PAQUETE_PEDIDO';
+
+  /// Primer delivery aceptado del pasajero: costo total, quien recibe y pago.
+  static const pasajeroDeliveryPedido = 'PASAJERO_DELIVERY_PEDIDO';
 
   /// Primer viaje aceptado del conductor de taxi.
   static const conductorViaje = 'CONDUCTOR_VIAJE';
@@ -22,8 +30,15 @@ abstract final class Guias {
   /// Inicio del repartidor (reemplaza a la guia de inicio del conductor).
   static const repartidorInicio = 'REPARTIDOR_INICIO';
 
-  /// Primer pedido aceptado del repartidor.
+  /// Primer pedido aceptado del repartidor (guia de antes, comun a paquete y delivery: se marca con las
+  /// de cada servicio).
   static const repartidorPedido = 'REPARTIDOR_PEDIDO';
+
+  /// Primer paquete del repartidor: recoger sin codigo, entregar y, si recibe otra persona, su nombre.
+  static const repartidorPaquete = 'REPARTIDOR_PAQUETE';
+
+  /// Primer delivery del repartidor: comprar, precio total, costo aceptado y entregar.
+  static const repartidorDelivery = 'REPARTIDOR_DELIVERY';
 
   /// Boton del mapa del pasajero para ver u ocultar los taxistas libres.
   static const pasajeroTaxistas = 'PASAJERO_TAXISTAS';
@@ -160,18 +175,44 @@ bool marcaEnPantalla(String id) => MarcaGuia._marcas[id]?.mounted ?? false;
 bool guiaPendiente(BuildContext context, String guia) =>
     !_guiasEnCurso.contains(guia) && context.read<Sesion>().guiaPendiente(guia);
 
-/// Rectangulo del widget del paso en la pantalla, o null si no esta dibujado (o queda fuera de ella).
+/// Rectangulo del widget del paso en la pantalla, o null si no se ve: no esta dibujado, queda fuera de
+/// la pantalla o recortado en mas de la mitad (un panel plegado, una lista desplazada), o no se pinta.
 Rect? _rectDe(PasoGuia paso, Rect pantalla) {
   final contexto = paso.clave?.currentContext ?? (paso.marca == null ? null : MarcaGuia._marcas[paso.marca]);
   if (contexto == null || !contexto.mounted) return null;
   final caja = contexto.findRenderObject();
   if (caja is! RenderBox || !caja.attached || !caja.hasSize) return null;
   final rect = caja.localToGlobal(Offset.zero) & caja.size;
-  // Fuera de la pantalla (por ejemplo abajo en un panel que se desplaza) no se puede iluminar.
-  if (rect.isEmpty || !pantalla.inflate(4).contains(rect.topLeft) || !pantalla.inflate(4).contains(rect.bottomRight)) {
+  if (rect.isEmpty) return null;
+  final visible = _parteVisible(caja, rect);
+  if (visible == null || visible.width * visible.height < rect.width * rect.height * 0.6) return null;
+  if (!pantalla.inflate(4).contains(visible.topLeft) || !pantalla.inflate(4).contains(visible.bottomRight)) {
     return null;
   }
-  return rect;
+  return visible;
+}
+
+/// Lo que se ve del widget: recortado con cada recorte de sus ancestros (paneles que se pliegan o se
+/// desplazan). null si no se pinta: dentro de un Offstage, con opacidad 0 o en otra pestana de un
+/// IndexedStack (antes se iluminaba el lugar vacio donde estaria).
+Rect? _parteVisible(RenderBox caja, Rect rect) {
+  var visible = rect;
+  RenderObject hijo = caja;
+  var padre = caja.parent;
+  while (padre != null) {
+    if (padre is RenderOffstage && padre.offstage) return null;
+    if (padre is RenderOpacity && padre.opacity == 0) return null;
+    if (padre is RenderAnimatedOpacity && padre.opacity.value == 0) return null;
+    if (padre is RenderIndexedStack && padre.getChildrenAsList().indexOf(hijo as RenderBox) != (padre.index ?? -1)) return null;
+    final recorte = padre.describeApproximatePaintClip(hijo);
+    if (recorte != null && padre.attached) {
+      visible = visible.intersect(MatrixUtils.transformRect(padre.getTransformTo(null), recorte));
+      if (visible.width <= 0 || visible.height <= 0) return null;
+    }
+    hijo = padre;
+    padre = padre.parent;
+  }
+  return visible;
 }
 
 class _GuiaInicio extends StatefulWidget {
@@ -188,13 +229,52 @@ class _GuiaInicioState extends State<_GuiaInicio> {
   static const _separacion = 16.0;
   int _indice = 0;
 
+  /// Donde esta ahora lo que se ilumina. Se vuelve a medir despues de cada cuadro que se dibuja: si el
+  /// panel de abajo todavia sube, se pliega o se desplaza, el hueco lo sigue en vez de quedar donde
+  /// estaba. Sin nada que se mueva no se dibujan cuadros y no se mide (no gasta bateria).
+  Rect? _rect;
+
   bool get _ultimo => _indice == widget.pasos.length - 1;
+
+  Rect? _medir() => _rectDe(widget.pasos[_indice], Offset.zero & MediaQuery.sizeOf(context));
+
+  @override
+  void initState() {
+    super.initState();
+    SchedulerBinding.instance.addPostFrameCallback((_) => _seguir());
+  }
+
+  void _seguir() {
+    if (!mounted) return;
+    final actual = _medir();
+    if (!_parecido(actual, _rect)) setState(() => _rect = actual);
+    // No pide un cuadro: espera al proximo que se dibuje por otra razon.
+    SchedulerBinding.instance.addPostFrameCallback((_) => _seguir());
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _rect = _medir();
+  }
+
+  /// Menos de medio pixel de diferencia no redibuja.
+  static bool _parecido(Rect? a, Rect? b) {
+    if (a == null || b == null) return a == b;
+    return (a.left - b.left).abs() < 0.5 &&
+        (a.top - b.top).abs() < 0.5 &&
+        (a.right - b.right).abs() < 0.5 &&
+        (a.bottom - b.bottom).abs() < 0.5;
+  }
 
   void _siguiente() {
     if (_ultimo) {
       Navigator.of(context).pop();
     } else {
-      setState(() => _indice++);
+      setState(() {
+        _indice++;
+        _rect = _medir();
+      });
     }
   }
 
@@ -202,7 +282,7 @@ class _GuiaInicioState extends State<_GuiaInicio> {
   Widget build(BuildContext context) {
     final pantalla = MediaQuery.sizeOf(context);
     final paso = widget.pasos[_indice];
-    final rect = _rectDe(paso, Offset.zero & pantalla);
+    final rect = _rect;
     final objetivo = rect?.inflate(6) ?? Rect.fromCenter(center: pantalla.center(Offset.zero), width: 0, height: 0);
 
     final ancho = math.min(_anchoCuadro, pantalla.width - 32);

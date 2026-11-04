@@ -600,11 +600,12 @@ class FlujoConductor extends ChangeNotifier {
 
   bool get esDelivery => viaje?.datosEntrega != null;
 
-  /// El repartidor llego al punto de recogida: recien ahi pide el codigo y la foto del paquete.
+  /// El repartidor llego al punto de recogida: recien ahi recibe el paquete.
   Future<void> llegueRecogida() => _accionDelivery((id) => api.llegueRecogida(id));
 
-  Future<void> validarRecogida(String codigo, Uint8List foto) =>
-      _accionDelivery((id) => api.validarRecogida(id, codigo, foto, mapa.miUbicacion));
+  /// Recibe el paquete en A, sin codigo; la foto es opcional.
+  Future<void> recogerPaquete(Uint8List? foto) =>
+      _accionDelivery((id) => api.recogerPaquete(id, foto, mapa.miUbicacion));
 
   Future<void> registrarCompra(
     LatLng punto,
@@ -616,11 +617,9 @@ class FlujoConductor extends ChangeNotifier {
 
   Future<void> confirmarPago(double monto, String metodo) => _accionDelivery((id) => api.confirmarPago(id, monto, metodo));
 
-  Future<void> validarEntrega(String codigo, Uint8List foto) =>
-      _accionDelivery((id) => api.validarEntrega(id, codigo, foto, mapa.miUbicacion!));
-
-  Future<void> identificarReceptor(String nombre, String telefono, Uint8List foto) =>
-      _accionDelivery((id) => api.identificarReceptor(id, nombre, telefono, foto, mapa.miUbicacion!));
+  /// Entrega en B; [nombreReceptor] solo si recibe otra persona (su nombre completo).
+  Future<void> entregarPedido(String? nombreReceptor) =>
+      _accionDelivery((id) => api.entregarPedido(id, nombreReceptor, mapa.miUbicacion!));
 
   /// Distancia en linea recta hasta B; null sin GPS.
   double? get metrosAlDestino => metrosDesdeMi(viaje?.destino);

@@ -33,10 +33,12 @@ import com.taxiuap.backend.shared.exception.ConflictoException;
 import com.taxiuap.backend.shared.exception.NegocioException;
 import com.taxiuap.backend.trip.dto.AceptarCostoRequest;
 import com.taxiuap.backend.trip.dto.ConfirmarPagoEntregaRequest;
+import com.taxiuap.backend.trip.dto.EntregarPedidoRequest;
 import com.taxiuap.backend.trip.dto.FinalizarViajeRequest;
 import com.taxiuap.backend.trip.dto.IdentificarReceptorRequest;
 import com.taxiuap.backend.trip.dto.ProductoCompradoRequest;
 import com.taxiuap.backend.trip.dto.PropuestaCostoResponse;
+import com.taxiuap.backend.trip.dto.RecogerPaqueteRequest;
 import com.taxiuap.backend.trip.dto.RegistrarCompraRequest;
 import com.taxiuap.backend.trip.dto.ValidarCodigoEntregaRequest;
 import com.taxiuap.backend.trip.dto.LlegadaEntregaRequest;
@@ -191,8 +193,13 @@ public class EntregaService {
             String nota = textoOpcional(comprado.observacion());
             producto.setObservacion(nota);
             if (Boolean.TRUE.equals(comprado.conseguido())) {
-                BigDecimal precio = dinero(comprado.precioUnitario());
-                BigDecimal subtotal = dinero(precio.multiply(BigDecimal.valueOf(comprado.cantidad())));
+                // El repartidor escribe lo que pago por todas las unidades; las apps de antes, el precio unitario.
+                BigDecimal subtotal = comprado.precioTotal() != null
+                        ? dinero(comprado.precioTotal())
+                        : dinero(comprado.precioUnitario().multiply(BigDecimal.valueOf(comprado.cantidad())));
+                BigDecimal precio = comprado.precioTotal() != null
+                        ? subtotal.divide(BigDecimal.valueOf(comprado.cantidad()), 2, RoundingMode.HALF_UP)
+                        : dinero(comprado.precioUnitario());
                 producto.setSituacionProducto(SituacionProducto.CONSEGUIDO);
                 producto.setCantidadConseguida(comprado.cantidad());
                 producto.setPrecioUnitario(precio);
@@ -397,6 +404,46 @@ public class EntregaService {
         return respuesta;
     }
 
+    /**
+     * ENCOMIENDA: el repartidor ya llego a A y recibe el paquete, sin codigo. La foto del paquete es
+     * opcional. El pedido pasa a EN_MANO, el viaje a EN_CURSO y empieza la entrega hacia B.
+     */
+    @Transactional
+    public ViajeResponse recogerPaquete(Long idViaje, RecogerPaqueteRequest request, MultipartFile foto) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        DatosEntrega datos = datosDe(viaje);
+        exigirTipo(datos, TipoEnvio.ENCOMIENDA);
+        exigirEstado(datos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO);
+        if (viaje.getSituacionViaje() != SituacionViaje.CONDUCTOR_LLEGO) {
+            throw new NegocioException("Marca primero que llegaste al punto de recogida");
+        }
+        byte[] contenido = imagenOpcional(foto, "La foto del paquete");
+        String rutaFoto = contenido == null ? null : guardarEvidencia(contenido, viaje, "recogida");
+        Point ubicacion = request == null ? null : PuntoDesdeWkt.desdeCoordenadas(request.latitud(), request.longitud());
+        Long idSolicitud = viaje.getSolicitud().getId();
+        Long idDatos = datos.getId();
+
+        int filas = datosEntregaRepository.avanzarSiEstadoPermitido(idDatos, ANTES_DE_TENER_EL_PEDIDO,
+                EstadoEntrega.EN_MANO);
+        if (filas == 0) {
+            throw transicionRechazada(idDatos, ANTES_DE_TENER_EL_PEDIDO, EstadoEntrega.EN_MANO,
+                    "El paquete ya no se puede recoger");
+        }
+
+        DatosEntrega actualizada = datosEntregaRepository.findBySolicitudId(idSolicitud)
+                .orElseThrow(() -> new NegocioException("El pedido ya no existe"));
+        actualizada.setFotoRecogidaUrl(rutaFoto);
+        actualizada.setFechaRecogida(LocalDateTime.now());
+        actualizada.setUbicacionRecogida(ubicacion);
+        datosEntregaRepository.save(actualizada);
+
+        ViajeResponse respuesta = viajeService.registrarPedidoEnMano(idViaje, null);
+        avisarCliente(idViaje, "PAQUETE_RECOGIDO", "Tu paquete fue recogido",
+                " ya tiene tu paquete y va en camino al destino.");
+        actualizarConstancia(idViaje);
+        return respuesta;
+    }
+
     // ---------------------------------------------------------------- pago directo al cliente
 
     /**
@@ -502,6 +549,94 @@ public class EntregaService {
         return completarEntrega(idViaje);
     }
 
+    /**
+     * Entrega en B (paquete o delivery), sin codigo ni foto: el pago ya confirmado, el costo aceptado en
+     * una compra y el GPS a 100 m o menos del destino. Si recibe otra persona, el nombre completo que
+     * ella le dice al repartidor tiene que ser el que dio el cliente; si recibe el cliente, nada mas.
+     */
+    @Transactional
+    public ViajeResponse entregarPedido(Long idViaje, EntregarPedidoRequest request) {
+        Viaje viaje = viajeService.obtenerViajeDelConductor(idViaje);
+        DatosEntrega datos = datosDe(viaje);
+        exigirEstado(datos, CON_PEDIDO_EN_MANO, EstadoEntrega.ENTREGADO);
+        exigirCostoAceptado(datos);
+        exigirPagoConfirmado(datos);
+        String recibe = validarNombreDeQuienRecibe(viaje, datos, request.nombreReceptor());
+        Point ubicacion = exigirCercaDelDestino(viaje, request.latitud(), request.longitud());
+        Long idSolicitud = viaje.getSolicitud().getId();
+
+        int filas = datosEntregaRepository.avanzarSiEstadoPermitido(datos.getId(), CON_PEDIDO_EN_MANO,
+                EstadoEntrega.ENTREGADO);
+        if (filas == 0) {
+            throw transicionRechazada(datos.getId(), CON_PEDIDO_EN_MANO, EstadoEntrega.ENTREGADO,
+                    "El pedido ya no se puede entregar");
+        }
+
+        registrarEvidenciaEntrega(idSolicitud, null, ubicacion, recibe);
+        return completarEntrega(idViaje);
+    }
+
+    /**
+     * Nombre de quien recibe para la constancia. Con otra persona (pedido para otra persona o, en una
+     * encomienda de antes, el receptor escrito) exige su nombre completo y lo compara con el que dio el
+     * cliente; si recibe el cliente devuelve su nombre registrado.
+     */
+    private String validarNombreDeQuienRecibe(Viaje viaje, DatosEntrega datos, String escrito) {
+        String esperado = nombreDeOtraPersona(viaje, datos);
+        if (esperado == null) {
+            return nombre(viaje.getPasajero() == null ? null : viaje.getPasajero().getUsuario());
+        }
+        if (escrito == null || escrito.isBlank()) {
+            throw new NegocioException("Pregúntale su nombre completo a quien recibe y escríbelo");
+        }
+        if (!nombreCoincide(escrito, esperado)) {
+            throw new NegocioException("El nombre no coincide con el de quien debe recibir el pedido. "
+                    + "Pregúntale su nombre completo y escríbelo como te lo dice");
+        }
+        return escrito.trim().replaceAll("\\s+", " ").toUpperCase();
+    }
+
+    /** Nombre que dio el cliente para quien recibe, o null si recibe el mismo cliente. */
+    private static String nombreDeOtraPersona(Viaje viaje, DatosEntrega datos) {
+        if (viaje.getSolicitud() != null && viaje.getSolicitud().esParaOtraPersona()) {
+            String tercero = viaje.getSolicitud().getNombrePasajeroTercero();
+            return tercero == null || tercero.isBlank() ? null : tercero;
+        }
+        if (datos.getTipoEnvio() == TipoEnvio.ENCOMIENDA && datos.getNombreReceptor() != null
+                && !datos.getNombreReceptor().isBlank()) {
+            return datos.getNombreReceptor();
+        }
+        return null;
+    }
+
+    /**
+     * Cada palabra del nombre que dio el cliente tiene que estar en el que se escribio (sin tildes ni
+     * mayusculas): "Juan Perez" acepta "JUAN CARLOS PÉREZ", pero no "Juan Mamani".
+     */
+    static boolean nombreCoincide(String escrito, String esperado) {
+        Set<String> palabras = Set.of(palabrasDeNombre(escrito));
+        String[] esperadas = palabrasDeNombre(esperado);
+        if (esperadas.length == 0) {
+            return false;
+        }
+        for (String palabra : esperadas) {
+            if (!palabras.contains(palabra)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String[] palabrasDeNombre(String nombre) {
+        String limpio = java.text.Normalizer.normalize(nombre == null ? "" : nombre, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toUpperCase()
+                .replaceAll("[^A-Z]+", " ")
+                .trim();
+        return limpio.isEmpty() ? new String[0] : java.util.Arrays.stream(limpio.split(" ")).distinct()
+                .toArray(String[]::new);
+    }
+
     /** Foto, hora y GPS de la entrega, escritos sobre el pedido releido despues del UPDATE condicional. */
     private void registrarEvidenciaEntrega(Long idSolicitud, String rutaFoto, Point ubicacion, String receptor) {
         DatosEntrega actualizada = datosEntregaRepository.findBySolicitudId(idSolicitud)
@@ -516,7 +651,7 @@ public class EntregaService {
     private ViajeResponse completarEntrega(Long idViaje) {
         ViajeResponse respuesta = viajeService.finalizarDesdeEntrega(idViaje, FinalizarViajeRequest.sinDatos());
         avisarCliente(idViaje, "PAQUETE_ENTREGADO", "Tu paquete fue entregado",
-                " confirmó la entrega con una foto.");
+                " confirmó la entrega.");
         actualizarConstancia(idViaje);
         return respuesta;
     }
@@ -937,9 +1072,8 @@ public class EntregaService {
                     t.append(" (").append(producto.getIndicaciones()).append(")");
                 }
                 if (producto.getSituacionProducto() == SituacionProducto.CONSEGUIDO) {
-                    t.append(" | comprado ").append(producto.getCantidadConseguida()).append(" x ")
-                            .append(dinero(producto.getPrecioUnitario())).append(" = ")
-                            .append(dinero(producto.getSubtotal())).append(" Bs");
+                    t.append(" | comprado ").append(producto.getCantidadConseguida()).append(" por ")
+                            .append(dinero(producto.getSubtotal())).append(" Bs en total");
                 } else if (producto.getSituacionProducto() == SituacionProducto.NO_CONSEGUIDO) {
                     t.append(" | no conseguido");
                 }
@@ -992,7 +1126,7 @@ public class EntregaService {
                     .append("\n");
         } else if (datos.getFechaRecogida() != null) {
             t.append("- ").append(fecha(datos.getFechaRecogida()))
-                    .append("  Paquete recogido con el codigo del remitente validado")
+                    .append("  Paquete recogido en el punto de recogida (A)")
                     .append(" | GPS ").append(coordenadas(datos.getUbicacionRecogida()))
                     .append(" | foto: ").append(archivo(datos.getFotoRecogidaUrl())).append("\n");
         }
@@ -1016,7 +1150,7 @@ public class EntregaService {
             t.append("- ").append(fecha(datos.getFechaEntrega())).append("  Paquete entregado")
                     .append(datos.getReceptorIdentificado() == null
                             ? " con el codigo del receptor validado"
-                            : " a " + datos.getReceptorIdentificado() + " (cliente identificado)")
+                            : " a " + datos.getReceptorIdentificado())
                     .append(" | GPS ").append(coordenadas(datos.getUbicacionEntrega()))
                     .append(" | foto: ").append(archivo(datos.getFotoEntregaUrl())).append("\n");
         }

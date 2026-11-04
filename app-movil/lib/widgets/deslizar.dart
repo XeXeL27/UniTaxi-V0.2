@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../core/iconos.dart';
 import '../core/tema.dart';
+import 'cargando.dart';
 
 /// "Desliza para iniciar el viaje": la perilla blanca se arrastra hasta el otro extremo para
 /// confirmar. Evita tocar por error una accion importante con la moto en marcha. Con el lector de
@@ -78,28 +79,28 @@ class _DeslizarParaConfirmarState extends State<DeslizarParaConfirmar> {
                 : null,
             child: Container(
               height: DeslizarParaConfirmar.alto,
-              decoration: BoxDecoration(color: fondo, borderRadius: BorderRadius.circular(DeslizarParaConfirmar.alto / 2)),
+              decoration: BoxDecoration(
+                color: fondo,
+                borderRadius: BorderRadius.circular(DeslizarParaConfirmar.alto / 2),
+              ),
               child: Stack(
                 alignment: Alignment.center,
                 children: [
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: _perilla + _margen * 4),
-                    child: widget.cargando
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(strokeWidth: 2.5, color: ColoresApp.blanco),
-                          )
-                        : Opacity(
-                            opacity: (1 - _avance * 1.4).clamp(0.0, 1.0),
-                            child: Text(
-                              widget.texto,
-                              textAlign: TextAlign.center,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(color: ColoresApp.blanco, fontSize: 16, fontWeight: FontWeight.w700),
-                            ),
-                          ),
+                    child: VigiaCarga(
+                      activa: widget.cargando,
+                      child: Opacity(
+                        opacity: (1 - _avance * 1.4).clamp(0.0, 1.0),
+                        child: Text(
+                          widget.texto,
+                          textAlign: TextAlign.center,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(color: ColoresApp.blanco, fontSize: 16, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ),
                   ),
                   AnimatedPositioned(
                     duration: Duration(milliseconds: _avance == 0 ? 200 : 0),

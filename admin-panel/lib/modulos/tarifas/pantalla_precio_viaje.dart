@@ -10,6 +10,7 @@ import '../../widgets/dialogos.dart';
 import '../../widgets/flujos_crud.dart';
 import 'modelos.dart';
 import 'tarifas_api.dart';
+import '../../widgets/cargando.dart';
 
 /// Tarifas > Precio del viaje: el precio base (hasta ciertos km; se edita pero no se elimina) y una
 /// tabla editable de km extra. Cada fila suma sus km y su costo a los anteriores; despues de la ultima
@@ -210,7 +211,7 @@ class _PantallaPrecioViajeState extends State<PantallaPrecioViaje> {
           child: _error != null
               ? Text(_error!, style: const TextStyle(color: ColoresApp.rojo))
               : _cargando
-              ? const Center(child: CircularProgressIndicator())
+              ? const CargaCentrada()
               : _contenido(),
         ),
       ),

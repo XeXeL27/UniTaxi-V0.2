@@ -151,7 +151,7 @@ void main() {
   });
 
   test('el subtotal de lo comprado se redondea como en el servidor', () {
-    const comprado = ProductoComprado(idProducto: 1, conseguido: true, cantidad: 3, precioUnitario: 0.1);
+    const comprado = ProductoComprado(idProducto: 1, conseguido: true, cantidad: 3, precioTotal: 0.30000000000000004);
     const faltante = ProductoComprado(idProducto: 2, conseguido: false, observacion: 'No habia');
 
     expect(comprado.subtotal, 0.3);
@@ -165,22 +165,18 @@ void main() {
     expect(EstadoEntrega.puedeCancelar('EN_MANO'), isFalse);
   });
 
-  test('lee el desglose y no expone codigos ausentes', () {
+  test('lee el desglose', () {
     final datos = DatosEntrega.desdeJson({
       'tipoEnvio': 'COMPRA_Y_ENTREGA',
       'descripcion': 'Pan',
       'costoProductoReal': 11.5,
       'costoProductoConfirmado': 12,
       'estadoEntrega': 'EN_MANO',
-      'codigoRecogida': null,
-      'codigoEntrega': null,
     });
 
     expect(datos.tipoEnvio, TipoEnvio.compraYEntrega);
     expect(datos.totalProducto, 11.5);
     expect(datos.muestraCancelacion, isFalse);
-    expect(datos.codigoRecogida, isNull);
-    expect(datos.codigoEntrega, isNull);
   });
 
   test('etiqueta precio fijo, estimado y total aceptado según tipo y respuesta', () {

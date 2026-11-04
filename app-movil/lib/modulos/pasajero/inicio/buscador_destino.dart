@@ -7,6 +7,7 @@ import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../mapa/servicios_mapa.dart';
 import '../favoritos/favoritos_api.dart';
+import '../../../widgets/cargando.dart';
 
 /// Lugar elegido en el buscador.
 typedef DestinoElegido = ({LatLng posicion, String nombre});
@@ -175,7 +176,7 @@ class _BuscadorState extends State<_Buscador> {
                 if (_buscando)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Center(child: CircularProgressIndicator(color: ColoresApp.azul)),
+                    child: CargaCentrada(),
                   )
                 else if (_resultados.isEmpty)
                   const Padding(

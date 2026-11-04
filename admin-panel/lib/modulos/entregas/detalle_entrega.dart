@@ -14,6 +14,7 @@ import '../expediente/vista_expediente.dart';
 import 'entregas_api.dart';
 import 'pantalla_entregas.dart';
 import '../../widgets/dialogo_animado.dart';
+import '../../widgets/cargando.dart';
 
 /// Nombre del tipo de envio como lo ven el cliente y el repartidor: Paquete o Delivery.
 String textoTipoEnvio(String? tipo) => switch (tipo) {
@@ -187,7 +188,7 @@ class _FilaProducto extends StatelessWidget {
   Widget build(BuildContext context) {
     final conseguido = producto.situacion == 'CONSEGUIDO';
     final resultado = switch (producto.situacion) {
-      'CONSEGUIDO' => '${producto.cantidadConseguida} x ${monedaBs(producto.precioUnitario)} = ${monedaBs(producto.subtotal)}',
+      'CONSEGUIDO' => '${producto.cantidadConseguida} por ${monedaBs(producto.subtotal)} en total',
       'NO_CONSEGUIDO' => 'No lo consiguió',
       _ => 'Sin comprar',
     };
@@ -380,7 +381,7 @@ class _TarjetaFotoState extends State<_TarjetaFoto> {
               return const SizedBox(height: 200, child: Center(child: Text('No se pudo cargar la foto')));
             }
             final foto = estado.data;
-            if (foto == null) return const SizedBox(height: 200, child: Center(child: CircularProgressIndicator()));
+            if (foto == null) return const SizedBox(height: 200, child: CargaCentrada());
             return InkWell(
               onTap: () => _ampliar(foto),
               child: ClipRRect(

@@ -10,6 +10,7 @@ import '../../core/tema.dart';
 import '../../widgets/dialogos.dart';
 import 'sistema_api.dart';
 import '../../widgets/dialogo_animado.dart';
+import '../../widgets/cargando.dart';
 
 /// Carpeta raiz donde se guardan los archivos subidos (PDF de conductores y fotos de perfil).
 /// Cada persona tiene su carpeta dentro (personas/&lt;id&gt;_&lt;ci&gt;, con general/ y conductor/).
@@ -76,7 +77,7 @@ class _PantallaCarpetaState extends State<PantallaCarpeta> {
               child: carpeta == null
                   ? (instantanea.hasError
                         ? Text('${instantanea.error}', style: const TextStyle(color: ColoresApp.rojo))
-                        : const Center(child: CircularProgressIndicator()))
+                        : const CargaCentrada())
                   : Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -134,13 +135,7 @@ class _PantallaCarpetaState extends State<PantallaCarpeta> {
                         const SizedBox(height: 20),
                         FilledButton.icon(
                           onPressed: _moviendo ? null : () => _cambiar(carpeta),
-                          icon: _moviendo
-                              ? const SizedBox(
-                                  width: 14,
-                                  height: 14,
-                                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                )
-                              : const Icon(Iconos.folderTree, size: 14),
+                          icon: VigiaCarga(activa: _moviendo, child: const Icon(Iconos.folderTree, size: 14)),
                           label: Text(_moviendo ? 'Moviendo archivos...' : 'Cambiar carpeta'),
                         ),
                       ],
@@ -274,7 +269,7 @@ class _ExploradorCarpetasState extends State<_ExploradorCarpetas> {
                 ],
               ),
             ),
-            if (_cargando) const LinearProgressIndicator(minHeight: 2, color: ColoresApp.rojo),
+            VigiaCarga(activa: _cargando, child: const SizedBox.shrink()),
             if (_error != null)
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),

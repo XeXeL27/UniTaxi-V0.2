@@ -198,8 +198,41 @@ void main() {
       );
 
       expect(find.text('Pago confirmado: 8 Bs'), findsOneWidget);
-      expect(find.text('Código de entrega'), findsOneWidget);
       expect(find.byType(CheckboxListTile), findsNothing);
+      // Recibe el mismo cliente: sin codigo, nombre, telefono ni foto.
+      expect(find.textContaining('Entrega el pedido a'), findsOneWidget);
+      expect(find.byType(TextField), findsNothing);
+      expect(find.textContaining('foto de la persona'), findsNothing);
+    });
+
+    testWidgets('si recibe otra persona solo pide su nombre completo', (tester) async {
+      await tester.pumpWidget(
+        _envolver(
+          PanelDeliveryConductor(
+            flujo: _flujo(
+              _viaje(
+                otraPersona: 'JUAN PEREZ',
+                datosEntrega: {'estadoEntrega': EstadoEntrega.enMano, 'pagoConfirmado': true, 'montoPagoRecibido': 8},
+              ),
+            ),
+          ),
+        ),
+      );
+
+      expect(find.text('Recibe Juan'), findsOneWidget);
+      expect(find.widgetWithText(TextField, 'Nombre completo de quien recibe'), findsOneWidget);
+      expect(find.byType(TextField), findsOneWidget);
+      expect(find.textContaining('Código'), findsNothing);
+    });
+
+    testWidgets('al recoger el paquete no pide codigo y la foto es opcional', (tester) async {
+      await tester.pumpWidget(
+        _envolver(PanelDeliveryConductor(flujo: _flujo(_viaje(situacionViaje: SituacionViaje.llego)))),
+      );
+
+      expect(find.text('Recoger el paquete'), findsOneWidget);
+      expect(find.text('Tomar foto del paquete (opcional)'), findsOneWidget);
+      expect(find.textContaining('Código'), findsNothing);
     });
 
     testWidgets('la UI no ofrece comprobante mientras esa funcionalidad esta pausada', (tester) async {
@@ -287,8 +320,10 @@ FlujoConductor _flujo(Viaje viaje) {
   return flujo;
 }
 
-Viaje _viaje({String situacionViaje = SituacionViaje.enCamino, Map<String, dynamic>? datosEntrega}) => Viaje.desdeJson({
+Viaje _viaje({String situacionViaje = SituacionViaje.enCamino, Map<String, dynamic>? datosEntrega, String? otraPersona}) =>
+    Viaje.desdeJson({
   'idViaje': 7,
+  if (otraPersona != null) ...{'paraOtraPersona': true, 'nombrePasajeroTercero': otraPersona, 'telefonoPasajeroTercero': '70000000'},
   'situacionViaje': situacionViaje,
   'precioFinal': 8,
   'nombrePasajero': 'ANA',

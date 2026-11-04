@@ -58,6 +58,7 @@ import '../viaje/formulario_tercero.dart';
 import 'boton_taxistas.dart';
 import 'buscador_destino.dart';
 import 'menu_inicio.dart';
+import '../../../widgets/cargando.dart';
 
 /// Vista principal del pasajero, con la barra inferior Inicio / Actividad / Perfil.
 ///
@@ -402,7 +403,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       if (costoPendiente && marcaEnPantalla('pasajero.costoCompra') && pendiente(Guias.pasajeroCosto)) {
         return Guias.pasajeroCosto;
       }
-      if (marcaEnPantalla('pasajero.conductor') && pendiente(Guias.pasajeroViaje)) return Guias.pasajeroViaje;
+      // Una guia por servicio: moto taxi, paquete y delivery se usan distinto.
+      final datos = _flujo.viaje?.datosEntrega;
+      final delServicio = datos == null
+          ? Guias.pasajeroViaje
+          : datos.esCompra
+          ? Guias.pasajeroDeliveryPedido
+          : Guias.pasajeroPaquete;
+      if (marcaEnPantalla('pasajero.conductor') && pendiente(delServicio)) return delServicio;
     }
     // El boton de ver taxistas libres, la primera vez que se ve en el inicio.
     if (_flujo.etapa == EtapaPasajero.eligiendo && _puedeVerTaxistas && marcaEnPantalla('pasajero.taxistas')) {
@@ -487,8 +495,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       const PasoGuia(
         marca: 'pasajero.encomienda',
         titulo: 'Paquete',
-        texto: 'Un repartidor recoge tu paquete en el punto de partida y lo lleva al destino. Al recoger y al '
-            'entregar se confirma con un código de 6 dígitos y una foto.',
+        texto: 'Un repartidor recoge tu paquete en el punto de partida y lo lleva al destino. Describes qué '
+            'envías y confirmas que cabe en una moto y no tiene nada prohibido.',
       ),
       const PasoGuia(
         marca: 'pasajero.delivery',
@@ -508,7 +516,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         const PasoGuia(
           icono: Iconos.userGroup,
           titulo: '¿Quién recibe y quién paga?',
-          texto: 'Lo eliges al tocar Solicitar: lo recibes tú u otra persona (con su nombre y celular), y pagas tú '
+          texto: 'Lo eliges al tocar Solicitar: lo recibes tú u otra persona (con su nombre completo y celular), y pagas tú '
               'por QR o paga quien recibe.',
         ),
         const PasoGuia(
@@ -590,7 +598,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     PasoGuia(
       icono: Iconos.userGroup,
       titulo: 'Quién recibe y quién paga',
-      texto: 'Lo recibes tú u otra persona (con su nombre y celular). Pagas tú por QR desde la app, o paga quien '
+      texto: 'Lo recibes tú u otra persona (con su nombre completo y celular). Pagas tú por QR desde la app, o paga quien '
           'recibe al recibirlo.',
     ),
     PasoGuia(
@@ -632,10 +640,14 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     ),
   ];
 
-  /// Primer viaje o pedido con conductor: que ver y que se puede hacer desde el panel.
+  /// Primer viaje o pedido con conductor: que ver y que se puede hacer desde el panel, segun el servicio.
   List<PasoGuia> _pasosViaje() {
-    final entrega = _flujo.viaje?.datosEntrega != null;
+    final viaje = _flujo.viaje;
+    final datos = viaje?.datosEntrega;
+    final entrega = datos != null;
+    final compra = datos?.esCompra ?? false;
     final quien = entrega ? 'tu repartidor' : 'tu conductor';
+    final recibe = viaje?.tercero?.primerNombre;
     return [
       PasoGuia(
         marca: 'pasajero.indicador',
@@ -657,28 +669,64 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
         texto: 'Llama o escribe a $quien sin salir de la app. Compartir envía tu ${entrega ? 'pedido' : 'viaje'} '
             'por WhatsApp a quien quieras y Seguridad tiene el 110 y ayuda.',
       ),
-      if (entrega)
+      if (!entrega) ...[
         const PasoGuia(
-          marca: 'pasajero.codigos',
-          icono: Iconos.hashtag,
-          titulo: 'Códigos del pedido',
-          texto: 'Los códigos confirman la recogida y la entrega. Dalos solo en ese momento al repartidor (o '
-              'pásaselos a quien recibe el paquete).',
+          icono: Iconos.bell,
+          titulo: 'Cuando llegue',
+          texto: 'Te avisamos con un sonido cuando tu conductor llegue. Si no sales, te vuelve a avisar; después de '
+              'varios avisos puede reportar que no te presentaste.',
         ),
-      PasoGuia(
-        icono: Iconos.bell,
-        titulo: entrega ? 'Te avisamos' : 'Cuando llegue',
-        texto: entrega
-            ? 'Te avisamos con un sonido cuando el repartidor recoja tu pedido y cuando llegue a entregarlo.'
-            : 'Te avisamos con un sonido cuando tu conductor llegue. Si no sales, te vuelve a avisar; después '
-                  'de varios avisos puede reportar que no te presentaste.',
-      ),
-      const PasoGuia(
-        icono: Iconos.moneyBill1,
-        titulo: 'Pago',
-        texto: 'Pagas al final, en efectivo o por QR. Si quieres cambiar la forma de pago, pídelo desde este '
-            'panel y el conductor lo acepta.',
-      ),
+        const PasoGuia(
+          icono: Iconos.moneyBill1,
+          titulo: 'Pago',
+          texto: 'Pagas al final, en efectivo o por QR. Si quieres cambiar la forma de pago, pídelo desde este panel '
+              'y el conductor lo acepta.',
+        ),
+      ] else ...[
+        if (compra)
+          const PasoGuia(
+            icono: Iconos.listUl,
+            titulo: 'El costo total',
+            texto: 'El repartidor compra tu lista y registra lo que costó cada producto. Te llega el costo total aquí '
+                'para que lo aceptes: sin eso no se paga ni se entrega.',
+          )
+        else
+          const PasoGuia(
+            icono: Iconos.boxOpen,
+            titulo: 'Ten listo tu paquete',
+            texto: 'El repartidor lo recoge en el punto de recogida, sin códigos: solo entrégaselo como lo '
+                'describiste.',
+          ),
+        if (recibe != null)
+          PasoGuia(
+            marca: 'pasajero.recibe',
+            icono: Iconos.userGroup,
+            titulo: 'Recibe $recibe',
+            texto: 'Avísale a $recibe que el repartidor le preguntará su nombre completo para entregarle el pedido. '
+                'Te avisamos cuando llegue.',
+          )
+        else
+          const PasoGuia(
+            icono: Iconos.flagCheckered,
+            titulo: 'La entrega',
+            texto: 'El repartidor te entrega el pedido en el punto de entrega. No tienes que dar códigos ni datos.',
+          ),
+        PasoGuia(
+          icono: Iconos.bell,
+          titulo: 'Te avisamos',
+          texto: compra
+              ? 'Te avisamos con un sonido cuando el repartidor registre el costo y cuando llegue a entregarlo.'
+              : 'Te avisamos con un sonido cuando el repartidor recoja tu paquete y cuando llegue a entregarlo.',
+        ),
+        PasoGuia(
+          icono: Iconos.moneyBill1,
+          titulo: 'Pago',
+          texto: compra
+              ? 'Se pagan los productos más el envío al entregarse, en efectivo o por QR, después de aceptar el costo '
+                    'total.'
+              : 'El envío se paga al entregarse el paquete, en efectivo o por QR, como lo elegiste al pedir.',
+        ),
+      ],
     ];
   }
 
@@ -731,7 +779,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       return;
     }
     try {
-      await context.read<Sesion>().cambiarModo(Config.rolConductor);
+      final sesion = context.read<Sesion>();
+      await conCarga(context, () => sesion.cambiarModo(Config.rolConductor));
     } on ApiExcepcion catch (e) {
       if (mounted) mostrarMensaje(context, e.mensaje, error: true);
     }
@@ -1485,7 +1534,8 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     );
     if (!confirmado || !mounted) return;
     try {
-      await context.read<Sesion>().cambiarModo(Config.rolConductor);
+      final sesion = context.read<Sesion>();
+      await conCarga(context, () => sesion.cambiarModo(Config.rolConductor));
     } on ApiExcepcion catch (e) {
       if (mounted) mostrarMensaje(context, e.mensaje, error: true);
     }
@@ -1496,7 +1546,9 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
       context,
       mensaje: 'Vas a salir de tu cuenta de pasajero en este teléfono.',
     );
-    if (confirmado && mounted) await context.read<Sesion>().cerrar();
+    if (!confirmado || !mounted) return;
+    final sesion = context.read<Sesion>();
+    await conCarga(context, sesion.cerrar);
   }
 
   @override
