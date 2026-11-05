@@ -1,9 +1,11 @@
 package com.taxiuap.movil
 
 import android.content.Context
+import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.Build
+import android.os.Bundle
 import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -15,8 +17,52 @@ import io.flutter.plugin.common.MethodChannel
 // FlutterFragmentActivity: la necesita local_auth para el ingreso con huella.
 class MainActivity : FlutterFragmentActivity() {
 
+    companion object {
+        // Ubicacion que llego de otra app (AbrirUbicacionActivity).
+        const val EXTRA_UBICACION = "unitaxi_ubicacion"
+    }
+
+    // Enlace de la ubicacion recibida que la app todavia no tomo (lib/core/ubicacion_compartida.dart
+    // lo pide con "tomar"; asi no se pierde si llega antes de que la app este lista).
+    private var ubicacionPendiente: String? = null
+    private var canalEnlaces: MethodChannel? = null
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        // Solo al abrirse por primera vez: si Android la recrea o se abre desde Recientes, el mismo
+        // enlace no se vuelve a usar.
+        if (savedInstanceState == null) guardarUbicacion(intent)
+        super.onCreate(savedInstanceState)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (guardarUbicacion(intent)) canalEnlaces?.invokeMethod("hayUbicacion", null)
+    }
+
+    private fun guardarUbicacion(intent: Intent?): Boolean {
+        if (intent == null) return false
+        if ((intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) return false
+        val enlace = intent.getStringExtra(EXTRA_UBICACION) ?: return false
+        intent.removeExtra(EXTRA_UBICACION)
+        ubicacionPendiente = enlace
+        return true
+    }
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        canalEnlaces = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "unitaxi/enlaces").apply {
+            setMethodCallHandler { llamada, resultado ->
+                when (llamada.method) {
+                    "tomar" -> {
+                        val enlace = ubicacionPendiente
+                        ubicacionPendiente = null
+                        resultado.success(enlace)
+                    }
+                    else -> resultado.notImplemented()
+                }
+            }
+        }
         // Vibracion y sonidos de aviso (SonidoAviso en lib/core/sonido.dart): viaje aceptado (la moto
         // encendiendo), servicio nuevo, el taxi llego, viaje finalizado, confirmacion y chat. "sonar"
         // recibe el nombre del audio; la app decide cual suena y cual no (prioridades).

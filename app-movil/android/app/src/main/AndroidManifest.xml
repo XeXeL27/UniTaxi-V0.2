@@ -58,6 +58,67 @@
             <!-- El enlace solo abre la app; Flutter no debe tratarlo como una ruta de navegacion -->
             <meta-data android:name="flutter_deeplinking_enabled" android:value="false"/>
         </activity>
+        <!-- "Abrir con UNITAXI": una ubicacion compartida por WhatsApp, Telegram, Messenger o SMS.
+             Android pregunta con que app abrirla y UNITAXI aparece junto a Google Maps, Waze, etc.
+             AbrirUbicacionActivity no se ve: pasa el enlace a MainActivity y se cierra -->
+        <activity
+            android:name=".AbrirUbicacionActivity"
+            android:exported="true"
+            android:label="UNITAXI"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <!-- geo:-11.02,-68.76 y geo:0,0?q=-11.02,-68.76(Lugar): lo que abren WhatsApp y Telegram -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="geo"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <data android:scheme="google.navigation"/>
+            </intent-filter>
+            <!-- Enlaces de ubicacion de Google Maps (Messenger y otros). Android 12 o superior los abre
+                 directo en Google Maps; hasta Android 11 pregunta. No incluye /maps/dir (el boton
+                 "Abrir en Maps" del conductor sigue yendo directo a Google Maps) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"/>
+                <data android:host="maps.app.goo.gl"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"/>
+                <data android:host="goo.gl"/>
+                <data android:pathPrefix="/maps"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="http"/>
+                <data android:scheme="https"/>
+                <data android:host="maps.google.com"/>
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="https"/>
+                <data android:host="www.google.com"/>
+                <data android:host="google.com"/>
+                <data android:pathPrefix="/maps/place"/>
+                <data android:pathPrefix="/maps/search"/>
+                <data android:pathPrefix="/maps/@"/>
+            </intent-filter>
+        </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->
         <meta-data

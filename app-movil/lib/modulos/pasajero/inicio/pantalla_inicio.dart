@@ -18,6 +18,7 @@ import '../../../comun/modelos_viaje.dart';
 import '../../../comun/pantalla_mas.dart';
 import '../../../comun/perfil_api.dart';
 import '../../../core/iconos.dart';
+import '../../../core/ubicacion_compartida.dart';
 import '../../../core/push.dart';
 import '../../../core/api_excepcion.dart';
 import '../../../core/cliente_api.dart';
@@ -190,6 +191,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
   void initState() {
     super.initState();
     _flujo.addListener(_alCambiarFlujo);
+    UbicacionCompartida.pendiente.addListener(_revisarUbicacionCompartida);
     _mapa.addListener(_revisarGuia);
     RequiereGps.listo.addListener(_revisarGuia);
     RequiereGps.listo.addListener(_revisarAvisoCredenciales);
@@ -240,6 +242,7 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     RequiereGps.listo.removeListener(_revisarAvisoCredenciales);
     _mapa.removeListener(_revisarGuia);
     _posiciones.dispose();
+    UbicacionCompartida.pendiente.removeListener(_revisarUbicacionCompartida);
     _flujo.removeListener(_alCambiarFlujo);
     _flujo.dispose();
     _mapa.dispose();
@@ -269,8 +272,43 @@ class _PantallaInicioPasajeroState extends State<PantallaInicioPasajero> with Si
     }
   }
 
+  /// Ubicacion abierta desde otra app ("Abrir con UNITAXI" en WhatsApp, Telegram, Messenger...): pasa
+  /// a ser el destino de un moto taxi. Mientras la app recupera el viaje o se califica uno, espera y
+  /// se usa apenas se pueda elegir destino.
+  void _revisarUbicacionCompartida() {
+    if (!mounted) return;
+    final recibida = UbicacionCompartida.pendiente.value;
+    if (recibida == null) return;
+    final etapa = _flujo.etapa;
+    if (etapa == EtapaPasajero.cargando || etapa == EtapaPasajero.calificando) return;
+    UbicacionCompartida.tomar();
+    final punto = recibida.punto;
+    if (punto == null) {
+      mostrarMensaje(context, 'No se pudo leer la ubicación que abriste.', error: true);
+      return;
+    }
+    if (etapa == EtapaPasajero.buscando) {
+      mostrarMensaje(context, 'Ya estás buscando un conductor. Cancela la solicitud para ir a otro lugar.', error: true);
+      return;
+    }
+    if (etapa == EtapaPasajero.enViaje) {
+      if (!_flujo.puedePedirOtro) {
+        mostrarMensaje(context, 'Ya tienes un viaje en curso.', error: true);
+        return;
+      }
+      _flujo.pedirOtro();
+    }
+    _irA(_seccionInicio);
+    _cerrarMenu();
+    _flujo.ponerDestinoRecibido(punto);
+  }
+
   void _alCambiarFlujo() {
     if (!mounted) return;
+    if (UbicacionCompartida.pendiente.value != null) {
+      // Despues de recuperar el viaje o de calificar ya se puede usar la ubicacion recibida.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _revisarUbicacionCompartida());
+    }
     if (_oculta) _revisarGpsDeFondo();
     if (_flujo.etapa != _etapaPanel) {
       _etapaPanel = _flujo.etapa;

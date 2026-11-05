@@ -25,6 +25,7 @@ import '../../../core/formato.dart';
 import '../../../core/chat.dart';
 import '../../../core/sesion.dart';
 import '../../../core/tema.dart';
+import '../../../core/ubicacion_compartida.dart';
 import '../../../mapa/controlador_mapa.dart';
 import '../../../mapa/vista_mapa.dart';
 import '../../../widgets/panel_recuperando.dart';
@@ -105,6 +106,8 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
   void initState() {
     super.initState();
     _flujo.addListener(_alCambiarFlujo);
+    UbicacionCompartida.pendiente.addListener(_revisarUbicacionCompartida);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _revisarUbicacionCompartida());
     RequiereGps.listo.addListener(_revisarGuia);
     RequiereGps.listo.addListener(_revisarAvisoCredenciales);
     _alOcultar = AppLifecycleListener(
@@ -297,8 +300,17 @@ class _PantallaInicioConductorState extends State<PantallaInicioConductor> {
     _cargarFoto();
   }
 
+  /// Ubicacion abierta desde otra app ("Abrir con UNITAXI"): el modo conductor no pide viajes, solo
+  /// se avisa como hacerlo. El mapa no cambia.
+  void _revisarUbicacionCompartida() {
+    if (!mounted || UbicacionCompartida.pendiente.value == null) return;
+    UbicacionCompartida.tomar();
+    mostrarMensaje(context, 'Abriste una ubicación en UNITAXI. Para pedir un viaje hasta ahí entra como pasajero.');
+  }
+
   @override
   void dispose() {
+    UbicacionCompartida.pendiente.removeListener(_revisarUbicacionCompartida);
     _alOcultar?.dispose();
     _sondeoAprobacion?.cancel();
     _emisor.dispose();

@@ -825,6 +825,19 @@ class FlujoPasajero extends ChangeNotifier {
     _avisar();
   }
 
+  /// Ubicacion abierta desde otra app ("Abrir con UNITAXI" en WhatsApp, Telegram...): el inicio vuelve
+  /// a un moto taxi para el pasajero y ese punto pasa a ser el destino, igual que tocarlo en el mapa
+  /// (la partida sigue siendo su GPS). false si no esta eligiendo destino.
+  bool ponerDestinoRecibido(LatLng punto) {
+    if (etapa != EtapaPasajero.eligiendo) return false;
+    volverAlMenu();
+    mapa.ponerB(PuntoRuta(punto, 'Buscando dirección...'));
+    _resolverDireccion(punto, esOrigen: false);
+    if (mapa.a == null) mapa.centrarEn(punto);
+    _avisar();
+    return true;
+  }
+
   void quitarDestino() {
     mapa.ponerB(null);
     final gps = mapa.miUbicacion;

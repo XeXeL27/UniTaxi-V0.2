@@ -175,6 +175,7 @@ class ControladorMapa extends ChangeNotifier {
     if (fuenteAvance == fuente) return;
     fuenteAvance = fuente;
     _avance = null;
+    _rutaDibujada = null;
     _fueraDeRuta = 0;
     final posicion = switch (fuente) {
       FuenteAvance.gps => miUbicacion,
@@ -231,6 +232,29 @@ class ControladorMapa extends ChangeNotifier {
     return rutaRestante(actual.puntos, avance);
   }
 
+  /// Ruta y tramo de la ruta hasta donde llego la moto que se dibuja (ver [puntosRutaDesde]). Solo
+  /// avanza: lo ya borrado no vuelve a aparecer.
+  Ruta? _rutaDibujada;
+  int _indiceDibujado = 0;
+
+  /// Lo que falta de la ruta A-B desde [dibujada], la moto tal como se ve mientras se desliza (va un
+  /// poco detras de la posicion real): asi la linea se borra junto con la moto y no por delante. La
+  /// logica del avance y del desvio sigue con la posicion real ([puntosRuta]); si la moto dibujada
+  /// no esta sobre la ruta o iria por delante de la real, se usa [puntosRuta].
+  List<LatLng>? puntosRutaDesde(LatLng? dibujada) {
+    final actual = ruta;
+    final avance = _avance;
+    if (actual == null || dibujada == null || fuenteAvance == FuenteAvance.ninguna || avance == null) {
+      return puntosRuta;
+    }
+    final desde = identical(_rutaDibujada, actual) ? _indiceDibujado : 0;
+    final ubicado = ubicarEnRuta(actual.puntos, dibujada, desde: desde);
+    if (ubicado == null || ubicado.indice > avance.indice) return puntosRuta;
+    _rutaDibujada = actual;
+    _indiceDibujado = ubicado.indice;
+    return rutaRestante(actual.puntos, ubicado);
+  }
+
   /// Lo que falta de un tramo punteado (acercamiento, conductor hasta el punto) desde [posicion]:
   /// entre un re-trazado y el siguiente (cada [_metrosParaRecalcular]) se va borrando lo recorrido.
   static List<LatLng> _restanteDesde(Ruta tramo, LatLng? posicion) {
@@ -240,23 +264,33 @@ class ControladorMapa extends ChangeNotifier {
   }
 
   /// Tramo punteado desde el GPS hasta el punto, sin lo ya recorrido (null si no se muestra).
-  List<LatLng>? get puntosAcercamiento {
+  List<LatLng>? get puntosAcercamiento => puntosAcercamientoDesde(miUbicacion);
+
+  /// [puntosAcercamiento] desde [posicion] (la moto tal como se dibuja mientras se desliza).
+  List<LatLng>? puntosAcercamientoDesde(LatLng? posicion) {
     final tramo = acercamiento;
     if (!mostrarAcercamiento || tramo == null) return null;
-    return _restanteDesde(tramo, miUbicacion);
+    return _restanteDesde(tramo, posicion ?? miUbicacion);
   }
 
   /// Tramo punteado desde la moto hasta el punto (app del pasajero), sin lo ya recorrido. Mientras
   /// la moto va borrando la ruta A-B no se dibuja: seria la misma linea.
-  List<LatLng>? get puntosRutaConductor {
+  List<LatLng>? get puntosRutaConductor => puntosRutaConductorDesde(conductorUbicacion);
+
+  /// [puntosRutaConductor] desde [posicion] (la moto tal como se dibuja mientras se desliza).
+  List<LatLng>? puntosRutaConductorDesde(LatLng? posicion) {
     final tramo = rutaConductor;
     if (!mostrarRutaConductor || tramo == null) return null;
     if (fuenteAvance == FuenteAvance.conductor && ruta != null) return null;
-    return _restanteDesde(tramo, conductorUbicacion);
+    return _restanteDesde(tramo, posicion ?? conductorUbicacion);
   }
 
   /// Posicion del conductor asignado al viaje del pasajero (solo en la app del pasajero).
   LatLng? conductorUbicacion;
+
+  /// Cambia cada vez que se deja de seguir al conductor (termina el viaje o se pasa al otro servicio):
+  /// la moto del siguiente conductor aparece en su lugar y no se desliza desde la del anterior.
+  int vueltaSeguimientoConductor = 0;
   double? conductorRumbo;
 
   /// Tramo desde la posicion del conductor hasta el punto de referencia (origen o destino).
@@ -622,6 +656,7 @@ class ControladorMapa extends ChangeNotifier {
 
   /// Detiene el seguimiento del conductor (cuando termina o cancela el viaje).
   void detenerSeguimientoConductor() {
+    vueltaSeguimientoConductor++;
     conductorUbicacion = null;
     conductorRumbo = null;
     rutaConductor = null;

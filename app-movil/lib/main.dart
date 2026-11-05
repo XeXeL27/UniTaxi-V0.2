@@ -23,6 +23,7 @@ import 'core/push.dart';
 import 'core/servidores.dart';
 import 'core/sesion.dart';
 import 'core/tema.dart';
+import 'core/ubicacion_compartida.dart';
 import 'modulos/conductor/inicio/pantalla_inicio.dart';
 import 'modulos/login/panel_admin.dart';
 import 'modulos/login/pantalla_login.dart';
@@ -49,6 +50,8 @@ Future<void> main() async {
   await PreferenciasAviso.cargar();
   // Notificaciones push (FCM): antes de runApp para recibir avisos con la app cerrada.
   await Push.preparar();
+  // "Abrir con UNITAXI": ubicaciones compartidas por WhatsApp, Telegram, Messenger o SMS (solo APK).
+  unawaited(UbicacionCompartida.preparar());
   final sesion = Sesion();
   await sesion.cargar();
   final api = ClienteApi(sesion);
