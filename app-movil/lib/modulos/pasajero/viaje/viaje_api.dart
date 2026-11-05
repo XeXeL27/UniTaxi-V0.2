@@ -161,12 +161,15 @@ class ViajeApi {
         as Map<String, dynamic>,
   );
 
-  /// Tarifa (base y por km) que se cobra a un pedido nuevo de ese tipo: el paquete tiene la suya y el
-  /// delivery (la compra) la suya, las dos se cambian en el panel.
-  Future<({double base, double km})> tarifaDelivery(TipoEnvio tipo) async {
+  /// Tarifa del envio que se cobra a un pedido nuevo de ese tipo, como texto: el paquete tiene su tabla
+  /// de precios y el delivery (la compra) la suya, las dos se cambian en el panel ("8 Bs hasta 1 km, +2 Bs
+  /// cada 1 km"). Con un servidor de antes, "8 Bs + 2 Bs por km".
+  Future<String> tarifaDelivery(TipoEnvio tipo) async {
     final json = await cliente.get('/api/pasajero/solicitudes/tarifa-delivery?tipo=${tipo.codigo}')
         as Map<String, dynamic>;
-    return (base: (json['tarifaBase'] as num).toDouble(), km: (json['precioKm'] as num).toDouble());
+    final texto = json['texto'] as String?;
+    if (texto != null && texto.trim().isNotEmpty) return texto;
+    return '${formatoBs((json['tarifaBase'] as num).toDouble())} + ${formatoBs((json['precioKm'] as num).toDouble())} por km';
   }
 
   /// Viaje activo del pasajero, o null si no tiene.

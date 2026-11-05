@@ -106,9 +106,10 @@ class _DetalleEntrega extends StatelessWidget {
                 ('Costo de los productos', entrega.costoProductoReal == null ? null : monedaBs(entrega.costoProductoReal)),
                 (
                   'Tarifa del pedido',
-                  entrega.tarifaBaseAplicada == null
-                      ? null
-                      : '${monedaBs(entrega.tarifaBaseAplicada)} + ${monedaBs(entrega.precioKmAplicado)} por km',
+                  entrega.textoTarifa ??
+                      (entrega.tarifaBaseAplicada == null
+                          ? null
+                          : '${monedaBs(entrega.tarifaBaseAplicada)} + ${monedaBs(entrega.precioKmAplicado)} por km'),
                 ),
                 ('Pago recibido', entrega.pagoConfirmado ? monedaBs(entrega.montoPagoRecibido) : 'Sin confirmar'),
                 ('Precio del servicio', monedaBs(viaje.precioFinal)),

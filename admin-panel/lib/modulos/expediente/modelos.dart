@@ -289,6 +289,9 @@ class EntregaExpediente {
   final bool fotoFalla;
   final double? tarifaBaseAplicada;
   final double? precioKmAplicado;
+
+  /// La tarifa con la que se pidio, ya escrita por el servidor ("8 Bs hasta 1 km, +2 Bs cada 1 km").
+  final String? textoTarifa;
   final List<ProductoEntregaAdmin> productos;
   final List<PropuestaCostoAdmin> propuestas;
 
@@ -319,6 +322,7 @@ class EntregaExpediente {
     this.fotoFalla = false,
     this.tarifaBaseAplicada,
     this.precioKmAplicado,
+    this.textoTarifa,
     this.productos = const [],
     this.propuestas = const [],
   });
@@ -352,6 +356,7 @@ class EntregaExpediente {
     fotoFalla: _hay(json['fotoFallaUrl']),
     tarifaBaseAplicada: Formato.leerDecimal(json['tarifaBaseAplicada']),
     precioKmAplicado: Formato.leerDecimal(json['precioKmAplicado']),
+    textoTarifa: json['textoTarifa'] as String?,
     productos: [
       for (final p in (json['productos'] as List<dynamic>? ?? const []))
         ProductoEntregaAdmin.desdeJson(p as Map<String, dynamic>),

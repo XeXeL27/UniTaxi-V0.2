@@ -135,7 +135,7 @@ class ResumenEntregaConductor extends StatelessWidget {
           detalle: !esCompra
               ? null
               : datos.propuestaVigente == null
-              ? 'Productos al precio real + envío ${datos.textoTarifa ?? 'según la tarifa'} desde el comercio'
+              ? 'Productos al precio real + envío ${datos.textoTarifa ?? 'según la tarifa'} desde donde compres'
               : '${formatoBs(datos.propuestaVigente!.totalProductos)} de productos y '
                     '${formatoBs(datos.propuestaVigente!.precioServicio)} del envío'
                     '${datos.costoAceptado ? ' (aceptado)' : ' (falta que lo acepte)'}',
@@ -434,7 +434,7 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
     final punto = flujo.mapa.miUbicacion;
     if (punto == null) return _mensaje('Activa el GPS: la compra se registra con tu ubicación.');
     await _ejecutar(() async {
-      await flujo.registrarCompra(punto, datos.comercio, datos.productos, datos.observacion, null);
+      await flujo.registrarCompra(punto, datos.productos, null);
       if (mounted) setState(() => _corrigiendo = false);
       if (mounted) _mensaje('Le enviamos el costo total al cliente para que lo acepte.');
     });
@@ -448,7 +448,6 @@ class _PanelDeliveryConductorState extends State<PanelDeliveryConductor> {
       return RegistroCompra(
         key: const ValueKey('correccion-compra'),
         productos: entrega.productos,
-        comercio: entrega.detalleCompra,
         correccion: true,
         ocupado: flujo.ocupado,
         onRegistrar: _registrarCompra,

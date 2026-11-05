@@ -5,7 +5,6 @@ import '../layout/layout_admin.dart';
 import '../modulos/sistema/pantalla_carpeta.dart';
 import '../modulos/tarifas/modelos.dart';
 import '../modulos/tarifas/pantalla_descuento_estudiante.dart';
-import '../modulos/tarifas/pantalla_tarifa_delivery.dart';
 import '../modulos/tarifas/pantalla_precio_viaje.dart';
 import '../modulos/viajes/pantalla_viajes.dart';
 import '../modulos/auth/pantalla_login.dart';
@@ -61,7 +60,7 @@ GoRouter crearRutas(Sesion sesion) {
           GoRoute(path: Menu.zonas.ruta, pageBuilder: (_, _) => pagina(const PantallaZonas())),
           GoRoute(path: Menu.mapa.ruta, pageBuilder: (_, _) => pagina(const PantallaMapa())),
           GoRoute(path: Menu.flota.ruta, pageBuilder: (_, _) => pagina(const PantallaFlota())),
-          GoRoute(path: Menu.precioViaje.ruta, pageBuilder: (_, _) => pagina(const PantallaPrecioViaje())),
+          GoRoute(path: Menu.precioViaje.ruta, pageBuilder: (_, _) => pagina(const PantallaPrecioViaje(key: ValueKey('taxi')))),
           GoRoute(
             path: Menu.descuentoEstudiante.ruta,
             pageBuilder: (_, _) => pagina(const PantallaDescuentoEstudiante()),
@@ -69,12 +68,12 @@ GoRouter crearRutas(Sesion sesion) {
           GoRoute(
             path: Menu.tarifaPaquete.ruta,
             pageBuilder: (_, _) =>
-                pagina(const PantallaTarifaDelivery(key: ValueKey('paquete'), servicio: ServicioTarifa.paquete)),
+                pagina(const PantallaPrecioViaje(key: ValueKey('paquete'), servicio: ServicioTarifa.paquete)),
           ),
           GoRoute(
             path: Menu.tarifaDelivery.ruta,
             pageBuilder: (_, _) =>
-                pagina(const PantallaTarifaDelivery(key: ValueKey('delivery'), servicio: ServicioTarifa.delivery)),
+                pagina(const PantallaPrecioViaje(key: ValueKey('delivery'), servicio: ServicioTarifa.delivery)),
           ),
           GoRoute(path: Menu.carpetaArchivos.ruta, pageBuilder: (_, _) => pagina(const PantallaCarpeta())),
           GoRoute(path: Menu.reportesEntrega.ruta, pageBuilder: (_, _) => pagina(const PantallaReportesEntrega())),

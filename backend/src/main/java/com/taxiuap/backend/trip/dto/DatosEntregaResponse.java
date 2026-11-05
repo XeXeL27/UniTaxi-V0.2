@@ -7,6 +7,7 @@ import java.util.List;
 import org.locationtech.jts.geom.Point;
 import org.locationtech.jts.io.WKTWriter;
 
+import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 import com.taxiuap.backend.trip.entity.DatosEntrega;
 import com.taxiuap.backend.trip.enums.EstadoEntrega;
@@ -55,6 +56,8 @@ public record DatosEntregaResponse(
         String observacionCompra,
         BigDecimal tarifaBaseAplicada,
         BigDecimal precioKmAplicado,
+        // La tarifa del envio con la que se pidio, para mostrarla ("8 Bs hasta 1 km, +2 Bs cada 1 km").
+        String textoTarifa,
         List<ProductoEntregaResponse> productos,
         List<PropuestaCostoResponse> propuestas,
         MotivoFallaEntrega tipoFalla) {
@@ -85,7 +88,7 @@ public record DatosEntregaResponse(
                 aWkt(datos.getUbicacionRecogida()), aWkt(datos.getUbicacionEntrega()),
                 datos.getReceptorIdentificado(), datos.getFechaLlegadaEntrega(), datos.getAvisosEntrega(),
                 datos.getUltimoAvisoEntrega(), datos.getObservacionCompra(), datos.getTarifaBaseAplicada(),
-                datos.getPrecioKmAplicado(),
+                datos.getPrecioKmAplicado(), CalculoPrecioDeliveryService.textoTarifaGuardada(datos),
                 datos.getProductos() == null ? List.of() : datos.getProductos().stream()
                         .filter(p -> p.getEstadoProductoEntrega() == EstadoRegistro.A)
                         .map(ProductoEntregaResponse::de)
@@ -118,7 +121,7 @@ public record DatosEntregaResponse(
                 fotoComprobanteUrl, fotoFallaUrl, motivoFalla, estadoEntrega, fechaLlegadaRecogida, fechaRecogida,
                 fechaEntrega, fotoRecogidaUrl, fotoEntregaUrl, ubicacionRecogidaWkt, ubicacionEntregaWkt,
                 receptorIdentificado, fechaLlegadaEntrega, avisosEntrega, ultimoAvisoEntrega, observacionCompra,
-                tarifaBaseAplicada, precioKmAplicado, productos, propuestas, tipoFalla);
+                tarifaBaseAplicada, precioKmAplicado, textoTarifa, productos, propuestas, tipoFalla);
     }
 
     /** Los puntos van como texto porque la app los dibuja en el mapa y no necesita la columna cruda. */

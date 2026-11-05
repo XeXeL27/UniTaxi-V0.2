@@ -607,13 +607,8 @@ class FlujoConductor extends ChangeNotifier {
   Future<void> recogerPaquete(Uint8List? foto) =>
       _accionDelivery((id) => api.recogerPaquete(id, foto, mapa.miUbicacion));
 
-  Future<void> registrarCompra(
-    LatLng punto,
-    String detalle,
-    List<ProductoComprado> productos,
-    String? observacion,
-    Uint8List? comprobante,
-  ) => _accionDelivery((id) => api.registrarCompra(id, punto, detalle, productos, observacion, comprobante));
+  Future<void> registrarCompra(LatLng punto, List<ProductoComprado> productos, Uint8List? comprobante) =>
+      _accionDelivery((id) => api.registrarCompra(id, punto, productos, comprobante));
 
   Future<void> confirmarPago(double monto, String metodo) => _accionDelivery((id) => api.confirmarPago(id, monto, metodo));
 

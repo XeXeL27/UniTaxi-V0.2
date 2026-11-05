@@ -3,9 +3,15 @@ package com.taxiuap.backend.pricing.dto;
 import java.math.BigDecimal;
 
 /**
- * Tarifa del servicio DELIVERY (encomienda y compra): precio del servicio = tarifaBase + precioKm por
- * cada km por calles. Cada pedido guarda la que valia al pedirlo (datos_entrega.tarifa_base_aplicada y
- * precio_km_aplicado), asi un cambio del administrador vale solo para los pedidos nuevos.
+ * Tarifa de antes de las tablas de precios (paquete y delivery): precio del servicio = tarifaBase +
+ * precioKm por cada km por calles. Solo la usan los pedidos que la guardaron al pedirse
+ * (datos_entrega.tarifa_base_aplicada y precio_km_aplicado); los nuevos usan la tabla de su servicio.
  */
-public record TarifaDelivery(BigDecimal tarifaBase, BigDecimal precioKm) {
+public record TarifaDelivery(BigDecimal tarifaBase, BigDecimal precioKm) implements TarifaPorDistancia {
+
+    @Override
+    public BigDecimal precioPara(BigDecimal distanciaKm) {
+        BigDecimal km = distanciaKm == null ? BigDecimal.ZERO : distanciaKm;
+        return tarifaBase.add(precioKm.multiply(km));
+    }
 }

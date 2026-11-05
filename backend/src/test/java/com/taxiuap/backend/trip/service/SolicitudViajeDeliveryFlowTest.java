@@ -40,7 +40,7 @@ import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.pricing.dto.CotizacionViaje;
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
-import com.taxiuap.backend.pricing.dto.TarifaDelivery;
+import com.taxiuap.backend.pricing.dto.ParametrosPrecio;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
@@ -85,13 +85,17 @@ class SolicitudViajeDeliveryFlowTest {
     private Pasajero pasajero;
     private CategoriaServicio delivery;
 
+    /** Tabla del delivery: hasta 1 km 8 Bs, +1 km +2 Bs. */
+    private static final ParametrosPrecio TABLA = new ParametrosPrecio(new BigDecimal("8.00"), BigDecimal.ONE,
+            java.util.List.of(new ParametrosPrecio.Tramo(1, BigDecimal.ONE, new BigDecimal("2.00"), 1)), 0, null);
+    private static final String COPIA = "{\"precioBase\":8.00,\"kmBase\":1}";
+
     @BeforeEach
     void setUp() {
         lenient().when(productoRepository.save(any(ProductoEntrega.class))).thenAnswer(i -> i.getArgument(0));
-        lenient().when(precioDeliveryService.tarifaVigente())
-                .thenReturn(new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")));
-        lenient().when(precioDeliveryService.tarifaVigente(any()))
-                .thenReturn(new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")));
+        lenient().when(precioDeliveryService.tarifaVigente()).thenReturn(TABLA);
+        lenient().when(precioDeliveryService.tarifaVigente(any())).thenReturn(TABLA);
+        lenient().when(precioDeliveryService.copiaDeTarifa(TABLA)).thenReturn(COPIA);
         Persona persona = new Persona();
         persona.setId(20L);
         persona.setNombres("Ana");
@@ -164,9 +168,10 @@ class SolicitudViajeDeliveryFlowTest {
         assertEquals("70000000", solicitudGuardada.getValue().getDatosEntrega().getTelefonoRemitente());
         assertEquals("Luis", solicitudGuardada.getValue().getDatosEntrega().getNombreReceptor());
         verify(precioDeliveryService).calcularEncomienda(any(Point.class), any(Point.class), any());
-        // La tarifa que valia al pedir queda copiada en el pedido.
-        assertEquals(new BigDecimal("8.00"), solicitudGuardada.getValue().getDatosEntrega().getTarifaBaseAplicada());
-        assertEquals(new BigDecimal("2.00"), solicitudGuardada.getValue().getDatosEntrega().getPrecioKmAplicado());
+        // La tabla de precios que valia al pedir queda copiada en el pedido (la tarifa de antes, no).
+        assertEquals(COPIA, solicitudGuardada.getValue().getDatosEntrega().getTarifaAplicadaJson());
+        assertEquals(null, solicitudGuardada.getValue().getDatosEntrega().getTarifaBaseAplicada());
+        assertEquals(null, solicitudGuardada.getValue().getDatosEntrega().getPrecioKmAplicado());
     }
 
     @Test

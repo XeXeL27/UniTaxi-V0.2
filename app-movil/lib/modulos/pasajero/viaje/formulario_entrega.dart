@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../../comun/modelos_viaje.dart';
-import '../../../core/formato.dart';
 import '../../../core/iconos.dart';
 import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
@@ -15,8 +14,8 @@ const double _anchoModalEntrega = 600;
 
 bool formularioEntregaEsPantallaCompleta(double ancho) => ancho < _anchoModalEntrega;
 
-/// Tarifa del delivery (base y por km) que se le muestra al pedir.
-typedef CargarTarifa = Future<({double base, double km})> Function();
+/// Tarifa del envio (texto de su tabla de precios) que se le muestra al pedir.
+typedef CargarTarifa = Future<String> Function();
 
 /// Formulario de datos que el pasajero debe confirmar antes de pedir una entrega. [tarifa] trae la
 /// tarifa vigente del envio para mostrarla aparte de los productos.
@@ -105,7 +104,7 @@ class _FormularioEntregaState extends State<_FormularioEntrega> {
     final cargar = widget.tarifa;
     if (cargar != null) {
       cargar().then((t) {
-        if (mounted) setState(() => _textoTarifa = '${formatoBs(t.base)} + ${formatoBs(t.km)} por km');
+        if (mounted) setState(() => _textoTarifa = t);
       }).catchError((_) {});
     }
   }
@@ -423,7 +422,7 @@ class _ResumenPrecio extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          linea('Envío', textoTarifa == null ? 'Tarifa base + por km' : textoTarifa!),
+          linea('Envío', textoTarifa == null ? 'Según la distancia' : textoTarifa!),
           linea('Productos', 'Lo registra el repartidor'),
           linea('Total', 'Lo aceptas cuando el repartidor compre'),
           const SizedBox(height: 4),

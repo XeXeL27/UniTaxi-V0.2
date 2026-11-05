@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.taxiuap.backend.pricing.dto.TarifaDelivery;
-import com.taxiuap.backend.pricing.dto.TarifaDeliveryRequest;
 import com.taxiuap.backend.sistema.entity.ConfiguracionSistema;
 import com.taxiuap.backend.sistema.repository.ConfiguracionSistemaRepository;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
@@ -16,12 +15,11 @@ import com.taxiuap.backend.trip.enums.TipoEnvio;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Tarifas del delivery (la compra) y del paquete (la encomienda) que el administrador cambia en el panel;
- * valen desde el siguiente pedido, sin reiniciar el backend. Van en configuracion_sistema
- * (delivery.tarifa-base / delivery.precio-km y paquete.tarifa-base / paquete.precio-km). Mientras el
- * administrador no guarde la del delivery vale la de taxiuap.delivery.* (8 Bs y 2 Bs por km si no se
- * definen); mientras no guarde la del paquete, el paquete cobra lo mismo que el delivery (antes las dos
- * eran una sola tarifa: al actualizar nada cambia).
+ * Tarifas de antes de las tablas de precios (base + precio por km) del delivery (la compra) y del paquete
+ * (la encomienda), en configuracion_sistema (delivery.tarifa-base / delivery.precio-km y
+ * paquete.tarifa-base / paquete.precio-km; sin guardar, taxiuap.delivery.*: 8 Bs y 2 Bs por km; sin la del
+ * paquete, la del delivery). Ya no se editan: solo sirven para armar una vez la tabla inicial de cada
+ * servicio (ParametrosPrecioService.crearTablasDeEnvioIniciales).
  */
 @Slf4j
 @Service
@@ -62,41 +60,6 @@ public class TarifaDeliveryService {
         return tipo == TipoEnvio.ENCOMIENDA ? paquete() : actual();
     }
 
-    @Transactional
-    public TarifaDelivery guardar(TarifaDeliveryRequest datos) {
-        TarifaDelivery anterior = actual();
-        // El paquete que todavia no tiene tarifa propia cobraba lo mismo que el delivery: se le fija esa
-        // antes del cambio, asi cambiar el delivery no le cambia el precio al paquete.
-        if (sinGuardar(PAQUETE_TARIFA_BASE) && sinGuardar(PAQUETE_PRECIO_KM)) {
-            escribir(PAQUETE_TARIFA_BASE, anterior.tarifaBase().toPlainString());
-            escribir(PAQUETE_PRECIO_KM, anterior.precioKm().toPlainString());
-        }
-        escribir(TARIFA_BASE, dinero(datos.tarifaBase()).toPlainString());
-        escribir(PRECIO_KM, dinero(datos.precioKm()).toPlainString());
-        TarifaDelivery nueva = actual();
-        log.info("Tarifa del delivery cambiada: base {} -> {} Bs, km {} -> {} Bs", anterior.tarifaBase(),
-                nueva.tarifaBase(), anterior.precioKm(), nueva.precioKm());
-        return nueva;
-    }
-
-    @Transactional
-    public TarifaDelivery guardarPaquete(TarifaDeliveryRequest datos) {
-        TarifaDelivery anterior = paquete();
-        escribir(PAQUETE_TARIFA_BASE, dinero(datos.tarifaBase()).toPlainString());
-        escribir(PAQUETE_PRECIO_KM, dinero(datos.precioKm()).toPlainString());
-        TarifaDelivery nueva = paquete();
-        log.info("Tarifa del paquete cambiada: base {} -> {} Bs, km {} -> {} Bs", anterior.tarifaBase(),
-                nueva.tarifaBase(), anterior.precioKm(), nueva.precioKm());
-        return nueva;
-    }
-
-    private boolean sinGuardar(String clave) {
-        return configuracionRepository.findByClave(clave)
-                .map(ConfiguracionSistema::getValor)
-                .map(valor -> valor == null || valor.isBlank())
-                .orElse(true);
-    }
-
     private BigDecimal leer(String clave, BigDecimal porDefecto) {
         return configuracionRepository.findByClave(clave)
                 .map(ConfiguracionSistema::getValor)
@@ -110,16 +73,6 @@ public class TarifaDeliveryService {
                     }
                 })
                 .orElse(porDefecto);
-    }
-
-    private void escribir(String clave, String valor) {
-        ConfiguracionSistema fila = configuracionRepository.findByClave(clave).orElseGet(() -> {
-            ConfiguracionSistema nueva = new ConfiguracionSistema();
-            nueva.setClave(clave);
-            return nueva;
-        });
-        fila.setValor(valor);
-        configuracionRepository.save(fila);
     }
 
     private static BigDecimal dinero(BigDecimal valor) {

@@ -14,7 +14,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import com.taxiuap.backend.pricing.dto.TarifaDelivery;
-import com.taxiuap.backend.pricing.dto.TarifaDeliveryRequest;
 import com.taxiuap.backend.sistema.entity.ConfiguracionSistema;
 import com.taxiuap.backend.sistema.repository.ConfiguracionSistemaRepository;
 import com.taxiuap.backend.trip.enums.TipoEnvio;
@@ -42,14 +41,6 @@ class TarifaDeliveryServiceTest {
     }
 
     @Test
-    void elAdministradorLaCambiaYQuedaGuardada() {
-        service.guardar(new TarifaDeliveryRequest(new BigDecimal("10"), new BigDecimal("2.5")));
-
-        assertEquals(new TarifaDelivery(new BigDecimal("10.00"), new BigDecimal("2.50")), service.actual());
-        assertEquals("10.00", filas.get(TarifaDeliveryService.TARIFA_BASE).getValor());
-    }
-
-    @Test
     void unValorRotoONegativoEnLaBdNoSeUsa() {
         ConfiguracionSistema rota = new ConfiguracionSistema();
         rota.setClave(TarifaDeliveryService.TARIFA_BASE);
@@ -70,28 +61,28 @@ class TarifaDeliveryServiceTest {
     }
 
     @Test
-    void elPaqueteTieneSuTarifaYNoTocaLaDelDelivery() {
-        service.guardarPaquete(new TarifaDeliveryRequest(new BigDecimal("5"), new BigDecimal("1.5")));
+    void elPaqueteGuardadoTieneSuTarifaYNoTocaLaDelDelivery() {
+        guardar(TarifaDeliveryService.PAQUETE_TARIFA_BASE, "5");
+        guardar(TarifaDeliveryService.PAQUETE_PRECIO_KM, "1.5");
 
         assertEquals(new TarifaDelivery(new BigDecimal("5.00"), new BigDecimal("1.50")), service.paquete());
         assertEquals(new TarifaDelivery(new BigDecimal("5.00"), new BigDecimal("1.50")), service.de(TipoEnvio.ENCOMIENDA));
         assertEquals(new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")), service.actual());
         assertEquals(service.actual(), service.de(TipoEnvio.COMPRA_Y_ENTREGA));
-        // Las apps de antes no mandan el tipo: reciben la del delivery.
         assertEquals(service.actual(), service.de(null));
     }
 
     @Test
-    void cambiarElDeliveryNoLeCambiaElPrecioAlPaquete() {
-        service.guardar(new TarifaDeliveryRequest(new BigDecimal("12"), new BigDecimal("3")));
+    void laTarifaDeAntesCobraBaseMasKm() {
+        // Solo la usan los pedidos que la guardaron antes de las tablas de precios.
+        assertEquals(0, new BigDecimal("8.02").compareTo(
+                new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")).precioPara(new BigDecimal("0.01"))));
+    }
 
-        assertEquals(new TarifaDelivery(new BigDecimal("12.00"), new BigDecimal("3.00")), service.actual());
-        // El paquete sigue con lo que cobraba antes del cambio (la tarifa que compartian).
-        assertEquals(new TarifaDelivery(new BigDecimal("8.00"), new BigDecimal("2.00")), service.paquete());
-
-        // Y si el paquete ya tenia la suya, guardar el delivery no la pisa.
-        service.guardarPaquete(new TarifaDeliveryRequest(new BigDecimal("6"), new BigDecimal("1")));
-        service.guardar(new TarifaDeliveryRequest(new BigDecimal("9"), new BigDecimal("2")));
-        assertEquals(new TarifaDelivery(new BigDecimal("6.00"), new BigDecimal("1.00")), service.paquete());
+    private void guardar(String clave, String valor) {
+        ConfiguracionSistema fila = new ConfiguracionSistema();
+        fila.setClave(clave);
+        fila.setValor(valor);
+        filas.put(clave, fila);
     }
 }

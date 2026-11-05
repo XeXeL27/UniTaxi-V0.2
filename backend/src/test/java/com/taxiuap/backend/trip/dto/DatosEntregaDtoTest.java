@@ -53,6 +53,7 @@ class DatosEntregaDtoTest {
                 "Sin boleta",
                 new BigDecimal("8.00"),
                 new BigDecimal("2.00"),
+                "8 Bs hasta 1 km, +2 Bs cada 1 km",
                 java.util.List.of(),
                 java.util.List.of(),
                 com.taxiuap.backend.trip.enums.MotivoFallaEntrega.NO_PAGO);
@@ -67,6 +68,7 @@ class DatosEntregaDtoTest {
         assertEquals(false, node.get("compraConfirmadaPorCliente").asBoolean());
         assertEquals(false, node.get("pagoConfirmado").asBoolean());
         assertEquals(8.00, node.get("tarifaBaseAplicada").asDouble());
+        assertEquals("8 Bs hasta 1 km, +2 Bs cada 1 km", node.get("textoTarifa").asText());
         assertEquals(true, node.get("productos").isArray());
         assertEquals("NO_PAGO", node.get("tipoFalla").asText());
     }

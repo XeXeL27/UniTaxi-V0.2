@@ -1123,6 +1123,7 @@ public class ViajeService {
         // La tarifa con la que se pidio sigue valiendo para el pedido publicado de nuevo.
         datos.setTarifaBaseAplicada(anterior.getTarifaBaseAplicada());
         datos.setPrecioKmAplicado(anterior.getPrecioKmAplicado());
+        datos.setTarifaAplicadaJson(anterior.getTarifaAplicadaJson());
         return datos;
     }
 

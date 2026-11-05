@@ -12,11 +12,14 @@ import 'modelos.dart';
 import 'tarifas_api.dart';
 import '../../widgets/cargando.dart';
 
-/// Tarifas > Precio del viaje: el precio base (hasta ciertos km; se edita pero no se elimina) y una
-/// tabla editable de km extra. Cada fila suma sus km y su costo a los anteriores; despues de la ultima
-/// se repite la ultima. Eliminar una fila es borrado logico. Vale desde el siguiente viaje que se pida.
+/// Tarifas > Precio del viaje, del paquete o del delivery ([servicio]): el precio base (hasta ciertos
+/// km; se edita pero no se elimina) y una tabla editable de km extra. Cada fila suma sus km y su costo a
+/// los anteriores; despues de la ultima se repite la ultima. Eliminar una fila es borrado logico. Vale
+/// desde el siguiente viaje o pedido que se pida.
 class PantallaPrecioViaje extends StatefulWidget {
-  const PantallaPrecioViaje({super.key});
+  final ServicioTarifa servicio;
+
+  const PantallaPrecioViaje({super.key, this.servicio = ServicioTarifa.taxi});
 
   @override
   State<PantallaPrecioViaje> createState() => _PantallaPrecioViajeState();
@@ -87,7 +90,7 @@ class _PantallaPrecioViajeState extends State<PantallaPrecioViaje> {
 
   Future<void> _cargar() async {
     try {
-      _mostrar(await _api.precioViaje());
+      _mostrar(await _api.precios(widget.servicio));
     } on ApiExcepcion catch (e) {
       if (mounted) setState(() => _error = e.mensaje);
     }
@@ -126,7 +129,7 @@ class _PantallaPrecioViajeState extends State<PantallaPrecioViaje> {
       final confirmado = await confirmarAccion(
         context,
         mensaje: 'Va a editar $descripcion: ${fila.esBase ? 'hasta' : 'más'} ${_texto(km)} km por '
-            '${fila.esBase ? '' : 'más '}${_bs(costo)}. Vale desde el próximo viaje que se pida.',
+            '${fila.esBase ? '' : 'más '}${_bs(costo)}. Vale desde ${widget.servicio.proximo}.',
         textoConfirmar: 'Sí, editar',
       );
       if (!confirmado || !mounted) return;
@@ -135,11 +138,11 @@ class _PantallaPrecioViajeState extends State<PantallaPrecioViaje> {
     try {
       final ParametrosPrecio p;
       if (fila.esBase) {
-        p = await _api.guardarBase(costo, km);
+        p = await _api.guardarBase(widget.servicio, costo, km);
       } else if (fila.nueva) {
-        p = await _api.crearTramo(km, costo);
+        p = await _api.crearTramo(widget.servicio, km, costo);
       } else {
-        p = await _api.editarTramo(fila.id!, km, costo);
+        p = await _api.editarTramo(widget.servicio, fila.id!, km, costo);
       }
       _mostrar(p);
       if (!mounted) return;
@@ -167,7 +170,7 @@ class _PantallaPrecioViajeState extends State<PantallaPrecioViaje> {
     return flujoEliminar(
       context,
       descripcion: 'el tramo ${_numero(fila)} (más ${_texto(fila.kmGuardado!)} km por ${_bs(fila.costoGuardado!)})',
-      eliminar: () async => respuesta = await _api.eliminarTramo(fila.id!),
+      eliminar: () async => respuesta = await _api.eliminarTramo(widget.servicio, fila.id!),
       mensajeEliminado: 'Se eliminó el tramo. Los siguientes se recalcularon.',
       alTerminar: () {
         if (respuesta != null) _mostrar(respuesta!);
@@ -218,30 +221,32 @@ class _PantallaPrecioViajeState extends State<PantallaPrecioViaje> {
     );
   }
 
+  IconData get _icono => switch (widget.servicio) {
+    ServicioTarifa.taxi => Iconos.route,
+    ServicioTarifa.paquete => Iconos.paquete,
+    ServicioTarifa.delivery => Iconos.cartShopping,
+  };
+
   Widget _contenido() {
     final acumulados = _acumulados();
     final ultimo = _filas.length > 1 ? _filas.last : null;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Row(
+        Row(
           children: [
-            Icon(Iconos.route, color: ColoresApp.rojo, size: 20),
-            SizedBox(width: 12),
+            Icon(_icono, color: ColoresApp.rojo, size: 20),
+            const SizedBox(width: 12),
             Expanded(
               child: Text(
-                'Precio del viaje en mototaxi',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: ColoresApp.azul),
+                widget.servicio.titulo,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: ColoresApp.azul),
               ),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        const Text(
-          'El servidor mide el viaje por calles. El precio base cubre los primeros km; cada fila de km extra suma '
-          'sus km y su costo a los anteriores. Edita los números en la tabla y guarda la fila.',
-          style: TextStyle(color: ColoresApp.textoSuave),
-        ),
+        Text(widget.servicio.detalle, style: const TextStyle(color: ColoresApp.textoSuave)),
         const SizedBox(height: 18),
         LayoutBuilder(
           builder: (context, restricciones) => restricciones.maxWidth >= 760

@@ -8,8 +8,9 @@ import '../../../core/tema.dart';
 import '../../../widgets/boton_principal.dart';
 import '../../../widgets/notificaciones.dart';
 
-/// Lo que el repartidor envia al registrar la compra: el comercio, cada producto y una observacion.
-typedef DatosRegistroCompra = ({String comercio, List<ProductoComprado> productos, String? observacion});
+/// Lo que el repartidor envia al registrar la compra: cada producto (con su nota opcional). El comercio
+/// y la observacion ya no se piden.
+typedef DatosRegistroCompra = ({List<ProductoComprado> productos});
 
 /// Registro de la compra: por cada producto del pedido, "Lo conseguí" con la cantidad y el precio total
 /// que pago por esas unidades, o "No lo conseguí" con una nota. El total que se cobra lo calcula el
@@ -17,7 +18,6 @@ typedef DatosRegistroCompra = ({String comercio, List<ProductoComprado> producto
 /// ([correccion]): el cliente tiene que volver a aceptar.
 class RegistroCompra extends StatefulWidget {
   final List<ProductoEntrega> productos;
-  final String? comercio;
   final bool correccion;
   final bool ocupado;
   final Future<void> Function(DatosRegistroCompra datos) onRegistrar;
@@ -27,7 +27,6 @@ class RegistroCompra extends StatefulWidget {
     super.key,
     required this.productos,
     required this.onRegistrar,
-    this.comercio,
     this.correccion = false,
     this.ocupado = false,
     this.onCancelar,
@@ -68,8 +67,6 @@ class _FilaCompra {
 
 class _RegistroCompraState extends State<RegistroCompra> {
   late final List<_FilaCompra> _filas = [for (final p in widget.productos) _FilaCompra(p)];
-  late final _comercio = TextEditingController(text: widget.comercio ?? '');
-  final _observacion = TextEditingController();
 
   static final _formatoPrecio = [FilteringTextInputFormatter.allow(RegExp(r'^\d{0,6}([.,]\d{0,2})?'))];
 
@@ -78,8 +75,6 @@ class _RegistroCompraState extends State<RegistroCompra> {
     for (final fila in _filas) {
       fila.dispose();
     }
-    _comercio.dispose();
-    _observacion.dispose();
     super.dispose();
   }
 
@@ -87,7 +82,6 @@ class _RegistroCompraState extends State<RegistroCompra> {
       _filas.fold<double>(0, (suma, f) => suma + f.comprado.subtotal);
 
   Future<void> _enviar() async {
-    if (_comercio.text.trim().isEmpty) return mostrarMensaje(context, 'Escribe el comercio donde compraste.', error: true);
     for (final fila in _filas) {
       if (fila.conseguido && ((fila.precioTotal ?? 0) <= 0)) {
         return mostrarMensaje(context, 'Escribe el precio total de ${fila.producto.nombre}.', error: true);
@@ -100,11 +94,7 @@ class _RegistroCompraState extends State<RegistroCompra> {
         error: true,
       );
     }
-    await widget.onRegistrar((
-      comercio: _comercio.text.trim(),
-      productos: [for (final fila in _filas) fila.comprado],
-      observacion: _observacion.text.trim().isEmpty ? null : _observacion.text.trim(),
-    ));
+    await widget.onRegistrar((productos: [for (final fila in _filas) fila.comprado]));
   }
 
   @override
@@ -124,18 +114,7 @@ class _RegistroCompraState extends State<RegistroCompra> {
         ),
         const SizedBox(height: 12),
         for (final fila in _filas) ...[_fila(fila), const SizedBox(height: 8)],
-        TextField(
-          controller: _comercio,
-          maxLength: 255,
-          decoration: const InputDecoration(labelText: 'Comercio donde compraste', counterText: ''),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _observacion,
-          maxLength: 500,
-          decoration: const InputDecoration(labelText: 'Observación (opcional)', counterText: ''),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 4),
         Row(
           children: [
             const Expanded(
@@ -148,7 +127,7 @@ class _RegistroCompraState extends State<RegistroCompra> {
           ],
         ),
         const Text(
-          'El envío se suma con la tarifa del pedido, desde el comercio hasta el cliente.',
+          'El envío se suma con la tarifa del pedido, desde donde compras hasta el cliente.',
           style: TextStyle(color: ColoresApp.grisTexto, fontSize: 12),
         ),
         const SizedBox(height: 12),

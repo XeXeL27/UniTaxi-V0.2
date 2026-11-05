@@ -150,15 +150,13 @@ class ConductorApi {
         if (gps != null) 'longitud': gps.longitude,
       }, [if (foto != null) (campo: 'foto', bytes: foto, nombre: 'recogida.jpg', tipo: MediaType('image', 'jpeg'))]));
 
-  /// Compra hecha (o corregida antes del pago): cada producto del pedido, conseguido con su precio o no.
-  /// El servidor calcula los subtotales y el total; el cliente tiene que aceptar el costo total.
-  Future<Viaje> registrarCompra(int id, LatLng punto, String detalle, List<ProductoComprado> productos,
-          String? observacion, Uint8List? comprobante) async =>
+  /// Compra hecha (o corregida antes del pago): cada producto del pedido, conseguido con su precio o no,
+  /// y el GPS de donde se compro (de ahi se cobra el envio). Sin comercio ni observacion. El servidor
+  /// calcula los subtotales y el total; el cliente tiene que aceptar el costo total.
+  Future<Viaje> registrarCompra(int id, LatLng punto, List<ProductoComprado> productos, Uint8List? comprobante) async =>
       _viaje(await cliente.enviarFormularioConParteJson('/api/conductor/viajes/$id/entrega/registrar-compra', 'compra', {
         'puntoCompraWkt': wktDesdePunto(punto),
-        'detalleCompra': detalle.trim(),
         'productos': [for (final p in productos) p.aJson()],
-        if (observacion != null && observacion.trim().isNotEmpty) 'observacionCompra': observacion.trim(),
       }, [if (comprobante != null) (campo: 'comprobante', bytes: comprobante, nombre: 'comprobante.jpg', tipo: MediaType('image', 'jpeg'))]));
 
   Future<Viaje> confirmarPago(int id, double monto, String metodoPago) async =>

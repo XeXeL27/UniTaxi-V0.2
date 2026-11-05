@@ -118,6 +118,12 @@ public class DatosEntrega extends EntidadAuditable {
     @DecimalMin(value = "0.00")
     private BigDecimal precioKmAplicado;
 
+    // Tabla de precios del servicio que valia al pedir (precio base y tramos de km, en JSON): la usan los
+    // pedidos nuevos en vez de tarifa_base_aplicada / precio_km_aplicado. Un cambio posterior en el
+    // panel no la toca.
+    @Column(name = "tarifa_aplicada_json", columnDefinition = "text")
+    private String tarifaAplicadaJson;
+
     @Column(name = "punto_compra_propuesto", columnDefinition = "geography(Point,4326)")
     private Point puntoCompraPropuesto;
 

@@ -2,7 +2,10 @@ package com.taxiuap.backend.pricing.entity;
 
 import java.math.BigDecimal;
 
+import org.hibernate.annotations.ColumnDefault;
+
 import com.taxiuap.backend.config.EntidadAuditable;
+import com.taxiuap.backend.pricing.enums.ServicioPrecio;
 import com.taxiuap.backend.shared.enums.EstadoRegistro;
 
 import jakarta.persistence.Column;
@@ -18,7 +21,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Tramo adicional del precio del viaje en taxi (Tarifas > Precio del viaje): despues del precio base,
+ * Tramo adicional de la tabla de precios de un servicio (moto taxi, paquete o delivery; Tarifas en el
+ * panel): despues del precio base,
  * cada tramo suma sus km y su costo a los anteriores, en el orden de [orden]. Si el viaje pasa del
  * ultimo tramo, ese ultimo tramo se repite. Borrado logico: estado_tramo X.
  */
@@ -42,6 +46,12 @@ public class TramoPrecio extends EntidadAuditable {
 
     @Column(name = "orden", nullable = false)
     private Integer orden;
+
+    /** De que servicio es el tramo. Los tramos de antes de separar los servicios son del moto taxi. */
+    @Enumerated(EnumType.STRING)
+    @ColumnDefault("'TAXI'")
+    @Column(name = "servicio_precio", length = 20)
+    private ServicioPrecio servicio = ServicioPrecio.TAXI;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_tramo", length = 20, nullable = false)

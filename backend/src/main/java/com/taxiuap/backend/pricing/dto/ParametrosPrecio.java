@@ -5,26 +5,29 @@ import java.math.RoundingMode;
 import java.util.List;
 
 /**
- * Precio del viaje en taxi (Tarifas > Precio del viaje): precioBase cubre los primeros kmBase y cada
+ * Tabla de precios de un servicio (Tarifas > Precio del viaje, del paquete o del delivery; ver
+ * ServicioPrecio): precioBase cubre los primeros kmBase y cada
  * tramo activo, en orden, suma sus km y su costo. Ejemplo: base 5 km = 8 Bs, tramos +3 km +2 Bs y
  * +3 km +2 Bs -> hasta 5 km = 8 Bs, de 5 a 8 km = 10 Bs, de 8 a 11 km = 12 Bs. Si el viaje pasa del
  * ultimo tramo, ese ultimo tramo se repite (11 a 14 km = 14 Bs...).
  *
- * descuentoEstudiante (Tarifas > Descuento estudiante): Bs enteros que se restan al estudiante con
- * matricula vigente. viajesEstudiantePorDia: viajes con descuento por dia (null: sin limite).
+ * descuentoEstudiante (Tarifas > Descuento estudiante, solo el moto taxi; 0 en el paquete y el
+ * delivery): Bs enteros que se restan al estudiante con matricula vigente. viajesEstudiantePorDia:
+ * viajes con descuento por dia (null: sin limite).
  */
 public record ParametrosPrecio(
         BigDecimal precioBase,
         BigDecimal kmBase,
         List<Tramo> tramos,
         Integer descuentoEstudiante,
-        Integer viajesEstudiantePorDia) {
+        Integer viajesEstudiantePorDia) implements TarifaPorDistancia {
 
     /** Un tramo activo; id null en los que no salen de la BD. */
     public record Tramo(Integer id, BigDecimal kmAdicional, BigDecimal costoAdicional, Integer orden) {
     }
 
     /** Precio normal (sin descuento) de un viaje de [distanciaKm]. */
+    @Override
     public BigDecimal precioPara(BigDecimal distanciaKm) {
         BigDecimal km = distanciaKm == null ? BigDecimal.ZERO : distanciaKm.setScale(2, RoundingMode.HALF_UP);
         BigDecimal hasta = kmBase;

@@ -22,7 +22,7 @@ import com.taxiuap.backend.identity.repository.ConductorRepository;
 import com.taxiuap.backend.identity.repository.PasajeroRepository;
 import com.taxiuap.backend.identity.service.CarnetService;
 import com.taxiuap.backend.pricing.dto.DesglosePrecioDelivery;
-import com.taxiuap.backend.pricing.dto.TarifaDelivery;
+import com.taxiuap.backend.pricing.dto.ParametrosPrecio;
 import com.taxiuap.backend.pricing.service.CalculoPrecioDeliveryService;
 import com.taxiuap.backend.pricing.service.CalculoPrecioService;
 import com.taxiuap.backend.pricing.enums.MetodoPago;
@@ -127,9 +127,9 @@ public class SolicitudViajeService {
                 && request.datosEntrega().tipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA;
         BigDecimal precioSolicitud;
         CotizacionViaje cotizacion = null;
-        // La tarifa que vale ahora queda copiada en el pedido (datos_entrega): la del paquete en una
-        // encomienda, la del delivery en una compra.
-        TarifaDelivery tarifaDelivery = esDelivery
+        // La tabla de precios que vale ahora queda copiada en el pedido (datos_entrega): la del paquete en
+        // una encomienda, la del delivery en una compra.
+        ParametrosPrecio tarifaDelivery = esDelivery
                 ? calculoPrecioDeliveryService.tarifaVigente(esCompra ? TipoEnvio.COMPRA_Y_ENTREGA : TipoEnvio.ENCOMIENDA)
                 : null;
         if (esDelivery) {
@@ -342,10 +342,9 @@ public class SolicitudViajeService {
     }
 
     private DatosEntrega crearDatosEntrega(SolicitudViaje solicitud, DatosEntregaRequest request,
-            TarifaDelivery tarifa) {
+            ParametrosPrecio tarifa) {
         DatosEntrega datos = new DatosEntrega();
-        datos.setTarifaBaseAplicada(tarifa.tarifaBase());
-        datos.setPrecioKmAplicado(tarifa.precioKm());
+        datos.setTarifaAplicadaJson(calculoPrecioDeliveryService.copiaDeTarifa(tarifa));
         datos.setSolicitud(solicitud);
         datos.setTipoEnvio(request.tipoEnvio());
         datos.setDescripcion(conLista(request) ? resumenProductos(request.productos()) : request.descripcion());

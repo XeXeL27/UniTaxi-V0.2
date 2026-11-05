@@ -1,6 +1,6 @@
 import '../../core/formato.dart';
 
-/// Tramo de km adicionales del precio del viaje: suma sus km y su costo a los anteriores.
+/// Tramo de km adicionales de una tabla de precios: suma sus km y su costo a los anteriores.
 class TramoPrecio {
   final int id;
   final double kmAdicional;
@@ -15,9 +15,9 @@ class TramoPrecio {
   );
 }
 
-/// Precio del viaje en taxi: precioBase hasta kmBase y luego los tramos, en orden; despues del ultimo
-/// tramo ese tramo se repite. descuentoEstudiante: Bs enteros por viaje del estudiante UAP;
-/// viajesEstudiantePorDia: viajes con descuento por dia (null: sin limite).
+/// Tabla de precios de un servicio: precioBase hasta kmBase y luego los tramos, en orden; despues del
+/// ultimo tramo ese tramo se repite. descuentoEstudiante (solo el moto taxi): Bs enteros por viaje del
+/// estudiante UAP; viajesEstudiantePorDia: viajes con descuento por dia (null: sin limite).
 class ParametrosPrecio {
   final double precioBase;
   final double kmBase;
@@ -44,45 +44,43 @@ class ParametrosPrecio {
   );
 }
 
-/// Servicio con tarifa base + precio por km: cada uno se cambia en su opcion de Tarifas.
+/// Servicio con su propia tabla de precios por km (Tarifas): el moto taxi, el paquete y el delivery.
+/// Los tres se editan con la misma pantalla (PantallaPrecioViaje).
 enum ServicioTarifa {
+  taxi(
+    codigo: 'TAXI',
+    titulo: 'Precio del viaje en mototaxi',
+    detalle:
+        'El servidor mide el viaje por calles. El precio base cubre los primeros km; cada fila de km extra suma '
+        'sus km y su costo a los anteriores. Edita los números en la tabla y guarda la fila.',
+    proximo: 'el próximo viaje que se pida',
+  ),
   paquete(
-    titulo: 'Tarifa del paquete',
-    ruta: '/api/admin/precio-paquete',
-    detalle: 'Se cobra en el paquete (la encomienda). Cada pedido conserva la tarifa con la que se pidió.',
-    pedidos: 'Los paquetes nuevos',
+    codigo: 'PAQUETE',
+    titulo: 'Precio del paquete',
+    detalle:
+        'Se cobra el envío del paquete, medido por calles desde donde se recoge hasta donde se entrega. El precio '
+        'base cubre los primeros km; cada fila de km extra suma sus km y su costo a los anteriores. Cada pedido '
+        'conserva el precio con el que se pidió.',
+    proximo: 'el próximo paquete que se pida',
   ),
   delivery(
-    titulo: 'Tarifa del delivery',
-    ruta: '/api/admin/precio-delivery',
+    codigo: 'DELIVERY',
+    titulo: 'Precio del delivery',
     detalle:
-        'Se cobra el envío del delivery (la compra); los productos van aparte. Cada pedido conserva la '
-        'tarifa con la que se pidió.',
-    pedidos: 'Los pedidos de delivery nuevos',
+        'Se cobra el envío del delivery, medido por calles desde donde el repartidor compra hasta el cliente; los '
+        'productos van aparte. El precio base cubre los primeros km; cada fila de km extra suma sus km y su costo '
+        'a los anteriores. Cada pedido conserva el precio con el que se pidió.',
+    proximo: 'el próximo delivery que se pida',
   );
 
+  /// Como lo nombra el servidor (/api/admin/precios/{codigo}).
+  final String codigo;
   final String titulo;
-  final String ruta;
   final String detalle;
 
-  /// Sujeto de la confirmacion: "Los paquetes nuevos cobraran...".
-  final String pedidos;
+  /// Desde cuando vale un cambio: "Vale desde el próximo paquete que se pida".
+  final String proximo;
 
-  const ServicioTarifa({required this.titulo, required this.ruta, required this.detalle, required this.pedidos});
-}
-
-/// Tarifa del paquete o del delivery: servicio = tarifa base + precio por km por calles.
-class TarifaDelivery {
-  final double tarifaBase;
-  final double precioKm;
-
-  const TarifaDelivery({required this.tarifaBase, required this.precioKm});
-
-  factory TarifaDelivery.desdeJson(Map<String, dynamic> json) => TarifaDelivery(
-    tarifaBase: (json['tarifaBase'] as num?)?.toDouble() ?? 0,
-    precioKm: (json['precioKm'] as num?)?.toDouble() ?? 0,
-  );
-
-  /// Precio del servicio para [km] por calles, redondeado como en el servidor.
-  double precioPara(double km) => ((tarifaBase + precioKm * km) * 100).roundToDouble() / 100;
+  const ServicioTarifa({required this.codigo, required this.titulo, required this.detalle, required this.proximo});
 }

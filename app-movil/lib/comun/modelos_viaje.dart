@@ -311,6 +311,9 @@ class DatosEntrega {
   final double? tarifaBaseAplicada;
   final double? precioKmAplicado;
 
+  /// La tarifa del envio con la que se pidio, ya escrita por el servidor ("8 Bs hasta 1 km, +2 Bs cada 1 km").
+  final String? tarifaTexto;
+
   /// Compra: los productos del pedido y los costos totales presentados, del mas nuevo al mas viejo.
   final List<ProductoEntrega> productos;
   final List<PropuestaCosto> propuestas;
@@ -351,6 +354,7 @@ class DatosEntrega {
     this.ultimoAvisoEntrega,
     this.tarifaBaseAplicada,
     this.precioKmAplicado,
+    this.tarifaTexto,
     this.productos = const [],
     this.propuestas = const [],
   });
@@ -388,6 +392,7 @@ class DatosEntrega {
     ultimoAvisoEntrega: fechaDesdeJson(json['ultimoAvisoEntrega']),
     tarifaBaseAplicada: numeroDesdeJson(json['tarifaBaseAplicada']),
     precioKmAplicado: numeroDesdeJson(json['precioKmAplicado']),
+    tarifaTexto: json['textoTarifa'] as String?,
     productos: [
       for (final p in (json['productos'] as List<dynamic>? ?? const []))
         ProductoEntrega.desdeJson(p as Map<String, dynamic>),
@@ -414,10 +419,13 @@ class DatosEntrega {
   /// Una encomienda siempre se puede cobrar; una compra, solo con el costo total aceptado.
   bool get sePuedeCobrar => !esCompra || costoAceptado;
 
-  /// "8 Bs + 2 Bs por km" (null si el pedido es de antes de guardar la tarifa).
-  String? get textoTarifa => tarifaBaseAplicada == null || precioKmAplicado == null
-      ? null
-      : '${formatoBs(tarifaBaseAplicada)} + ${formatoBs(precioKmAplicado)} por km';
+  /// La tarifa del envio: la que escribe el servidor ("8 Bs hasta 1 km, +2 Bs cada 1 km") o, con un
+  /// servidor de antes, "8 Bs + 2 Bs por km" (null si el pedido no guardo ninguna).
+  String? get textoTarifa =>
+      tarifaTexto ??
+      (tarifaBaseAplicada == null || precioKmAplicado == null
+          ? null
+          : '${formatoBs(tarifaBaseAplicada)} + ${formatoBs(precioKmAplicado)} por km');
   bool get tieneFotoEntrega => fotoEntregaUrl?.trim().isNotEmpty ?? false;
   bool get muestraCancelacion => EstadoEntrega.puedeCancelar(estadoEntrega);
   /// El repartidor reporto que no pudo entregarlo: el viaje quedo cerrado.

@@ -217,7 +217,8 @@ public class EntregaService {
             }
             productoEntregaRepository.save(producto);
         }
-        actualizada.setDetalleCompra(request.detalleCompra().trim());
+        // El comercio y la observacion ya no se piden (la app nueva no los manda; las de antes si).
+        actualizada.setDetalleCompra(textoOpcional(request.detalleCompra()));
         actualizada.setCostoProductoReal(totalProductos);
         actualizada.setObservacionCompra(textoOpcional(request.observacionCompra()));
         if (rutaComprobante != null) {
@@ -1119,8 +1120,10 @@ public class EntregaService {
                     .append("  Llego al punto de recogida (A)\n");
         }
         if (datos.getTipoEnvio() == TipoEnvio.COMPRA_Y_ENTREGA && datos.getCostoProductoReal() != null) {
-            t.append("- ").append(fecha(datos.getFechaRecogida())).append("  Compra registrada en ")
-                    .append(texto(datos.getDetalleCompra())).append(" por ").append(dinero(datos.getCostoProductoReal()))
+            t.append("- ").append(fecha(datos.getFechaRecogida())).append("  Compra registrada")
+                    .append(datos.getDetalleCompra() == null ? "" : " en " + texto(datos.getDetalleCompra()))
+                    .append(" | GPS ").append(coordenadas(datos.getPuntoCompra()))
+                    .append(" por ").append(dinero(datos.getCostoProductoReal()))
                     .append(" Bs").append(datos.getFotoComprobanteUrl() == null ? ""
                             : " | recibo: " + archivo(datos.getFotoComprobanteUrl()))
                     .append("\n");

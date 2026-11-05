@@ -13,8 +13,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.taxiuap.backend.pricing.dto.TarifaDelivery;
-import com.taxiuap.backend.pricing.service.TarifaDeliveryService;
+import com.taxiuap.backend.pricing.dto.TarifaEnvioResponse;
+import com.taxiuap.backend.pricing.enums.ServicioPrecio;
+import com.taxiuap.backend.pricing.service.ParametrosPrecioService;
 import com.taxiuap.backend.shared.response.ApiResponse;
 import com.taxiuap.backend.trip.dto.CotizacionViajeResponse;
 import com.taxiuap.backend.trip.dto.OfertaViajeResponse;
@@ -35,7 +36,7 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class SolicitudViajeController {
 
-    private final TarifaDeliveryService tarifaDeliveryService;
+    private final ParametrosPrecioService parametrosPrecioService;
     private final SolicitudViajeService solicitudViajeService;
     private final OfertaViajeService ofertaViajeService;
 
@@ -58,12 +59,13 @@ public class SolicitudViajeController {
     }
 
     /**
-     * Tarifa (base y por km) que se le cobra a un pedido nuevo: con tipo ENCOMIENDA la del paquete; sin
-     * tipo (apps de antes) o COMPRA_Y_ENTREGA la del delivery.
+     * Tabla de precios que se le cobra a un pedido nuevo: con tipo ENCOMIENDA la del paquete; sin tipo
+     * (apps de antes) o COMPRA_Y_ENTREGA la del delivery.
      */
     @GetMapping("/tarifa-delivery")
-    public ResponseEntity<ApiResponse<TarifaDelivery>> tarifaDelivery(@RequestParam(required = false) TipoEnvio tipo) {
-        return ResponseEntity.ok(ApiResponse.exito(tarifaDeliveryService.de(tipo)));
+    public ResponseEntity<ApiResponse<TarifaEnvioResponse>> tarifaDelivery(@RequestParam(required = false) TipoEnvio tipo) {
+        return ResponseEntity.ok(ApiResponse.exito(TarifaEnvioResponse.de(
+                parametrosPrecioService.actuales(ServicioPrecio.de(tipo == null ? TipoEnvio.COMPRA_Y_ENTREGA : tipo)))));
     }
 
     /** Precio del viaje de origen a destino, con el descuento de estudiante, antes de pedirlo (entrega: el de la encomienda). */

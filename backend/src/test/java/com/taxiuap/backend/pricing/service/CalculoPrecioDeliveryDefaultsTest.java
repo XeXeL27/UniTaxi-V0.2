@@ -16,6 +16,7 @@ import org.springframework.context.support.PropertySourcesPlaceholderConfigurer;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
 import com.taxiuap.backend.pricing.dto.RutaResponse;
+import com.taxiuap.backend.pricing.repository.TramoPrecioRepository;
 import com.taxiuap.backend.sistema.repository.ConfiguracionSistemaRepository;
 
 class CalculoPrecioDeliveryDefaultsTest {
@@ -30,12 +31,13 @@ class CalculoPrecioDeliveryDefaultsTest {
                     geometria.createPoint(new Coordinate(1, 2)),
                     geometria.createPoint(new Coordinate(3, 4)));
 
-            assertEquals(new BigDecimal("10.00"), resultado.precioServicio());
+            // Antes de crear la tabla inicial: el precio base de antes (8 Bs) cubre el primer km.
+            assertEquals(new BigDecimal("8.00"), resultado.precioServicio());
         }
     }
 
     @Configuration(proxyBeanMethods = false)
-    @Import({CalculoPrecioDeliveryService.class, TarifaDeliveryService.class})
+    @Import({CalculoPrecioDeliveryService.class, ParametrosPrecioService.class, TarifaDeliveryService.class})
     static class Configuracion {
 
         @Bean
@@ -49,6 +51,11 @@ class CalculoPrecioDeliveryDefaultsTest {
             ConfiguracionSistemaRepository repositorio = Mockito.mock(ConfiguracionSistemaRepository.class);
             Mockito.when(repositorio.findByClave(Mockito.any())).thenReturn(Optional.empty());
             return repositorio;
+        }
+
+        @Bean
+        TramoPrecioRepository tramoPrecioRepository() {
+            return Mockito.mock(TramoPrecioRepository.class);
         }
 
         @Bean
